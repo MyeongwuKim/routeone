@@ -11,6 +11,7 @@ import { usePlaceSheetLayout } from "../hooks/usePlaceSheetLayout";
 import { fetchDrivingRouteFromCurrentLocation } from "../../../lib/naverDirectionsApi";
 import { fetchTourPlaceDetail } from "../../../lib/visitKoreaTourApi";
 import { useMapSheetStore } from "../../../stores/mapSheetStore";
+import { useUiToastStore } from "../../../stores/uiToastStore";
 
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
 const NAVER_MAP_SCHEME_APP_NAME = "routeone.web";
@@ -57,8 +58,16 @@ async function preloadImageUrls(urls: string[]) {
 }
 
 function PlaceBottomSheet() {
-  const { isOpen, sheetMode, selectedPlace, savedPlaceIds, closeSheet, toggleSavedPlace } =
-    useMapSheetStore();
+  const {
+    isOpen,
+    sheetMode,
+    sheetResetVersion,
+    selectedPlace,
+    savedPlaceIds,
+    resetSheet,
+    toggleSavedPlace,
+  } = useMapSheetStore();
+  const showToast = useUiToastStore((state) => state.showToast);
 
   const previewMapRef = useRef<HTMLDivElement | null>(null);
   const previewMapInstanceRef = useRef<any>(null);
@@ -84,7 +93,8 @@ function PlaceBottomSheet() {
     handleSheetPointerUp,
   } = usePlaceSheetLayout({
     isSheetOpen: isOpen && !isFullPopupMode,
-    onRequestClose: closeSheet,
+    onRequestClose: resetSheet,
+    resetVersion: sheetResetVersion,
   });
 
   const detailQuery = useQuery({
@@ -283,16 +293,16 @@ function PlaceBottomSheet() {
     <>
       <button
         type="button"
-        onClick={closeSheet}
+        onClick={resetSheet}
         aria-label="바텀시트 닫기"
-        className="fixed inset-0 z-[1200] bg-slate-900/25"
+        className="fixed inset-0 z-[1800] bg-slate-900/25"
       />
 
       <section
         className={
           isFullPopupMode
-            ? "fixed inset-0 z-[1300] w-full bg-white"
-            : `fixed bottom-0 z-[1300] w-full bg-white ${
+            ? "fixed inset-0 z-[1900] w-full bg-white"
+            : `fixed bottom-0 z-[1900] w-full bg-white ${
                 isSheetExpanded
                   ? "inset-x-0 rounded-none border-0 shadow-none"
                   : "inset-x-0 mx-auto max-w-md rounded-t-3xl border border-brand-200 shadow-[0_-10px_32px_rgba(15,23,42,0.25)]"
@@ -323,7 +333,7 @@ function PlaceBottomSheet() {
                   type="button"
                   aria-label="시트 닫기"
                   onPointerDown={(event) => event.stopPropagation()}
-                  onClick={closeSheet}
+                  onClick={resetSheet}
                   className="rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700"
                 >
                   <IoArrowBack />
@@ -359,7 +369,11 @@ function PlaceBottomSheet() {
                   aria-label="내 루트 담기"
                   onClick={() => {
                     if (selectedPlace) {
-                      toggleSavedPlace(selectedPlace.id);
+                      const willAddToCart = !isCurrentPlaceSaved;
+                      toggleSavedPlace(selectedPlace, activeImageList[0] ?? "");
+                      if (willAddToCart) {
+                        showToast("여행지 카트에 담았습니다");
+                      }
                     }
                   }}
                   className="mt-1 shrink-0 rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700"

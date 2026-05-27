@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { IoLocationSharp } from "react-icons/io5";
+import { IoBagHandleOutline, IoLocationSharp } from "react-icons/io5";
 import PlaceBottomSheet from "../features/place-sheet/components/PlaceBottomSheet";
+import RouteCheckoutModal from "../features/route-checkout/components/RouteCheckoutModal";
 import { loadNaverMapSdk } from "../lib/naverMapSdk";
 import {
   fetchGangwonAttractions,
@@ -72,6 +73,11 @@ type GangwonBoundaryFeature = {
 
 type GangwonBoundaryCollection = {
   features?: GangwonBoundaryFeature[];
+};
+
+type CurrentLocation = {
+  lat: number;
+  lng: number;
 };
 
 const CONTENT_TYPE_BADGES: Record<string, MarkerBadge> = {
@@ -246,6 +252,25 @@ function buildBoundaryMapBySigunguCode(
   return mapByCode;
 }
 
+function calculateDistanceMeters(
+  from: CurrentLocation,
+  to: CurrentLocation
+) {
+  const earthRadiusMeters = 6371000;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRadians(to.lat - from.lat);
+  const dLng = toRadians(to.lng - from.lng);
+  const fromLat = toRadians(from.lat);
+  const toLat = toRadians(to.lat);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusMeters * c;
+}
+
 function HomePage() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -254,7 +279,18 @@ function HomePage() {
   const markerRefs = useRef<any[]>([]);
   const markerListenerRefs = useRef<any[]>([]);
 
-  const { openSheet, closeSheet } = useMapSheetStore();
+  const {
+    openSheet,
+    closeSheet,
+    resetSheet,
+    savedPlaceIds,
+    savedPlaces,
+    isSavedListOpen,
+    openSavedList,
+    closeSavedList,
+    removeSavedPlace,
+    clearSavedPlaces,
+  } = useMapSheetStore();
 
   const [selectedSigunguCode, setSelectedSigunguCode] = useState<string>(
     GANGWON_REGIONS[0].sigunguCode
@@ -262,13 +298,7 @@ function HomePage() {
   const [searchKeyword, setSearchKeyword] = useState("");
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
-
-  const selectedRegion = useMemo(
-    () =>
-      GANGWON_REGIONS.find((region) => region.sigunguCode === selectedSigunguCode) ??
-      GANGWON_REGIONS[0],
-    [selectedSigunguCode]
-  );
+  const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
 
   const boundaryQuery = useQuery({
     queryKey: ["gangwon-boundary"],
@@ -308,13 +338,46 @@ function HomePage() {
 
   const boundaryBySigunguCode = boundaryQuery.data ?? {};
   const isBoundaryDataReady = boundaryQuery.isSuccess || boundaryQuery.isError;
-  const attractionCount = attractionsQuery.data?.filteredAttractions.length ?? 0;
   const isAttractionLoading = attractionsQuery.isFetching;
   const attractionError = !TOUR_API_SERVICE_KEY
     ? "VITE_VISITKOREA_SERVICE_KEY가 비어있습니다."
     : attractionsQuery.error instanceof Error
       ? attractionsQuery.error.message
       : null;
+  const orderedRegions = useMemo(() => {
+    if (!currentLocation) {
+      return GANGWON_REGIONS;
+    }
+
+    return [...GANGWON_REGIONS].sort((a, b) => {
+      const distanceA = calculateDistanceMeters(currentLocation, a.center);
+      const distanceB = calculateDistanceMeters(currentLocation, b.center);
+      return distanceA - distanceB;
+    });
+  }, [currentLocation]);
+
+  useEffect(() => {
+    if (!("geolocation" in navigator)) {
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCurrentLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
+      () => {
+        setCurrentLocation(null);
+      },
+      {
+        enableHighAccuracy: false,
+        maximumAge: 1000 * 60 * 5,
+        timeout: 4000,
+      }
+    );
+  }, []);
 
   const clearMarkers = () => {
     const naverMaps = naverMapsRef.current;
@@ -730,14 +793,23 @@ function HomePage() {
             className="ml-2 w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none"
           />
         </div>
-        <div className="ml-2 rounded-full bg-brand-600/95 px-3 py-1.5 text-xs font-semibold text-white shadow">
-          {isAttractionLoading ? "불러오는 중" : `${selectedRegion.label} ${attractionCount}개`}
-        </div>
+        <button
+          type="button"
+          aria-label="담은 장소"
+          onClick={() => {
+            resetSheet();
+            openSavedList();
+          }}
+          className="pointer-events-auto ml-2 inline-flex h-12 items-center gap-2 rounded-full border border-brand-500 bg-brand-600/95 px-3 text-xs font-semibold text-white shadow"
+        >
+          <IoBagHandleOutline className="text-sm" />
+          <span>{isAttractionLoading ? "…" : savedPlaceIds.length}</span>
+        </button>
       </div>
 
       <div className="scrollbar-hide pointer-events-auto absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+3.4rem)] z-20 overflow-x-auto px-3 pb-1">
         <div className="flex w-max min-w-full gap-2 pr-3">
-          {GANGWON_REGIONS.map((region) => {
+          {orderedRegions.map((region) => {
             const isActive = selectedSigunguCode === region.sigunguCode;
 
             return (
@@ -757,6 +829,17 @@ function HomePage() {
           })}
         </div>
       </div>
+
+      <RouteCheckoutModal
+        isOpen={isSavedListOpen}
+        savedPlaces={savedPlaces}
+        onClose={closeSavedList}
+        onSelectPlace={(place) => {
+          openSheet(place, { mode: "full-popup" });
+        }}
+        onRemovePlace={removeSavedPlace}
+        onClearPlaces={clearSavedPlaces}
+      />
 
       <PlaceBottomSheet />
 

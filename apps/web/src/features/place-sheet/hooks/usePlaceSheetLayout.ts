@@ -6,6 +6,7 @@ type SheetSnap = "collapsed" | "expanded";
 type UsePlaceSheetLayoutParams = {
   isSheetOpen: boolean;
   onRequestClose: () => void;
+  resetVersion?: number;
 };
 
 const DRAG_SNAP_THRESHOLD_PX = 48;
@@ -20,7 +21,11 @@ function getSheetTop(viewportHeight: number, snap: SheetSnap) {
   return snap === "expanded" ? expandedTop : collapsedTop;
 }
 
-export function usePlaceSheetLayout({ isSheetOpen, onRequestClose }: UsePlaceSheetLayoutParams) {
+export function usePlaceSheetLayout({
+  isSheetOpen,
+  onRequestClose,
+  resetVersion = 0,
+}: UsePlaceSheetLayoutParams) {
   const [viewportHeight, setViewportHeight] = useState(() =>
     typeof window === "undefined" ? 800 : window.innerHeight
   );
@@ -30,6 +35,8 @@ export function usePlaceSheetLayout({ isSheetOpen, onRequestClose }: UsePlaceShe
   );
   const [isDraggingSheet, setIsDraggingSheet] = useState(false);
   const sheetTopRef = useRef(sheetTop);
+  const wasSheetOpenRef = useRef(false);
+  const lastResetVersionRef = useRef(resetVersion);
   const dragStateRef = useRef<{
     active: boolean;
     pointerId: number | null;
@@ -56,6 +63,29 @@ export function usePlaceSheetLayout({ isSheetOpen, onRequestClose }: UsePlaceShe
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  useEffect(() => {
+    if (resetVersion !== lastResetVersionRef.current) {
+      const nextTop = getSheetTop(viewportHeight, "collapsed");
+      setSheetSnap("collapsed");
+      setIsDraggingSheet(false);
+      setSheetTop(nextTop);
+      sheetTopRef.current = nextTop;
+      lastResetVersionRef.current = resetVersion;
+    }
+  }, [resetVersion, viewportHeight]);
+
+  useEffect(() => {
+    if (isSheetOpen && !wasSheetOpenRef.current) {
+      const collapsedTop = getSheetTop(viewportHeight, "collapsed");
+      setSheetSnap("collapsed");
+      setIsDraggingSheet(false);
+      setSheetTop(collapsedTop);
+      sheetTopRef.current = collapsedTop;
+    }
+
+    wasSheetOpenRef.current = isSheetOpen;
+  }, [isSheetOpen, viewportHeight]);
 
   useEffect(() => {
     if (!isSheetOpen) {

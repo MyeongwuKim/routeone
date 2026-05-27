@@ -1,7 +1,13 @@
 import AppRouter from "./router/AppRouter";
+import TopToast from "./components/feedback/TopToast";
 
 function App() {
-  return <AppRouter />;
+  return (
+    <>
+      <TopToast />
+      <AppRouter />
+    </>
+  );
 }
 
 export default App;
