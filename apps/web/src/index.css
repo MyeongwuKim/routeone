@@ -1,5 +1,61 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Roboto";
+  src: url("/fonts/roboto-latin-400-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Roboto";
+  src: url("/fonts/roboto-latin-500-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Roboto";
+  src: url("/fonts/roboto-latin-700-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Roboto";
+  src: url("/fonts/roboto-latin-900-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Jua";
+  src: url("/fonts/jua-korean-400-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range:
+    U+1100-11FF,
+    U+3130-318F,
+    U+AC00-D7AF;
+}
+
+@font-face {
+  font-family: "Jua";
+  src: url("/fonts/jua-latin-400-normal.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF,
+    U+0100-024F,
+    U+1E00-1EFF;
+}
+
 @theme {
   --color-brand-50: #f0fdfa;
   --color-brand-100: #ccfbf1;
@@ -17,11 +73,24 @@
   color: #0f172a;
   background: #f8fafc;
   font-family:
-    "Pretendard Variable",
+    "Roboto",
     "Noto Sans KR",
     "Apple SD Gothic Neo",
     "Segoe UI",
     sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-trip {
+  font-family:
+    "Jua",
+    "Roboto",
+    "Noto Sans KR",
+    "Apple SD Gothic Neo",
+    "Segoe UI",
+    sans-serif;
+  letter-spacing: 0.01em;
 }
 
 html,
@@ -38,6 +107,16 @@ body {
   margin: 0;
   min-height: 100dvh;
   background: #f8fafc;
+  overflow-x: hidden;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 .naver-map-root * {

@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+export type MapSheetMode = "bottom-sheet" | "full-popup";
+
 export type MapSheetPlace = {
   id: string;
   contentId: string;
@@ -16,21 +18,34 @@ export type MapSheetPlace = {
 
 type MapSheetState = {
   isOpen: boolean;
+  sheetMode: MapSheetMode;
   selectedPlace: MapSheetPlace | null;
   savedPlaceIds: string[];
-  openSheet: (place: MapSheetPlace) => void;
+  openSheet: (
+    place: MapSheetPlace,
+    options?: {
+      mode?: MapSheetMode;
+    }
+  ) => void;
+  setSheetMode: (mode: MapSheetMode) => void;
   closeSheet: () => void;
   toggleSavedPlace: (placeId: string) => void;
 };
 
 export const useMapSheetStore = create<MapSheetState>((set) => ({
   isOpen: false,
+  sheetMode: "bottom-sheet",
   selectedPlace: null,
   savedPlaceIds: [],
-  openSheet: (place) =>
+  openSheet: (place, options) =>
     set({
       isOpen: true,
+      sheetMode: options?.mode ?? "bottom-sheet",
       selectedPlace: place,
+    }),
+  setSheetMode: (mode) =>
+    set({
+      sheetMode: mode,
     }),
   closeSheet: () =>
     set({

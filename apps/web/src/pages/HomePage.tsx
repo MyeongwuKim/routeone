@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  IoBookmark,
-  IoBookmarkOutline,
-  IoClose,
-  IoLocationSharp,
-} from "react-icons/io5";
-import { GANGWON_BOUNDARY_POINTS } from "../data/gangwonBoundary";
+import { useQuery } from "@tanstack/react-query";
+import { IoLocationSharp } from "react-icons/io5";
+import PlaceBottomSheet from "../features/place-sheet/components/PlaceBottomSheet";
 import { loadNaverMapSdk } from "../lib/naverMapSdk";
 import {
   fetchGangwonAttractions,
   fetchLclsSystemNameMap,
-  fetchTourPlaceDetail,
   TOUR_CONTENT_TYPE_IDS,
   type GangwonAttraction,
 } from "../lib/visitKoreaTourApi";
@@ -60,7 +55,24 @@ type MarkerBadge = {
   text: string;
 };
 
-type SheetSnap = "collapsed" | "expanded";
+type GeoRing = [number, number][];
+type GeoPolygon = GeoRing[];
+type GeoMultiPolygon = GeoPolygon[];
+
+type GangwonBoundaryFeature = {
+  properties?: {
+    id?: string;
+    title?: string;
+  };
+  geometry?: {
+    type?: string;
+    coordinates?: unknown;
+  };
+};
+
+type GangwonBoundaryCollection = {
+  features?: GangwonBoundaryFeature[];
+};
 
 const CONTENT_TYPE_BADGES: Record<string, MarkerBadge> = {
   "12": {
@@ -90,13 +102,6 @@ const CONTENT_TYPE_BADGES: Record<string, MarkerBadge> = {
     background: "#dcfce7",
     border: "#16a34a",
     text: "#14532d",
-  },
-  "32": {
-    label: "숙박",
-    icon: "🛏",
-    background: "#f1f5f9",
-    border: "#475569",
-    text: "#1e293b",
   },
   "38": {
     label: "쇼핑",
@@ -130,8 +135,6 @@ const CAFE_BADGE: MarkerBadge = {
   border: "#d97706",
   text: "#78350f",
 };
-
-const DRAG_SNAP_THRESHOLD_PX = 48;
 
 function escapeHtml(text: string) {
   return text
@@ -205,61 +208,60 @@ function shouldHideAttraction(
   return /화장실|공중.?화장실|주차장|공영주차장|parking/i.test(targetText);
 }
 
-function getSheetTop(viewportHeight: number, snap: SheetSnap) {
-  const safeTop = typeof window === "undefined" ? 0 : window.visualViewport?.offsetTop ?? 0;
-  const expandedTop = Math.max(safeTop, 0);
-  // 처음 오픈 시: 타이틀/메타/이미지까지만 보이는 높이(화면 크기와 무관하게 안정적)
-  const collapsedHeight = Math.min(380, Math.max(320, viewportHeight * 0.42));
-  const collapsedTop = Math.max(expandedTop + 180, viewportHeight - collapsedHeight);
-  return snap === "expanded" ? expandedTop : collapsedTop;
+function toMultiPolygonCoordinates(feature: GangwonBoundaryFeature): GeoMultiPolygon {
+  const geometryType = feature.geometry?.type;
+  const coordinates = feature.geometry?.coordinates;
+
+  if (!coordinates) {
+    return [];
+  }
+
+  if (geometryType === "Polygon") {
+    return [coordinates as GeoPolygon];
+  }
+
+  if (geometryType === "MultiPolygon") {
+    return coordinates as GeoMultiPolygon;
+  }
+
+  return [];
+}
+
+function buildBoundaryMapBySigunguCode(
+  collection: GangwonBoundaryCollection
+): Record<string, GeoMultiPolygon> {
+  const features = collection.features ?? [];
+  const mapByCode: Record<string, GeoMultiPolygon> = {};
+
+  GANGWON_REGIONS.forEach((region) => {
+    const matchedFeature = features.find((feature) =>
+      feature.properties?.title?.startsWith(region.label)
+    );
+
+    if (matchedFeature) {
+      mapByCode[region.sigunguCode] = toMultiPolygonCoordinates(matchedFeature);
+    }
+  });
+
+  return mapByCode;
 }
 
 function HomePage() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const naverMapsRef = useRef<any>(null);
+  const boundaryPolygonRefs = useRef<any[]>([]);
   const markerRefs = useRef<any[]>([]);
   const markerListenerRefs = useRef<any[]>([]);
-  const lclsNameByCodeRef = useRef<Record<string, string>>({});
-  const dragStateRef = useRef<{
-    active: boolean;
-    pointerId: number | null;
-    startY: number;
-    startTop: number;
-  }>({ active: false, pointerId: null, startY: 0, startTop: 0 });
 
-  const {
-    isOpen: isSheetOpen,
-    selectedPlace,
-    openSheet,
-    closeSheet,
-    toggleSavedPlace,
-    savedPlaceIds,
-  } = useMapSheetStore();
+  const { openSheet, closeSheet } = useMapSheetStore();
 
   const [selectedSigunguCode, setSelectedSigunguCode] = useState<string>(
     GANGWON_REGIONS[0].sigunguCode
   );
   const [searchKeyword, setSearchKeyword] = useState("");
   const [mapError, setMapError] = useState<string | null>(null);
-  const [attractionError, setAttractionError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [isAttractionLoading, setIsAttractionLoading] = useState(false);
-  const [attractionCount, setAttractionCount] = useState(0);
-  const [detailOverview, setDetailOverview] = useState("");
-  const [detailImages, setDetailImages] = useState<string[]>([]);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [brokenImageUrls, setBrokenImageUrls] = useState<string[]>([]);
-
-  const [viewportHeight, setViewportHeight] = useState(() =>
-    typeof window === "undefined" ? 800 : window.innerHeight
-  );
-  const [sheetSnap, setSheetSnap] = useState<SheetSnap>("collapsed");
-  const [sheetTop, setSheetTop] = useState(() =>
-    getSheetTop(typeof window === "undefined" ? 800 : window.innerHeight, "collapsed")
-  );
-  const [isDraggingSheet, setIsDraggingSheet] = useState(false);
-  const sheetTopRef = useRef(sheetTop);
 
   const selectedRegion = useMemo(
     () =>
@@ -268,88 +270,51 @@ function HomePage() {
     [selectedSigunguCode]
   );
 
-  const activeImageList = useMemo(() => {
-    const merged = [...detailImages, ...(selectedPlace?.images ?? [])].filter(Boolean);
-    const unique = [...new Set(merged)];
-    return unique.filter((url) => !brokenImageUrls.includes(url));
-  }, [brokenImageUrls, detailImages, selectedPlace?.images]);
-  const isCurrentPlaceSaved = selectedPlace
-    ? savedPlaceIds.includes(selectedPlace.id)
-    : false;
-  const collapsedTop = getSheetTop(viewportHeight, "collapsed");
-  const showOverviewPanel =
-    sheetSnap === "expanded" || sheetTop < collapsedTop - DRAG_SNAP_THRESHOLD_PX * 0.6;
-
-  useEffect(() => {
-    const onResize = () => {
-      setViewportHeight(window.innerHeight);
-    };
-
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  useEffect(() => {
-    if (!isSheetOpen) {
-      return;
-    }
-
-    setSheetTop(getSheetTop(viewportHeight, sheetSnap));
-  }, [isSheetOpen, sheetSnap, viewportHeight]);
-
-  useEffect(() => {
-    sheetTopRef.current = sheetTop;
-  }, [sheetTop]);
-
-  useEffect(() => {
-    if (!isSheetOpen || !selectedPlace) {
-      setDetailImages([]);
-      setDetailOverview("");
-      setIsDetailLoading(false);
-      setBrokenImageUrls([]);
-      return;
-    }
-
-    let isDisposed = false;
-
-    const loadPlaceDetail = async () => {
-      setIsDetailLoading(true);
-      setDetailOverview("");
-      setDetailImages([]);
-      setBrokenImageUrls([]);
-
-      try {
-        const detail = await fetchTourPlaceDetail(
-          TOUR_API_SERVICE_KEY,
-          selectedPlace.contentId,
-          selectedPlace.contentTypeId,
-          selectedPlace.title
-        );
-
-        if (isDisposed) {
-          return;
-        }
-
-        setDetailOverview(detail.overview);
-        setDetailImages(detail.images);
-      } catch {
-        if (!isDisposed) {
-          setDetailOverview("");
-          setDetailImages([]);
-        }
-      } finally {
-        if (!isDisposed) {
-          setIsDetailLoading(false);
-        }
+  const boundaryQuery = useQuery({
+    queryKey: ["gangwon-boundary"],
+    queryFn: async () => {
+      const response = await fetch("/gangwon-sigungu-boundary.json");
+      if (!response.ok) {
+        throw new Error("Failed to load boundary data.");
       }
-    };
+      const data = (await response.json()) as GangwonBoundaryCollection;
+      return buildBoundaryMapBySigunguCode(data);
+    },
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
 
-    loadPlaceDetail();
+  const attractionsQuery = useQuery({
+    queryKey: ["gangwon-attractions", selectedSigunguCode],
+    enabled: mapReady && Boolean(TOUR_API_SERVICE_KEY),
+    queryFn: async () => {
+      const lclsNameByCode = await fetchLclsSystemNameMap(TOUR_API_SERVICE_KEY);
+      const attractions = await fetchGangwonAttractions(TOUR_API_SERVICE_KEY, {
+        sigunguCode: selectedSigunguCode || undefined,
+        contentTypeIds: [...TOUR_CONTENT_TYPE_IDS],
+      });
+      const filteredAttractions = attractions.filter(
+        (attraction) => !shouldHideAttraction(attraction, lclsNameByCode)
+      );
 
-    return () => {
-      isDisposed = true;
-    };
-  }, [isSheetOpen, selectedPlace]);
+      return {
+        filteredAttractions,
+        lclsNameByCode,
+      };
+    },
+    staleTime: 1000 * 60 * 60 * 12,
+    gcTime: 1000 * 60 * 60 * 24,
+  });
+
+  const boundaryBySigunguCode = boundaryQuery.data ?? {};
+  const isBoundaryDataReady = boundaryQuery.isSuccess || boundaryQuery.isError;
+  const attractionCount = attractionsQuery.data?.filteredAttractions.length ?? 0;
+  const isAttractionLoading = attractionsQuery.isFetching;
+  const attractionError = !TOUR_API_SERVICE_KEY
+    ? "VITE_VISITKOREA_SERVICE_KEY가 비어있습니다."
+    : attractionsQuery.error instanceof Error
+      ? attractionsQuery.error.message
+      : null;
 
   const clearMarkers = () => {
     const naverMaps = naverMapsRef.current;
@@ -365,81 +330,196 @@ function HomePage() {
     markerListenerRefs.current = [];
   };
 
-  const resetSheetLayout = () => {
-    setSheetSnap("collapsed");
-    setIsDraggingSheet(false);
-    setSheetTop(getSheetTop(viewportHeight, "collapsed"));
+  const clearBoundaryPolygons = () => {
+    boundaryPolygonRefs.current.forEach((polygon) => polygon.setMap(null));
+    boundaryPolygonRefs.current = [];
   };
 
-  const handleSheetPointerDown: React.PointerEventHandler<HTMLDivElement> = (event) => {
-    if (!isSheetOpen) {
-      return;
+  const drawSelectedRegionBoundary = () => {
+    const mapInstance = mapInstanceRef.current;
+    const naverMaps = naverMapsRef.current;
+
+    if (!mapInstance || !naverMaps) {
+      return null;
     }
 
-    dragStateRef.current = {
-      active: true,
-      pointerId: event.pointerId,
-      startY: event.clientY,
-      startTop: sheetTop,
+    clearBoundaryPolygons();
+
+    const multiPolygon = boundaryBySigunguCode[selectedSigunguCode];
+    if (!multiPolygon || multiPolygon.length === 0) {
+      return null;
+    }
+
+    const regionBounds = new naverMaps.LatLngBounds();
+    const isKoreaLatLng = (lat: number, lng: number) =>
+      lat >= 32 && lat <= 40 && lng >= 123 && lng <= 133;
+    const readLatLng = (coord: any) => {
+      if (!coord) {
+        return null;
+      }
+
+      const lat =
+        typeof coord.lat === "function"
+          ? coord.lat()
+          : typeof coord.y === "number"
+            ? coord.y
+            : typeof coord._lat === "number"
+              ? coord._lat
+              : null;
+      const lng =
+        typeof coord.lng === "function"
+          ? coord.lng()
+          : typeof coord.x === "number"
+            ? coord.x
+            : typeof coord._lng === "number"
+              ? coord._lng
+              : null;
+
+      if (typeof lat !== "number" || typeof lng !== "number") {
+        return null;
+      }
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return null;
+      }
+
+      return { lat, lng };
     };
 
-    setIsDraggingSheet(true);
-    event.currentTarget.setPointerCapture(event.pointerId);
+    const toLatLng = ([x, y]: [number, number]) => {
+      if (Math.abs(x) <= 180 && Math.abs(y) <= 90) {
+        return isKoreaLatLng(y, x) ? new naverMaps.LatLng(y, x) : null;
+      }
+
+      const transCoord = naverMaps.TransCoord;
+      const convertCandidates = [
+        () => transCoord?.fromUTMKToLatLng?.(new naverMaps.Point(x, y)),
+        () => transCoord?.fromTM128ToLatLng?.(new naverMaps.Point(x, y)),
+        () => transCoord?.fromNaverToLatLng?.(new naverMaps.Point(x, y)),
+      ];
+
+      for (const convert of convertCandidates) {
+        const coord = convert();
+        const parsed = readLatLng(coord);
+        if (parsed && isKoreaLatLng(parsed.lat, parsed.lng)) {
+          return new naverMaps.LatLng(parsed.lat, parsed.lng);
+        }
+      }
+
+      return null;
+    };
+
+    multiPolygon.forEach((polygon) => {
+      const paths = polygon
+        .map((ring) =>
+          ring
+            .map((point) => {
+              const latLng = toLatLng(point);
+              if (!latLng) {
+                return null;
+              }
+              regionBounds.extend(latLng);
+              return latLng;
+            })
+            .filter((point): point is any => point !== null)
+        )
+        .filter((ring) => ring.length > 0);
+
+      if (paths.length === 0) {
+        return;
+      }
+
+      const boundaryPolygon = new naverMaps.Polygon({
+        map: mapInstance,
+        paths,
+        strokeColor: "#0d9488",
+        strokeWeight: 3,
+        strokeOpacity: 0.95,
+        fillColor: "#14b8a6",
+        fillOpacity: 0.12,
+      });
+
+      boundaryPolygonRefs.current.push(boundaryPolygon);
+    });
+
+    if (boundaryPolygonRefs.current.length === 0) {
+      return null;
+    }
+
+    return regionBounds;
   };
 
-  const handleSheetPointerMove: React.PointerEventHandler<HTMLDivElement> = (event) => {
-    const dragState = dragStateRef.current;
+  const moveMapToBounds = (bounds: any, smooth: boolean) => {
+    const mapInstance = mapInstanceRef.current;
 
-    if (!dragState.active || dragState.pointerId !== event.pointerId) {
+    if (!mapInstance) {
       return;
     }
 
-    const expandedTop = getSheetTop(viewportHeight, "expanded");
-    const collapsedTop = getSheetTop(viewportHeight, "collapsed");
-    const nextTop = Math.min(
-      collapsedTop,
-      Math.max(expandedTop, dragState.startTop + (event.clientY - dragState.startY))
+    if (!smooth) {
+      mapInstance.fitBounds(bounds);
+      return;
+    }
+
+    if (typeof mapInstance.panToBounds === "function") {
+      mapInstance.panToBounds(bounds);
+      return;
+    }
+
+    const center =
+      typeof bounds?.getCenter === "function" ? bounds.getCenter() : null;
+
+    if (center && typeof mapInstance.panTo === "function") {
+      mapInstance.panTo(center, { duration: 450 });
+      setTimeout(() => {
+        if (mapInstanceRef.current === mapInstance) {
+          mapInstance.fitBounds(bounds);
+        }
+      }, 220);
+      return;
+    }
+
+    mapInstance.fitBounds(bounds);
+  };
+
+  const fitMapToSelectedRegion = (options?: { smooth?: boolean; fallbackBounds?: any }) => {
+    const mapInstance = mapInstanceRef.current;
+    const naverMaps = naverMapsRef.current;
+    const smooth = options?.smooth ?? false;
+    const currentRegion =
+      GANGWON_REGIONS.find((region) => region.sigunguCode === selectedSigunguCode) ??
+      GANGWON_REGIONS[0];
+
+    if (!mapInstance || !naverMaps) {
+      return;
+    }
+
+    const regionBounds = drawSelectedRegionBoundary();
+    if (regionBounds) {
+      moveMapToBounds(regionBounds, smooth);
+      return;
+    }
+
+    if (options?.fallbackBounds) {
+      moveMapToBounds(options.fallbackBounds, smooth);
+      return;
+    }
+
+    const center = new naverMaps.LatLng(currentRegion.center.lat, currentRegion.center.lng);
+    if (smooth && typeof mapInstance.panTo === "function") {
+      mapInstance.panTo(center, { duration: 450 });
+      setTimeout(() => {
+        if (mapInstanceRef.current === mapInstance) {
+          mapInstance.setZoom(10);
+        }
+      }, 220);
+      return;
+    }
+
+    mapInstance.setCenter(
+      center
     );
-
-    setSheetTop(nextTop);
-    sheetTopRef.current = nextTop;
-  };
-
-  const handleSheetPointerUp: React.PointerEventHandler<HTMLDivElement> = (event) => {
-    const dragState = dragStateRef.current;
-
-    if (!dragState.active || dragState.pointerId !== event.pointerId) {
-      return;
-    }
-
-    dragStateRef.current = {
-      active: false,
-      pointerId: null,
-      startY: 0,
-      startTop: 0,
-    };
-
-    setIsDraggingSheet(false);
-
-    const expandedTop = getSheetTop(viewportHeight, "expanded");
-    const collapsedTop = getSheetTop(viewportHeight, "collapsed");
-    const currentTop = sheetTopRef.current;
-    const movedDistance = currentTop - dragState.startTop;
-    const movedUpEnough = movedDistance < -DRAG_SNAP_THRESHOLD_PX;
-    const movedDownEnough = movedDistance > DRAG_SNAP_THRESHOLD_PX;
-    const midpoint = expandedTop + (collapsedTop - expandedTop) / 2;
-
-    let nextSnap: SheetSnap;
-    if (movedUpEnough) {
-      nextSnap = "expanded";
-    } else if (movedDownEnough) {
-      nextSnap = "collapsed";
-    } else {
-      nextSnap = currentTop <= midpoint ? "expanded" : "collapsed";
-    }
-
-    setSheetSnap(nextSnap);
-    setSheetTop(getSheetTop(viewportHeight, nextSnap));
+    mapInstance.setZoom(10);
   };
 
   useEffect(() => {
@@ -498,20 +578,6 @@ function HomePage() {
           new naverMaps.LatLng(GANGWON_BOUNDS.north, GANGWON_BOUNDS.east)
         );
 
-        const highlightPath = GANGWON_BOUNDARY_POINTS.map(
-          (point) => new naverMaps.LatLng(point.lat, point.lng)
-        );
-
-        new naverMaps.Polygon({
-          map: mapInstance,
-          paths: [highlightPath],
-          strokeColor: "#0d9488",
-          strokeWeight: 3,
-          strokeOpacity: 0.95,
-          fillColor: "#14b8a6",
-          fillOpacity: 0.12,
-        });
-
         mapInstance.fitBounds(gangwonBounds);
         mapInstance.setZoom(Math.max(10, mapInstance.getZoom()));
 
@@ -547,6 +613,7 @@ function HomePage() {
     return () => {
       isDisposed = true;
       clearMarkers();
+      clearBoundaryPolygons();
       if (handleResize) {
         window.removeEventListener("resize", handleResize);
       }
@@ -555,7 +622,6 @@ function HomePage() {
       }
       mapInstanceRef.current = null;
       naverMapsRef.current = null;
-      lclsNameByCodeRef.current = {};
       closeSheet();
       window.navermap_authFailure = undefined;
       container.innerHTML = "";
@@ -563,136 +629,86 @@ function HomePage() {
   }, [closeSheet]);
 
   useEffect(() => {
+    if (!mapReady || !isBoundaryDataReady) {
+      return;
+    }
+
+    fitMapToSelectedRegion();
+  }, [isBoundaryDataReady, mapReady, selectedSigunguCode]);
+
+  useEffect(() => {
+    if (!mapReady) {
+      return;
+    }
+
+    closeSheet();
+    clearMarkers();
+  }, [closeSheet, mapReady, selectedSigunguCode]);
+
+  useEffect(() => {
     const mapInstance = mapInstanceRef.current;
     const naverMaps = naverMapsRef.current;
+    const attractionData = attractionsQuery.data;
 
-    if (!mapReady || !mapInstance || !naverMaps) {
+    if (!mapReady || !mapInstance || !naverMaps || !attractionData) {
       return;
     }
 
-    if (!TOUR_API_SERVICE_KEY) {
-      setAttractionError("VITE_VISITKOREA_SERVICE_KEY가 비어있습니다.");
-      return;
-    }
+    const markerBounds = new naverMaps.LatLngBounds();
 
-    let isDisposed = false;
-    const currentRegion =
-      GANGWON_REGIONS.find((region) => region.sigunguCode === selectedSigunguCode) ??
-      GANGWON_REGIONS[0];
+    attractionData.filteredAttractions.forEach((attraction) => {
+      const position = new naverMaps.LatLng(attraction.lat, attraction.lng);
+      markerBounds.extend(position);
 
-    const loadAttractions = async () => {
-      setIsAttractionLoading(true);
-      setAttractionError(null);
-      closeSheet();
-      clearMarkers();
+      const markerType = resolveMarkerType(attraction, attractionData.lclsNameByCode);
 
-      try {
-        if (Object.keys(lclsNameByCodeRef.current).length === 0) {
-          try {
-            lclsNameByCodeRef.current = await fetchLclsSystemNameMap(
-              TOUR_API_SERVICE_KEY
-            );
-          } catch {
-            lclsNameByCodeRef.current = {};
-          }
-        }
+      const marker = new naverMaps.Marker({
+        map: mapInstance,
+        position,
+        title: attraction.title,
+        icon: {
+          content: createBadgeMarkerIconHtml(markerType.badge),
+          anchor: new naverMaps.Point(17, 17),
+        },
+      });
 
-        const attractions = await fetchGangwonAttractions(TOUR_API_SERVICE_KEY, {
-          sigunguCode: selectedSigunguCode || undefined,
-          contentTypeIds: [...TOUR_CONTENT_TYPE_IDS],
-        });
-        const filteredAttractions = attractions.filter(
-          (attraction) =>
-            !shouldHideAttraction(attraction, lclsNameByCodeRef.current)
-        );
+      markerRefs.current.push(marker);
 
-        if (isDisposed) {
-          return;
-        }
-
-        const markerBounds = new naverMaps.LatLngBounds();
-
-        filteredAttractions.forEach((attraction) => {
-          const position = new naverMaps.LatLng(attraction.lat, attraction.lng);
-          markerBounds.extend(position);
-
-          const markerType = resolveMarkerType(
-            attraction,
-            lclsNameByCodeRef.current
-          );
-
-          const marker = new naverMaps.Marker({
-            map: mapInstance,
-            position,
-            title: attraction.title,
-            icon: {
-              content: createBadgeMarkerIconHtml(markerType.badge),
-              anchor: new naverMaps.Point(17, 17),
-            },
+      const listener = naverMaps.Event.addListener(marker, "click", () => {
+        if (typeof mapInstance.panTo === "function") {
+          mapInstance.panTo(position, {
+            duration: 500,
           });
-
-          markerRefs.current.push(marker);
-
-          const listener = naverMaps.Event.addListener(marker, "click", () => {
-            if (typeof mapInstance.panTo === "function") {
-              mapInstance.panTo(position, {
-                duration: 500,
-              });
-            } else {
-              mapInstance.setCenter(position);
-            }
-
-            resetSheetLayout();
-            openSheet({
-              id: `${attraction.id}-${attraction.contentTypeId}`,
-              contentId: attraction.id,
-              contentTypeId: attraction.contentTypeId,
-              title: attraction.title,
-              address: attraction.address,
-              lat: attraction.lat,
-              lng: attraction.lng,
-              contentTypeLabel: markerType.contentTypeLabel,
-              categoryName: markerType.typeName,
-              icon: markerType.badge.icon,
-              images: [attraction.firstImage, attraction.secondImage].filter(Boolean),
-            });
-          });
-
-          markerListenerRefs.current.push(listener);
-        });
-
-        setAttractionCount(filteredAttractions.length);
-
-        if (filteredAttractions.length > 0) {
-          mapInstance.fitBounds(markerBounds);
-          mapInstance.setZoom(Math.max(10, mapInstance.getZoom()));
         } else {
-          mapInstance.setCenter(
-            new naverMaps.LatLng(currentRegion.center.lat, currentRegion.center.lng)
-          );
-          mapInstance.setZoom(currentRegion.sigunguCode ? 10 : 9);
+          mapInstance.setCenter(position);
         }
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "관광 명소 데이터를 불러오지 못했습니다.";
-        if (!isDisposed) {
-          setAttractionError(message);
-        }
-      } finally {
-        if (!isDisposed) {
-          setIsAttractionLoading(false);
-        }
-      }
-    };
 
-    loadAttractions();
+        openSheet(
+          {
+            id: `${attraction.id}-${attraction.contentTypeId}`,
+            contentId: attraction.id,
+            contentTypeId: attraction.contentTypeId,
+            title: attraction.title,
+            address: attraction.address,
+            lat: attraction.lat,
+            lng: attraction.lng,
+            contentTypeLabel: markerType.contentTypeLabel,
+            categoryName: markerType.typeName,
+            icon: markerType.badge.icon,
+            images: [],
+          },
+          { mode: "bottom-sheet" }
+        );
+      });
 
-    return () => {
-      isDisposed = true;
-    };
-  }, [closeSheet, mapReady, openSheet, selectedSigunguCode]);
+      markerListenerRefs.current.push(listener);
+    });
+
+    fitMapToSelectedRegion({
+      smooth: true,
+      fallbackBounds: attractionData.filteredAttractions.length > 0 ? markerBounds : null,
+    });
+  }, [attractionsQuery.data, mapReady, openSheet, selectedSigunguCode]);
 
   return (
     <section className="relative h-full overflow-hidden bg-brand-50">
@@ -719,7 +735,7 @@ function HomePage() {
         </div>
       </div>
 
-      <div className="pointer-events-auto absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+3.4rem)] z-20 overflow-x-auto px-3 pb-1">
+      <div className="scrollbar-hide pointer-events-auto absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+3.4rem)] z-20 overflow-x-auto px-3 pb-1">
         <div className="flex w-max min-w-full gap-2 pr-3">
           {GANGWON_REGIONS.map((region) => {
             const isActive = selectedSigunguCode === region.sigunguCode;
@@ -742,122 +758,7 @@ function HomePage() {
         </div>
       </div>
 
-      {isSheetOpen && selectedPlace ? (
-        <>
-          <button
-            type="button"
-            onClick={() => {
-              closeSheet();
-              resetSheetLayout();
-            }}
-            aria-label="바텀시트 닫기"
-            className="fixed inset-0 z-[1200] bg-slate-900/25"
-          />
-
-          <section
-            className={`fixed inset-x-0 bottom-0 z-[1300] mx-auto w-full max-w-md rounded-t-3xl border border-brand-200 bg-white shadow-[0_-10px_32px_rgba(15,23,42,0.25)] ${
-              isDraggingSheet ? "transition-none" : "transition-[top] duration-300"
-            }`}
-            style={{ top: `${sheetTop}px` }}
-          >
-            <div className="flex h-full flex-col">
-              <div
-                role="button"
-                tabIndex={0}
-                className="touch-none"
-                onPointerDown={handleSheetPointerDown}
-                onPointerMove={handleSheetPointerMove}
-                onPointerUp={handleSheetPointerUp}
-                onPointerCancel={handleSheetPointerUp}
-              >
-                <div className="flex cursor-grab justify-center pt-2 active:cursor-grabbing">
-                  <div className="h-1.5 w-12 rounded-full bg-brand-200" />
-                </div>
-
-                <div className="px-5 pt-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-2xl font-bold text-slate-900">{selectedPlace.title}</p>
-                      <p className="mt-2 text-sm font-semibold text-brand-700">
-                        {selectedPlace.icon} {selectedPlace.contentTypeLabel}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-600">{selectedPlace.categoryName}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        aria-label="내 루트 담기"
-                        onClick={() => toggleSavedPlace(selectedPlace.id)}
-                        className="rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700"
-                      >
-                        {isCurrentPlaceSaved ? <IoBookmark /> : <IoBookmarkOutline />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          closeSheet();
-                          resetSheetLayout();
-                        }}
-                        className="rounded-full border border-slate-200 bg-white p-2 text-slate-500"
-                      >
-                        <IoClose />
-                      </button>
-                    </div>
-                  </div>
-
-                  <p className="mt-3 text-sm text-slate-600">{selectedPlace.address}</p>
-
-                  <div className="mt-4">
-                    <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
-                      {activeImageList.length > 0 ? (
-                        activeImageList.map((imageUrl, index) => (
-                          <img
-                            key={`${imageUrl}-${index}`}
-                            src={imageUrl}
-                            alt={`${selectedPlace.title} 이미지 ${index + 1}`}
-                            onError={() => {
-                              setBrokenImageUrls((prev) =>
-                                prev.includes(imageUrl) ? prev : [...prev, imageUrl]
-                              );
-                            }}
-                            className="h-44 w-40 shrink-0 snap-start rounded-2xl border border-brand-100 bg-brand-50 object-cover"
-                          />
-                        ))
-                      ) : (
-                        <div className="flex h-44 w-full items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50 text-sm text-slate-500">
-                          {isDetailLoading ? "이미지 불러오는 중" : "등록된 이미지가 없습니다"}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                className={`px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 transition-all duration-200 ${
-                  showOverviewPanel
-                    ? "min-h-0 flex-1 opacity-100"
-                    : "pointer-events-none h-0 overflow-hidden opacity-0"
-                }`}
-              >
-                <div className="h-full min-h-0 overflow-y-auto rounded-2xl bg-brand-50 px-4 py-3">
-                  {isDetailLoading ? (
-                    <p className="text-sm text-slate-500">장소 정보를 불러오는 중입니다.</p>
-                  ) : detailOverview ? (
-                    <p className="whitespace-pre-line text-sm leading-6 text-slate-700">
-                      {detailOverview}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-slate-500">
-                      관광공사 오픈 API에서 제공하는 상세 설명이 아직 없습니다.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-        </>
-      ) : null}
+      <PlaceBottomSheet />
 
       {mapError ? (
         <div className="absolute inset-x-3 bottom-3 z-20 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 shadow-sm">

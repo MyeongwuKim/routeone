@@ -9,7 +9,6 @@ const GANGWON_AREA_CODE = "32";
 export const TOUR_CONTENT_TYPE_IDS = [
   "39", // 음식점
   "38", // 쇼핑
-  "32", // 숙박
   "12", // 관광지
   "14", // 문화시설
   "15", // 축제/공연
@@ -42,27 +41,6 @@ type TourApiResponse = {
     body?: {
       items?: {
         item?: TourApiItem[] | TourApiItem;
-      };
-    };
-  };
-};
-
-type TourPhotoGalleryItem = {
-  galWebImageUrl?: string;
-  galTitle?: string;
-  galPhotographyLocation?: string;
-  galSearchKeyword?: string;
-};
-
-type TourPhotoGalleryResponse = {
-  response?: {
-    header?: {
-      resultCode?: string;
-      resultMsg?: string;
-    };
-    body?: {
-      items?: {
-        item?: TourPhotoGalleryItem[] | TourPhotoGalleryItem;
       };
     };
   };
@@ -322,8 +300,8 @@ export async function fetchLclsSystemNameMap(serviceKey: string) {
 export async function fetchTourPlaceDetail(
   serviceKey: string,
   contentId: string,
-  contentTypeId?: string,
-  fallbackKeyword?: string
+  _contentTypeId?: string,
+  _fallbackKeyword?: string
 ) {
   if (!serviceKey || !contentId) {
     throw new Error("Tour place detail params are missing.");
@@ -349,10 +327,6 @@ export async function fetchTourPlaceDetail(
     numOfRows: "50",
     pageNo: "1",
   });
-  console.log(contentId);
-  // if (contentTypeId) {
-  //   imageQuery.set("contentTypeId", contentTypeId);
-  // }
 
   const [commonResponse, imageResponse] = await Promise.all([
     fetch(`${TOUR_DETAIL_COMMON_BASE_URL}?${commonQuery.toString()}`),
@@ -369,7 +343,6 @@ export async function fetchTourPlaceDetail(
   }
 
   const commonData = (await commonResponse.json()) as TourApiResponse;
-  console.log(commonData);
   const commonCode = commonData.response?.header?.resultCode;
 
   if (commonCode && commonCode !== "0000") {
@@ -378,23 +351,19 @@ export async function fetchTourPlaceDetail(
   }
 
   const commonItem = toArray(commonData.response?.body?.items?.item)[0];
-  const commonImages = [commonItem?.firstimage, commonItem?.firstimage2].filter(
-    (image): image is string => Boolean(image)
-  );
 
   let detailImageUrls: string[] = [];
   if (imageResponse.ok) {
     const imageData = (await imageResponse.json()) as TourApiResponse;
-    console.log(imageData);
     const imageCode = imageData.response?.header?.resultCode;
     if (!imageCode || imageCode === "0000") {
       detailImageUrls = toArray(imageData.response?.body?.items?.item)
-        .map((item) => item.originimgurl ?? item.smallimageurl ?? "")
+        .map((item) => item.originimgurl ?? "")
         .filter((image): image is string => Boolean(image));
     }
   }
 
-  let uniqueImages = dedupeImageUrls([...detailImageUrls, ...commonImages]);
+  const uniqueImages = dedupeImageUrls(detailImageUrls);
 
   return {
     overview: stripHtml(commonItem?.overview),
