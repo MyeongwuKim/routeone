@@ -1,13 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { IoBagHandleOutline, IoLocationSharp } from "react-icons/io5";
+import {
+  IoArrowBack,
+  IoBagHandleOutline,
+  IoCafeOutline,
+  IoClose,
+  IoLocationSharp,
+  IoRestaurantOutline,
+  IoSearch,
+} from "react-icons/io5";
 import PlaceBottomSheet from "../features/place-sheet/components/PlaceBottomSheet";
 import RouteCheckoutModal from "../features/route-checkout/components/RouteCheckoutModal";
 import { loadNaverMapSdk } from "../lib/naverMapSdk";
 import {
+  buildLatestConcentrationMap,
   fetchGangwonAttractions,
   fetchLclsSystemNameMap,
-  TOUR_CONTENT_TYPE_IDS,
+  fetchTouristConcentrationPoints,
+  normalizeTouristPlaceNameForMatch,
   type GangwonAttraction,
 } from "../lib/visitKoreaTourApi";
 import { useMapSheetStore } from "../stores/mapSheetStore";
@@ -48,6 +58,29 @@ const GANGWON_REGIONS = [
   { label: "횡성", sigunguCode: "18", center: { lat: 37.4918, lng: 127.985 } },
 ] as const;
 
+const GANGWON_SIGNGU_ADMIN_CODES: Record<string, string> = {
+  "1": "51150", // 강릉
+  "2": "51820", // 고성
+  "3": "51170", // 동해
+  "4": "51230", // 삼척
+  "5": "51210", // 속초
+  "6": "51800", // 양구
+  "7": "51830", // 양양
+  "8": "51750", // 영월
+  "9": "51130", // 원주
+  "10": "51810", // 인제
+  "11": "51770", // 정선
+  "12": "51780", // 철원
+  "13": "51110", // 춘천
+  "14": "51190", // 태백
+  "15": "51760", // 평창
+  "16": "51720", // 홍천
+  "17": "51790", // 화천
+  "18": "51730", // 횡성
+};
+
+const GANGWON_TATS_AREA_CODE = "51";
+
 type MarkerBadge = {
   label: string;
   icon: string;
@@ -79,6 +112,13 @@ type CurrentLocation = {
   lat: number;
   lng: number;
 };
+
+type SearchFilter = "all" | "tourist" | "food" | "cafe";
+type AttractionLoadingStage =
+  | "idle"
+  | "fetching-places"
+  | "ranking"
+  | "rendering-markers";
 
 const CONTENT_TYPE_BADGES: Record<string, MarkerBadge> = {
   "12": {
@@ -178,9 +218,50 @@ function resolveMarkerType(
   };
 }
 
-function createBadgeMarkerIconHtml(badge: MarkerBadge) {
+function createBadgeMarkerIconHtml(badge: MarkerBadge, rankLabel?: string) {
+  const rank = rankLabel ? Number(rankLabel) : Number.NaN;
+  const isRankNumber = Number.isFinite(rank);
+  const rankBadgeStyle = (() => {
+    if (!isRankNumber) {
+      return {
+        background: "#ef4444",
+        text: "#ffffff",
+        border: "#ffffff",
+      };
+    }
+
+    if (rank === 1) {
+      return {
+        background: "#f59e0b",
+        text: "#ffffff",
+        border: "#ffffff",
+      };
+    }
+    if (rank === 2) {
+      return {
+        background: "#94a3b8",
+        text: "#ffffff",
+        border: "#ffffff",
+      };
+    }
+    if (rank === 3) {
+      return {
+        background: "#b45309",
+        text: "#ffffff",
+        border: "#ffffff",
+      };
+    }
+
+    return {
+      background: "#ef4444",
+      text: "#ffffff",
+      border: "#ffffff",
+    };
+  })();
+
   return `
     <div style="
+      position:relative;
       width:34px;
       height:34px;
       border-radius:9999px;
@@ -196,7 +277,32 @@ function createBadgeMarkerIconHtml(badge: MarkerBadge) {
       box-shadow:0 4px 10px rgba(15,23,42,0.18);
       letter-spacing:-0.02em;
       user-select:none;
-    ">${escapeHtml(badge.icon)}</div>
+    ">
+      <span>${escapeHtml(badge.icon)}</span>
+      ${
+        rankLabel
+          ? `<span style="
+              position:absolute;
+              top:-8px;
+              right:-8px;
+              min-width:18px;
+              height:18px;
+              border-radius:9999px;
+              border:2px solid ${rankBadgeStyle.border};
+              background:${rankBadgeStyle.background};
+              color:${rankBadgeStyle.text};
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              font-size:10px;
+              font-weight:800;
+              line-height:1;
+              padding:0 3px;
+              box-shadow:0 3px 8px rgba(15,23,42,0.2);
+            ">${escapeHtml(rankLabel)}</span>`
+          : ""
+      }
+    </div>
   `;
 }
 
@@ -211,7 +317,9 @@ function shouldHideAttraction(
   ].join(" ");
   const targetText = `${attraction.title} ${categoryText}`;
 
-  return /화장실|공중.?화장실|주차장|공영주차장|parking/i.test(targetText);
+  return /화장실|공중.?화장실|주차장|공영주차장|parking|교회|성당|대성당|사찰|절|암자|성지|성지순례|cathedral|church|temple/i.test(
+    targetText
+  );
 }
 
 function toMultiPolygonCoordinates(feature: GangwonBoundaryFeature): GeoMultiPolygon {
@@ -271,6 +379,28 @@ function calculateDistanceMeters(
   return earthRadiusMeters * c;
 }
 
+function getTouristNameMatchScore(placeTitle: string, touristName: string) {
+  const normalizedPlace = normalizeTouristPlaceNameForMatch(placeTitle);
+  const normalizedTourist = normalizeTouristPlaceNameForMatch(touristName);
+
+  if (!normalizedPlace || !normalizedTourist) {
+    return 0;
+  }
+
+  if (normalizedPlace === normalizedTourist) {
+    return 100;
+  }
+
+  if (
+    normalizedTourist.includes(normalizedPlace) ||
+    normalizedPlace.includes(normalizedTourist)
+  ) {
+    return 70;
+  }
+
+  return 0;
+}
+
 function HomePage() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -296,9 +426,19 @@ function HomePage() {
     GANGWON_REGIONS[0].sigunguCode
   );
   const [searchKeyword, setSearchKeyword] = useState("");
+  const [isSearchPopupOpen, setIsSearchPopupOpen] = useState(false);
+  const [searchFilter, setSearchFilter] = useState<SearchFilter>("all");
+  const [attractionLoadingStage, setAttractionLoadingStage] =
+    useState<AttractionLoadingStage>("idle");
+  const [recentSearches, setRecentSearches] = useState<string[]>([
+    "경포해변",
+    "속초해수욕장",
+    "봉포머구리집",
+  ]);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const boundaryQuery = useQuery({
     queryKey: ["gangwon-boundary"],
@@ -318,17 +458,83 @@ function HomePage() {
     queryKey: ["gangwon-attractions", selectedSigunguCode],
     enabled: mapReady && Boolean(TOUR_API_SERVICE_KEY),
     queryFn: async () => {
+      setAttractionLoadingStage("fetching-places");
+      const signguCode = GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode];
       const lclsNameByCode = await fetchLclsSystemNameMap(TOUR_API_SERVICE_KEY);
       const attractions = await fetchGangwonAttractions(TOUR_API_SERVICE_KEY, {
         sigunguCode: selectedSigunguCode || undefined,
-        contentTypeIds: [...TOUR_CONTENT_TYPE_IDS],
+        contentTypeIds: ["12", "39"],
       });
+      setAttractionLoadingStage("ranking");
+      const concentrationPoints = await fetchTouristConcentrationPoints(
+        TOUR_API_SERVICE_KEY,
+        {
+          areaCode: GANGWON_TATS_AREA_CODE,
+          signguCode,
+          numOfRows: 2000,
+        }
+      );
       const filteredAttractions = attractions.filter(
         (attraction) => !shouldHideAttraction(attraction, lclsNameByCode)
       );
+      const rankableTouristAttractions = filteredAttractions.filter(
+        (attraction) => attraction.contentTypeId === "12"
+      );
+      const latestConcentrationByName =
+        buildLatestConcentrationMap(concentrationPoints);
+      const latestConcentrationPoints = [...latestConcentrationByName.values()].sort(
+        (a, b) => b.concentrationRate - a.concentrationRate
+      );
+
+      const usedAttractionIds = new Set<string>();
+      const topAttractions: Array<{
+        attraction: GangwonAttraction;
+        popularityScore: number;
+        touristTrendName: string;
+      }> = [];
+
+      latestConcentrationPoints.forEach((point) => {
+        if (topAttractions.length >= 10) {
+          return;
+        }
+
+        const bestMatch = rankableTouristAttractions
+          .filter((attraction) => !usedAttractionIds.has(attraction.id))
+          .map((attraction) => ({
+            attraction,
+            score: getTouristNameMatchScore(attraction.title, point.touristName),
+          }))
+          .filter((candidate) => candidate.score > 0)
+          .sort((a, b) => b.score - a.score)[0];
+
+        if (!bestMatch) {
+          return;
+        }
+
+        usedAttractionIds.add(bestMatch.attraction.id);
+        topAttractions.push({
+          attraction: bestMatch.attraction,
+          popularityScore: point.concentrationRate,
+          touristTrendName: point.touristName,
+        });
+      });
+
+      if (topAttractions.length < 10) {
+        rankableTouristAttractions
+          .filter((attraction) => !usedAttractionIds.has(attraction.id))
+          .slice(0, 10 - topAttractions.length)
+          .forEach((attraction) => {
+            topAttractions.push({
+              attraction,
+              popularityScore: -1,
+              touristTrendName: attraction.title,
+            });
+          });
+      }
 
       return {
-        filteredAttractions,
+        allAttractions: filteredAttractions,
+        topAttractions,
         lclsNameByCode,
       };
     },
@@ -344,6 +550,18 @@ function HomePage() {
     : attractionsQuery.error instanceof Error
       ? attractionsQuery.error.message
       : null;
+  const attractionLoadingMessage = useMemo(() => {
+    if (attractionLoadingStage === "fetching-places") {
+      return "장소 데이터를 찾고 있어요";
+    }
+    if (attractionLoadingStage === "ranking") {
+      return "순서를 매기고 있어요";
+    }
+    if (attractionLoadingStage === "rendering-markers") {
+      return "지도를 그리고 있어요";
+    }
+    return "";
+  }, [attractionLoadingStage]);
   const orderedRegions = useMemo(() => {
     if (!currentLocation) {
       return GANGWON_REGIONS;
@@ -355,6 +573,164 @@ function HomePage() {
       return distanceA - distanceB;
     });
   }, [currentLocation]);
+
+  const topRankByAttractionId = useMemo(() => {
+    const map = new Map<string, number>();
+    (attractionsQuery.data?.topAttractions ?? []).forEach((item, index) => {
+      map.set(item.attraction.id, index + 1);
+    });
+    return map;
+  }, [attractionsQuery.data]);
+
+  const trendNameByAttractionId = useMemo(() => {
+    const map = new Map<string, string>();
+    (attractionsQuery.data?.topAttractions ?? []).forEach((item) => {
+      map.set(item.attraction.id, item.touristTrendName);
+    });
+    return map;
+  }, [attractionsQuery.data]);
+
+  const searchResults = useMemo(() => {
+    const attractionData = attractionsQuery.data;
+    if (!attractionData) {
+      return [];
+    }
+
+    const keyword = searchKeyword.trim().toLowerCase();
+
+    return attractionData.allAttractions
+      .map((attraction) => {
+        const markerType = resolveMarkerType(attraction, attractionData.lclsNameByCode);
+        const rank = topRankByAttractionId.get(attraction.id) ?? null;
+        const textForSearch = `${attraction.title} ${attraction.address} ${markerType.typeName}`.toLowerCase();
+        const isCafe = markerType.contentTypeLabel === "카페";
+        const isFoodOrCafe =
+          attraction.contentTypeId === "39" || markerType.contentTypeLabel === "카페";
+
+        const matchesFilter =
+          searchFilter === "all"
+            ? true
+            : searchFilter === "tourist"
+              ? attraction.contentTypeId === "12"
+              : searchFilter === "food"
+                ? isFoodOrCafe
+                : isCafe;
+        const matchesKeyword = !keyword || textForSearch.includes(keyword);
+
+        return {
+          attraction,
+          markerType,
+          rank,
+          touristTrendName: trendNameByAttractionId.get(attraction.id) ?? attraction.title,
+          matchesFilter,
+          matchesKeyword,
+        };
+      })
+      .filter((item) => item.matchesFilter && item.matchesKeyword)
+      .sort((a, b) => {
+        if (a.rank != null && b.rank != null) {
+          return a.rank - b.rank;
+        }
+        if (a.rank != null) {
+          return -1;
+        }
+        if (b.rank != null) {
+          return 1;
+        }
+        return a.attraction.title.localeCompare(b.attraction.title, "ko");
+      })
+      .slice(0, 60);
+  }, [attractionsQuery.data, searchFilter, searchKeyword, topRankByAttractionId, trendNameByAttractionId]);
+
+  const appendRecentSearch = (keyword: string) => {
+    const trimmedKeyword = keyword.trim();
+    if (!trimmedKeyword) {
+      return;
+    }
+    setRecentSearches((previous) => [
+      trimmedKeyword,
+      ...previous.filter((item) => item !== trimmedKeyword),
+    ].slice(0, 8));
+  };
+
+  const openPlaceSheetFromAttraction = (
+    attraction: GangwonAttraction,
+    markerType: ReturnType<typeof resolveMarkerType>,
+    touristTrendName: string,
+    rank: number | null
+  ) => {
+    const mapInstance = mapInstanceRef.current;
+    const naverMaps = naverMapsRef.current;
+    const position = naverMaps
+      ? new naverMaps.LatLng(attraction.lat, attraction.lng)
+      : null;
+
+    if (mapInstance && position) {
+      if (typeof mapInstance.panTo === "function") {
+        mapInstance.panTo(position, {
+          duration: 500,
+        });
+      } else {
+        mapInstance.setCenter(position);
+      }
+    }
+
+    openSheet(
+      {
+        id: `${attraction.id}-${attraction.contentTypeId}`,
+        contentId: attraction.id,
+        contentTypeId: attraction.contentTypeId,
+        areaCode: GANGWON_TATS_AREA_CODE,
+        signguCode:
+          GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode] ?? "",
+        touristTrendName,
+        topRank: rank ?? null,
+        title: attraction.title,
+        address: attraction.address,
+        lat: attraction.lat,
+        lng: attraction.lng,
+        contentTypeLabel: markerType.contentTypeLabel,
+        categoryName: markerType.typeName,
+        icon: markerType.badge.icon,
+        images: [],
+      },
+      { mode: "bottom-sheet" }
+    );
+  };
+
+  useEffect(() => {
+    if (!isSearchPopupOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isSearchPopupOpen]);
+
+  useEffect(() => {
+    if (!isSearchPopupOpen) {
+      return;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsSearchPopupOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isSearchPopupOpen]);
 
   useEffect(() => {
     if (!("geolocation" in navigator)) {
@@ -717,20 +1093,27 @@ function HomePage() {
       return;
     }
 
+    setAttractionLoadingStage("rendering-markers");
     const markerBounds = new naverMaps.LatLngBounds();
 
-    attractionData.filteredAttractions.forEach((attraction) => {
+    attractionData.allAttractions.forEach((attraction) => {
       const position = new naverMaps.LatLng(attraction.lat, attraction.lng);
       markerBounds.extend(position);
 
       const markerType = resolveMarkerType(attraction, attractionData.lclsNameByCode);
+      const rank = topRankByAttractionId.get(attraction.id) ?? null;
+      const touristTrendName =
+        trendNameByAttractionId.get(attraction.id) ?? attraction.title;
 
       const marker = new naverMaps.Marker({
         map: mapInstance,
         position,
         title: attraction.title,
+        zIndex: rank ? 2000 - rank : 1100,
         icon: {
-          content: createBadgeMarkerIconHtml(markerType.badge),
+          content: rank
+            ? createBadgeMarkerIconHtml(markerType.badge, `${rank}`)
+            : createBadgeMarkerIconHtml(markerType.badge),
           anchor: new naverMaps.Point(17, 17),
         },
       });
@@ -738,30 +1121,7 @@ function HomePage() {
       markerRefs.current.push(marker);
 
       const listener = naverMaps.Event.addListener(marker, "click", () => {
-        if (typeof mapInstance.panTo === "function") {
-          mapInstance.panTo(position, {
-            duration: 500,
-          });
-        } else {
-          mapInstance.setCenter(position);
-        }
-
-        openSheet(
-          {
-            id: `${attraction.id}-${attraction.contentTypeId}`,
-            contentId: attraction.id,
-            contentTypeId: attraction.contentTypeId,
-            title: attraction.title,
-            address: attraction.address,
-            lat: attraction.lat,
-            lng: attraction.lng,
-            contentTypeLabel: markerType.contentTypeLabel,
-            categoryName: markerType.typeName,
-            icon: markerType.badge.icon,
-            images: [],
-          },
-          { mode: "bottom-sheet" }
-        );
+        openPlaceSheetFromAttraction(attraction, markerType, touristTrendName, rank);
       });
 
       markerListenerRefs.current.push(listener);
@@ -769,9 +1129,16 @@ function HomePage() {
 
     fitMapToSelectedRegion({
       smooth: true,
-      fallbackBounds: attractionData.filteredAttractions.length > 0 ? markerBounds : null,
+      fallbackBounds: attractionData.allAttractions.length > 0 ? markerBounds : null,
     });
-  }, [attractionsQuery.data, mapReady, openSheet, selectedSigunguCode]);
+    setAttractionLoadingStage("idle");
+  }, [attractionsQuery.data, mapReady, selectedSigunguCode, topRankByAttractionId, trendNameByAttractionId]);
+
+  useEffect(() => {
+    if (attractionsQuery.isError) {
+      setAttractionLoadingStage("idle");
+    }
+  }, [attractionsQuery.isError]);
 
   return (
     <section className="relative h-full overflow-hidden bg-brand-50">
@@ -782,17 +1149,24 @@ function HomePage() {
       />
 
       <div className="pointer-events-none absolute inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center justify-between">
-        <div className="pointer-events-auto flex h-12 flex-1 items-center rounded-full border border-brand-200 bg-white/95 px-4 shadow-md backdrop-blur">
+        <button
+          type="button"
+          onClick={() => setIsSearchPopupOpen(true)}
+          className="pointer-events-auto flex h-12 flex-1 items-center rounded-full border border-brand-200 bg-white/95 px-4 text-left shadow-md backdrop-blur"
+        >
           <span className="text-base text-brand-500">
             <IoLocationSharp />
           </span>
-          <input
-            value={searchKeyword}
-            onChange={(event) => setSearchKeyword(event.target.value)}
-            placeholder="강원도 명소 검색"
-            className="ml-2 w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none"
-          />
-        </div>
+          <span
+            className={`ml-2 w-full truncate text-sm ${
+              searchKeyword
+                ? "text-slate-700"
+                : "text-slate-400"
+            }`}
+          >
+            {searchKeyword || "강원도 명소 검색"}
+          </span>
+        </button>
         <button
           type="button"
           aria-label="담은 장소"
@@ -842,6 +1216,160 @@ function HomePage() {
       />
 
       <PlaceBottomSheet />
+
+      {attractionLoadingStage !== "idle" && !isSearchPopupOpen ? (
+        <div className="pointer-events-none absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+6.4rem)] z-30 flex justify-center px-3">
+          <div className="w-full max-w-xs rounded-2xl border border-brand-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+              <p className="text-sm font-semibold text-slate-800">{attractionLoadingMessage}</p>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              잠시만요, 최신 데이터를 반영하고 있어요.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {isSearchPopupOpen ? (
+        <section className="fixed inset-0 z-[2300] bg-gradient-to-b from-brand-50 via-brand-50 to-white">
+          <div className="flex h-full flex-col">
+            <div className="border-b border-brand-100/80 bg-white/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
+              <div className="flex items-center gap-2">
+                <div className="flex h-12 flex-1 items-center rounded-full border border-brand-200 bg-white px-4 shadow-sm">
+                  <button
+                    type="button"
+                    aria-label="검색 닫기"
+                    onClick={() => setIsSearchPopupOpen(false)}
+                    className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full text-brand-700"
+                  >
+                    <IoArrowBack />
+                  </button>
+                  <input
+                    ref={searchInputRef}
+                    value={searchKeyword}
+                    onChange={(event) => setSearchKeyword(event.target.value)}
+                    placeholder="강원도 명소, 카페, 음식점 검색"
+                    className="ml-2 w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none"
+                  />
+                  {searchKeyword ? (
+                    <button
+                      type="button"
+                      aria-label="검색어 지우기"
+                      onClick={() => setSearchKeyword("")}
+                      className="ml-2 text-slate-400"
+                    >
+                      <IoClose />
+                    </button>
+                  ) : (
+                    <span className="ml-2 text-slate-400">
+                      <IoSearch />
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="scrollbar-hide mt-3 flex items-center gap-2 overflow-x-auto pr-2">
+                {[
+                  { key: "all", label: "전체" },
+                  { key: "tourist", label: "관광지" },
+                  { key: "food", label: "음식점" },
+                  { key: "cafe", label: "카페" },
+                ].map((filter) => {
+                  const isActive = searchFilter === filter.key;
+                  return (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      onClick={() => setSearchFilter(filter.key as SearchFilter)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                        isActive
+                          ? "border-brand-500 bg-brand-600 text-white"
+                          : "border-brand-200 bg-white text-slate-600"
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+              {searchKeyword.trim() ? (
+                <div className="space-y-2">
+                  {searchResults.length > 0 ? (
+                    searchResults.map((item) => (
+                      <button
+                        key={`${item.attraction.id}-${item.attraction.contentTypeId}`}
+                        type="button"
+                        onClick={() => {
+                          appendRecentSearch(searchKeyword);
+                          setSearchKeyword(item.attraction.title);
+                          setIsSearchPopupOpen(false);
+                          openPlaceSheetFromAttraction(
+                            item.attraction,
+                            item.markerType,
+                            item.touristTrendName,
+                            item.rank
+                          );
+                        }}
+                        className="flex w-full items-start justify-between rounded-2xl border border-brand-100 bg-white px-4 py-3 text-left shadow-[0_4px_14px_rgba(15,23,42,0.04)]"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-800">
+                            {item.attraction.title}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-slate-500">
+                            {item.attraction.address}
+                          </p>
+                        </div>
+                        <div className="ml-3 flex shrink-0 items-center gap-2">
+                          {item.rank ? (
+                            <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+                              TOP {item.rank}
+                            </span>
+                          ) : null}
+                          {item.markerType.contentTypeLabel === "카페" ? (
+                            <IoCafeOutline className="text-brand-500" />
+                          ) : item.attraction.contentTypeId === "39" ? (
+                            <IoRestaurantOutline className="text-brand-500" />
+                          ) : (
+                            <span>{item.markerType.badge.icon}</span>
+                          )}
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-4 py-8 text-center text-sm text-slate-500">
+                      검색 결과가 없습니다.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-slate-500">최근 검색</p>
+                  <div className="space-y-2">
+                    {recentSearches.map((keyword) => (
+                      <button
+                        key={keyword}
+                        type="button"
+                        onClick={() => {
+                          setSearchKeyword(keyword);
+                        }}
+                        className="flex w-full items-center justify-between rounded-2xl border border-brand-100 bg-white px-4 py-3 text-left"
+                      >
+                        <span className="text-sm text-slate-700">{keyword}</span>
+                        <IoSearch className="text-slate-400" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {mapError ? (
         <div className="absolute inset-x-3 bottom-3 z-20 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 shadow-sm">

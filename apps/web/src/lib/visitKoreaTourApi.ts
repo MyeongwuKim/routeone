@@ -3,8 +3,10 @@ const TOUR_LCLS_CODE_BASE_URL = "/tour-api/B551011/KorService2/lclsSystmCode2";
 const TOUR_DETAIL_COMMON_BASE_URL =
   "/tour-api/B551011/KorService2/detailCommon2";
 const TOUR_DETAIL_IMAGE_BASE_URL = "/tour-api/B551011/KorService2/detailImage2";
+const TOUR_TATS_CONCENTRATION_BASE_URL =
+  "/tour-api/B551011/TatsCnctrRateService/tatsCnctrRatedList";
 
-const GANGWON_AREA_CODE = "32";
+export const GANGWON_AREA_CODE = "32";
 
 export const TOUR_CONTENT_TYPE_IDS = [
   "39", // 음식점
@@ -39,6 +41,7 @@ type TourApiResponse = {
       resultMsg?: string;
     };
     body?: {
+      totalCount?: string | number;
       items?: {
         item?: TourApiItem[] | TourApiItem;
       };
@@ -88,9 +91,25 @@ export type TourPlaceDetail = {
   images: string[];
 };
 
+export type TouristConcentrationPoint = {
+  touristName: string;
+  baseYmd: string;
+  concentrationRate: number;
+  areaCode: string;
+  signguCode: string;
+};
+
 type FetchGangwonAttractionsOptions = {
   sigunguCode?: string;
   contentTypeIds?: string[];
+};
+
+type FetchTouristConcentrationOptions = {
+  areaCode: string;
+  signguCode: string;
+  touristName?: string;
+  numOfRows?: number;
+  pageNo?: number;
 };
 
 function normalizeServiceKey(serviceKey: string) {
@@ -147,6 +166,58 @@ function dedupeImageUrls(urls: string[]) {
   return [...unique.values()];
 }
 
+function normalizeYmd(rawValue: unknown) {
+  if (typeof rawValue !== "string" && typeof rawValue !== "number") {
+    return null;
+  }
+
+  const digitsOnly = String(rawValue).replaceAll(/\D/g, "");
+  if (digitsOnly.length !== 8) {
+    return null;
+  }
+
+  return digitsOnly;
+}
+
+function readNumberFromUnknown(
+  source: Record<string, unknown>,
+  keys: string[]
+) {
+  for (const key of keys) {
+    const rawValue = source[key];
+    if (rawValue == null) {
+      continue;
+    }
+    const parsed = Number(rawValue);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function readStringFromUnknown(
+  source: Record<string, unknown>,
+  keys: string[]
+) {
+  for (const key of keys) {
+    const rawValue = source[key];
+    if (typeof rawValue === "string" && rawValue.trim()) {
+      return rawValue.trim();
+    }
+  }
+  return "";
+}
+
+function normalizeTouristName(rawName: string) {
+  return rawName
+    .toLowerCase()
+    .replaceAll(/\([^)]*\)/g, "")
+    .replaceAll(/[\s·\-_,./]/g, "")
+    .trim();
+}
+
+
 export async function fetchGangwonAttractions(
   serviceKey: string,
   options: FetchGangwonAttractionsOptions = {}
@@ -160,12 +231,14 @@ export async function fetchGangwonAttractions(
       ? options.contentTypeIds
       : [...TOUR_CONTENT_TYPE_IDS];
 
+  const pageSize = 200;
+  const maxPagesSafetyLimit = 100;
   const queryBase: Record<string, string> = {
     serviceKey: normalizeServiceKey(serviceKey),
     MobileOS: "ETC",
     MobileApp: "RouteOne",
     _type: "json",
-    numOfRows: "200",
+    numOfRows: `${pageSize}`,
     pageNo: "1",
     arrange: "Q",
     areaCode: GANGWON_AREA_CODE,
@@ -177,33 +250,56 @@ export async function fetchGangwonAttractions(
 
   const results = await Promise.all(
     contentTypeIds.map(async (contentTypeId) => {
-      const query = new URLSearchParams({
-        ...queryBase,
-        contentTypeId,
-      });
+      const aggregatedItems: TourApiItem[] = [];
+      let totalPages = Number.POSITIVE_INFINITY;
 
-      const response = await fetch(`${TOUR_API_BASE_URL}?${query.toString()}`);
+      for (let pageNo = 1; pageNo <= totalPages; pageNo += 1) {
+        if (pageNo > maxPagesSafetyLimit) {
+          break;
+        }
 
-      if (!response.ok) {
-        const errorText = (await response.text()).trim();
-        throw new Error(
-          `Tour API request failed: ${response.status}${
-            errorText ? ` (${errorText})` : ""
-          }`
-        );
+        const query = new URLSearchParams({
+          ...queryBase,
+          pageNo: `${pageNo}`,
+          contentTypeId,
+        });
+
+        const response = await fetch(`${TOUR_API_BASE_URL}?${query.toString()}`);
+
+        if (!response.ok) {
+          const errorText = (await response.text()).trim();
+          throw new Error(
+            `Tour API request failed: ${response.status}${
+              errorText ? ` (${errorText})` : ""
+            }`
+          );
+        }
+
+        const data = (await response.json()) as TourApiResponse;
+        const resultCode = data.response?.header?.resultCode;
+
+        if (resultCode && resultCode !== "0000") {
+          const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
+          throw new Error(`Tour API error: ${resultCode} ${resultMsg}`);
+        }
+
+        const items = toArray(data.response?.body?.items?.item);
+        if (items.length === 0) {
+          break;
+        }
+        aggregatedItems.push(...items);
+
+        const totalCount = Number(data.response?.body?.totalCount ?? 0);
+        if (Number.isFinite(totalCount) && totalCount > 0) {
+          totalPages = Math.ceil(totalCount / pageSize);
+        }
+
+        if (items.length < pageSize) {
+          break;
+        }
       }
 
-      const data = (await response.json()) as TourApiResponse;
-      const resultCode = data.response?.header?.resultCode;
-
-      if (resultCode && resultCode !== "0000") {
-        const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
-        throw new Error(`Tour API error: ${resultCode} ${resultMsg}`);
-      }
-
-      const items = toArray(data.response?.body?.items?.item);
-
-      return items
+      return aggregatedItems
         .map((item, index): GangwonAttraction | null => {
           const lat = Number(item.mapy);
           const lng = Number(item.mapx);
@@ -300,8 +396,7 @@ export async function fetchLclsSystemNameMap(serviceKey: string) {
 export async function fetchTourPlaceDetail(
   serviceKey: string,
   contentId: string,
-  _contentTypeId?: string,
-  _fallbackKeyword?: string
+  _contentTypeId?: string
 ) {
   if (!serviceKey || !contentId) {
     throw new Error("Tour place detail params are missing.");
@@ -363,10 +458,138 @@ export async function fetchTourPlaceDetail(
     }
   }
 
-  const uniqueImages = dedupeImageUrls(detailImageUrls);
+  const images = dedupeImageUrls(detailImageUrls);
 
   return {
     overview: stripHtml(commonItem?.overview),
-    images: uniqueImages,
+    images,
   } satisfies TourPlaceDetail;
+}
+
+export async function fetchTouristConcentrationPoints(
+  serviceKey: string,
+  options: FetchTouristConcentrationOptions
+) {
+  if (!serviceKey) {
+    throw new Error("VisitKorea service key is missing.");
+  }
+
+  if (!options.areaCode || !options.signguCode) {
+    throw new Error("지역 코드를 찾을 수 없습니다.");
+  }
+
+  const query = new URLSearchParams({
+    serviceKey: normalizeServiceKey(serviceKey),
+    MobileOS: "ETC",
+    MobileApp: "RouteOne",
+    _type: "json",
+    pageNo: `${options.pageNo ?? 1}`,
+    numOfRows: `${options.numOfRows ?? 300}`,
+    areaCd: options.areaCode,
+    signguCd: options.signguCode,
+  });
+
+  if (options.touristName) {
+    query.set("tAtsNm", options.touristName);
+  }
+
+  const response = await fetch(
+    `${TOUR_TATS_CONCENTRATION_BASE_URL}?${query.toString()}`
+  );
+
+  if (!response.ok) {
+    const errorText = (await response.text()).trim();
+    throw new Error(
+      `Tour trend request failed: ${response.status}${
+        errorText ? ` (${errorText})` : ""
+      }`
+    );
+  }
+
+  const data = (await response.json()) as TourApiResponse;
+  const resultCode = data.response?.header?.resultCode;
+
+  if (resultCode && resultCode !== "0000") {
+    const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
+    throw new Error(`Tour trend API error: ${resultCode} ${resultMsg}`);
+  }
+
+  const rawItems = toArray(data.response?.body?.items?.item) as Record<
+    string,
+    unknown
+  >[];
+
+  const parsed = rawItems
+    .map((rawItem): TouristConcentrationPoint | null => {
+      const touristName = readStringFromUnknown(rawItem, [
+        "tAtsNm",
+        "touristName",
+        "touristNm",
+        "atsNm",
+      ]);
+      const baseYmd =
+        normalizeYmd(rawItem.baseYmd) ||
+        normalizeYmd(rawItem.predYmd) ||
+        normalizeYmd(rawItem.fcstYmd) ||
+        normalizeYmd(rawItem.cnctrYmd) ||
+        normalizeYmd(rawItem.ymd);
+      const concentrationRate = readNumberFromUnknown(rawItem, [
+        "cnctrRate",
+        "cnctrRto",
+        "predVal",
+        "cnctrVal",
+        "score",
+      ]);
+
+      if (!touristName || !baseYmd || concentrationRate == null) {
+        return null;
+      }
+
+      return {
+        touristName,
+        baseYmd,
+        concentrationRate,
+        areaCode:
+          readStringFromUnknown(rawItem, ["areaCd", "areaCode"]) ||
+          options.areaCode,
+        signguCode:
+          readStringFromUnknown(rawItem, ["signguCd", "signguCode"]) ||
+          options.signguCode,
+      };
+    })
+    .filter((item): item is TouristConcentrationPoint => item !== null)
+    .sort((a, b) => a.baseYmd.localeCompare(b.baseYmd));
+
+  return parsed;
+}
+
+export function buildLatestConcentrationMap(
+  points: TouristConcentrationPoint[]
+) {
+  const latestByTourist = new Map<string, TouristConcentrationPoint>();
+
+  points.forEach((point) => {
+    const key = normalizeTouristName(point.touristName);
+    const current = latestByTourist.get(key);
+    if (!current || current.baseYmd < point.baseYmd) {
+      latestByTourist.set(key, point);
+    }
+  });
+
+  return latestByTourist;
+}
+
+export function toWeeklyAndMonthlySeries(points: TouristConcentrationPoint[]) {
+  const sortedPoints = [...points].sort((a, b) => a.baseYmd.localeCompare(b.baseYmd));
+  const monthly = sortedPoints.slice(-30);
+  const weekly = sortedPoints.slice(-7);
+
+  return {
+    weekly,
+    monthly,
+  };
+}
+
+export function normalizeTouristPlaceNameForMatch(placeName: string) {
+  return normalizeTouristName(placeName);
 }
