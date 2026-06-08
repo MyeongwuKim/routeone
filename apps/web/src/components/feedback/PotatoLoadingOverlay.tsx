@@ -1,0 +1,378 @@
+import { useUiLoadingStore, type AppLoadingAnimation } from "../../stores/uiLoadingStore";
+
+type PotatoLoadingCardProps = {
+  title: string;
+  description?: string;
+  footerText?: string;
+  animation?: AppLoadingAnimation;
+  compact?: boolean;
+  className?: string;
+};
+
+function PotatoLoadingStyles() {
+  return (
+    <style>
+      {`
+        @keyframes potatoFloat {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-5px); }
+        }
+        @keyframes potatoThinkTilt {
+          0%, 100% { transform: rotate(-1.4deg); }
+          50% { transform: rotate(1.6deg); }
+        }
+        @keyframes potatoBlinkCute {
+          0%, 44%, 100% { transform: scaleY(1); }
+          46%, 48% { transform: scaleY(0.12); }
+        }
+        @keyframes potatoEyeMove {
+          0%, 100% { transform: translateX(-0.8px); }
+          50% { transform: translateX(1.2px); }
+        }
+        @keyframes potatoMapWiggle {
+          0%, 100% { transform: rotate(-3deg); }
+          50% { transform: rotate(3deg); }
+        }
+        @keyframes potatoMapInspect {
+          0%, 100% { transform: translateY(0px) rotate(-1deg); }
+          50% { transform: translateY(-1.8px) rotate(1.8deg); }
+        }
+        @keyframes potatoPupilFocus {
+          0%, 100% { transform: translate(-0.4px, 0.9px); }
+          35% { transform: translate(0.7px, 1.2px); }
+          70% { transform: translate(0.1px, 1.6px); }
+        }
+        @keyframes potatoPupilSide {
+          0%, 100% { transform: translateX(-0.6px); }
+          50% { transform: translateX(0.8px); }
+        }
+        @keyframes potatoShadowPulse {
+          0%, 100% { transform: scaleX(1); opacity: 0.22; }
+          50% { transform: scaleX(0.9); opacity: 0.15; }
+        }
+        @keyframes potatoLensSwing {
+          0%, 100% { transform: rotate(-4deg) translateY(0px); }
+          50% { transform: rotate(4deg) translateY(-0.6px); }
+        }
+        @keyframes potatoPonderNod {
+          0%, 100% { transform: rotate(0deg); }
+          50% { transform: rotate(1.6deg); }
+        }
+        @keyframes potatoThoughtBubble {
+          0%, 100% { transform: translateY(0px); opacity: 0.75; }
+          50% { transform: translateY(-2px); opacity: 1; }
+        }
+        @keyframes potatoThoughtDot {
+          0%, 20%, 100% { opacity: 0.2; transform: scale(0.8); }
+          40%, 70% { opacity: 1; transform: scale(1); }
+        }
+      `}
+    </style>
+  );
+}
+
+function PotatoCharacter({
+  animation,
+  compact,
+}: {
+  animation: AppLoadingAnimation;
+  compact: boolean;
+}) {
+  const isMapThinking = animation === "map-thinking";
+  const isRanking = animation === "ranking";
+  const isMapRendering = animation === "map-rendering";
+  const isSearching = animation === "searching";
+  const isPondering = animation === "pondering";
+  const shouldHoldMap = isMapThinking || isRanking || isMapRendering;
+
+  return (
+    <div className={`${compact ? "h-20 w-20" : "h-24 w-24"} relative shrink-0`}>
+      <div
+        className="absolute bottom-[6px] left-1/2 h-3 w-14 -translate-x-1/2 rounded-full bg-slate-400/30"
+        style={{ animation: "potatoShadowPulse 1.8s ease-in-out infinite" }}
+      />
+      <svg
+        viewBox="0 0 120 120"
+        className="relative z-10 h-full w-full"
+        style={{
+          animation: isMapThinking
+            ? "potatoThinkTilt 1.1s ease-in-out infinite"
+            : isPondering || isSearching
+              ? "none"
+              : "potatoFloat 1.6s ease-in-out infinite",
+        }}
+        aria-hidden="true"
+      >
+        <g>
+          <path
+            d="M60 16C82 16 100 33 100 55C100 82 84 103 60 104C36 104 20 83 20 58C20 34 38 16 60 16Z"
+            fill="#CFA06D"
+            stroke="#2A1A13"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <ellipse cx="45" cy="45" rx="3.6" ry="3.1" fill="#B9864F" opacity="0.52" />
+          <ellipse cx="76" cy="73" rx="3.2" ry="2.9" fill="#B9864F" opacity="0.45" />
+          <ellipse cx="62" cy="88" rx="2.7" ry="2.3" fill="#B9864F" opacity="0.45" />
+        </g>
+        {isSearching ? (
+          <g>
+            <circle cx="50" cy="58" r="3.1" fill="#111827" />
+            <circle cx="49.3" cy="57.3" r="1.1" fill="#ffffff" />
+            <path
+              d="M67 58 Q70 55 73 58"
+              fill="none"
+              stroke="#111827"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </g>
+        ) : (
+          <g
+            style={{
+              animation:
+                isMapThinking || isPondering
+                  ? "potatoEyeMove 1.2s ease-in-out infinite"
+                  : "none",
+            }}
+          >
+            <g
+              style={{
+                animation:
+                  isMapThinking || isPondering
+                    ? "potatoPupilFocus 1.5s ease-in-out infinite"
+                    : "none",
+              }}
+            >
+              <circle cx="50" cy="58" r="2.6" fill="#111827" />
+              <circle cx="70" cy="58" r="2.6" fill="#111827" />
+            </g>
+          </g>
+        )}
+        <g>
+          <line
+            x1="45"
+            y1="52"
+            x2="55"
+            y2="52"
+            stroke="#2A1A13"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            opacity="0.36"
+          />
+          <line
+            x1="65"
+            y1="52"
+            x2="75"
+            y2="52"
+            stroke="#2A1A13"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            opacity="0.36"
+          />
+        </g>
+        <circle cx="60" cy="70" r="3.1" fill="none" stroke="#2A1A13" strokeWidth="2" />
+        <circle cx="42" cy="69" r="2.6" fill="#F6C8B5" opacity="0.7" />
+        <circle cx="78" cy="69" r="2.6" fill="#F6C8B5" opacity="0.7" />
+        <path d="M50 104 L48 110" stroke="#2A1A13" strokeWidth="2.2" strokeLinecap="round" />
+        <path d="M70 104 L72 110" stroke="#2A1A13" strokeWidth="2.2" strokeLinecap="round" />
+        <g>
+          <path
+            d="M62 20 C66 10,79 10,82 20 C77 24,69 24,62 20Z"
+            fill="#47B26B"
+            stroke="#1D6B37"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M70 20 C70 16,71 14,73 12"
+            fill="none"
+            stroke="#1D6B37"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+        </g>
+
+        {shouldHoldMap ? (
+          <g
+            style={{
+              transformOrigin: "60px 78px",
+              animation: isMapThinking
+                ? "potatoMapInspect 1.1s ease-in-out infinite"
+                : "potatoMapWiggle 1.3s ease-in-out infinite",
+            }}
+          >
+            <path
+              d="M46 74 C40 70,34 69,30 67"
+              fill="none"
+              stroke="#2A1A13"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+            />
+            <path
+              d="M74 74 C80 70,86 69,90 67"
+              fill="none"
+              stroke="#2A1A13"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+            />
+            <rect
+              x="42"
+              y="64"
+              width="36"
+              height="24"
+              rx="4.5"
+              fill="#E0F2FE"
+              stroke="#2A1A13"
+              strokeWidth="2"
+            />
+            <path d="M50 67 V85 M60 67 V85 M70 67 V85" stroke="#38BDF8" strokeWidth="1.6" />
+            <circle cx="54" cy="74" r="1.8" fill="#F97316" />
+            <path d="M64 80 L70 74" stroke="#0EA5E9" strokeWidth="1.6" strokeLinecap="round" />
+            <circle cx="41.5" cy="75.5" r="2.4" fill="#2A1A13" />
+            <circle cx="78.5" cy="75.5" r="2.4" fill="#2A1A13" />
+            {isRanking ? (
+              <g>
+                <circle cx="75" cy="66" r="5" fill="#F59E0B" stroke="#2A1A13" strokeWidth="1.2" />
+                <text x="75" y="69" textAnchor="middle" fontSize="5.6" fill="#ffffff" fontWeight="700">
+                  1
+                </text>
+              </g>
+            ) : null}
+          </g>
+        ) : null}
+
+        {isSearching ? (
+          <g>
+            <g style={{ animation: "potatoThoughtBubble 1.2s ease-in-out infinite" }}>
+              <circle cx="34" cy="40" r="3.6" fill="#ffffff" stroke="#2A1A13" strokeWidth="1.4" />
+              <circle cx="26" cy="31.5" r="4.8" fill="#ffffff" stroke="#2A1A13" strokeWidth="1.4" />
+              <rect
+                x="10"
+                y="8"
+                width="34"
+                height="20"
+                rx="10"
+                fill="#ffffff"
+                stroke="#2A1A13"
+                strokeWidth="1.7"
+              />
+              <circle
+                cx="20"
+                cy="18"
+                r="1.8"
+                fill="#94A3B8"
+                style={{ animation: "potatoThoughtDot 1.2s ease-in-out infinite" }}
+              />
+              <circle
+                cx="27"
+                cy="18"
+                r="1.8"
+                fill="#94A3B8"
+                style={{ animation: "potatoThoughtDot 1.2s ease-in-out infinite 0.2s" }}
+              />
+              <circle
+                cx="34"
+                cy="18"
+                r="1.8"
+                fill="#94A3B8"
+                style={{ animation: "potatoThoughtDot 1.2s ease-in-out infinite 0.4s" }}
+              />
+            </g>
+            <path
+              d="M77 75 C73 72,68 71,63 72"
+              fill="none"
+              stroke="#2A1A13"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+            />
+            <circle cx="63" cy="72" r="2.2" fill="#2A1A13" />
+            <circle cx="50" cy="58" r="12" fill="#dbeafe" stroke="#2563EB" strokeWidth="2.6" />
+            <line x1="58" y1="66" x2="64" y2="72" stroke="#2A1A13" strokeWidth="3" strokeLinecap="round" />
+            <circle cx="50" cy="58" r="4.5" fill="#111827" />
+            <circle cx="48.8" cy="56.8" r="1.4" fill="#ffffff" />
+          </g>
+        ) : null}
+
+        {isPondering ? (
+          <g>
+            <path
+              d="M40 74 C34 77,31 83,31 89"
+              fill="none"
+              stroke="#2A1A13"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+            />
+            <path
+              d="M78 74 C73 72,69 70,66 69"
+              fill="none"
+              stroke="#2A1A13"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+            />
+            <circle cx="63.5" cy="68.5" r="2.2" fill="#2A1A13" />
+          </g>
+        ) : null}
+
+      </svg>
+    </div>
+  );
+}
+
+export function PotatoLoadingCard({
+  title,
+  description,
+  footerText,
+  animation = "generic",
+  compact = false,
+  className = "",
+}: PotatoLoadingCardProps) {
+  return (
+    <div
+      className={`w-full rounded-3xl border border-brand-200 bg-white/95 shadow-2xl backdrop-blur ${
+        compact ? "max-w-none px-4 py-4" : "max-w-sm px-5 py-5"
+      } ${className}`}
+    >
+      <PotatoLoadingStyles />
+      <div className="flex items-center gap-4">
+        <PotatoCharacter animation={animation} compact={compact} />
+        <div>
+          <p className={`${compact ? "text-xs" : "text-sm"} font-semibold text-slate-800`}>{title}</p>
+          {description ? (
+            <p className={`${compact ? "mt-0.5 text-[11px]" : "mt-1 text-xs"} text-slate-500`}>
+              {description}
+            </p>
+          ) : null}
+          {footerText ? (
+            <p className={`${compact ? "mt-1.5 text-[11px]" : "mt-2 text-xs"} text-brand-700`}>
+              {footerText}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function PotatoLoadingOverlay() {
+  const { isOpen, title, description, footerText, animation, dimmed } = useUiLoadingStore();
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[1800] flex items-center justify-center px-4">
+      {dimmed ? <div className="absolute inset-0 bg-slate-900/5" /> : null}
+      <PotatoLoadingCard
+        title={title}
+        description={description}
+        footerText={footerText}
+        animation={animation}
+      />
+    </div>
+  );
+}

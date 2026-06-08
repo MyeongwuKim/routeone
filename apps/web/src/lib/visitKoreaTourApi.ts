@@ -5,6 +5,10 @@ const TOUR_DETAIL_COMMON_BASE_URL =
 const TOUR_DETAIL_IMAGE_BASE_URL = "/tour-api/B551011/KorService2/detailImage2";
 const TOUR_TATS_CONCENTRATION_BASE_URL =
   "/tour-api/B551011/TatsCnctrRateService/tatsCnctrRatedList";
+const TOUR_LOCATION_BASED_BASE_URL =
+  "/tour-api/B551011/KorService2/locationBasedList2";
+const TOUR_RELATED_TOURIST_KEYWORD_BASE_URL =
+  "/tour-api/B551011/TarRlteTarService1/searchKeyword1";
 
 export const GANGWON_AREA_CODE = "32";
 
@@ -99,6 +103,33 @@ export type TouristConcentrationPoint = {
   signguCode: string;
 };
 
+export type RelatedTouristPlace = {
+  id: string;
+  name: string;
+  category: string;
+  rank: number | null;
+  relationScore: number | null;
+  keyword: string;
+  areaCode: string;
+  signguCode: string;
+  baseYm: string;
+};
+
+export type NearbyTouristPlace = {
+  id: string;
+  title: string;
+  address: string;
+  lat: number;
+  lng: number;
+  contentTypeId: string;
+  lclsSystm1: string;
+  lclsSystm2: string;
+  lclsSystm3: string;
+  firstImage: string;
+  secondImage: string;
+  distanceM: number | null;
+};
+
 type FetchGangwonAttractionsOptions = {
   sigunguCode?: string;
   contentTypeIds?: string[];
@@ -110,6 +141,25 @@ type FetchTouristConcentrationOptions = {
   touristName?: string;
   numOfRows?: number;
   pageNo?: number;
+};
+
+type FetchRelatedTouristPlacesOptions = {
+  areaCode: string;
+  signguCode: string;
+  keyword: string;
+  baseYm?: string;
+  numOfRows?: number;
+  pageNo?: number;
+};
+
+type FetchNearbyTouristPlacesOptions = {
+  lat: number;
+  lng: number;
+  radiusM?: number;
+  numOfRows?: number;
+  pageNo?: number;
+  contentTypeIds?: string[];
+  excludeContentId?: string;
 };
 
 function normalizeServiceKey(serviceKey: string) {
@@ -217,6 +267,174 @@ function normalizeTouristName(rawName: string) {
     .trim();
 }
 
+function formatBaseYm(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  return `${year}${month}`;
+}
+
+function buildBaseYmCandidates(explicitBaseYm?: string) {
+  if (explicitBaseYm && /^\d{6}$/.test(explicitBaseYm)) {
+    return [explicitBaseYm];
+  }
+
+  const now = new Date();
+  const candidates: string[] = [];
+
+  for (let offset = 0; offset < 6; offset += 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    candidates.push(formatBaseYm(date));
+  }
+
+  return candidates;
+}
+
+function parseRelatedTouristPlaces(
+  rawItems: Record<string, unknown>[],
+  fallback: {
+    areaCode: string;
+    signguCode: string;
+    keyword: string;
+    baseYm: string;
+  }
+) {
+  return rawItems
+    .map((rawItem, index): RelatedTouristPlace | null => {
+      const name = readStringFromUnknown(rawItem, [
+        "rlteAtsNm",
+        "relatedTouristNm",
+        "touristNm",
+        "tAtsNm",
+      ]);
+      if (!name) {
+        return null;
+      }
+
+      const category = readStringFromUnknown(rawItem, [
+        "rlteAtsKndNm",
+        "rlteAtsTypeNm",
+        "category",
+      ]);
+      const rankValue = readNumberFromUnknown(rawItem, [
+        "rlteRk",
+        "rank",
+        "rlteAtsRk",
+        "seq",
+      ]);
+      const relationScore = readNumberFromUnknown(rawItem, [
+        "cnctRate",
+        "cnctRto",
+        "score",
+        "rlteScore",
+      ]);
+      const keyword = readStringFromUnknown(rawItem, [
+        "keyword",
+        "tAtsNm",
+        "touristNm",
+      ]);
+      const areaCode =
+        readStringFromUnknown(rawItem, ["areaCd", "areaCode"]) ||
+        fallback.areaCode;
+      const signguCode =
+        readStringFromUnknown(rawItem, ["signguCd", "signguCode"]) ||
+        fallback.signguCode;
+
+      return {
+        id: `related-${normalizeTouristName(name)}-${rankValue ?? index}-${
+          fallback.baseYm
+        }`,
+        name,
+        category,
+        rank: rankValue != null ? Math.max(1, Math.round(rankValue)) : null,
+        relationScore,
+        keyword: keyword || fallback.keyword,
+        areaCode,
+        signguCode,
+        baseYm: fallback.baseYm,
+      };
+    })
+    .filter((item): item is RelatedTouristPlace => item !== null)
+    .sort(sortRelatedTouristPlaces);
+}
+
+function sortRelatedTouristPlaces(
+  a: RelatedTouristPlace,
+  b: RelatedTouristPlace
+) {
+  if (a.rank != null && b.rank != null) {
+    return a.rank - b.rank;
+  }
+  if (a.rank != null) {
+    return -1;
+  }
+  if (b.rank != null) {
+    return 1;
+  }
+  return (b.relationScore ?? -1) - (a.relationScore ?? -1);
+}
+
+function pickBetterRelatedTouristPlace(
+  current: RelatedTouristPlace,
+  incoming: RelatedTouristPlace
+) {
+  const rankingOrder = sortRelatedTouristPlaces(current, incoming);
+
+  if (rankingOrder <= 0) {
+    return {
+      ...current,
+      category: current.category || incoming.category,
+      relationScore:
+        current.relationScore ??
+        incoming.relationScore ??
+        current.relationScore,
+    };
+  }
+
+  return {
+    ...incoming,
+    category: incoming.category || current.category,
+    relationScore:
+      incoming.relationScore ?? current.relationScore ?? incoming.relationScore,
+  };
+}
+
+function mergeRelatedTouristPlaces(
+  bucket: Map<string, RelatedTouristPlace>,
+  places: RelatedTouristPlace[]
+) {
+  places.forEach((place) => {
+    const normalizedName = normalizeTouristName(place.name);
+    if (!normalizedName) {
+      return;
+    }
+
+    const current = bucket.get(normalizedName);
+    if (!current) {
+      bucket.set(normalizedName, place);
+      return;
+    }
+
+    bucket.set(normalizedName, pickBetterRelatedTouristPlace(current, place));
+  });
+}
+
+async function requestRelatedTouristPlaces(
+  endpoint: string,
+  params: URLSearchParams
+) {
+  const response = await fetch(`${endpoint}?${params.toString()}`);
+  if (!response.ok) {
+    return [] as Record<string, unknown>[];
+  }
+
+  const data = (await response.json()) as TourApiResponse;
+  const resultCode = data.response?.header?.resultCode;
+  if (resultCode && resultCode !== "0000") {
+    return [] as Record<string, unknown>[];
+  }
+
+  return toArray(data.response?.body?.items?.item) as Record<string, unknown>[];
+}
 
 export async function fetchGangwonAttractions(
   serviceKey: string,
@@ -264,7 +482,9 @@ export async function fetchGangwonAttractions(
           contentTypeId,
         });
 
-        const response = await fetch(`${TOUR_API_BASE_URL}?${query.toString()}`);
+        const response = await fetch(
+          `${TOUR_API_BASE_URL}?${query.toString()}`
+        );
 
         if (!response.ok) {
           const errorText = (await response.text()).trim();
@@ -466,6 +686,120 @@ export async function fetchTourPlaceDetail(
   } satisfies TourPlaceDetail;
 }
 
+export async function fetchNearbyTouristPlaces(
+  serviceKey: string,
+  options: FetchNearbyTouristPlacesOptions
+) {
+  if (!serviceKey) {
+    throw new Error("VisitKorea service key is missing.");
+  }
+
+  if (!Number.isFinite(options.lat) || !Number.isFinite(options.lng)) {
+    throw new Error("주변 장소 조회 좌표가 올바르지 않습니다.");
+  }
+
+  const maxCount = Math.max(1, Math.min(30, options.numOfRows ?? 12));
+  const radiusM = Math.max(100, Math.min(20000, Math.round(options.radiusM ?? 5000)));
+  const contentTypeIds =
+    options.contentTypeIds && options.contentTypeIds.length > 0
+      ? options.contentTypeIds
+      : ["12", "14", "15", "28", "38"];
+
+  const unique = new Map<string, NearbyTouristPlace>();
+
+  for (const contentTypeId of contentTypeIds) {
+    const query = new URLSearchParams({
+      serviceKey: normalizeServiceKey(serviceKey),
+      MobileOS: "ETC",
+      MobileApp: "RouteOne",
+      _type: "json",
+      pageNo: `${options.pageNo ?? 1}`,
+      numOfRows: `${maxCount}`,
+      arrange: "E",
+      mapX: `${options.lng}`,
+      mapY: `${options.lat}`,
+      radius: `${radiusM}`,
+      contentTypeId,
+    });
+
+    const response = await fetch(
+      `${TOUR_LOCATION_BASED_BASE_URL}?${query.toString()}`
+    );
+
+    if (!response.ok) {
+      const errorText = (await response.text()).trim();
+      throw new Error(
+        `Tour nearby request failed: ${response.status}${
+          errorText ? ` (${errorText})` : ""
+        }`
+      );
+    }
+
+    const data = (await response.json()) as TourApiResponse;
+    const resultCode = data.response?.header?.resultCode;
+
+    if (resultCode && resultCode !== "0000") {
+      const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
+      throw new Error(`Tour nearby API error: ${resultCode} ${resultMsg}`);
+    }
+
+    const items = toArray(data.response?.body?.items?.item);
+    items.forEach((item, index) => {
+      const lat = Number(item.mapy);
+      const lng = Number(item.mapx);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return;
+      }
+
+      const parsedDistance = readNumberFromUnknown(item as Record<string, unknown>, [
+        "dist",
+        "distance",
+      ]);
+
+      const parsed: NearbyTouristPlace = {
+        id: item.contentid ?? `${item.title ?? "spot"}-${contentTypeId}-${index}`,
+        title: item.title ?? "이름 없음",
+        address: item.addr1 ?? "주소 정보 없음",
+        lat,
+        lng,
+        contentTypeId: item.contenttypeid ?? contentTypeId,
+        lclsSystm1: item.lclsSystm1 ?? "",
+        lclsSystm2: item.lclsSystm2 ?? "",
+        lclsSystm3: item.lclsSystm3 ?? "",
+        firstImage: item.firstimage ?? "",
+        secondImage: item.firstimage2 ?? "",
+        distanceM: parsedDistance,
+      };
+
+      const uniqueKey = `${parsed.id}-${parsed.contentTypeId}`;
+      const existing = unique.get(uniqueKey);
+      if (!existing) {
+        unique.set(uniqueKey, parsed);
+        return;
+      }
+
+      const existingDistance = existing.distanceM ?? Number.POSITIVE_INFINITY;
+      const nextDistance = parsed.distanceM ?? Number.POSITIVE_INFINITY;
+      if (nextDistance < existingDistance) {
+        unique.set(uniqueKey, parsed);
+      }
+    });
+  }
+
+  return [...unique.values()]
+    .filter((place) => place.id !== options.excludeContentId)
+    .sort((a, b) => {
+      const distanceA = a.distanceM ?? Number.POSITIVE_INFINITY;
+      const distanceB = b.distanceM ?? Number.POSITIVE_INFINITY;
+      if (distanceA !== distanceB) {
+        return distanceA - distanceB;
+      }
+      return a.title.localeCompare(b.title, "ko");
+    })
+    .slice(0, maxCount);
+}
+
 export async function fetchTouristConcentrationPoints(
   serviceKey: string,
   options: FetchTouristConcentrationOptions
@@ -580,7 +914,9 @@ export function buildLatestConcentrationMap(
 }
 
 export function toWeeklyAndMonthlySeries(points: TouristConcentrationPoint[]) {
-  const sortedPoints = [...points].sort((a, b) => a.baseYmd.localeCompare(b.baseYmd));
+  const sortedPoints = [...points].sort((a, b) =>
+    a.baseYmd.localeCompare(b.baseYmd)
+  );
   const monthly = sortedPoints.slice(-30);
   const weekly = sortedPoints.slice(-7);
 
@@ -588,6 +924,64 @@ export function toWeeklyAndMonthlySeries(points: TouristConcentrationPoint[]) {
     weekly,
     monthly,
   };
+}
+
+export async function fetchRelatedTouristPlaces(
+  serviceKey: string,
+  options: FetchRelatedTouristPlacesOptions
+) {
+  if (!serviceKey) {
+    throw new Error("VisitKorea service key is missing.");
+  }
+
+  if (!options.areaCode || !options.signguCode || !options.keyword.trim()) {
+    throw new Error("연관 관광지 조회 필수값이 누락되었습니다.");
+  }
+
+  const baseYmCandidates = buildBaseYmCandidates(options.baseYm);
+  const maxCount = Math.max(1, Math.min(20, options.numOfRows ?? 10));
+  const uniqueRelatedPlaces = new Map<string, RelatedTouristPlace>();
+
+  for (const baseYm of baseYmCandidates) {
+    const baseParams = new URLSearchParams({
+      serviceKey: normalizeServiceKey(serviceKey),
+      MobileOS: "ETC",
+      MobileApp: "RouteOne",
+      _type: "json",
+      pageNo: `${options.pageNo ?? 1}`,
+      numOfRows: `${options.numOfRows ?? 10}`,
+      areaCd: options.areaCode,
+      signguCd: options.signguCode,
+      baseYm,
+    });
+
+    const keywordParams = new URLSearchParams(baseParams);
+    keywordParams.set("keyword", options.keyword.trim());
+
+    const keywordItems = await requestRelatedTouristPlaces(
+      TOUR_RELATED_TOURIST_KEYWORD_BASE_URL,
+      keywordParams
+    );
+    const keywordParsed = parseRelatedTouristPlaces(keywordItems, {
+      areaCode: options.areaCode,
+      signguCode: options.signguCode,
+      keyword: options.keyword.trim(),
+      baseYm,
+    });
+
+    mergeRelatedTouristPlaces(uniqueRelatedPlaces, keywordParsed);
+
+    if (uniqueRelatedPlaces.size >= maxCount) {
+      return [...uniqueRelatedPlaces.values()]
+        .sort(sortRelatedTouristPlaces)
+        .slice(0, maxCount);
+    }
+
+  }
+
+  return [...uniqueRelatedPlaces.values()]
+    .sort(sortRelatedTouristPlaces)
+    .slice(0, maxCount);
 }
 
 export function normalizeTouristPlaceNameForMatch(placeName: string) {

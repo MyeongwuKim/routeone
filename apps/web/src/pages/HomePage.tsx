@@ -21,6 +21,7 @@ import {
   type GangwonAttraction,
 } from "../lib/visitKoreaTourApi";
 import { useMapSheetStore } from "../stores/mapSheetStore";
+import { useUiLoadingStore } from "../stores/uiLoadingStore";
 
 const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
@@ -421,6 +422,8 @@ function HomePage() {
     removeSavedPlace,
     clearSavedPlaces,
   } = useMapSheetStore();
+  const showLoading = useUiLoadingStore((state) => state.showLoading);
+  const hideLoading = useUiLoadingStore((state) => state.hideLoading);
 
   const [selectedSigunguCode, setSelectedSigunguCode] = useState<string>(
     GANGWON_REGIONS[0].sigunguCode
@@ -461,6 +464,7 @@ function HomePage() {
       setAttractionLoadingStage("fetching-places");
       const signguCode = GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode];
       const lclsNameByCode = await fetchLclsSystemNameMap(TOUR_API_SERVICE_KEY);
+      lclsNameByCode[CAFE_LCLS_CODE] = lclsNameByCode[CAFE_LCLS_CODE] || "카페";
       const attractions = await fetchGangwonAttractions(TOUR_API_SERVICE_KEY, {
         sigunguCode: selectedSigunguCode || undefined,
         contentTypeIds: ["12", "39"],
@@ -474,7 +478,20 @@ function HomePage() {
           numOfRows: 2000,
         }
       );
-      const filteredAttractions = attractions.filter(
+      const dedupedAttractions = attractions.filter((attraction, index, array) => {
+        const key = `${attraction.title.trim().toLowerCase()}|${attraction.address
+          .trim()
+          .toLowerCase()}`;
+        return (
+          array.findIndex((candidate) => {
+            const candidateKey = `${candidate.title.trim().toLowerCase()}|${candidate.address
+              .trim()
+              .toLowerCase()}`;
+            return candidateKey === key;
+          }) === index
+        );
+      });
+      const filteredAttractions = dedupedAttractions.filter(
         (attraction) => !shouldHideAttraction(attraction, lclsNameByCode)
       );
       const rankableTouristAttractions = filteredAttractions.filter(
@@ -550,18 +567,6 @@ function HomePage() {
     : attractionsQuery.error instanceof Error
       ? attractionsQuery.error.message
       : null;
-  const attractionLoadingMessage = useMemo(() => {
-    if (attractionLoadingStage === "fetching-places") {
-      return "장소 데이터를 찾고 있어요";
-    }
-    if (attractionLoadingStage === "ranking") {
-      return "순서를 매기고 있어요";
-    }
-    if (attractionLoadingStage === "rendering-markers") {
-      return "지도를 그리고 있어요";
-    }
-    return "";
-  }, [attractionLoadingStage]);
   const orderedRegions = useMemo(() => {
     if (!currentLocation) {
       return GANGWON_REGIONS;
@@ -714,6 +719,46 @@ function HomePage() {
       document.body.style.overflow = previousOverflow;
     };
   }, [isSearchPopupOpen]);
+
+  useEffect(() => {
+    if (attractionLoadingStage === "idle" || isSearchPopupOpen) {
+      hideLoading();
+      return;
+    }
+
+    if (attractionLoadingStage === "fetching-places") {
+      showLoading({
+        title: "장소 데이터를 찾고 있어요",
+        description: "지도를 보면서 장소 후보를 찾는 중",
+        footerText: "감자 분석 모드 진행 중",
+        animation: "map-thinking",
+      });
+      return;
+    }
+
+    if (attractionLoadingStage === "ranking") {
+      showLoading({
+        title: "순위를 매기고 있어요",
+        description: "지도를 들고 TOP 후보를 정리하는 중",
+        footerText: "감자 분석 모드 진행 중",
+        animation: "ranking",
+      });
+      return;
+    }
+
+    showLoading({
+      title: "지도를 그리고 있어요",
+      description: "지도 위에 핀을 배치하는 중",
+      footerText: "감자 분석 모드 진행 중",
+      animation: "map-rendering",
+    });
+  }, [attractionLoadingStage, hideLoading, isSearchPopupOpen, showLoading]);
+
+  useEffect(() => {
+    return () => {
+      hideLoading();
+    };
+  }, [hideLoading]);
 
   useEffect(() => {
     if (!isSearchPopupOpen) {
@@ -1216,20 +1261,6 @@ function HomePage() {
       />
 
       <PlaceBottomSheet />
-
-      {attractionLoadingStage !== "idle" && !isSearchPopupOpen ? (
-        <div className="pointer-events-none absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+6.4rem)] z-30 flex justify-center px-3">
-          <div className="w-full max-w-xs rounded-2xl border border-brand-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur">
-            <div className="flex items-center gap-2">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
-              <p className="text-sm font-semibold text-slate-800">{attractionLoadingMessage}</p>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              잠시만요, 최신 데이터를 반영하고 있어요.
-            </p>
-          </div>
-        </div>
-      ) : null}
 
       {isSearchPopupOpen ? (
         <section className="fixed inset-0 z-[2300] bg-gradient-to-b from-brand-50 via-brand-50 to-white">

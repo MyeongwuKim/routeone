@@ -23,16 +23,20 @@ import {
 import { usePlaceSheetLayout } from "../hooks/usePlaceSheetLayout";
 import { fetchDrivingRouteFromCurrentLocation } from "../../../lib/naverDirectionsApi";
 import {
+  fetchNearbyTouristPlaces,
   fetchTourPlaceDetail,
   fetchTouristConcentrationPoints,
   toWeeklyAndMonthlySeries,
+  type NearbyTouristPlace,
   type TouristConcentrationPoint,
 } from "../../../lib/visitKoreaTourApi";
+import { PotatoLoadingCard } from "../../../components/feedback/PotatoLoadingOverlay";
 import { useMapSheetStore } from "../../../stores/mapSheetStore";
 import { useUiToastStore } from "../../../stores/uiToastStore";
 
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
 const NAVER_MAP_SCHEME_APP_NAME = "routeone.web";
+const CAFE_LCLS_CODE = "FD050100";
 const GANGNEUNG_CENTER_LOCATION = {
   lat: 37.7519,
   lng: 128.8761,
@@ -141,6 +145,45 @@ function buildTrendChartData(points: TouristConcentrationPoint[]) {
   };
 }
 
+function buildGoogleImageSearchUrl(keyword: string) {
+  const query = `${keyword} 사진`;
+  const params = new URLSearchParams({
+    tbm: "isch",
+    q: query,
+  });
+  return `https://www.google.com/search?${params.toString()}`;
+}
+
+function buildGoogleSearchUrl(keyword: string) {
+  const params = new URLSearchParams({
+    q: keyword,
+  });
+  return `https://www.google.com/search?${params.toString()}`;
+}
+
+const EXCLUDED_NEARBY_PLACE_PATTERN =
+  /(버스정류장|정류장|매표소|주차장|화장실|터미널|관리사무소|안내소|입구|출구|승강장|휴게소|매점)/;
+
+function formatNearbyDistance(distanceM: number | null) {
+  if (distanceM == null || !Number.isFinite(distanceM)) {
+    return null;
+  }
+
+  if (distanceM >= 1000) {
+    return `${(distanceM / 1000).toFixed(1)}km`;
+  }
+
+  return `${Math.round(distanceM)}m`;
+}
+
+function isCafeNearbyPlace(place: NearbyTouristPlace) {
+  const targetText = `${place.title} ${place.lclsSystm1} ${place.lclsSystm2} ${place.lclsSystm3}`;
+  return (
+    place.lclsSystm3 === CAFE_LCLS_CODE ||
+    /카페|커피|coffee|디저트|찻집/i.test(targetText)
+  );
+}
+
 function PlaceBottomSheet() {
   const {
     isOpen,
@@ -163,11 +206,14 @@ function PlaceBottomSheet() {
 
   const hasTourApiServiceKey = Boolean(TOUR_API_SERVICE_KEY);
   const isFullPopupMode = sheetMode === "full-popup";
+  const isSelectedPlaceCafe = selectedPlace?.contentTypeLabel === "카페";
 
   const selectedPlaceKey = selectedPlace
     ? `${selectedPlace.contentId}-${selectedPlace.contentTypeId}`
     : null;
-  const isCurrentPlaceSaved = selectedPlace ? savedPlaceIds.includes(selectedPlace.id) : false;
+  const isCurrentPlaceSaved = selectedPlace
+    ? savedPlaceIds.includes(selectedPlace.id)
+    : false;
 
   const {
     isSheetExpanded,
@@ -206,7 +252,12 @@ function PlaceBottomSheet() {
   });
 
   const routeQuery = useQuery({
-    queryKey: ["place-route", selectedPlaceKey, currentLocation.lat, currentLocation.lng],
+    queryKey: [
+      "place-route",
+      selectedPlaceKey,
+      currentLocation.lat,
+      currentLocation.lng,
+    ],
     enabled: isOpen && Boolean(selectedPlace),
     queryFn: async () => {
       if (!selectedPlace) {
@@ -259,12 +310,43 @@ function PlaceBottomSheet() {
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 60,
   });
+  const nearbyTouristQuery = useQuery({
+    queryKey: [
+      "nearby-tourist",
+      selectedPlace?.contentId ?? "",
+      selectedPlace?.lat ?? 0,
+      selectedPlace?.lng ?? 0,
+    ],
+    enabled:
+      isOpen &&
+      Boolean(selectedPlace) &&
+      hasTourApiServiceKey &&
+      Number.isFinite(selectedPlace?.lat) &&
+      Number.isFinite(selectedPlace?.lng),
+    queryFn: async () => {
+      if (!selectedPlace) {
+        throw new Error("선택된 장소가 없습니다.");
+      }
+
+      return fetchNearbyTouristPlaces(TOUR_API_SERVICE_KEY, {
+        lat: selectedPlace.lat,
+        lng: selectedPlace.lng,
+        radiusM: 6000,
+        numOfRows: 12,
+        contentTypeIds: [selectedPlace.contentTypeId],
+        excludeContentId: selectedPlace.contentId,
+      });
+    },
+    staleTime: 1000 * 60 * 20,
+    gcTime: 1000 * 60 * 60,
+  });
 
   const detailOverview = detailQuery.data?.overview ?? "";
   const detailImages = detailQuery.data?.images ?? [];
   const isSelectedPlaceDetailReady =
     !hasTourApiServiceKey ||
-    (Boolean(selectedPlaceKey) && (detailQuery.isSuccess || detailQuery.isError));
+    (Boolean(selectedPlaceKey) &&
+      (detailQuery.isSuccess || detailQuery.isError));
   const activeImageList = useMemo(
     () => [...new Set(detailImages.filter(Boolean))],
     [detailImages]
@@ -272,7 +354,9 @@ function PlaceBottomSheet() {
   const routeDurationText = routeQuery.data
     ? formatDurationMinutes(routeQuery.data.durationMs)
     : null;
-  const routeDistanceText = routeQuery.data ? formatDistance(routeQuery.data.distanceM) : null;
+  const routeDistanceText = routeQuery.data
+    ? formatDistance(routeQuery.data.distanceM)
+    : null;
   const routePathPoints = routeQuery.data?.path ?? [];
   const isRouteLoading = routeQuery.isFetching;
   const routeError =
@@ -281,12 +365,18 @@ function PlaceBottomSheet() {
     concentrationTrendQuery.error instanceof Error
       ? concentrationTrendQuery.error.message
       : null;
+  const nearbyTouristError =
+    nearbyTouristQuery.error instanceof Error
+      ? nearbyTouristQuery.error.message
+      : null;
   const concentrationSeries = useMemo(
     () => toWeeklyAndMonthlySeries(concentrationTrendQuery.data ?? []),
     [concentrationTrendQuery.data]
   );
   const activeTrendPoints =
-    trendTab === "weekly" ? concentrationSeries.weekly : concentrationSeries.monthly;
+    trendTab === "weekly"
+      ? concentrationSeries.weekly
+      : concentrationSeries.monthly;
   const trendChartData = useMemo(
     () => buildTrendChartData(activeTrendPoints),
     [activeTrendPoints]
@@ -349,13 +439,47 @@ function PlaceBottomSheet() {
   const topRankBadge = selectedPlace?.topRank
     ? getTopRankBadgeStyle(selectedPlace.topRank)
     : null;
+  const selectedPlaceTitle = selectedPlace?.title.trim().toLowerCase() ?? "";
+  const nearbyTouristPlaces = useMemo(
+    () =>
+      (nearbyTouristQuery.data ?? [])
+        .filter(
+          (item): item is NearbyTouristPlace =>
+            item.title.trim().toLowerCase() !== selectedPlaceTitle
+        )
+        .filter((item) => item.contentTypeId === selectedPlace?.contentTypeId)
+        .filter((item) => {
+          if (selectedPlace?.contentTypeId !== "39") {
+            return true;
+          }
+
+          const isCafeResult = isCafeNearbyPlace(item);
+          return isSelectedPlaceCafe ? isCafeResult : !isCafeResult;
+        })
+        .filter((item) => {
+          if (item.contentTypeId === "12") {
+            return true;
+          }
+          return !EXCLUDED_NEARBY_PLACE_PATTERN.test(item.title);
+        })
+        .slice(0, 6),
+    [
+      nearbyTouristQuery.data,
+      isSelectedPlaceCafe,
+      selectedPlace?.contentTypeId,
+      selectedPlaceTitle,
+    ]
+  );
 
   const clearPreviewOverlays = () => {
     previewOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     previewOverlaysRef.current = [];
   };
 
-  const openNaverDirections = (origin: CurrentLocation, destination: CurrentLocation) => {
+  const openNaverDirections = (
+    origin: CurrentLocation,
+    destination: CurrentLocation
+  ) => {
     const params = new URLSearchParams({
       slat: `${origin.lat}`,
       slng: `${origin.lng}`,
@@ -377,6 +501,25 @@ function PlaceBottomSheet() {
       lat: selectedPlace.lat,
       lng: selectedPlace.lng,
     });
+  };
+
+  const handleOpenGoogleImageSearch = () => {
+    if (!selectedPlace) {
+      return;
+    }
+
+    const targetKeyword = `${selectedPlace.title} ${selectedPlace.address}`;
+    window.open(
+      buildGoogleImageSearchUrl(targetKeyword),
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
+
+  const handleOpenRelatedPlaceSearch = (placeName: string) => {
+    const query = `${placeName} ${selectedPlace?.address ?? ""}`.trim();
+    const url = buildGoogleSearchUrl(query);
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   useEffect(() => {
@@ -421,7 +564,10 @@ function PlaceBottomSheet() {
     clearPreviewOverlays();
 
     const bounds = new naverMaps.LatLngBounds();
-    const destinationLatLng = new naverMaps.LatLng(selectedPlace.lat, selectedPlace.lng);
+    const destinationLatLng = new naverMaps.LatLng(
+      selectedPlace.lat,
+      selectedPlace.lng
+    );
     bounds.extend(destinationLatLng);
 
     const destinationMarker = new naverMaps.Marker({
@@ -432,7 +578,10 @@ function PlaceBottomSheet() {
     previewOverlaysRef.current.push(destinationMarker);
 
     if (currentLocation) {
-      const originLatLng = new naverMaps.LatLng(currentLocation.lat, currentLocation.lng);
+      const originLatLng = new naverMaps.LatLng(
+        currentLocation.lat,
+        currentLocation.lng
+      );
       bounds.extend(originLatLng);
 
       const originMarker = new naverMaps.Marker({
@@ -476,7 +625,13 @@ function PlaceBottomSheet() {
     requestAnimationFrame(() => {
       naverMaps.Event.trigger(previewMap, "resize");
     });
-  }, [currentLocation, isOpen, routePathPoints, selectedPlace, shouldShowExpandedSection]);
+  }, [
+    currentLocation,
+    isOpen,
+    routePathPoints,
+    selectedPlace,
+    shouldShowExpandedSection,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -507,7 +662,11 @@ function PlaceBottomSheet() {
                 isSheetExpanded
                   ? "inset-x-0 rounded-none border-0 shadow-none"
                   : "inset-x-0 mx-auto max-w-md rounded-t-3xl border border-brand-200 shadow-[0_-10px_32px_rgba(15,23,42,0.25)]"
-              } ${isDraggingSheet ? "transition-none" : "transition-[top] duration-300"}`
+              } ${
+                isDraggingSheet
+                  ? "transition-none"
+                  : "transition-[top] duration-300"
+              }`
         }
         style={isFullPopupMode ? undefined : { top: `${sheetTop}px` }}
       >
@@ -516,7 +675,9 @@ function PlaceBottomSheet() {
             role="button"
             tabIndex={0}
             className={`${isFullPopupMode ? "" : "touch-none"} ${
-              isSheetExpanded || isFullPopupMode ? "rounded-none" : "rounded-t-3xl"
+              isSheetExpanded || isFullPopupMode
+                ? "rounded-none"
+                : "rounded-t-3xl"
             }`}
             style={{ minHeight: `${SHEET_HEADER_HEIGHT_PX}px` }}
             onPointerDown={isFullPopupMode ? undefined : handleSheetPointerDown}
@@ -526,7 +687,9 @@ function PlaceBottomSheet() {
           >
             <div
               className={`flex items-center px-4 ${
-                isSheetExpanded || isFullPopupMode ? "h-full justify-start" : "h-full justify-center"
+                isSheetExpanded || isFullPopupMode
+                  ? "h-full justify-start"
+                  : "h-full justify-center"
               }`}
             >
               {isSheetExpanded || isFullPopupMode ? (
@@ -554,7 +717,10 @@ function PlaceBottomSheet() {
                 : "overflow-hidden"
             }`}
           >
-            <div className="px-5 pt-4" style={{ minHeight: `${SHEET_HEADLINE_MIN_HEIGHT_PX}px` }}>
+            <div
+              className="px-5 pt-4"
+              style={{ minHeight: `${SHEET_HEADLINE_MIN_HEIGHT_PX}px` }}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-trip text-[30px] leading-[1.15] text-slate-900">
@@ -570,7 +736,9 @@ function PlaceBottomSheet() {
                   <p className="mt-3 text-sm font-semibold text-brand-700">
                     {selectedPlace.icon} {selectedPlace.contentTypeLabel}
                   </p>
-                  <p className="mt-1 text-sm text-slate-600">{selectedPlace.categoryName}</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {selectedPlace.categoryName}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -590,14 +758,21 @@ function PlaceBottomSheet() {
                 </button>
               </div>
 
-              <p className="mt-4 text-sm leading-6 text-slate-600">{selectedPlace.address}</p>
+              <p className="mt-4 text-sm leading-6 text-slate-600">
+                {selectedPlace.address}
+              </p>
 
               <div className="mt-5">
                 <div className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
                   {!isSelectedPlaceDetailReady ? (
-                    <div className="flex h-44 w-full min-w-full flex-col items-center justify-center rounded-2xl border border-brand-200 bg-brand-50">
-                      <div className="h-9 w-9 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
-                      <p className="mt-2 text-sm font-semibold text-brand-700">이미지 불러오는 중</p>
+                    <div className="flex h-44 w-full min-w-full items-center rounded-2xl border border-brand-200 bg-brand-50 px-3">
+                      <PotatoLoadingCard
+                        title="이미지를 불러오는 중"
+                        description="감자가 데이터에서 이미지를 찾는 중"
+                        animation="searching"
+                        compact
+                        className="border-brand-100 bg-white/90 shadow-none"
+                      />
                     </div>
                   ) : activeImageList.length > 0 ? (
                     activeImageList.map((imageUrl, index) => (
@@ -609,8 +784,15 @@ function PlaceBottomSheet() {
                       />
                     ))
                   ) : (
-                    <div className="flex h-44 w-full items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50 text-sm text-slate-500">
-                      등록된 이미지가 없습니다
+                    <div className="flex h-44 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-4 text-sm text-slate-500">
+                      <p>등록된 이미지가 없습니다</p>
+                      <button
+                        type="button"
+                        onClick={handleOpenGoogleImageSearch}
+                        className="pointer-events-auto mt-3 rounded-full border border-brand-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700"
+                      >
+                        구글 이미지 검색으로 보기
+                      </button>
                     </div>
                   )}
                 </div>
@@ -627,15 +809,22 @@ function PlaceBottomSheet() {
               <div className="space-y-4">
                 <div className="rounded-3xl border border-brand-200/80 bg-gradient-to-b from-white to-brand-50/70 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
                   <div className="mb-3 flex items-center justify-between">
-                    <p className="font-trip text-sm text-brand-700">PLACE OVERVIEW</p>
+                    <p className="font-trip text-sm text-brand-700">
+                      PLACE OVERVIEW
+                    </p>
                     <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
                       상세 정보
                     </span>
                   </div>
                   {!isSelectedPlaceDetailReady ? (
-                    <div className="flex min-h-24 items-center justify-center rounded-2xl border border-brand-100 bg-white/75">
-                      <div className="h-7 w-7 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
-                      <p className="ml-3 text-sm font-semibold text-brand-700">장소 정보를 불러오는 중</p>
+                    <div className="rounded-2xl border border-brand-100 bg-white/75 p-2">
+                      <PotatoLoadingCard
+                        title="장소 설명을 불러오는 중"
+                        description="감자가 데이터에서 설명을 찾는 중"
+                        animation="searching"
+                        compact
+                        className="border-brand-100 bg-white/95 shadow-none"
+                      />
                     </div>
                   ) : detailOverview ? (
                     <p className="whitespace-pre-line rounded-2xl border border-brand-100 bg-white/80 px-3 py-3 text-sm leading-7 text-slate-700">
@@ -650,7 +839,9 @@ function PlaceBottomSheet() {
 
                 <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="font-trip text-sm text-brand-700">방문자 추이</p>
+                    <p className="font-trip text-sm text-brand-700">
+                      방문자 추이
+                    </p>
                     <div className="inline-flex rounded-full border border-brand-200 bg-brand-50 p-1">
                       <button
                         type="button"
@@ -681,11 +872,16 @@ function PlaceBottomSheet() {
                     {concentrationTrendQuery.isFetching ? (
                       <div className="flex min-h-44 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
                         <div className="h-7 w-7 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
-                        <p className="ml-3 text-sm font-semibold">방문자 추이 불러오는 중</p>
+                        <p className="ml-3 text-sm font-semibold">
+                          방문자 추이 불러오는 중
+                        </p>
                       </div>
                     ) : activeTrendPoints.length > 0 ? (
                       <div className="h-44 w-full">
-                        <Line data={trendChartData} options={trendChartOptions} />
+                        <Line
+                          data={trendChartData}
+                          options={trendChartOptions}
+                        />
                       </div>
                     ) : (
                       <div className="flex min-h-44 flex-col items-center justify-center rounded-xl border border-dashed border-brand-200 bg-brand-50/70 px-3 text-center text-sm text-slate-500">
@@ -700,14 +896,17 @@ function PlaceBottomSheet() {
                     )}
                   </div>
                   <p className="mt-3 text-xs leading-5 text-slate-500">
-                    이동통신 기반 방문자 집계 데이터를 바탕으로 산출한 관광지 집중률 예측 추이입니다.
+                    이동통신 기반 방문자 집계 데이터를 바탕으로 산출한 관광지
+                    집중률 예측 추이입니다.
                   </p>
                 </section>
 
                 {shouldShowExpandedSection ? (
                   <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center justify-between">
-                      <p className="font-trip text-sm text-brand-700">PLACE DIRECTIONS</p>
+                      <p className="font-trip text-sm text-brand-700">
+                        PLACE DIRECTIONS
+                      </p>
                     </div>
 
                     <div className="relative overflow-hidden rounded-2xl border border-brand-100 bg-brand-50">
@@ -731,7 +930,9 @@ function PlaceBottomSheet() {
                       {isRouteLoading ? (
                         <div className="flex items-center text-sm text-brand-700">
                           <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
-                          <span className="ml-2 font-semibold">내 위치(강릉 중심) 기준 경로 계산 중</span>
+                          <span className="ml-2 font-semibold">
+                            내 위치(강릉 중심) 기준 경로 계산 중
+                          </span>
                         </div>
                       ) : routeDurationText && routeDistanceText ? (
                         <div className="flex items-center gap-2 text-sm">
@@ -759,6 +960,84 @@ function PlaceBottomSheet() {
                     </button>
                   </section>
                 ) : null}
+
+                <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="font-trip text-sm text-brand-700">이런 곳도 좋아요</p>
+                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
+                      주변 추천
+                    </span>
+                  </div>
+
+                  {nearbyTouristQuery.isFetching ? (
+                    <div className="rounded-2xl border border-brand-100 bg-white/75 p-2">
+                      <PotatoLoadingCard
+                        title="주변 장소를 찾는 중"
+                        description="감자가 근처 관광지를 정리하는 중"
+                        animation="searching"
+                        compact
+                        className="border-brand-100 bg-white/95 shadow-none"
+                      />
+                    </div>
+                  ) : nearbyTouristPlaces.length > 0 ? (
+                    <div className="space-y-2">
+                      {nearbyTouristPlaces.map((place) => {
+                        const thumbnailUrl = place.firstImage || place.secondImage;
+                        const distanceLabel = formatNearbyDistance(place.distanceM);
+
+                        return (
+                          <button
+                            key={`${place.id}-${place.contentTypeId}`}
+                            type="button"
+                            onClick={() => handleOpenRelatedPlaceSearch(place.title)}
+                            className="flex w-full items-center justify-between rounded-2xl border border-brand-100 bg-brand-50/60 px-3 py-2.5 text-left"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-brand-100 bg-white">
+                                {thumbnailUrl ? (
+                                  <img
+                                    src={thumbnailUrl}
+                                    alt={`${place.title} 썸네일`}
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-base text-slate-400">
+                                    📍
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-800">
+                                  {place.title}
+                                </p>
+                                <p className="mt-0.5 truncate text-xs text-slate-500">
+                                  {place.address}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="ml-3 shrink-0 text-right">
+                              {distanceLabel ? (
+                                <p className="text-[11px] font-semibold text-brand-700">
+                                  {distanceLabel}
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-slate-500">주변 추천</p>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm text-slate-500">
+                      {nearbyTouristError ?? "주변 관광지 데이터가 아직 없습니다."}
+                    </div>
+                  )}
+                  <p className="mt-3 text-xs leading-5 text-slate-500">
+                    locationBasedList2 기준 반경 6km 내 관광지 추천 데이터입니다.
+                  </p>
+                </section>
               </div>
             </div>
           </div>
