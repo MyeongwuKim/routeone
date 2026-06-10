@@ -21,7 +21,7 @@ function PlaceCartTempoStep({ tempo, onSelectTempo }: PlaceCartTempoStepProps) {
         }`}
       >
         <p className="font-semibold text-slate-900">여유롭게</p>
-        <p className="mt-1 text-xs text-slate-500">이동 여유 크게, 장소당 체류 길게</p>
+        <p className="mt-1 text-xs text-slate-500">장소당 체류시간을 길게 배치</p>
       </button>
 
       <button
@@ -32,7 +32,7 @@ function PlaceCartTempoStep({ tempo, onSelectTempo }: PlaceCartTempoStepProps) {
         }`}
       >
         <p className="font-semibold text-slate-900">보통</p>
-        <p className="mt-1 text-xs text-slate-500">이동/체류 균형 중심 일정</p>
+        <p className="mt-1 text-xs text-slate-500">체류시간을 적당하게 배치</p>
       </button>
 
       <button

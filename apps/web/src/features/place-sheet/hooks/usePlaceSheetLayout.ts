@@ -12,11 +12,20 @@ type UsePlaceSheetLayoutParams = {
 const DRAG_SNAP_THRESHOLD_PX = 48;
 const DRAG_CLOSE_THRESHOLD_PX = 72;
 const COLLAPSED_DRAG_OVERSCROLL_PX = 132;
+const COLLAPSED_CONTENT_MIN_HEIGHT_PX = 452;
+const COLLAPSED_CONTENT_MAX_HEIGHT_PX = 472;
 
 function getSheetTop(viewportHeight: number, snap: SheetSnap) {
   const safeTop = typeof window === "undefined" ? 0 : window.visualViewport?.offsetTop ?? 0;
   const expandedTop = Math.max(safeTop, 0);
-  const collapsedHeight = Math.min(460, Math.max(360, viewportHeight * 0.42));
+  const maxCollapsedHeight = Math.max(360, viewportHeight - expandedTop - 180);
+  const collapsedHeight = Math.min(
+    maxCollapsedHeight,
+    Math.max(
+      COLLAPSED_CONTENT_MIN_HEIGHT_PX,
+      Math.min(COLLAPSED_CONTENT_MAX_HEIGHT_PX, viewportHeight * 0.46)
+    )
+  );
   const collapsedTop = Math.max(expandedTop + 180, viewportHeight - collapsedHeight);
   return snap === "expanded" ? expandedTop : collapsedTop;
 }

@@ -6,11 +6,13 @@ import {
   IoCafeOutline,
   IoClose,
   IoLocationSharp,
+  IoMapOutline,
   IoRestaurantOutline,
   IoSearch,
 } from "react-icons/io5";
 import PlaceBottomSheet from "../features/place-sheet/components/PlaceBottomSheet";
 import RouteCheckoutModal from "../features/route-checkout/components/RouteCheckoutModal";
+import PlaceResultCard from "../components/place/PlaceResultCard";
 import { loadNaverMapSdk } from "../lib/naverMapSdk";
 import {
   buildLatestConcentrationMap,
@@ -25,6 +27,7 @@ import { useUiLoadingStore } from "../stores/uiLoadingStore";
 
 const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
+const SEARCH_RESULTS_PAGE_SIZE = 12;
 
 const GANGWON_CENTER = {
   lat: 37.8228,
@@ -380,6 +383,18 @@ function calculateDistanceMeters(
   return earthRadiusMeters * c;
 }
 
+function formatDistanceLabel(distanceM: number | null) {
+  if (distanceM == null || !Number.isFinite(distanceM)) {
+    return null;
+  }
+
+  if (distanceM >= 1000) {
+    return `${(distanceM / 1000).toFixed(1)}km`;
+  }
+
+  return `${Math.round(distanceM)}m`;
+}
+
 function getTouristNameMatchScore(placeTitle: string, touristName: string) {
   const normalizedPlace = normalizeTouristPlaceNameForMatch(placeTitle);
   const normalizedTourist = normalizeTouristPlaceNameForMatch(touristName);
@@ -400,6 +415,43 @@ function getTouristNameMatchScore(placeTitle: string, touristName: string) {
   }
 
   return 0;
+}
+
+function matchesPlaceFilter(
+  attraction: GangwonAttraction,
+  markerType: ReturnType<typeof resolveMarkerType>,
+  filter: SearchFilter
+) {
+  const isCafe = markerType.contentTypeLabel === "카페";
+
+  if (filter === "all") {
+    return true;
+  }
+
+  if (filter === "tourist") {
+    return attraction.contentTypeId === "12";
+  }
+
+  if (filter === "food") {
+    return attraction.contentTypeId === "39" && !isCafe;
+  }
+
+  return isCafe;
+}
+
+function getMarkerTypeIcon(
+  attraction: GangwonAttraction,
+  markerType: ReturnType<typeof resolveMarkerType>
+) {
+  if (markerType.contentTypeLabel === "카페") {
+    return "☕";
+  }
+
+  if (attraction.contentTypeId === "39") {
+    return "🍽";
+  }
+
+  return markerType.badge.icon;
 }
 
 function HomePage() {
@@ -431,6 +483,9 @@ function HomePage() {
   const [searchKeyword, setSearchKeyword] = useState("");
   const [isSearchPopupOpen, setIsSearchPopupOpen] = useState(false);
   const [searchFilter, setSearchFilter] = useState<SearchFilter>("all");
+  const [visibleSearchResultCount, setVisibleSearchResultCount] = useState(
+    SEARCH_RESULTS_PAGE_SIZE
+  );
   const [attractionLoadingStage, setAttractionLoadingStage] =
     useState<AttractionLoadingStage>("idle");
   const [recentSearches, setRecentSearches] = useState<string[]>([
@@ -506,7 +561,6 @@ function HomePage() {
       const usedAttractionIds = new Set<string>();
       const topAttractions: Array<{
         attraction: GangwonAttraction;
-        popularityScore: number;
         touristTrendName: string;
       }> = [];
 
@@ -531,23 +585,9 @@ function HomePage() {
         usedAttractionIds.add(bestMatch.attraction.id);
         topAttractions.push({
           attraction: bestMatch.attraction,
-          popularityScore: point.concentrationRate,
           touristTrendName: point.touristName,
         });
       });
-
-      if (topAttractions.length < 10) {
-        rankableTouristAttractions
-          .filter((attraction) => !usedAttractionIds.has(attraction.id))
-          .slice(0, 10 - topAttractions.length)
-          .forEach((attraction) => {
-            topAttractions.push({
-              attraction,
-              popularityScore: -1,
-              touristTrendName: attraction.title,
-            });
-          });
-      }
 
       return {
         allAttractions: filteredAttractions,
@@ -608,24 +648,24 @@ function HomePage() {
         const markerType = resolveMarkerType(attraction, attractionData.lclsNameByCode);
         const rank = topRankByAttractionId.get(attraction.id) ?? null;
         const textForSearch = `${attraction.title} ${attraction.address} ${markerType.typeName}`.toLowerCase();
-        const isCafe = markerType.contentTypeLabel === "카페";
-        const isFoodOrCafe =
-          attraction.contentTypeId === "39" || markerType.contentTypeLabel === "카페";
+        const distanceM = currentLocation
+          ? calculateDistanceMeters(currentLocation, {
+              lat: attraction.lat,
+              lng: attraction.lng,
+            })
+          : null;
 
-        const matchesFilter =
-          searchFilter === "all"
-            ? true
-            : searchFilter === "tourist"
-              ? attraction.contentTypeId === "12"
-              : searchFilter === "food"
-                ? isFoodOrCafe
-                : isCafe;
+        const matchesFilter = matchesPlaceFilter(attraction, markerType, searchFilter);
         const matchesKeyword = !keyword || textForSearch.includes(keyword);
 
         return {
           attraction,
           markerType,
           rank,
+          distanceM,
+          distanceLabel: formatDistanceLabel(distanceM),
+          thumbnailUrl: attraction.firstImage || attraction.secondImage,
+          icon: getMarkerTypeIcon(attraction, markerType),
           touristTrendName: trendNameByAttractionId.get(attraction.id) ?? attraction.title,
           matchesFilter,
           matchesKeyword,
@@ -633,6 +673,15 @@ function HomePage() {
       })
       .filter((item) => item.matchesFilter && item.matchesKeyword)
       .sort((a, b) => {
+        if (a.distanceM != null && b.distanceM != null) {
+          return a.distanceM - b.distanceM;
+        }
+        if (a.distanceM != null) {
+          return -1;
+        }
+        if (b.distanceM != null) {
+          return 1;
+        }
         if (a.rank != null && b.rank != null) {
           return a.rank - b.rank;
         }
@@ -644,8 +693,23 @@ function HomePage() {
         }
         return a.attraction.title.localeCompare(b.attraction.title, "ko");
       })
-      .slice(0, 60);
-  }, [attractionsQuery.data, searchFilter, searchKeyword, topRankByAttractionId, trendNameByAttractionId]);
+  }, [
+    attractionsQuery.data,
+    currentLocation,
+    searchFilter,
+    searchKeyword,
+    topRankByAttractionId,
+    trendNameByAttractionId,
+  ]);
+
+  const visibleSearchResults = useMemo(
+    () => searchResults.slice(0, visibleSearchResultCount),
+    [searchResults, visibleSearchResultCount]
+  );
+
+  useEffect(() => {
+    setVisibleSearchResultCount(SEARCH_RESULTS_PAGE_SIZE);
+  }, [searchFilter, searchKeyword]);
 
   const appendRecentSearch = (keyword: string) => {
     const trimmedKeyword = keyword.trim();
@@ -662,7 +726,8 @@ function HomePage() {
     attraction: GangwonAttraction,
     markerType: ReturnType<typeof resolveMarkerType>,
     touristTrendName: string,
-    rank: number | null
+    rank: number | null,
+    mode: "bottom-sheet" | "full-popup" = "bottom-sheet"
   ) => {
     const mapInstance = mapInstanceRef.current;
     const naverMaps = naverMapsRef.current;
@@ -699,7 +764,7 @@ function HomePage() {
         icon: markerType.badge.icon,
         images: [],
       },
-      { mode: "bottom-sheet" }
+      { mode }
     );
   };
 
@@ -739,7 +804,7 @@ function HomePage() {
     if (attractionLoadingStage === "ranking") {
       showLoading({
         title: "순위를 매기고 있어요",
-        description: "지도를 들고 TOP 후보를 정리하는 중",
+        description: "방문자 집중률 데이터를 정리하는 중",
         footerText: "감자 분석 모드 진행 중",
         animation: "ranking",
       });
@@ -1139,13 +1204,20 @@ function HomePage() {
     }
 
     setAttractionLoadingStage("rendering-markers");
+    clearMarkers();
     const markerBounds = new naverMaps.LatLngBounds();
+    let visibleMarkerCount = 0;
 
     attractionData.allAttractions.forEach((attraction) => {
+      const markerType = resolveMarkerType(attraction, attractionData.lclsNameByCode);
+      if (!matchesPlaceFilter(attraction, markerType, searchFilter)) {
+        return;
+      }
+
       const position = new naverMaps.LatLng(attraction.lat, attraction.lng);
       markerBounds.extend(position);
+      visibleMarkerCount += 1;
 
-      const markerType = resolveMarkerType(attraction, attractionData.lclsNameByCode);
       const rank = topRankByAttractionId.get(attraction.id) ?? null;
       const touristTrendName =
         trendNameByAttractionId.get(attraction.id) ?? attraction.title;
@@ -1174,10 +1246,17 @@ function HomePage() {
 
     fitMapToSelectedRegion({
       smooth: true,
-      fallbackBounds: attractionData.allAttractions.length > 0 ? markerBounds : null,
+      fallbackBounds: visibleMarkerCount > 0 ? markerBounds : null,
     });
     setAttractionLoadingStage("idle");
-  }, [attractionsQuery.data, mapReady, selectedSigunguCode, topRankByAttractionId, trendNameByAttractionId]);
+  }, [
+    attractionsQuery.data,
+    mapReady,
+    searchFilter,
+    selectedSigunguCode,
+    topRankByAttractionId,
+    trendNameByAttractionId,
+  ]);
 
   useEffect(() => {
     if (attractionsQuery.isError) {
@@ -1249,15 +1328,60 @@ function HomePage() {
         </div>
       </div>
 
+      <div className="scrollbar-hide pointer-events-auto absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+6.1rem)] z-20 overflow-x-auto px-3 pb-1">
+        <div className="flex w-max min-w-full gap-2 pr-3">
+          {[
+            { key: "all", label: "전체" },
+            { key: "tourist", label: "관광지" },
+            { key: "food", label: "음식점" },
+            { key: "cafe", label: "카페" },
+          ].map((filter) => {
+            const isActive = searchFilter === filter.key;
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => {
+                  resetSheet();
+                  setSearchFilter(filter.key as SearchFilter);
+                }}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold shadow-sm backdrop-blur transition ${
+                  isActive
+                    ? "border-brand-500 bg-brand-600 text-white"
+                    : "border-brand-200 bg-white/95 text-slate-600"
+                }`}
+              >
+                {filter.key === "all" ? (
+                  <IoMapOutline className="text-sm" />
+                ) : filter.key === "tourist" ? (
+                  <IoLocationSharp className="text-sm" />
+                ) : filter.key === "food" ? (
+                  <IoRestaurantOutline className="text-sm" />
+                ) : (
+                  <IoCafeOutline className="text-sm" />
+                )}
+                <span>{filter.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <RouteCheckoutModal
         isOpen={isSavedListOpen}
         savedPlaces={savedPlaces}
+        currentLocation={currentLocation}
         onClose={closeSavedList}
         onSelectPlace={(place) => {
           openSheet(place, { mode: "full-popup" });
         }}
         onRemovePlace={removeSavedPlace}
         onClearPlaces={clearSavedPlaces}
+        onRequestAddPlace={() => {
+          closeSavedList();
+          setIsSearchPopupOpen(true);
+          window.setTimeout(() => searchInputRef.current?.focus(), 0);
+        }}
       />
 
       <PlaceBottomSheet />
@@ -1330,47 +1454,44 @@ function HomePage() {
               {searchKeyword.trim() ? (
                 <div className="space-y-2">
                   {searchResults.length > 0 ? (
-                    searchResults.map((item) => (
-                      <button
-                        key={`${item.attraction.id}-${item.attraction.contentTypeId}`}
-                        type="button"
-                        onClick={() => {
-                          appendRecentSearch(searchKeyword);
-                          setSearchKeyword(item.attraction.title);
-                          setIsSearchPopupOpen(false);
-                          openPlaceSheetFromAttraction(
-                            item.attraction,
-                            item.markerType,
-                            item.touristTrendName,
-                            item.rank
-                          );
-                        }}
-                        className="flex w-full items-start justify-between rounded-2xl border border-brand-100 bg-white px-4 py-3 text-left shadow-[0_4px_14px_rgba(15,23,42,0.04)]"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-800">
-                            {item.attraction.title}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-slate-500">
-                            {item.attraction.address}
-                          </p>
-                        </div>
-                        <div className="ml-3 flex shrink-0 items-center gap-2">
-                          {item.rank ? (
-                            <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
-                              TOP {item.rank}
-                            </span>
-                          ) : null}
-                          {item.markerType.contentTypeLabel === "카페" ? (
-                            <IoCafeOutline className="text-brand-500" />
-                          ) : item.attraction.contentTypeId === "39" ? (
-                            <IoRestaurantOutline className="text-brand-500" />
-                          ) : (
-                            <span>{item.markerType.badge.icon}</span>
-                          )}
-                        </div>
-                      </button>
-                    ))
+                    <>
+                      {visibleSearchResults.map((item) => (
+                        <PlaceResultCard
+                          key={`${item.attraction.id}-${item.attraction.contentTypeId}`}
+                          title={item.attraction.title}
+                          address={item.attraction.address}
+                          categoryLabel={item.markerType.contentTypeLabel}
+                          thumbnailUrl={item.thumbnailUrl}
+                          fallbackIcon={item.icon}
+                          distanceLabel={item.distanceLabel}
+                          badgeLabel={item.rank ? `집중률 ${item.rank}위` : null}
+                          onClick={() => {
+                            appendRecentSearch(searchKeyword);
+                            setSearchKeyword(item.attraction.title);
+                            openPlaceSheetFromAttraction(
+                              item.attraction,
+                              item.markerType,
+                              item.touristTrendName,
+                              item.rank,
+                              "full-popup"
+                            );
+                          }}
+                        />
+                      ))}
+                      {visibleSearchResults.length < searchResults.length ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setVisibleSearchResultCount(
+                              (count) => count + SEARCH_RESULTS_PAGE_SIZE
+                            )
+                          }
+                          className="w-full rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm font-semibold text-brand-700 shadow-sm transition hover:bg-brand-50"
+                        >
+                          더 보기 {visibleSearchResults.length}/{searchResults.length}
+                        </button>
+                      ) : null}
+                    </>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-4 py-8 text-center text-sm text-slate-500">
                       검색 결과가 없습니다.

@@ -17,6 +17,8 @@ import {
   IoBagAdd,
   IoBagAddOutline,
   IoCarSportOutline,
+  IoClose,
+  IoInformationCircleOutline,
   IoStatsChart,
   IoNavigate,
 } from "react-icons/io5";
@@ -31,6 +33,7 @@ import {
   type TouristConcentrationPoint,
 } from "../../../lib/visitKoreaTourApi";
 import { PotatoLoadingCard } from "../../../components/feedback/PotatoLoadingOverlay";
+import PlaceResultCard from "../../../components/place/PlaceResultCard";
 import { useMapSheetStore } from "../../../stores/mapSheetStore";
 import { useUiToastStore } from "../../../stores/uiToastStore";
 
@@ -65,24 +68,24 @@ type TrendTabType = "weekly" | "monthly";
 function getTopRankBadgeStyle(rank: number) {
   if (rank === 1) {
     return {
-      label: "🥇 TOP 1",
+      label: "🥇 집중률 1위",
       className: "border-amber-300 bg-amber-50 text-amber-700",
     };
   }
   if (rank === 2) {
     return {
-      label: "🥈 TOP 2",
+      label: "🥈 집중률 2위",
       className: "border-slate-300 bg-slate-50 text-slate-700",
     };
   }
   if (rank === 3) {
     return {
-      label: "🥉 TOP 3",
+      label: "🥉 집중률 3위",
       className: "border-orange-300 bg-orange-50 text-orange-700",
     };
   }
   return {
-    label: `TOP ${rank}`,
+    label: `집중률 ${rank}위`,
     className: "border-rose-200 bg-rose-50 text-rose-700",
   };
 }
@@ -154,13 +157,6 @@ function buildGoogleImageSearchUrl(keyword: string) {
   return `https://www.google.com/search?${params.toString()}`;
 }
 
-function buildGoogleSearchUrl(keyword: string) {
-  const params = new URLSearchParams({
-    q: keyword,
-  });
-  return `https://www.google.com/search?${params.toString()}`;
-}
-
 const EXCLUDED_NEARBY_PLACE_PATTERN =
   /(버스정류장|정류장|매표소|주차장|화장실|터미널|관리사무소|안내소|입구|출구|승강장|휴게소|매점)/;
 
@@ -184,6 +180,32 @@ function isCafeNearbyPlace(place: NearbyTouristPlace) {
   );
 }
 
+function getNearbyPlaceCategoryLabel(place: NearbyTouristPlace) {
+  if (place.contentTypeId === "12") {
+    return "관광지";
+  }
+
+  if (place.contentTypeId === "39") {
+    return isCafeNearbyPlace(place) ? "카페" : "음식점";
+  }
+
+  return null;
+}
+
+function getNearbyPlaceCategoryIcon(place: NearbyTouristPlace) {
+  const categoryLabel = getNearbyPlaceCategoryLabel(place);
+
+  if (categoryLabel === "카페") {
+    return "☕";
+  }
+
+  if (categoryLabel === "음식점") {
+    return "🍽";
+  }
+
+  return "📍";
+}
+
 function PlaceBottomSheet() {
   const {
     isOpen,
@@ -191,22 +213,24 @@ function PlaceBottomSheet() {
     sheetResetVersion,
     selectedPlace,
     savedPlaceIds,
+    openSheet,
     resetSheet,
     toggleSavedPlace,
   } = useMapSheetStore();
   const showToast = useUiToastStore((state) => state.showToast);
   const [trendTab, setTrendTab] = useState<TrendTabType>("monthly");
+  const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
 
   const previewMapRef = useRef<HTMLDivElement | null>(null);
   const previewMapInstanceRef = useRef<any>(null);
   const previewMapContainerRef = useRef<HTMLDivElement | null>(null);
   const previewOverlaysRef = useRef<any[]>([]);
+  const contentScrollRef = useRef<HTMLDivElement | null>(null);
 
   const currentLocation: CurrentLocation = GANGNEUNG_CENTER_LOCATION;
 
   const hasTourApiServiceKey = Boolean(TOUR_API_SERVICE_KEY);
   const isFullPopupMode = sheetMode === "full-popup";
-  const isSelectedPlaceCafe = selectedPlace?.contentTypeLabel === "카페";
 
   const selectedPlaceKey = selectedPlace
     ? `${selectedPlace.contentId}-${selectedPlace.contentTypeId}`
@@ -333,7 +357,7 @@ function PlaceBottomSheet() {
         lng: selectedPlace.lng,
         radiusM: 6000,
         numOfRows: 12,
-        contentTypeIds: [selectedPlace.contentTypeId],
+        contentTypeIds: ["12", "39"],
         excludeContentId: selectedPlace.contentId,
       });
     },
@@ -447,26 +471,11 @@ function PlaceBottomSheet() {
           (item): item is NearbyTouristPlace =>
             item.title.trim().toLowerCase() !== selectedPlaceTitle
         )
-        .filter((item) => item.contentTypeId === selectedPlace?.contentTypeId)
-        .filter((item) => {
-          if (selectedPlace?.contentTypeId !== "39") {
-            return true;
-          }
-
-          const isCafeResult = isCafeNearbyPlace(item);
-          return isSelectedPlaceCafe ? isCafeResult : !isCafeResult;
-        })
-        .filter((item) => {
-          if (item.contentTypeId === "12") {
-            return true;
-          }
-          return !EXCLUDED_NEARBY_PLACE_PATTERN.test(item.title);
-        })
+        .filter((item) => getNearbyPlaceCategoryLabel(item) != null)
+        .filter((item) => !EXCLUDED_NEARBY_PLACE_PATTERN.test(item.title))
         .slice(0, 6),
     [
       nearbyTouristQuery.data,
-      isSelectedPlaceCafe,
-      selectedPlace?.contentTypeId,
       selectedPlaceTitle,
     ]
   );
@@ -516,11 +525,51 @@ function PlaceBottomSheet() {
     );
   };
 
-  const handleOpenRelatedPlaceSearch = (placeName: string) => {
-    const query = `${placeName} ${selectedPlace?.address ?? ""}`.trim();
-    const url = buildGoogleSearchUrl(query);
-    window.open(url, "_blank", "noopener,noreferrer");
+  const handleSelectNearbyPlace = (place: NearbyTouristPlace) => {
+    if (!selectedPlace) {
+      return;
+    }
+
+    const categoryLabel = getNearbyPlaceCategoryLabel(place) ?? "장소";
+    const categoryIcon = getNearbyPlaceCategoryIcon(place);
+    const categoryName =
+      place.lclsSystm3 || place.lclsSystm2 || place.lclsSystm1 || categoryLabel;
+
+    openSheet(
+      {
+        id: `${place.id}-${place.contentTypeId}`,
+        contentId: place.id,
+        contentTypeId: place.contentTypeId,
+        areaCode: selectedPlace.areaCode,
+        signguCode: selectedPlace.signguCode,
+        touristTrendName: place.title,
+        topRank: null,
+        title: place.title,
+        address: place.address,
+        lat: place.lat,
+        lng: place.lng,
+        contentTypeLabel: categoryLabel,
+        categoryName,
+        icon: categoryIcon,
+        images: [place.firstImage, place.secondImage].filter(Boolean),
+      },
+      { mode: sheetMode }
+    );
+
+    requestAnimationFrame(() => {
+      contentScrollRef.current?.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    });
   };
+
+  useEffect(() => {
+    contentScrollRef.current?.scrollTo({
+      top: 0,
+      behavior: "instant",
+    });
+  }, [selectedPlaceKey]);
 
   useEffect(() => {
     if (!isOpen || !selectedPlace) {
@@ -641,6 +690,10 @@ function PlaceBottomSheet() {
     };
   }, []);
 
+  useEffect(() => {
+    setIsTopRankInfoOpen(false);
+  }, [isOpen, selectedPlaceKey]);
+
   if (!isOpen || !selectedPlace) {
     return null;
   }
@@ -657,7 +710,7 @@ function PlaceBottomSheet() {
       <section
         className={
           isFullPopupMode
-            ? "fixed inset-0 z-[1900] w-full bg-white"
+            ? "fixed inset-0 z-[2400] w-full bg-white"
             : `fixed bottom-0 z-[1900] w-full bg-white ${
                 isSheetExpanded
                   ? "inset-x-0 rounded-none border-0 shadow-none"
@@ -711,6 +764,7 @@ function PlaceBottomSheet() {
           </div>
 
           <div
+            ref={contentScrollRef}
             className={`min-h-0 flex-1 ${
               isSheetExpanded || isFullPopupMode
                 ? "scrollbar-hide overflow-y-auto"
@@ -726,13 +780,6 @@ function PlaceBottomSheet() {
                   <p className="font-trip text-[30px] leading-[1.15] text-slate-900">
                     {selectedPlace.title}
                   </p>
-                  {topRankBadge ? (
-                    <p
-                      className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${topRankBadge.className}`}
-                    >
-                      {topRankBadge.label}
-                    </p>
-                  ) : null}
                   <p className="mt-3 text-sm font-semibold text-brand-700">
                     {selectedPlace.icon} {selectedPlace.contentTypeLabel}
                   </p>
@@ -740,22 +787,34 @@ function PlaceBottomSheet() {
                     {selectedPlace.categoryName}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  aria-label="내 루트 담기"
-                  onClick={() => {
-                    if (selectedPlace) {
-                      const willAddToCart = !isCurrentPlaceSaved;
-                      toggleSavedPlace(selectedPlace, activeImageList[0] ?? "");
-                      if (willAddToCart) {
-                        showToast("여행지 카트에 담았습니다");
+                <div className="mt-1 flex shrink-0 items-center gap-2">
+                  {topRankBadge ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsTopRankInfoOpen(true)}
+                      className={`inline-flex h-10 items-center gap-1 rounded-full border px-3 text-xs font-bold ${topRankBadge.className}`}
+                    >
+                      TOP {selectedPlace.topRank}
+                      <IoInformationCircleOutline className="text-sm" />
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    aria-label="내 루트 담기"
+                    onClick={() => {
+                      if (selectedPlace) {
+                        const willAddToCart = !isCurrentPlaceSaved;
+                        toggleSavedPlace(selectedPlace, activeImageList[0] ?? "");
+                        if (willAddToCart) {
+                          showToast("여행지 카트에 담았습니다");
+                        }
                       }
-                    }
-                  }}
-                  className="mt-1 shrink-0 rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700"
-                >
-                  {isCurrentPlaceSaved ? <IoBagAdd /> : <IoBagAddOutline />}
-                </button>
+                    }}
+                    className="rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700"
+                  >
+                    {isCurrentPlaceSaved ? <IoBagAdd /> : <IoBagAddOutline />}
+                  </button>
+                </div>
               </div>
 
               <p className="mt-4 text-sm leading-6 text-slate-600">
@@ -775,23 +834,48 @@ function PlaceBottomSheet() {
                       />
                     </div>
                   ) : activeImageList.length > 0 ? (
-                    activeImageList.map((imageUrl, index) => (
-                      <img
-                        key={`${imageUrl}-${index}`}
-                        src={imageUrl}
-                        alt={`${selectedPlace.title} 이미지 ${index + 1}`}
-                        className="h-44 w-40 shrink-0 snap-start rounded-2xl border border-brand-100 bg-brand-50 object-cover"
-                      />
-                    ))
+                    <>
+                      {activeImageList.map((imageUrl, index) => (
+                        <img
+                          key={`${imageUrl}-${index}`}
+                          src={imageUrl}
+                          alt={`${selectedPlace.title} 이미지 ${index + 1}`}
+                          className="h-44 w-40 shrink-0 snap-start rounded-2xl border border-brand-100 bg-brand-50 object-cover"
+                        />
+                      ))}
+                      <div className="flex h-44 w-40 shrink-0 snap-start flex-col items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 text-center text-sm text-slate-500">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-lg shadow-sm">
+                          {selectedPlace.icon}
+                        </div>
+                        <p className="mt-3 text-xs font-semibold text-slate-600">
+                          더 찾아보기
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleOpenGoogleImageSearch}
+                          className="pointer-events-auto mt-3 rounded-full border border-brand-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-brand-700"
+                        >
+                          구글에서 보기
+                        </button>
+                      </div>
+                    </>
                   ) : (
-                    <div className="flex h-44 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-4 text-sm text-slate-500">
-                      <p>등록된 이미지가 없습니다</p>
+                    <div className="flex h-52 w-full min-w-full shrink-0 snap-start flex-col items-center justify-center rounded-3xl border border-dashed border-brand-200 bg-brand-50 px-5 text-center text-sm text-slate-500">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-2xl shadow-sm">
+                        {selectedPlace.icon}
+                      </div>
+                      <p className="mt-4 text-sm font-semibold text-slate-700">
+                        이미지 없음
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        등록된 대표 이미지가 아직 없습니다.
+                      </p>
                       <button
                         type="button"
                         onClick={handleOpenGoogleImageSearch}
-                        className="pointer-events-auto mt-3 rounded-full border border-brand-300 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700"
+                        className="pointer-events-auto mt-4 rounded-full border border-brand-300 bg-white px-4 py-2 text-xs font-semibold text-brand-700"
                       >
-                        구글 이미지 검색으로 보기
+                        구글에서 보기
                       </button>
                     </div>
                   )}
@@ -984,58 +1068,31 @@ function PlaceBottomSheet() {
                       {nearbyTouristPlaces.map((place) => {
                         const thumbnailUrl = place.firstImage || place.secondImage;
                         const distanceLabel = formatNearbyDistance(place.distanceM);
+                        const categoryLabel = getNearbyPlaceCategoryLabel(place);
+                        const categoryIcon = getNearbyPlaceCategoryIcon(place);
 
                         return (
-                          <button
+                          <PlaceResultCard
                             key={`${place.id}-${place.contentTypeId}`}
-                            type="button"
-                            onClick={() => handleOpenRelatedPlaceSearch(place.title)}
-                            className="flex w-full items-center justify-between rounded-2xl border border-brand-100 bg-brand-50/60 px-3 py-2.5 text-left"
-                          >
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-brand-100 bg-white">
-                                {thumbnailUrl ? (
-                                  <img
-                                    src={thumbnailUrl}
-                                    alt={`${place.title} 썸네일`}
-                                    className="h-full w-full object-cover"
-                                    loading="lazy"
-                                  />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-base text-slate-400">
-                                    📍
-                                  </div>
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-800">
-                                  {place.title}
-                                </p>
-                                <p className="mt-0.5 truncate text-xs text-slate-500">
-                                  {place.address}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="ml-3 shrink-0 text-right">
-                              {distanceLabel ? (
-                                <p className="text-[11px] font-semibold text-brand-700">
-                                  {distanceLabel}
-                                </p>
-                              ) : (
-                                <p className="text-[11px] text-slate-500">주변 추천</p>
-                              )}
-                            </div>
-                          </button>
+                            title={place.title}
+                            address={place.address}
+                            categoryLabel={categoryLabel ?? "장소"}
+                            thumbnailUrl={thumbnailUrl}
+                            fallbackIcon={categoryIcon}
+                            distanceLabel={distanceLabel}
+                            surface="tinted"
+                            onClick={() => handleSelectNearbyPlace(place)}
+                          />
                         );
                       })}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm text-slate-500">
-                      {nearbyTouristError ?? "주변 관광지 데이터가 아직 없습니다."}
+                      {nearbyTouristError ?? "주변 추천 데이터가 아직 없습니다."}
                     </div>
                   )}
                   <p className="mt-3 text-xs leading-5 text-slate-500">
-                    locationBasedList2 기준 반경 6km 내 관광지 추천 데이터입니다.
+                    locationBasedList2 기준 반경 6km 내 관광지, 음식점, 카페 추천 데이터입니다.
                   </p>
                 </section>
               </div>
@@ -1043,6 +1100,42 @@ function PlaceBottomSheet() {
           </div>
         </div>
       </section>
+
+      {isTopRankInfoOpen && topRankBadge ? (
+        <div className="fixed inset-0 z-[2600] flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            aria-label="집중률 안내 닫기"
+            onClick={() => setIsTopRankInfoOpen(false)}
+            className="absolute inset-0"
+          />
+          <section className="relative w-full max-w-md rounded-3xl border border-brand-200 bg-white px-5 py-5 shadow-[0_20px_60px_rgba(15,23,42,0.25)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-trip text-sm text-brand-700">TOP RANK</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">
+                  {topRankBadge.label}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="집중률 안내 닫기"
+                onClick={() => setIsTopRankInfoOpen(false)}
+                className="rounded-full border border-slate-200 bg-white p-2 text-slate-600"
+              >
+                <IoClose />
+              </button>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-slate-600">
+              한국관광공사 방문자 집중률 예측 데이터를 기준으로 같은 지역의
+              관광지 중 상대적으로 관심도가 높은 장소를 표시한 순위입니다.
+            </p>
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              실제 혼잡도나 실시간 방문자 수와는 다를 수 있어요.
+            </p>
+          </section>
+        </div>
+      ) : null}
     </>
   );
 }
