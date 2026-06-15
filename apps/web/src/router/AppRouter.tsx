@@ -1,9 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import BottomTabLayout from "../layouts/BottomTabLayout";
-import HomePage from "../pages/HomePage";
-import MyInfoPage from "../pages/MyInfoPage";
-import MyRoutePage from "../pages/MyRoutePage";
-import SharedRoutePage from "../pages/SharedRoutePage";
+import BottomTabLayout from "@/layouts/BottomTabLayout";
+import HomePage from "@/pages/HomePage";
+import MyInfoPage from "@/pages/MyInfoPage";
+import MyRoutePage from "@/pages/MyRoutePage";
+import SharedRoutePage from "@/pages/SharedRoutePage";
 
 function AppRouter() {
   return (

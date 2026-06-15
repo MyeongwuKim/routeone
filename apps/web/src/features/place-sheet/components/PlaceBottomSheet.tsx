@@ -1,45 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  CategoryScale,
-  Chart as ChartJS,
-  Filler,
-  type TooltipItem,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Tooltip,
-  Legend,
-} from "chart.js";
-import { Line } from "react-chartjs-2";
-import {
   IoArrowBack,
   IoBagAdd,
   IoBagAddOutline,
   IoCarSportOutline,
   IoClose,
   IoInformationCircleOutline,
-  IoStatsChart,
   IoNavigate,
 } from "react-icons/io5";
 import { usePlaceSheetLayout } from "../hooks/usePlaceSheetLayout";
-import { fetchDrivingRouteFromCurrentLocation } from "../../../lib/naverDirectionsApi";
+import PlaceTrendChart from "./PlaceTrendChart";
+import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
 import {
   fetchNearbyTouristPlaces,
   fetchTourPlaceDetail,
   fetchTouristConcentrationPoints,
-  toWeeklyAndMonthlySeries,
   type NearbyTouristPlace,
-  type TouristConcentrationPoint,
-} from "../../../lib/visitKoreaTourApi";
-import { PotatoLoadingCard } from "../../../components/feedback/PotatoLoadingOverlay";
-import PlaceResultCard from "../../../components/place/PlaceResultCard";
-import { useMapSheetStore } from "../../../stores/mapSheetStore";
-import { useUiToastStore } from "../../../stores/uiToastStore";
+} from "@/lib/visitKoreaTourApi";
+import {
+  getPlaceCategoryIcon,
+  getPlaceCategoryLabel,
+  getReadablePlaceCategoryName,
+  isReadableCategoryName,
+  isTouristPlace,
+} from "@/lib/placeCategory";
+import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import PlaceResultCard from "@/components/place/PlaceResultCard";
+import {
+  useMapSheetStore,
+  type MapSheetPlace,
+} from "@/stores/mapSheetStore";
+import { useUiToastStore } from "@/stores/uiToastStore";
 
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
 const NAVER_MAP_SCHEME_APP_NAME = "routeone.web";
-const CAFE_LCLS_CODE = "FD050100";
 const GANGNEUNG_CENTER_LOCATION = {
   lat: 37.7519,
   lng: 128.8761,
@@ -48,22 +43,10 @@ const GANGNEUNG_CENTER_LOCATION = {
 const SHEET_HEADER_HEIGHT_PX = 64;
 const SHEET_HEADLINE_MIN_HEIGHT_PX = 108;
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip,
-  Legend,
-  Filler
-);
-
 type CurrentLocation = {
   lat: number;
   lng: number;
 };
-
-type TrendTabType = "weekly" | "monthly";
 
 function getTopRankBadgeStyle(rank: number) {
   if (rank === 1) {
@@ -119,35 +102,6 @@ async function preloadImageUrls(urls: string[]) {
   return results.filter((result) => result.loaded).map((result) => result.url);
 }
 
-function formatYmdLabel(ymd: string) {
-  if (!/^\d{8}$/.test(ymd)) {
-    return ymd;
-  }
-
-  const month = ymd.slice(4, 6);
-  const day = ymd.slice(6, 8);
-  return `${month}.${day}`;
-}
-
-function buildTrendChartData(points: TouristConcentrationPoint[]) {
-  return {
-    labels: points.map((point) => formatYmdLabel(point.baseYmd)),
-    datasets: [
-      {
-        label: "방문자 집중률",
-        data: points.map((point) => point.concentrationRate),
-        borderColor: "#0d9488",
-        backgroundColor: "rgba(13, 148, 136, 0.14)",
-        borderWidth: 2.5,
-        pointRadius: 2.5,
-        pointHoverRadius: 4,
-        fill: true,
-        tension: 0.34,
-      },
-    ],
-  };
-}
-
 function buildGoogleImageSearchUrl(keyword: string) {
   const query = `${keyword} 사진`;
   const params = new URLSearchParams({
@@ -172,38 +126,50 @@ function formatNearbyDistance(distanceM: number | null) {
   return `${Math.round(distanceM)}m`;
 }
 
-function isCafeNearbyPlace(place: NearbyTouristPlace) {
-  const targetText = `${place.title} ${place.lclsSystm1} ${place.lclsSystm2} ${place.lclsSystm3}`;
-  return (
-    place.lclsSystm3 === CAFE_LCLS_CODE ||
-    /카페|커피|coffee|디저트|찻집/i.test(targetText)
-  );
-}
-
 function getNearbyPlaceCategoryLabel(place: NearbyTouristPlace) {
-  if (place.contentTypeId === "12") {
-    return "관광지";
-  }
-
-  if (place.contentTypeId === "39") {
-    return isCafeNearbyPlace(place) ? "카페" : "음식점";
-  }
-
-  return null;
+  return getPlaceCategoryLabel(place);
 }
 
 function getNearbyPlaceCategoryIcon(place: NearbyTouristPlace) {
   const categoryLabel = getNearbyPlaceCategoryLabel(place);
+  return getPlaceCategoryIcon(categoryLabel);
+}
 
-  if (categoryLabel === "카페") {
-    return "☕";
-  }
+type NearbyMapSheetPlaceInput = {
+  place: NearbyTouristPlace;
+  areaCode: string;
+  signguCode: string;
+};
 
-  if (categoryLabel === "음식점") {
-    return "🍽";
-  }
+function createMapSheetPlaceFromNearbyPlace({
+  place,
+  areaCode,
+  signguCode,
+}: NearbyMapSheetPlaceInput): MapSheetPlace {
+  const categoryLabel = getNearbyPlaceCategoryLabel(place);
+  const categoryIcon = getNearbyPlaceCategoryIcon(place);
+  const categoryName = getReadablePlaceCategoryName(
+    [place.lclsSystm3, place.lclsSystm2, place.lclsSystm1],
+    categoryLabel
+  );
 
-  return "📍";
+  return {
+    id: `${place.id}-${place.contentTypeId}`,
+    contentId: place.id,
+    contentTypeId: place.contentTypeId,
+    areaCode,
+    signguCode,
+    touristTrendName: place.title,
+    topRank: null,
+    title: place.title,
+    address: place.address,
+    lat: place.lat,
+    lng: place.lng,
+    contentTypeLabel: categoryLabel,
+    categoryName,
+    icon: categoryIcon,
+    images: [place.firstImage, place.secondImage].filter(Boolean),
+  };
 }
 
 function PlaceBottomSheet() {
@@ -218,7 +184,6 @@ function PlaceBottomSheet() {
     toggleSavedPlace,
   } = useMapSheetStore();
   const showToast = useUiToastStore((state) => state.showToast);
-  const [trendTab, setTrendTab] = useState<TrendTabType>("monthly");
   const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
 
   const previewMapRef = useRef<HTMLDivElement | null>(null);
@@ -307,7 +272,7 @@ function PlaceBottomSheet() {
     enabled:
       isOpen &&
       Boolean(selectedPlace) &&
-      selectedPlace?.contentTypeId === "12" &&
+      (selectedPlace ? isTouristPlace(selectedPlace) : false) &&
       hasTourApiServiceKey &&
       Boolean(selectedPlace?.areaCode) &&
       Boolean(selectedPlace?.signguCode),
@@ -372,8 +337,12 @@ function PlaceBottomSheet() {
     (Boolean(selectedPlaceKey) &&
       (detailQuery.isSuccess || detailQuery.isError));
   const activeImageList = useMemo(
-    () => [...new Set(detailImages.filter(Boolean))],
-    [detailImages]
+    () => [
+      ...new Set(
+        [...(selectedPlace?.images ?? []), ...detailImages].filter(Boolean)
+      ),
+    ],
+    [detailImages, selectedPlace?.images]
   );
   const routeDurationText = routeQuery.data
     ? formatDurationMinutes(routeQuery.data.durationMs)
@@ -393,76 +362,15 @@ function PlaceBottomSheet() {
     nearbyTouristQuery.error instanceof Error
       ? nearbyTouristQuery.error.message
       : null;
-  const concentrationSeries = useMemo(
-    () => toWeeklyAndMonthlySeries(concentrationTrendQuery.data ?? []),
-    [concentrationTrendQuery.data]
-  );
-  const activeTrendPoints =
-    trendTab === "weekly"
-      ? concentrationSeries.weekly
-      : concentrationSeries.monthly;
-  const trendChartData = useMemo(
-    () => buildTrendChartData(activeTrendPoints),
-    [activeTrendPoints]
-  );
-  const trendChartOptions = useMemo(
-    () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false,
-        },
-        tooltip: {
-          mode: "index" as const,
-          intersect: false,
-          callbacks: {
-            label: (context: TooltipItem<"line">) =>
-              `집중률 ${(context.parsed.y ?? 0).toFixed(1)}`,
-          },
-        },
-      },
-      scales: {
-        x: {
-          ticks: {
-            maxTicksLimit: trendTab === "weekly" ? 7 : 8,
-            color: "#475569",
-            font: {
-              size: 11,
-            },
-          },
-          grid: {
-            display: false,
-          },
-        },
-        y: {
-          beginAtZero: true,
-          suggestedMax: 100,
-          ticks: {
-            color: "#64748b",
-            callback: (value: string | number) => `${value}`,
-            font: {
-              size: 11,
-            },
-          },
-          grid: {
-            color: "rgba(148, 163, 184, 0.25)",
-          },
-        },
-      },
-      interaction: {
-        mode: "nearest" as const,
-        intersect: false,
-      },
-    }),
-    [trendTab]
-  );
   const shouldShowOverviewPanel = isFullPopupMode || showOverviewPanel;
   const shouldShowExpandedSection = isFullPopupMode || isSheetExpanded;
-  const isTouristAttraction = selectedPlace?.contentTypeId === "12";
+  const isTouristAttraction = selectedPlace ? isTouristPlace(selectedPlace) : false;
   const topRankBadge = selectedPlace?.topRank
     ? getTopRankBadgeStyle(selectedPlace.topRank)
     : null;
+  const shouldShowCategoryName =
+    isReadableCategoryName(selectedPlace?.categoryName) &&
+    selectedPlace?.categoryName !== selectedPlace?.contentTypeLabel;
   const selectedPlaceTitle = selectedPlace?.title.trim().toLowerCase() ?? "";
   const nearbyTouristPlaces = useMemo(
     () =>
@@ -471,7 +379,7 @@ function PlaceBottomSheet() {
           (item): item is NearbyTouristPlace =>
             item.title.trim().toLowerCase() !== selectedPlaceTitle
         )
-        .filter((item) => getNearbyPlaceCategoryLabel(item) != null)
+        .filter((item) => getNearbyPlaceCategoryLabel(item) !== "장소")
         .filter((item) => !EXCLUDED_NEARBY_PLACE_PATTERN.test(item.title))
         .slice(0, 6),
     [
@@ -530,29 +438,12 @@ function PlaceBottomSheet() {
       return;
     }
 
-    const categoryLabel = getNearbyPlaceCategoryLabel(place) ?? "장소";
-    const categoryIcon = getNearbyPlaceCategoryIcon(place);
-    const categoryName =
-      place.lclsSystm3 || place.lclsSystm2 || place.lclsSystm1 || categoryLabel;
-
     openSheet(
-      {
-        id: `${place.id}-${place.contentTypeId}`,
-        contentId: place.id,
-        contentTypeId: place.contentTypeId,
+      createMapSheetPlaceFromNearbyPlace({
+        place,
         areaCode: selectedPlace.areaCode,
         signguCode: selectedPlace.signguCode,
-        touristTrendName: place.title,
-        topRank: null,
-        title: place.title,
-        address: place.address,
-        lat: place.lat,
-        lng: place.lng,
-        contentTypeLabel: categoryLabel,
-        categoryName,
-        icon: categoryIcon,
-        images: [place.firstImage, place.secondImage].filter(Boolean),
-      },
+      }),
       { mode: sheetMode }
     );
 
@@ -783,9 +674,11 @@ function PlaceBottomSheet() {
                   <p className="mt-3 text-sm font-semibold text-brand-700">
                     {selectedPlace.icon} {selectedPlace.contentTypeLabel}
                   </p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {selectedPlace.categoryName}
-                  </p>
+                  {shouldShowCategoryName ? (
+                    <p className="mt-1 text-sm text-slate-600">
+                      {selectedPlace.categoryName}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="mt-1 flex shrink-0 items-center gap-2">
                   {topRankBadge ? (
@@ -921,69 +814,12 @@ function PlaceBottomSheet() {
                   )}
                 </div>
 
-                <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="font-trip text-sm text-brand-700">
-                      방문자 추이
-                    </p>
-                    <div className="inline-flex rounded-full border border-brand-200 bg-brand-50 p-1">
-                      <button
-                        type="button"
-                        onClick={() => setTrendTab("weekly")}
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          trendTab === "weekly"
-                            ? "bg-brand-600 text-white shadow-sm"
-                            : "text-brand-700"
-                        }`}
-                      >
-                        주간
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTrendTab("monthly")}
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          trendTab === "monthly"
-                            ? "bg-brand-600 text-white shadow-sm"
-                            : "text-brand-700"
-                        }`}
-                      >
-                        월간
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-brand-100 bg-white px-3 py-3">
-                    {concentrationTrendQuery.isFetching ? (
-                      <div className="flex min-h-44 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
-                        <div className="h-7 w-7 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
-                        <p className="ml-3 text-sm font-semibold">
-                          방문자 추이 불러오는 중
-                        </p>
-                      </div>
-                    ) : activeTrendPoints.length > 0 ? (
-                      <div className="h-44 w-full">
-                        <Line
-                          data={trendChartData}
-                          options={trendChartOptions}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex min-h-44 flex-col items-center justify-center rounded-xl border border-dashed border-brand-200 bg-brand-50/70 px-3 text-center text-sm text-slate-500">
-                        <IoStatsChart className="mb-2 text-lg text-brand-500" />
-                        <p>
-                          {concentrationTrendError ??
-                            (isTouristAttraction
-                              ? "선택한 관광지의 방문자 추이 데이터가 아직 없습니다."
-                              : "방문자 추이 예측은 관광지 데이터에 한해 제공됩니다.")}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-3 text-xs leading-5 text-slate-500">
-                    이동통신 기반 방문자 집계 데이터를 바탕으로 산출한 관광지
-                    집중률 예측 추이입니다.
-                  </p>
-                </section>
+                <PlaceTrendChart
+                  points={concentrationTrendQuery.data ?? []}
+                  isLoading={concentrationTrendQuery.isFetching}
+                  errorMessage={concentrationTrendError}
+                  isTouristAttraction={isTouristAttraction}
+                />
 
                 {shouldShowExpandedSection ? (
                   <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm">

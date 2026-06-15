@@ -1,21 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { IoArrowBack } from "react-icons/io5";
 import PlaceCartItemsStep from "./cart-steps/PlaceCartItemsStep";
 import PlaceCartRouteResultStep from "./cart-steps/PlaceCartRouteResultStep";
 import PlaceCartScheduleStep from "./cart-steps/PlaceCartScheduleStep";
 import PlaceCartTempoStep, { type TravelTempo } from "./cart-steps/PlaceCartTempoStep";
-import type { PlannedRouteDay } from "./cart-steps/routePlanTypes";
-import type { MapSheetPlace, SavedPlaceItem } from "../../../stores/mapSheetStore";
+import type {
+  PlannedRouteDay,
+  PlannedRouteItem,
+  RouteInsertRequest,
+} from "./cart-steps/routePlanTypes";
+import {
+  getRoutePlaceCategory,
+  type RoutePlaceCategory,
+} from "@/lib/placeCategory";
+import type { MapSheetPlace, SavedPlaceItem } from "@/stores/mapSheetStore";
 
 type RouteCheckoutModalProps = {
   isOpen: boolean;
   savedPlaces: SavedPlaceItem[];
+  insertCandidatePlaces: MapSheetPlace[];
   currentLocation: RouteStartLocation | null;
   onClose: () => void;
   onSelectPlace: (place: MapSheetPlace) => void;
   onRemovePlace: (placeId: string) => void;
   onClearPlaces: () => void;
-  onRequestAddPlace: () => void;
+  onRequestSearchPlace: () => void;
 };
 
 type CartFlowStep = "cart" | "schedule" | "tempo" | "result";
@@ -23,6 +32,27 @@ type CartFlowStep = "cart" | "schedule" | "tempo" | "result";
 type RouteStartLocation = {
   lat: number;
   lng: number;
+};
+
+type RoutePlannerPlace = {
+  place: MapSheetPlace;
+  category: RoutePlaceCategory;
+  stayMinutes: number;
+  recommendedStayMinutes: number;
+};
+
+type RoutePlannerState = {
+  days: PlannedRouteDay[];
+  dayIndex: number;
+  currentMinutes: number;
+  previousPlace: MapSheetPlace | null;
+  remainingPlaces: RoutePlannerPlace[];
+  score: number;
+};
+
+type ManualRouteInsertion = {
+  request: RouteInsertRequest;
+  place: MapSheetPlace;
 };
 
 const TEMPO_STAY_MINUTES: Record<TravelTempo, Record<string, number>> = {
@@ -42,6 +72,15 @@ const TEMPO_STAY_MINUTES: Record<TravelTempo, Record<string, number>> = {
     cafe: 35,
   },
 };
+
+const ROUTE_BEAM_WIDTH = 80;
+const LUNCH_START_MINUTES = 11 * 60 + 30;
+const LUNCH_END_MINUTES = 13 * 60 + 20;
+const DINNER_START_MINUTES = 17 * 60 + 30;
+const DINNER_END_MINUTES = 19 * 60 + 10;
+const DEFAULT_TRIP_DAYS = 1;
+const DEFAULT_DAILY_START_TIME = "09:00";
+const DEFAULT_SCHEDULE_END_TIME = "18:00";
 
 function toMinutes(timeValue: string) {
   const [hourText, minuteText] = timeValue.split(":");
@@ -67,20 +106,8 @@ function addDays(dateValue: string, days: number) {
   return toDateValue(date);
 }
 
-function getPlaceRouteCategory(place: MapSheetPlace) {
-  if (place.contentTypeLabel === "카페") {
-    return "cafe";
-  }
-
-  if (place.contentTypeId === "39") {
-    return "food";
-  }
-
-  return "tourist";
-}
-
 function getRecommendedStayMinutes(place: MapSheetPlace, tempo: TravelTempo) {
-  const category = getPlaceRouteCategory(place);
+  const category = getRoutePlaceCategory(place);
   return TEMPO_STAY_MINUTES[tempo][category];
 }
 
@@ -103,51 +130,386 @@ function estimateTravelMinutes(from: RouteStartLocation, to: RouteStartLocation)
   return Math.max(8, Math.round((distanceKm / 35) * 60));
 }
 
-function orderPlacesByDistance(
-  savedPlaces: SavedPlaceItem[],
-  currentLocation: RouteStartLocation | null
+function isWithinTimeWindow(
+  value: number,
+  startMinutes: number,
+  endMinutes: number
 ) {
-  const remaining = savedPlaces.map((item) => item.place);
-  const ordered: MapSheetPlace[] = [];
+  return value >= startMinutes && value <= endMinutes;
+}
 
-  const firstPlaceIndex = currentLocation
-    ? remaining.reduce(
-        (nearestIndex, place, index) => {
-          const nearestPlace = remaining[nearestIndex];
-          return calculateDistanceKm(currentLocation, place) <
-            calculateDistanceKm(currentLocation, nearestPlace)
-            ? index
-            : nearestIndex;
-        },
-        0
-      )
-    : 0;
-  const [firstPlace] = remaining.splice(firstPlaceIndex, 1);
-
-  if (!firstPlace) {
-    return ordered;
+function getTimeWindowDistance(
+  value: number,
+  startMinutes: number,
+  endMinutes: number
+) {
+  if (isWithinTimeWindow(value, startMinutes, endMinutes)) {
+    return 0;
   }
 
-  ordered.push(firstPlace);
+  return Math.min(
+    Math.abs(value - startMinutes),
+    Math.abs(value - endMinutes)
+  );
+}
 
-  while (remaining.length > 0) {
-    const currentPlace = ordered[ordered.length - 1];
-    let nearestIndex = 0;
-    let nearestDistance = Number.POSITIVE_INFINITY;
+function getTempoTravelWeight(tempo: TravelTempo) {
+  if (tempo === "relaxed") {
+    return 1.45;
+  }
 
-    remaining.forEach((place, index) => {
-      const distance = calculateDistanceKm(currentPlace, place);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestIndex = index;
+  if (tempo === "packed") {
+    return 2.35;
+  }
+
+  return 1.8;
+}
+
+function getCafeWindow(tempo: TravelTempo) {
+  if (tempo === "relaxed") {
+    return {
+      start: 13 * 60,
+      end: 17 * 60 + 20,
+    };
+  }
+
+  if (tempo === "packed") {
+    return {
+      start: 14 * 60 + 30,
+      end: 16 * 60 + 30,
+    };
+  }
+
+  return {
+    start: 14 * 60,
+    end: 17 * 60,
+  };
+}
+
+function getCategoryTimeScore(options: {
+  category: RoutePlaceCategory;
+  startMinutes: number;
+  tempo: TravelTempo;
+  hasFoodRemaining: boolean;
+  previousCategory: RoutePlaceCategory | null;
+}) {
+  const { category, startMinutes, tempo, hasFoodRemaining, previousCategory } =
+    options;
+
+  if (category === "food") {
+    const lunchDistance = getTimeWindowDistance(
+      startMinutes,
+      LUNCH_START_MINUTES,
+      LUNCH_END_MINUTES
+    );
+    const dinnerDistance = getTimeWindowDistance(
+      startMinutes,
+      DINNER_START_MINUTES,
+      DINNER_END_MINUTES
+    );
+    const isMealTime = lunchDistance === 0 || dinnerDistance === 0;
+    let score = Math.min(lunchDistance, dinnerDistance) * 0.8;
+
+    if (isMealTime) {
+      score -= 110;
+    }
+
+    if (startMinutes < 10 * 60 + 40) {
+      score += 70;
+    }
+
+    if (previousCategory === "tourist" && isMealTime) {
+      score -= 20;
+    }
+
+    return score;
+  }
+
+  if (category === "cafe") {
+    const cafeWindow = getCafeWindow(tempo);
+    const cafeDistance = getTimeWindowDistance(
+      startMinutes,
+      cafeWindow.start,
+      cafeWindow.end
+    );
+    let score = cafeDistance * (tempo === "relaxed" ? 0.25 : 0.45);
+
+    if (cafeDistance === 0) {
+      score -= tempo === "relaxed" ? 70 : 40;
+    }
+
+    if (
+      hasFoodRemaining &&
+      isWithinTimeWindow(startMinutes, LUNCH_START_MINUTES - 20, LUNCH_END_MINUTES)
+    ) {
+      score += 90;
+    }
+
+    if (previousCategory === "food" && startMinutes >= LUNCH_END_MINUTES - 20) {
+      score -= 30;
+    }
+
+    if (previousCategory === "tourist" && cafeDistance === 0) {
+      score -= tempo === "relaxed" ? 35 : 20;
+    }
+
+    return score;
+  }
+
+  let score = 0;
+
+  if (
+    hasFoodRemaining &&
+    isWithinTimeWindow(startMinutes, LUNCH_START_MINUTES - 10, LUNCH_END_MINUTES)
+  ) {
+    score += 130;
+  }
+
+  if (startMinutes >= 16 * 60 + 30) {
+    score += 25;
+  }
+
+  if (previousCategory === "cafe" && startMinutes >= 14 * 60) {
+    score += 20;
+  }
+
+  return score;
+}
+
+function createEmptyRouteDays(options: {
+  travelStartDate: string;
+  tripDays: number;
+  startLocation: RouteStartLocation | null;
+}) {
+  return Array.from(
+    { length: Math.max(1, options.tripDays) },
+    (_, index) => ({
+      day: index + 1,
+      date: options.travelStartDate ? addDays(options.travelStartDate, index) : "",
+      startsFromCurrentLocation: Boolean(options.startLocation),
+      startLocation: options.startLocation,
+      items: [],
+    })
+  );
+}
+
+function addRouteItemToDays(
+  days: PlannedRouteDay[],
+  dayIndex: number,
+  item: PlannedRouteItem
+) {
+  return days.map((day, index) =>
+    index === dayIndex
+      ? {
+          ...day,
+          items: [...day.items, item],
+        }
+      : day
+  );
+}
+
+function recalculateRouteDay(options: {
+  day: PlannedRouteDay;
+  dailyStartMinutes: number;
+  dailyEndMinutes: number;
+  tempo: TravelTempo;
+  stayOverrides: Record<string, number>;
+  currentLocation: RouteStartLocation | null;
+}) {
+  const {
+    day,
+    dailyStartMinutes,
+    dailyEndMinutes,
+    tempo,
+    stayOverrides,
+    currentLocation,
+  } = options;
+  let currentMinutes = dailyStartMinutes;
+  let previousPlace: MapSheetPlace | null = null;
+  const startLocation = day.startLocation ?? currentLocation;
+
+  return {
+    ...day,
+    items: day.items.map((item) => {
+      const travelStart = previousPlace ?? startLocation;
+      const travelMinutes = travelStart
+        ? estimateTravelMinutes(travelStart, item.place)
+        : 0;
+      const recommendedStayMinutes = getRecommendedStayMinutes(item.place, tempo);
+      const stayMinutes =
+        stayOverrides[item.place.id] ?? item.stayMinutes ?? recommendedStayMinutes;
+      const startMinutes = currentMinutes + travelMinutes;
+      const endMinutes = startMinutes + stayMinutes;
+      const nextItem: PlannedRouteItem = {
+        ...item,
+        stayMinutes,
+        recommendedStayMinutes,
+        startMinutes,
+        endMinutes,
+        travelMinutesFromPrevious: travelMinutes,
+        isOverSchedule: endMinutes > dailyEndMinutes,
+      };
+
+      currentMinutes = endMinutes;
+      previousPlace = item.place;
+      return nextItem;
+    }),
+  };
+}
+
+function applyManualRouteInsertions(options: {
+  routePlan: PlannedRouteDay[];
+  insertions: ManualRouteInsertion[];
+  dailyStartMinutes: number;
+  dailyEndMinutes: number;
+  tempo: TravelTempo;
+  stayOverrides: Record<string, number>;
+  currentLocation: RouteStartLocation | null;
+}) {
+  const {
+    routePlan,
+    insertions,
+    dailyStartMinutes,
+    dailyEndMinutes,
+    tempo,
+    stayOverrides,
+    currentLocation,
+  } = options;
+
+  if (insertions.length === 0) {
+    return routePlan;
+  }
+
+  return routePlan.map((day) => {
+    const dayInsertions = insertions
+      .filter((insertion) => insertion.request.day === day.day)
+      .sort((a, b) => a.request.insertIndex - b.request.insertIndex);
+
+    if (dayInsertions.length === 0) {
+      return day;
+    }
+
+    const nextItems = [...day.items];
+    dayInsertions.forEach((insertion, offset) => {
+      if (nextItems.some((item) => item.place.id === insertion.place.id)) {
+        return;
       }
+
+      const recommendedStayMinutes = getRecommendedStayMinutes(
+        insertion.place,
+        tempo
+      );
+      const insertIndex = Math.min(
+        insertion.request.insertIndex + offset,
+        nextItems.length
+      );
+      nextItems.splice(insertIndex, 0, {
+        id: insertion.place.id,
+        place: insertion.place,
+        stayMinutes:
+          stayOverrides[insertion.place.id] ?? recommendedStayMinutes,
+        recommendedStayMinutes,
+        startMinutes: 0,
+        endMinutes: 0,
+        travelMinutesFromPrevious: 0,
+        isOverSchedule: false,
+      });
     });
 
-    const [nearestPlace] = remaining.splice(nearestIndex, 1);
-    ordered.push(nearestPlace);
-  }
+    return recalculateRouteDay({
+      day: {
+        ...day,
+        items: nextItems,
+      },
+      dailyStartMinutes,
+      dailyEndMinutes,
+      tempo,
+      stayOverrides,
+      currentLocation,
+    });
+  });
+}
 
-  return ordered;
+function appendPlaceToRouteState(options: {
+  state: RoutePlannerState;
+  candidate: RoutePlannerPlace;
+  dayIndex: number;
+  dayBreakPenalty: number;
+  dailyStartMinutes: number;
+  dailyEndMinutes: number;
+  tempo: TravelTempo;
+  currentLocation: RouteStartLocation | null;
+}) {
+  const {
+    state,
+    candidate,
+    dayIndex,
+    dayBreakPenalty,
+    dailyStartMinutes,
+    dailyEndMinutes,
+    tempo,
+    currentLocation,
+  } = options;
+  const isNewDay = dayIndex !== state.dayIndex;
+  const previousPlace = isNewDay ? null : state.previousPlace;
+  const baseMinutes = isNewDay ? dailyStartMinutes : state.currentMinutes;
+  const travelStart = previousPlace ?? currentLocation;
+  const travelMinutes = travelStart
+    ? estimateTravelMinutes(travelStart, candidate.place)
+    : 0;
+  const startMinutes = baseMinutes + travelMinutes;
+  const endMinutes = startMinutes + candidate.stayMinutes;
+  const overMinutes = Math.max(0, endMinutes - dailyEndMinutes);
+  const previousCategory = previousPlace
+    ? getRoutePlaceCategory(previousPlace)
+    : null;
+  const remainingPlaces = state.remainingPlaces.filter(
+    (item) => item.place.id !== candidate.place.id
+  );
+  const hasFoodRemaining = remainingPlaces.some((item) => item.category === "food");
+  const routeItem: PlannedRouteItem = {
+    id: candidate.place.id,
+    place: candidate.place,
+    stayMinutes: candidate.stayMinutes,
+    recommendedStayMinutes: candidate.recommendedStayMinutes,
+    startMinutes,
+    endMinutes,
+    travelMinutesFromPrevious: travelMinutes,
+    isOverSchedule: overMinutes > 0,
+  };
+  const score =
+    state.score +
+    dayBreakPenalty +
+    travelMinutes * getTempoTravelWeight(tempo) +
+    getCategoryTimeScore({
+      category: candidate.category,
+      startMinutes,
+      tempo,
+      hasFoodRemaining,
+      previousCategory,
+    }) +
+    overMinutes * 22 +
+    (overMinutes > 0 ? 900 : 0);
+
+  return {
+    days: addRouteItemToDays(state.days, dayIndex, routeItem),
+    dayIndex,
+    currentMinutes: endMinutes,
+    previousPlace: candidate.place,
+    remainingPlaces,
+    score,
+  } satisfies RoutePlannerState;
+}
+
+function getDayBreakPenalty(options: {
+  currentMinutes: number;
+  dailyStartMinutes: number;
+  dailyEndMinutes: number;
+}) {
+  const usedMinutes = options.currentMinutes - options.dailyStartMinutes;
+  const unusedMinutes = Math.max(0, options.dailyEndMinutes - options.currentMinutes);
+
+  return 35 + Math.max(0, 120 - usedMinutes) * 0.7 + unusedMinutes * 0.07;
 }
 
 function buildRoutePlan(options: {
@@ -160,92 +522,147 @@ function buildRoutePlan(options: {
   stayOverrides: Record<string, number>;
   currentLocation: RouteStartLocation | null;
 }): PlannedRouteDay[] {
-  const orderedPlaces = orderPlacesByDistance(
-    options.savedPlaces,
-    options.currentLocation
-  );
-  const days: PlannedRouteDay[] = Array.from(
-    { length: Math.max(1, options.tripDays) },
-    (_, index) => ({
-      day: index + 1,
-      date: options.travelStartDate ? addDays(options.travelStartDate, index) : "",
-      startsFromCurrentLocation: Boolean(options.currentLocation),
-      items: [],
-    })
-  );
-  let currentDayIndex = 0;
-  let currentMinutes = options.dailyStartMinutes;
-  let previousPlace: MapSheetPlace | null = null;
+  const routePlaces: RoutePlannerPlace[] = options.savedPlaces.map((item) => {
+    const recommendedStayMinutes = getRecommendedStayMinutes(
+      item.place,
+      options.tempo
+    );
 
-  orderedPlaces.forEach((place) => {
-    const stayMinutes =
-      options.stayOverrides[place.id] ??
-      getRecommendedStayMinutes(place, options.tempo);
-    let travelMinutes = previousPlace
-      ? estimateTravelMinutes(previousPlace, place)
-      : options.currentLocation
-        ? estimateTravelMinutes(options.currentLocation, place)
-        : 0;
-    let startMinutes = currentMinutes + travelMinutes;
-    let endMinutes = startMinutes + stayMinutes;
-
-    if (
-      days[currentDayIndex].items.length > 0 &&
-      endMinutes > options.dailyEndMinutes &&
-      currentDayIndex < days.length - 1
-    ) {
-      currentDayIndex += 1;
-      currentMinutes = options.dailyStartMinutes;
-      previousPlace = null;
-      travelMinutes = options.currentLocation
-        ? estimateTravelMinutes(options.currentLocation, place)
-        : 0;
-      startMinutes = currentMinutes + travelMinutes;
-      endMinutes = startMinutes + stayMinutes;
-    }
-
-    days[currentDayIndex].items.push({
-      id: place.id,
-      place,
-      stayMinutes,
-      recommendedStayMinutes: getRecommendedStayMinutes(place, options.tempo),
-      startMinutes,
-      endMinutes,
-      travelMinutesFromPrevious: travelMinutes,
-      isOverSchedule: endMinutes > options.dailyEndMinutes,
-    });
-
-    currentMinutes = endMinutes;
-    previousPlace = place;
+    return {
+      place: item.place,
+      category: getRoutePlaceCategory(item.place),
+      stayMinutes: options.stayOverrides[item.place.id] ?? recommendedStayMinutes,
+      recommendedStayMinutes,
+    };
+  });
+  const emptyDays = createEmptyRouteDays({
+    travelStartDate: options.travelStartDate,
+    tripDays: options.tripDays,
+    startLocation: options.currentLocation,
   });
 
-  return days;
+  if (routePlaces.length === 0) {
+    return emptyDays;
+  }
+
+  let beam: RoutePlannerState[] = [
+    {
+      days: emptyDays,
+      dayIndex: 0,
+      currentMinutes: options.dailyStartMinutes,
+      previousPlace: null,
+      remainingPlaces: routePlaces,
+      score: 0,
+    },
+  ];
+
+  for (let index = 0; index < routePlaces.length; index += 1) {
+    const nextBeam: RoutePlannerState[] = [];
+
+    beam.forEach((state) => {
+      if (state.remainingPlaces.length === 0) {
+        nextBeam.push(state);
+        return;
+      }
+
+      state.remainingPlaces.forEach((candidate) => {
+        const currentDayState = appendPlaceToRouteState({
+          state,
+          candidate,
+          dayIndex: state.dayIndex,
+          dayBreakPenalty: 0,
+          dailyStartMinutes: options.dailyStartMinutes,
+          dailyEndMinutes: options.dailyEndMinutes,
+          tempo: options.tempo,
+          currentLocation: options.currentLocation,
+        });
+        const canMoveToNextDay =
+          state.dayIndex < emptyDays.length - 1 &&
+          state.days[state.dayIndex].items.length > 0;
+        const hasFoodRemaining = state.remainingPlaces.some(
+          (item) => item.category === "food"
+        );
+        const hasCafeRemaining = state.remainingPlaces.some(
+          (item) => item.category === "cafe"
+        );
+        const cafeWindow = getCafeWindow(options.tempo);
+        const shouldTryNextDay =
+          currentDayState.currentMinutes > options.dailyEndMinutes ||
+          state.currentMinutes >= options.dailyEndMinutes - 120 ||
+          (hasFoodRemaining && state.currentMinutes > LUNCH_END_MINUTES) ||
+          (hasCafeRemaining && state.currentMinutes > cafeWindow.end);
+
+        nextBeam.push(currentDayState);
+
+        if (canMoveToNextDay && shouldTryNextDay) {
+          nextBeam.push(
+            appendPlaceToRouteState({
+              state,
+              candidate,
+              dayIndex: state.dayIndex + 1,
+              dayBreakPenalty: getDayBreakPenalty({
+                currentMinutes: state.currentMinutes,
+                dailyStartMinutes: options.dailyStartMinutes,
+                dailyEndMinutes: options.dailyEndMinutes,
+              }),
+              dailyStartMinutes: options.dailyStartMinutes,
+              dailyEndMinutes: options.dailyEndMinutes,
+              tempo: options.tempo,
+              currentLocation: options.currentLocation,
+            })
+          );
+        }
+      });
+    });
+
+    beam = nextBeam
+      .sort((a, b) => a.score - b.score)
+      .slice(0, ROUTE_BEAM_WIDTH);
+  }
+
+  return beam.sort((a, b) => a.score - b.score)[0]?.days ?? emptyDays;
 }
 
 function RouteCheckoutModal({
   isOpen,
   savedPlaces,
+  insertCandidatePlaces,
   currentLocation,
   onClose,
   onSelectPlace,
   onRemovePlace,
   onClearPlaces,
-  onRequestAddPlace,
+  onRequestSearchPlace,
 }: RouteCheckoutModalProps) {
   const [step, setStep] = useState<CartFlowStep>("cart");
   const [travelStartDate, setTravelStartDate] = useState("");
-  const [tripDays, setTripDays] = useState(1);
-  const [dailyStartTime, setDailyStartTime] = useState("09:00");
-  const [scheduleEndTime, setScheduleEndTime] = useState("18:00");
+  const [tripDays, setTripDays] = useState(DEFAULT_TRIP_DAYS);
+  const [dailyStartTime, setDailyStartTime] = useState(DEFAULT_DAILY_START_TIME);
+  const [scheduleEndTime, setScheduleEndTime] = useState(
+    DEFAULT_SCHEDULE_END_TIME
+  );
   const [tempo, setTempo] = useState<TravelTempo | null>(null);
   const [stayOverrides, setStayOverrides] = useState<Record<string, number>>({});
+  const [manualInsertions, setManualInsertions] = useState<
+    ManualRouteInsertion[]
+  >([]);
+
+  const resetCheckoutState = useCallback(() => {
+    setStep("cart");
+    setTravelStartDate("");
+    setTripDays(DEFAULT_TRIP_DAYS);
+    setDailyStartTime(DEFAULT_DAILY_START_TIME);
+    setScheduleEndTime(DEFAULT_SCHEDULE_END_TIME);
+    setTempo(null);
+    setStayOverrides({});
+    setManualInsertions([]);
+  }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      setStep("cart");
-      setStayOverrides({});
+    if (!isOpen) {
+      resetCheckoutState();
     }
-  }, [isOpen]);
+  }, [isOpen, resetCheckoutState]);
 
   const hasValidStartDate = Boolean(travelStartDate);
   const hasValidTripDays = Number.isFinite(tripDays) && tripDays >= 1;
@@ -270,10 +687,20 @@ function RouteCheckoutModal({
       return [];
     }
 
-    return buildRoutePlan({
+    const baseRoutePlan = buildRoutePlan({
       savedPlaces,
       travelStartDate,
       tripDays,
+      dailyStartMinutes,
+      dailyEndMinutes: scheduleEndMinutes,
+      tempo,
+      stayOverrides,
+      currentLocation,
+    });
+
+    return applyManualRouteInsertions({
+      routePlan: baseRoutePlan,
+      insertions: manualInsertions,
       dailyStartMinutes,
       dailyEndMinutes: scheduleEndMinutes,
       tempo,
@@ -284,6 +711,7 @@ function RouteCheckoutModal({
     currentLocation,
     dailyStartMinutes,
     isScheduleValid,
+    manualInsertions,
     savedPlaces,
     scheduleEndMinutes,
     stayOverrides,
@@ -316,6 +744,19 @@ function RouteCheckoutModal({
     }
 
     onClose();
+  };
+
+  const handleInsertPlace = (
+    request: RouteInsertRequest,
+    place: MapSheetPlace
+  ) => {
+    setManualInsertions((previous) => [
+      ...previous.filter((insertion) => insertion.place.id !== place.id),
+      {
+        request,
+        place,
+      },
+    ]);
   };
 
   const handleNext = () => {
@@ -410,13 +851,15 @@ function RouteCheckoutModal({
                 routePlan={routePlan}
                 tempo={tempo}
                 dailyEndMinutes={scheduleEndMinutes}
+                candidatePlaces={insertCandidatePlaces}
                 onChangeStayMinutes={(placeId, minutes) => {
                   setStayOverrides((previous) => ({
                     ...previous,
                     [placeId]: minutes,
                   }));
                 }}
-                onRequestAddPlace={onRequestAddPlace}
+                onInsertPlace={handleInsertPlace}
+                onRequestSearchPlace={onRequestSearchPlace}
               />
             ) : null}
           </div>

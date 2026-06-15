@@ -1,13 +1,16 @@
 import PlaceCartRouteDayCard from "./PlaceCartRouteDayCard";
 import type { TravelTempo } from "./PlaceCartTempoStep";
-import type { PlannedRouteDay } from "./routePlanTypes";
+import type { MapSheetPlace } from "@/stores/mapSheetStore";
+import type { PlannedRouteDay, RouteInsertRequest } from "./routePlanTypes";
 
 type PlaceCartRouteResultStepProps = {
   routePlan: PlannedRouteDay[];
   tempo: TravelTempo;
   dailyEndMinutes: number;
+  candidatePlaces: MapSheetPlace[];
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
-  onRequestAddPlace: () => void;
+  onInsertPlace: (request: RouteInsertRequest, place: MapSheetPlace) => void;
+  onRequestSearchPlace: () => void;
 };
 
 const TEMPO_LABEL: Record<TravelTempo, string> = {
@@ -27,11 +30,16 @@ function PlaceCartRouteResultStep({
   routePlan,
   tempo,
   dailyEndMinutes,
+  candidatePlaces,
   onChangeStayMinutes,
-  onRequestAddPlace,
+  onInsertPlace,
+  onRequestSearchPlace,
 }: PlaceCartRouteResultStepProps) {
   const hasOverSchedule = routePlan.some((day) =>
     day.items.some((item) => item.isOverSchedule)
+  );
+  const excludedPlaceIds = routePlan.flatMap((day) =>
+    day.items.map((item) => item.place.id)
   );
 
   return (
@@ -59,8 +67,11 @@ function PlaceCartRouteResultStep({
           <PlaceCartRouteDayCard
             key={day.day}
             day={day}
+            candidatePlaces={candidatePlaces}
+            excludedPlaceIds={excludedPlaceIds}
             onChangeStayMinutes={onChangeStayMinutes}
-            onRequestAddPlace={onRequestAddPlace}
+            onInsertPlace={onInsertPlace}
+            onRequestSearchPlace={onRequestSearchPlace}
           />
         ))}
       </div>

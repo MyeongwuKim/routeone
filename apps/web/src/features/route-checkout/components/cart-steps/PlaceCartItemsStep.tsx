@@ -1,5 +1,5 @@
 import { IoTrashOutline } from "react-icons/io5";
-import type { MapSheetPlace, SavedPlaceItem } from "../../../../stores/mapSheetStore";
+import type { MapSheetPlace, SavedPlaceItem } from "@/stores/mapSheetStore";
 
 type PlaceCartItemsStepProps = {
   savedPlaces: SavedPlaceItem[];

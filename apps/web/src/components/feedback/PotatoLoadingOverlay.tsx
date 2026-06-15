@@ -1,4 +1,4 @@
-import { useUiLoadingStore, type AppLoadingAnimation } from "../../stores/uiLoadingStore";
+import { useUiLoadingStore, type AppLoadingAnimation } from "@/stores/uiLoadingStore";
 
 type PotatoLoadingCardProps = {
   title: string;

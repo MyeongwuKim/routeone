@@ -1,0 +1,253 @@
+import { useMemo, useState } from "react";
+import {
+  IoCafeOutline,
+  IoClose,
+  IoLocationSharp,
+  IoRestaurantOutline,
+  IoSearch,
+} from "react-icons/io5";
+import {
+  getRoutePlaceCategory,
+  type RoutePlaceCategory,
+} from "@/lib/placeCategory";
+import type { MapSheetPlace } from "@/stores/mapSheetStore";
+import type { RouteInsertRequest } from "./routePlanTypes";
+
+type InsertFilter = "all" | RoutePlaceCategory;
+
+type PlaceCartRouteInsertSheetProps = {
+  request: RouteInsertRequest;
+  candidatePlaces: MapSheetPlace[];
+  excludedPlaceIds: string[];
+  onClose: () => void;
+  onSelectPlace: (place: MapSheetPlace, request: RouteInsertRequest) => void;
+  onRequestSearchPlace: () => void;
+};
+
+const FILTERS: Array<{ key: InsertFilter; label: string }> = [
+  { key: "all", label: "전체" },
+  { key: "tourist", label: "관광지" },
+  { key: "food", label: "음식점" },
+  { key: "cafe", label: "카페" },
+];
+
+function getFilterIcon(filter: InsertFilter) {
+  if (filter === "food") {
+    return <IoRestaurantOutline />;
+  }
+
+  if (filter === "cafe") {
+    return <IoCafeOutline />;
+  }
+
+  return <IoLocationSharp />;
+}
+
+function calculateDistanceKm(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number }
+) {
+  const earthRadiusKm = 6371;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRadians(to.lat - from.lat);
+  const dLng = toRadians(to.lng - from.lng);
+  const fromLat = toRadians(from.lat);
+  const toLat = toRadians(to.lat);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
+function formatDistance(distanceKm: number) {
+  if (distanceKm >= 10) {
+    return `${Math.round(distanceKm)}km`;
+  }
+
+  return `${distanceKm.toFixed(1)}km`;
+}
+
+function getSegmentFitScore(place: MapSheetPlace, request: RouteInsertRequest) {
+  const fromDistance = calculateDistanceKm(request.from, place);
+  const toDistance = calculateDistanceKm(place, request.to);
+  const directDistance = calculateDistanceKm(request.from, request.to);
+  const detourDistance = Math.max(0, fromDistance + toDistance - directDistance);
+
+  return {
+    fromDistance,
+    toDistance,
+    detourDistance,
+    score: detourDistance * 1.4 + Math.min(fromDistance, toDistance) * 0.25,
+  };
+}
+
+function PlaceCartRouteInsertSheet({
+  request,
+  candidatePlaces,
+  excludedPlaceIds,
+  onClose,
+  onSelectPlace,
+  onRequestSearchPlace,
+}: PlaceCartRouteInsertSheetProps) {
+  const [activeFilter, setActiveFilter] = useState<InsertFilter>("all");
+  const [keyword, setKeyword] = useState("");
+  const excludedIdSet = useMemo(
+    () => new Set(excludedPlaceIds),
+    [excludedPlaceIds]
+  );
+  const keywordText = keyword.trim().toLowerCase();
+  const recommendedPlaces = useMemo(
+    () =>
+      candidatePlaces
+        .filter((place) => !excludedIdSet.has(place.id))
+        .filter((place) => {
+          if (activeFilter === "all") {
+            return true;
+          }
+
+          return getRoutePlaceCategory(place) === activeFilter;
+        })
+        .filter((place) => {
+          if (!keywordText) {
+            return true;
+          }
+
+          return `${place.title} ${place.address} ${place.contentTypeLabel} ${place.categoryName}`
+            .toLowerCase()
+            .includes(keywordText);
+        })
+        .map((place) => ({
+          place,
+          fit: getSegmentFitScore(place, request),
+        }))
+        .sort((a, b) => a.fit.score - b.fit.score)
+        .slice(0, 8),
+    [activeFilter, candidatePlaces, excludedIdSet, keywordText, request]
+  );
+
+  return (
+    <div className="fixed inset-0 z-[2600] flex items-end bg-slate-950/30">
+      <button
+        type="button"
+        aria-label="구간 장소 추가 닫기"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <section className="route-checkout-modal-enter relative w-full rounded-t-[28px] border border-brand-100 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl">
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200" />
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-trip text-sm text-brand-700">
+              이 구간에 장소 추가
+            </p>
+            <div className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-900">
+              <span className="min-w-0 truncate">{request.from.title}</span>
+              <span className="text-brand-500">→</span>
+              <span className="min-w-0 truncate">{request.to.title}</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              경로에서 크게 벗어나지 않는 후보를 먼저 보여줘요.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
+          >
+            <IoClose />
+          </button>
+        </div>
+
+        <div className="mt-4 flex h-11 items-center gap-2 rounded-2xl border border-brand-100 bg-brand-50/70 px-3">
+          <IoSearch className="shrink-0 text-brand-600" />
+          <input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder="이 구간에 넣을 장소 검색"
+            className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+          />
+        </div>
+
+        <div className="scrollbar-hide mt-3 flex gap-2 overflow-x-auto">
+          {FILTERS.map((filter) => {
+            const isActive = activeFilter === filter.key;
+
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => setActiveFilter(filter.key)}
+                className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-bold ${
+                  isActive
+                    ? "border-brand-500 bg-brand-600 text-white"
+                    : "border-brand-100 bg-white text-slate-600"
+                }`}
+              >
+                {getFilterIcon(filter.key)}
+                {filter.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 max-h-[44vh] space-y-2 overflow-y-auto pb-2">
+          {recommendedPlaces.length > 0 ? (
+            recommendedPlaces.map(({ place, fit }) => (
+              <button
+                key={place.id}
+                type="button"
+                onClick={() => onSelectPlace(place, request)}
+                className="flex w-full items-center gap-3 rounded-2xl border border-brand-100 bg-white p-3 text-left shadow-sm active:scale-[0.99]"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-lg">
+                  {place.icon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-slate-900">
+                    {place.title}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs font-semibold text-brand-700">
+                    {place.contentTypeLabel}
+                    {place.categoryName !== place.contentTypeLabel
+                      ? ` · ${place.categoryName}`
+                      : ""}
+                  </p>
+                  <p className="mt-1 truncate text-xs text-slate-500">
+                    {place.address}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-xs font-bold text-brand-700">
+                    +{formatDistance(fit.detourDistance)}
+                  </p>
+                  <p className="mt-1 text-[10px] text-slate-400">우회</p>
+                </div>
+              </button>
+            ))
+          ) : (
+            <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-4 py-6 text-center">
+              <p className="text-sm font-bold text-slate-700">
+                이 조건에 맞는 추천 후보가 없어요
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                검색어를 바꾸거나 전체 검색에서 직접 찾아볼 수 있어요.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onRequestSearchPlace}
+          className="mt-2 w-full rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-700"
+        >
+          전체 검색에서 직접 찾기
+        </button>
+      </section>
+    </div>
+  );
+}
+
+export default PlaceCartRouteInsertSheet;

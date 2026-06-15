@@ -10,10 +10,23 @@ import {
   IoRestaurantOutline,
   IoSearch,
 } from "react-icons/io5";
-import PlaceBottomSheet from "../features/place-sheet/components/PlaceBottomSheet";
-import RouteCheckoutModal from "../features/route-checkout/components/RouteCheckoutModal";
-import PlaceResultCard from "../components/place/PlaceResultCard";
-import { loadNaverMapSdk } from "../lib/naverMapSdk";
+import PlaceBottomSheet from "@/features/place-sheet/components/PlaceBottomSheet";
+import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
+import {
+  createBadgeMarkerIconHtml,
+  type MapMarkerBadge,
+} from "@/components/map/NaverMapMarkerIcon";
+import PlaceResultCard from "@/components/place/PlaceResultCard";
+import { loadNaverMapSdk } from "@/lib/naverMapSdk";
+import {
+  CAFE_LCLS_CODE,
+  getPlaceCategoryIcon,
+  getPlaceCategoryLabel,
+  getRoutePlaceCategory,
+  isCafePlace,
+  isTouristPlace,
+  type RoutePlaceCategory,
+} from "@/lib/placeCategory";
 import {
   buildLatestConcentrationMap,
   fetchGangwonAttractions,
@@ -21,9 +34,13 @@ import {
   fetchTouristConcentrationPoints,
   normalizeTouristPlaceNameForMatch,
   type GangwonAttraction,
-} from "../lib/visitKoreaTourApi";
-import { useMapSheetStore } from "../stores/mapSheetStore";
-import { useUiLoadingStore } from "../stores/uiLoadingStore";
+} from "@/lib/visitKoreaTourApi";
+import {
+  useMapSheetStore,
+  type MapSheetMode,
+  type MapSheetPlace,
+} from "@/stores/mapSheetStore";
+import { useUiLoadingStore } from "@/stores/uiLoadingStore";
 
 const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
@@ -85,14 +102,6 @@ const GANGWON_SIGNGU_ADMIN_CODES: Record<string, string> = {
 
 const GANGWON_TATS_AREA_CODE = "51";
 
-type MarkerBadge = {
-  label: string;
-  icon: string;
-  background: string;
-  border: string;
-  text: string;
-};
-
 type GeoRing = [number, number][];
 type GeoPolygon = GeoRing[];
 type GeoMultiPolygon = GeoPolygon[];
@@ -117,14 +126,14 @@ type CurrentLocation = {
   lng: number;
 };
 
-type SearchFilter = "all" | "tourist" | "food" | "cafe";
+type SearchFilter = "all" | RoutePlaceCategory;
 type AttractionLoadingStage =
   | "idle"
   | "fetching-places"
   | "ranking"
   | "rendering-markers";
 
-const CONTENT_TYPE_BADGES: Record<string, MarkerBadge> = {
+const CONTENT_TYPE_BADGES: Record<string, MapMarkerBadge> = {
   "12": {
     label: "관광지",
     icon: "📍",
@@ -169,7 +178,7 @@ const CONTENT_TYPE_BADGES: Record<string, MarkerBadge> = {
   },
 };
 
-const DEFAULT_BADGE: MarkerBadge = {
+const DEFAULT_BADGE: MapMarkerBadge = {
   label: "장소",
   icon: "📌",
   background: "#ccfbf1",
@@ -177,23 +186,13 @@ const DEFAULT_BADGE: MarkerBadge = {
   text: "#115e59",
 };
 
-const CAFE_LCLS_CODE = "FD050100";
-const CAFE_BADGE: MarkerBadge = {
+const CAFE_BADGE: MapMarkerBadge = {
   label: "카페",
   icon: "☕",
   background: "#fef3c7",
   border: "#d97706",
   text: "#78350f",
 };
-
-function escapeHtml(text: string) {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
 
 function resolveMarkerType(
   attraction: GangwonAttraction,
@@ -207,107 +206,16 @@ function resolveMarkerType(
     lclsNameByCode[attraction.lclsSystm1] ||
     contentTypeBadge.label;
 
-  const isCafe =
-    attraction.contentTypeId === "39" &&
-    (attraction.lclsSystm3 === CAFE_LCLS_CODE ||
-      /카페|커피|coffee|찻집/i.test(`${categoryName} ${attraction.title}`));
-
-  const badge = isCafe ? CAFE_BADGE : contentTypeBadge;
-  const contentTypeLabel = isCafe ? "카페" : contentTypeBadge.label;
+  const contentTypeLabel = getPlaceCategoryLabel(attraction, categoryName);
+  const badge = isCafePlace(attraction, categoryName)
+    ? CAFE_BADGE
+    : contentTypeBadge;
 
   return {
     typeName: categoryName,
     contentTypeLabel,
     badge,
   };
-}
-
-function createBadgeMarkerIconHtml(badge: MarkerBadge, rankLabel?: string) {
-  const rank = rankLabel ? Number(rankLabel) : Number.NaN;
-  const isRankNumber = Number.isFinite(rank);
-  const rankBadgeStyle = (() => {
-    if (!isRankNumber) {
-      return {
-        background: "#ef4444",
-        text: "#ffffff",
-        border: "#ffffff",
-      };
-    }
-
-    if (rank === 1) {
-      return {
-        background: "#f59e0b",
-        text: "#ffffff",
-        border: "#ffffff",
-      };
-    }
-    if (rank === 2) {
-      return {
-        background: "#94a3b8",
-        text: "#ffffff",
-        border: "#ffffff",
-      };
-    }
-    if (rank === 3) {
-      return {
-        background: "#b45309",
-        text: "#ffffff",
-        border: "#ffffff",
-      };
-    }
-
-    return {
-      background: "#ef4444",
-      text: "#ffffff",
-      border: "#ffffff",
-    };
-  })();
-
-  return `
-    <div style="
-      position:relative;
-      width:34px;
-      height:34px;
-      border-radius:9999px;
-      border:2px solid ${badge.border};
-      background:${badge.background};
-      color:${badge.text};
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:15px;
-      font-weight:700;
-      line-height:1;
-      box-shadow:0 4px 10px rgba(15,23,42,0.18);
-      letter-spacing:-0.02em;
-      user-select:none;
-    ">
-      <span>${escapeHtml(badge.icon)}</span>
-      ${
-        rankLabel
-          ? `<span style="
-              position:absolute;
-              top:-8px;
-              right:-8px;
-              min-width:18px;
-              height:18px;
-              border-radius:9999px;
-              border:2px solid ${rankBadgeStyle.border};
-              background:${rankBadgeStyle.background};
-              color:${rankBadgeStyle.text};
-              display:flex;
-              align-items:center;
-              justify-content:center;
-              font-size:10px;
-              font-weight:800;
-              line-height:1;
-              padding:0 3px;
-              box-shadow:0 3px 8px rgba(15,23,42,0.2);
-            ">${escapeHtml(rankLabel)}</span>`
-          : ""
-      }
-    </div>
-  `;
 }
 
 function shouldHideAttraction(
@@ -422,37 +330,69 @@ function matchesPlaceFilter(
   markerType: ReturnType<typeof resolveMarkerType>,
   filter: SearchFilter
 ) {
-  const isCafe = markerType.contentTypeLabel === "카페";
-
   if (filter === "all") {
     return true;
   }
 
-  if (filter === "tourist") {
-    return attraction.contentTypeId === "12";
-  }
-
-  if (filter === "food") {
-    return attraction.contentTypeId === "39" && !isCafe;
-  }
-
-  return isCafe;
+  return (
+    getRoutePlaceCategory({
+      contentTypeId: attraction.contentTypeId,
+      contentTypeLabel: markerType.contentTypeLabel,
+    }) === filter
+  );
 }
 
-function getMarkerTypeIcon(
-  attraction: GangwonAttraction,
-  markerType: ReturnType<typeof resolveMarkerType>
-) {
-  if (markerType.contentTypeLabel === "카페") {
-    return "☕";
-  }
-
-  if (attraction.contentTypeId === "39") {
-    return "🍽";
+function getMarkerTypeIcon(markerType: ReturnType<typeof resolveMarkerType>) {
+  if (markerType.contentTypeLabel !== "장소") {
+    return getPlaceCategoryIcon(markerType.contentTypeLabel);
   }
 
   return markerType.badge.icon;
 }
+
+type ResolvedMarkerType = ReturnType<typeof resolveMarkerType>;
+
+type AttractionMapSheetPlaceInput = {
+  attraction: GangwonAttraction;
+  markerType: ResolvedMarkerType;
+  signguCode: string;
+  touristTrendName: string;
+  topRank: number | null;
+};
+
+function createMapSheetPlaceFromAttraction({
+  attraction,
+  markerType,
+  signguCode,
+  touristTrendName,
+  topRank,
+}: AttractionMapSheetPlaceInput): MapSheetPlace {
+  return {
+    id: `${attraction.id}-${attraction.contentTypeId}`,
+    contentId: attraction.id,
+    contentTypeId: attraction.contentTypeId,
+    areaCode: GANGWON_TATS_AREA_CODE,
+    signguCode,
+    touristTrendName,
+    topRank,
+    title: attraction.title,
+    address: attraction.address,
+    lat: attraction.lat,
+    lng: attraction.lng,
+    contentTypeLabel: markerType.contentTypeLabel,
+    categoryName: markerType.typeName,
+    icon: markerType.badge.icon,
+    images: [attraction.firstImage, attraction.secondImage].filter(Boolean),
+  };
+}
+
+type OpenPlaceSheetFromAttractionOptions = {
+  attraction: GangwonAttraction;
+  markerType: ResolvedMarkerType;
+  touristTrendName: string;
+  rank: number | null;
+  mode?: MapSheetMode;
+};
 
 function HomePage() {
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -550,7 +490,7 @@ function HomePage() {
         (attraction) => !shouldHideAttraction(attraction, lclsNameByCode)
       );
       const rankableTouristAttractions = filteredAttractions.filter(
-        (attraction) => attraction.contentTypeId === "12"
+        (attraction) => isTouristPlace(attraction)
       );
       const latestConcentrationByName =
         buildLatestConcentrationMap(concentrationPoints);
@@ -618,6 +558,10 @@ function HomePage() {
       return distanceA - distanceB;
     });
   }, [currentLocation]);
+  const selectedRegion =
+    GANGWON_REGIONS.find((region) => region.sigunguCode === selectedSigunguCode) ??
+    GANGWON_REGIONS[0];
+  const routeStartLocation = currentLocation ?? selectedRegion.center;
 
   const topRankByAttractionId = useMemo(() => {
     const map = new Map<string, number>();
@@ -665,7 +609,7 @@ function HomePage() {
           distanceM,
           distanceLabel: formatDistanceLabel(distanceM),
           thumbnailUrl: attraction.firstImage || attraction.secondImage,
-          icon: getMarkerTypeIcon(attraction, markerType),
+          icon: getMarkerTypeIcon(markerType),
           touristTrendName: trendNameByAttractionId.get(attraction.id) ?? attraction.title,
           matchesFilter,
           matchesKeyword,
@@ -706,6 +650,36 @@ function HomePage() {
     () => searchResults.slice(0, visibleSearchResultCount),
     [searchResults, visibleSearchResultCount]
   );
+  const routeInsertCandidatePlaces = useMemo(() => {
+    const attractionData = attractionsQuery.data;
+    if (!attractionData) {
+      return [];
+    }
+
+    return attractionData.allAttractions
+      .map((attraction) => {
+        const markerType = resolveMarkerType(
+          attraction,
+          attractionData.lclsNameByCode
+        );
+        const rank = topRankByAttractionId.get(attraction.id) ?? null;
+
+        return createMapSheetPlaceFromAttraction({
+          attraction,
+          markerType,
+          signguCode: GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode] ?? "",
+          touristTrendName:
+            trendNameByAttractionId.get(attraction.id) ?? attraction.title,
+          topRank: rank,
+        });
+      })
+      .slice(0, 160);
+  }, [
+    attractionsQuery.data,
+    selectedSigunguCode,
+    topRankByAttractionId,
+    trendNameByAttractionId,
+  ]);
 
   useEffect(() => {
     setVisibleSearchResultCount(SEARCH_RESULTS_PAGE_SIZE);
@@ -722,13 +696,13 @@ function HomePage() {
     ].slice(0, 8));
   };
 
-  const openPlaceSheetFromAttraction = (
-    attraction: GangwonAttraction,
-    markerType: ReturnType<typeof resolveMarkerType>,
-    touristTrendName: string,
-    rank: number | null,
-    mode: "bottom-sheet" | "full-popup" = "bottom-sheet"
-  ) => {
+  const openPlaceSheetFromAttraction = ({
+    attraction,
+    markerType,
+    touristTrendName,
+    rank,
+    mode = "bottom-sheet",
+  }: OpenPlaceSheetFromAttractionOptions) => {
     const mapInstance = mapInstanceRef.current;
     const naverMaps = naverMapsRef.current;
     const position = naverMaps
@@ -746,24 +720,13 @@ function HomePage() {
     }
 
     openSheet(
-      {
-        id: `${attraction.id}-${attraction.contentTypeId}`,
-        contentId: attraction.id,
-        contentTypeId: attraction.contentTypeId,
-        areaCode: GANGWON_TATS_AREA_CODE,
-        signguCode:
-          GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode] ?? "",
+      createMapSheetPlaceFromAttraction({
+        attraction,
+        markerType,
+        signguCode: GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode] ?? "",
         touristTrendName,
         topRank: rank ?? null,
-        title: attraction.title,
-        address: attraction.address,
-        lat: attraction.lat,
-        lng: attraction.lng,
-        contentTypeLabel: markerType.contentTypeLabel,
-        categoryName: markerType.typeName,
-        icon: markerType.badge.icon,
-        images: [],
-      },
+      }),
       { mode }
     );
   };
@@ -1238,7 +1201,12 @@ function HomePage() {
       markerRefs.current.push(marker);
 
       const listener = naverMaps.Event.addListener(marker, "click", () => {
-        openPlaceSheetFromAttraction(attraction, markerType, touristTrendName, rank);
+        openPlaceSheetFromAttraction({
+          attraction,
+          markerType,
+          touristTrendName,
+          rank,
+        });
       });
 
       markerListenerRefs.current.push(listener);
@@ -1370,14 +1338,15 @@ function HomePage() {
       <RouteCheckoutModal
         isOpen={isSavedListOpen}
         savedPlaces={savedPlaces}
-        currentLocation={currentLocation}
+        insertCandidatePlaces={routeInsertCandidatePlaces}
+        currentLocation={routeStartLocation}
         onClose={closeSavedList}
         onSelectPlace={(place) => {
           openSheet(place, { mode: "full-popup" });
         }}
         onRemovePlace={removeSavedPlace}
         onClearPlaces={clearSavedPlaces}
-        onRequestAddPlace={() => {
+        onRequestSearchPlace={() => {
           closeSavedList();
           setIsSearchPopupOpen(true);
           window.setTimeout(() => searchInputRef.current?.focus(), 0);
@@ -1468,13 +1437,13 @@ function HomePage() {
                           onClick={() => {
                             appendRecentSearch(searchKeyword);
                             setSearchKeyword(item.attraction.title);
-                            openPlaceSheetFromAttraction(
-                              item.attraction,
-                              item.markerType,
-                              item.touristTrendName,
-                              item.rank,
-                              "full-popup"
-                            );
+                            openPlaceSheetFromAttraction({
+                              attraction: item.attraction,
+                              markerType: item.markerType,
+                              touristTrendName: item.touristTrendName,
+                              rank: item.rank,
+                              mode: "full-popup",
+                            });
                           }}
                         />
                       ))}

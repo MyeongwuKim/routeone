@@ -1,11 +1,27 @@
-import { IoAdd, IoCarSportOutline, IoLocationSharp } from "react-icons/io5";
-import type { ReactNode } from "react";
-import type { PlannedRouteDay, PlannedRouteItem } from "./routePlanTypes";
+import {
+  IoAdd,
+  IoCarSportOutline,
+  IoLocationSharp,
+  IoMapOutline,
+} from "react-icons/io5";
+import { useState, type ReactNode } from "react";
+import PlaceCartRouteMapPopup from "./PlaceCartRouteMapPopup";
+import PlaceCartRouteInsertSheet from "./PlaceCartRouteInsertSheet";
+import type { MapSheetPlace } from "@/stores/mapSheetStore";
+import type {
+  PlannedRouteDay,
+  PlannedRouteItem,
+  RouteInsertPoint,
+  RouteInsertRequest,
+} from "./routePlanTypes";
 
 type PlaceCartRouteDayCardProps = {
   day: PlannedRouteDay;
+  candidatePlaces: MapSheetPlace[];
+  excludedPlaceIds: string[];
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
-  onRequestAddPlace: () => void;
+  onInsertPlace: (request: RouteInsertRequest, place: MapSheetPlace) => void;
+  onRequestSearchPlace: () => void;
 };
 
 type RouteStation =
@@ -15,6 +31,7 @@ type RouteStation =
       icon: ReactNode;
       title: string;
       subtitle: string;
+      location: RouteInsertPoint | null;
       incomingTravelMinutes: null;
       item: null;
     }
@@ -24,6 +41,8 @@ type RouteStation =
       icon: string;
       title: string;
       subtitle: string;
+      location: RouteInsertPoint;
+      itemIndex: number;
       incomingTravelMinutes: number;
       item: PlannedRouteItem;
     };
@@ -85,19 +104,34 @@ function buildRouteStations(day: PlannedRouteDay): RouteStation[] {
           icon: <IoLocationSharp />,
           title: "내 위치",
           subtitle: "출발",
+          location: day.startLocation
+            ? {
+                title: "내 위치",
+                subtitle: "출발",
+                lat: day.startLocation.lat,
+                lng: day.startLocation.lng,
+              }
+            : null,
           incomingTravelMinutes: null,
           item: null,
         },
       ]
     : [];
 
-  day.items.forEach((item) => {
+  day.items.forEach((item, itemIndex) => {
     stations.push({
       id: item.id,
       type: "place",
       icon: item.place.icon,
       title: item.place.title,
       subtitle: item.place.contentTypeLabel,
+      location: {
+        title: item.place.title,
+        subtitle: item.place.contentTypeLabel,
+        lat: item.place.lat,
+        lng: item.place.lng,
+      },
+      itemIndex,
       incomingTravelMinutes: item.travelMinutesFromPrevious,
       item,
     });
@@ -130,13 +164,15 @@ function getRoutePointX(sequenceIndex: number) {
 function RouteSegmentControl({
   x,
   y = ROUTE_LINE_Y,
+  badgeOffsetY = 11,
   travelMinutes,
-  onRequestAddPlace,
+  onRequestInsertPlace,
 }: {
   x: number;
   y?: number;
+  badgeOffsetY?: number;
   travelMinutes: number;
-  onRequestAddPlace: () => void;
+  onRequestInsertPlace: () => void;
 }) {
   return (
     <div
@@ -146,12 +182,15 @@ function RouteSegmentControl({
       <button
         type="button"
         aria-label="이 구간에 장소 추가"
-        onClick={onRequestAddPlace}
-        className="absolute left-1/2 top-0 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 shadow-sm transition active:scale-95"
+        onClick={onRequestInsertPlace}
+        className="absolute left-1/2 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 shadow-sm transition active:scale-95"
       >
-        <IoAdd className="text-sm" />
+        <IoAdd className="text-xs" />
       </button>
-      <span className="absolute left-1/2 top-5 inline-flex -translate-x-1/2 items-center gap-0.5 whitespace-nowrap rounded-full border border-brand-100 bg-brand-50 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
+      <span
+        className="absolute left-1/2 inline-flex -translate-x-1/2 items-center gap-0.5 whitespace-nowrap rounded-full border border-brand-100 bg-brand-50 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500"
+        style={{ top: `${badgeOffsetY}px` }}
+      >
         <IoCarSportOutline className="shrink-0 text-brand-600" />
         {getDurationText(travelMinutes)}
       </span>
@@ -196,28 +235,46 @@ function buildRouteConnectorPath(rowIndex: number) {
   ].join(" ");
 }
 
-function getRouteConnectorControlX(rowIndex: number) {
-  return rowIndex % 2 === 0 ? ROUTE_TURN_RIGHT_X + 4 : ROUTE_TURN_LEFT_X - 4;
+function getRouteConnectorControlPoint(rowIndex: number) {
+  const isRightTurn = rowIndex % 2 === 0;
+  const turnX = isRightTurn ? ROUTE_TURN_RIGHT_X : ROUTE_TURN_LEFT_X;
+  const bendX = isRightTurn ? 103 : -1;
+  const nextLineY = ROUTE_ROW_HEIGHT + ROUTE_ROW_GAP + ROUTE_LINE_Y;
+
+  return {
+    x: turnX * 0.25 + bendX * 0.75,
+    y: (ROUTE_LINE_Y + nextLineY) / 2,
+  };
 }
 
 function RouteConnectorLayer({
+  day,
   rows,
-  onRequestAddPlace,
+  onRequestInsertPlace,
 }: {
+  day: PlannedRouteDay;
   rows: RouteRowEntry[][];
-  onRequestAddPlace: () => void;
+  onRequestInsertPlace: (request: RouteInsertRequest) => void;
 }) {
   return (
     <>
       {rows.slice(0, -1).map((row, rowIndex) => {
         const travelMinutes =
           rows[rowIndex + 1]?.[0]?.station.incomingTravelMinutes ?? null;
+        const fromStation = row[row.length - 1]?.station;
+        const toStation = rows[rowIndex + 1]?.[0]?.station;
 
-        if (travelMinutes == null) {
+        if (
+          travelMinutes == null ||
+          !fromStation?.location ||
+          !toStation?.location ||
+          toStation.type !== "place"
+        ) {
           return null;
         }
 
         const connectorHeight = ROUTE_ROW_HEIGHT + ROUTE_ROW_GAP + ROUTE_LINE_Y;
+        const controlPoint = getRouteConnectorControlPoint(rowIndex);
 
         return (
           <div
@@ -246,10 +303,18 @@ function RouteConnectorLayer({
             </svg>
             <div className="pointer-events-auto relative z-30">
               <RouteSegmentControl
-                x={getRouteConnectorControlX(rowIndex)}
-                y={connectorHeight / 2}
+                x={controlPoint.x}
+                y={controlPoint.y}
+                badgeOffsetY={20}
                 travelMinutes={travelMinutes}
-                onRequestAddPlace={onRequestAddPlace}
+                onRequestInsertPlace={() =>
+                  onRequestInsertPlace({
+                    day: day.day,
+                    insertIndex: toStation.itemIndex,
+                    from: fromStation.location as RouteInsertPoint,
+                    to: toStation.location,
+                  })
+                }
               />
             </div>
           </div>
@@ -260,15 +325,17 @@ function RouteConnectorLayer({
 }
 
 function RouteRowGroup({
+  day,
   row,
   rowIndex,
   onChangeStayMinutes,
-  onRequestAddPlace,
+  onRequestInsertPlace,
 }: {
+  day: PlannedRouteDay;
   row: RouteRowEntry[];
   rowIndex: number;
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
-  onRequestAddPlace: () => void;
+  onRequestInsertPlace: (request: RouteInsertRequest) => void;
 }) {
   const isReverseRow = rowIndex % 2 === 1;
   const cells: Array<RouteRowEntry | null> = Array.from(
@@ -329,17 +396,34 @@ function RouteRowGroup({
 
       {row.slice(1).map((entry, entryIndex) => {
         const previousEntry = row[entryIndex];
+        const previousStation = previousEntry.station;
+        const nextStation = entry.station;
         const x =
           (getRoutePointX(previousEntry.sequenceIndex) +
             getRoutePointX(entry.sequenceIndex)) /
           2;
+
+        if (
+          !previousStation.location ||
+          !nextStation.location ||
+          nextStation.type !== "place"
+        ) {
+          return null;
+        }
 
         return (
           <RouteSegmentControl
             key={`${previousEntry.station.id}-${entry.station.id}`}
             x={x}
             travelMinutes={entry.station.incomingTravelMinutes ?? 0}
-            onRequestAddPlace={onRequestAddPlace}
+            onRequestInsertPlace={() =>
+              onRequestInsertPlace({
+                day: day.day,
+                insertIndex: nextStation.itemIndex,
+                from: previousStation.location as RouteInsertPoint,
+                to: nextStation.location,
+              })
+            }
           />
         );
       })}
@@ -370,7 +454,10 @@ function StationNode({
         {station.icon}
       </div>
 
-      <p className="mt-3 w-full truncate text-center text-[11px] font-bold text-slate-900">
+      <p
+        className="mt-3 w-full max-w-[92px] truncate text-center text-[11px] font-bold text-slate-900"
+        title={station.title}
+      >
         {station.title}
       </p>
       <p className="mt-0.5 text-[10px] text-slate-500">{station.subtitle}</p>
@@ -380,7 +467,7 @@ function StationNode({
           <p className="mt-0.5 text-[10px] font-semibold text-brand-700">
             {formatClock(station.item.startMinutes)}
           </p>
-          <label className="mt-1 flex w-[72px] max-w-full items-center justify-center gap-0.5 rounded-full border border-brand-100 bg-brand-50 px-2 py-1">
+          <label className="mt-1 flex w-[58px] max-w-full items-center justify-center gap-0.5 rounded-full border border-brand-100 bg-brand-50 px-1.5 py-1">
             <input
               aria-label="체류 시간(분)"
               type="number"
@@ -394,7 +481,7 @@ function StationNode({
                   clampStayMinutes(Number(event.target.value))
                 )
               }
-              className="w-7 bg-transparent text-center text-[11px] font-bold text-slate-800 outline-none"
+              className="w-6 bg-transparent text-center text-[11px] font-bold text-slate-800 outline-none"
             />
             <span className="text-[9px] text-slate-500">분</span>
           </label>
@@ -408,9 +495,15 @@ function StationNode({
 
 function PlaceCartRouteDayCard({
   day,
+  candidatePlaces,
+  excludedPlaceIds,
   onChangeStayMinutes,
-  onRequestAddPlace,
+  onInsertPlace,
+  onRequestSearchPlace,
 }: PlaceCartRouteDayCardProps) {
+  const [isRouteMapOpen, setIsRouteMapOpen] = useState(false);
+  const [insertRequest, setInsertRequest] =
+    useState<RouteInsertRequest | null>(null);
   const routeStations = buildRouteStations(day);
   const routeRows = splitRouteRows(routeStations);
 
@@ -425,17 +518,30 @@ function PlaceCartRouteDayCard({
             </p>
           ) : null}
         </div>
-        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-700 shadow-sm">
-          {day.items.length}곳
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {day.items.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setIsRouteMapOpen(true)}
+              className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-700 shadow-sm"
+            >
+              <IoMapOutline className="text-xs" />
+              루트보기
+            </button>
+          ) : null}
+          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-700 shadow-sm">
+            {day.items.length}곳
+          </span>
+        </div>
       </div>
 
       {day.items.length > 0 ? (
         <div className="px-6 py-4">
           <div className="relative">
             <RouteConnectorLayer
+              day={day}
               rows={routeRows}
-              onRequestAddPlace={onRequestAddPlace}
+              onRequestInsertPlace={setInsertRequest}
             />
             <div
               className="relative z-10 flex flex-col"
@@ -444,10 +550,11 @@ function PlaceCartRouteDayCard({
               {routeRows.map((row, rowIndex) => (
                 <RouteRowGroup
                   key={`${day.day}-${rowIndex}`}
+                  day={day}
                   row={row}
                   rowIndex={rowIndex}
                   onChangeStayMinutes={onChangeStayMinutes}
-                  onRequestAddPlace={onRequestAddPlace}
+                  onRequestInsertPlace={setInsertRequest}
                 />
               ))}
             </div>
@@ -463,6 +570,28 @@ function PlaceCartRouteDayCard({
           배치된 장소가 없습니다
         </div>
       )}
+      {isRouteMapOpen ? (
+        <PlaceCartRouteMapPopup
+          day={day}
+          onClose={() => setIsRouteMapOpen(false)}
+        />
+      ) : null}
+      {insertRequest ? (
+        <PlaceCartRouteInsertSheet
+          request={insertRequest}
+          candidatePlaces={candidatePlaces}
+          excludedPlaceIds={excludedPlaceIds}
+          onClose={() => setInsertRequest(null)}
+          onSelectPlace={(place, request) => {
+            onInsertPlace(request, place);
+            setInsertRequest(null);
+          }}
+          onRequestSearchPlace={() => {
+            setInsertRequest(null);
+            onRequestSearchPlace();
+          }}
+        />
+      ) : null}
     </section>
   );
 }

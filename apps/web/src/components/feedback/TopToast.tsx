@@ -1,5 +1,5 @@
 import { IoBagHandleOutline } from "react-icons/io5";
-import { useUiToastStore } from "../../stores/uiToastStore";
+import { useUiToastStore } from "@/stores/uiToastStore";
 
 function TopToast() {
   const { message, isVisible } = useUiToastStore();

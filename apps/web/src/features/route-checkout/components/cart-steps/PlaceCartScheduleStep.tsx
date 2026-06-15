@@ -1,5 +1,5 @@
-import { DateInput, TimeWheelInput } from "../../../../components/inputs";
 import { useEffect, useState } from "react";
+import { DateInput, TimeWheelInput } from "@/components/inputs";
 
 type PlaceCartScheduleStepProps = {
   travelStartDate: string;
