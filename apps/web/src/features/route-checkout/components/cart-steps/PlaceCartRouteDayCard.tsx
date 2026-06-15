@@ -1,10 +1,19 @@
 import {
   IoAdd,
   IoCarSportOutline,
+  IoClose,
   IoLocationSharp,
   IoMapOutline,
+  IoTimeOutline,
+  IoTrashOutline,
 } from "react-icons/io5";
-import { useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import PlaceCartRouteMapPopup from "./PlaceCartRouteMapPopup";
 import PlaceCartRouteInsertSheet from "./PlaceCartRouteInsertSheet";
 import type { MapSheetPlace } from "@/stores/mapSheetStore";
@@ -17,12 +26,39 @@ import type {
 
 type PlaceCartRouteDayCardProps = {
   day: PlannedRouteDay;
+  routePlan: PlannedRouteDay[];
+  isOrderEditing: boolean;
+  comparisonDay?: PlannedRouteDay | null;
   candidatePlaces: MapSheetPlace[];
   excludedPlaceIds: string[];
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
   onInsertPlace: (request: RouteInsertRequest, place: MapSheetPlace) => void;
+  onRemovePlace: (placeId: string) => void;
+  onReorderDayItems: (
+    dayNumber: number,
+    nextItems: PlannedRouteItem[]
+  ) => void;
+  onMovePlaceToDay: (
+    placeId: string,
+    targetDayNumber: number,
+    position: "first" | "last"
+  ) => void;
+  onRequestOrderEditing: () => void;
+  onFinishOrderEditing: () => void;
   onRequestSearchPlace: () => void;
 };
+
+type DraggedDayItem = {
+  itemIndex: number;
+  item: PlannedRouteItem;
+  startX: number;
+  startY: number;
+  x: number;
+  y: number;
+  isActive: boolean;
+};
+
+type AdjacentMoveDirection = "previous" | "next";
 
 type RouteStation =
   | {
@@ -93,6 +129,29 @@ function clampStayMinutes(value: number) {
   }
 
   return Math.max(15, Math.min(360, Math.round(value)));
+}
+
+function moveDayItem(
+  items: PlannedRouteItem[],
+  sourceIndex: number,
+  targetIndex: number
+) {
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(sourceIndex, 1);
+
+  if (!movedItem) {
+    return items;
+  }
+
+  const adjustedTargetIndex =
+    sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  nextItems.splice(
+    Math.max(0, Math.min(adjustedTargetIndex, nextItems.length)),
+    0,
+    movedItem
+  );
+
+  return nextItems;
 }
 
 function buildRouteStations(day: PlannedRouteDay): RouteStation[] {
@@ -166,14 +225,53 @@ function RouteSegmentControl({
   y = ROUTE_LINE_Y,
   badgeOffsetY = 11,
   travelMinutes,
+  insertIndex,
+  isOrderEditing,
+  isActiveDropZone,
   onRequestInsertPlace,
+  onDropRouteItem,
+  registerDropZone,
 }: {
   x: number;
   y?: number;
   badgeOffsetY?: number;
   travelMinutes: number;
+  insertIndex: number;
+  isOrderEditing: boolean;
+  isActiveDropZone: boolean;
   onRequestInsertPlace: () => void;
+  onDropRouteItem: (targetIndex: number) => void;
+  registerDropZone: (
+    targetIndex: number,
+    node: HTMLDivElement | null
+  ) => void;
 }) {
+  if (isOrderEditing) {
+    return (
+      <div
+        ref={(node) => registerDropZone(insertIndex, node)}
+        data-route-drop-zone-kind="segment"
+        className="absolute z-30 h-14 w-20 -translate-x-1/2"
+        style={{ left: `${x}%`, top: y }}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          onDropRouteItem(insertIndex);
+        }}
+      >
+        <div
+          className={`absolute left-1/2 top-0 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-dashed text-[10px] font-black shadow-sm transition ${
+            isActiveDropZone
+              ? "scale-125 border-brand-600 bg-brand-600 text-white"
+              : "border-brand-400 bg-white text-brand-700"
+          }`}
+        >
+          ↓
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="absolute z-30 h-12 w-16 -translate-x-1/2"
@@ -250,11 +348,22 @@ function getRouteConnectorControlPoint(rowIndex: number) {
 function RouteConnectorLayer({
   day,
   rows,
+  isOrderEditing,
   onRequestInsertPlace,
+  onDropRouteItem,
+  activeDropIndex,
+  registerDropZone,
 }: {
   day: PlannedRouteDay;
   rows: RouteRowEntry[][];
+  isOrderEditing: boolean;
   onRequestInsertPlace: (request: RouteInsertRequest) => void;
+  onDropRouteItem: (targetIndex: number) => void;
+  activeDropIndex: number | null;
+  registerDropZone: (
+    targetIndex: number,
+    node: HTMLDivElement | null
+  ) => void;
 }) {
   return (
     <>
@@ -307,6 +416,11 @@ function RouteConnectorLayer({
                 y={controlPoint.y}
                 badgeOffsetY={20}
                 travelMinutes={travelMinutes}
+                insertIndex={toStation.itemIndex}
+                isOrderEditing={isOrderEditing}
+                isActiveDropZone={activeDropIndex === toStation.itemIndex}
+                onDropRouteItem={onDropRouteItem}
+                registerDropZone={registerDropZone}
                 onRequestInsertPlace={() =>
                   onRequestInsertPlace({
                     day: day.day,
@@ -328,14 +442,35 @@ function RouteRowGroup({
   day,
   row,
   rowIndex,
+  isOrderEditing,
   onChangeStayMinutes,
+  onSelectItem,
+  onStartDragItem,
+  onRequestOrderEditing,
   onRequestInsertPlace,
+  onDropRouteItem,
+  activeDropIndex,
+  registerDropZone,
 }: {
   day: PlannedRouteDay;
   row: RouteRowEntry[];
   rowIndex: number;
+  isOrderEditing: boolean;
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
+  onSelectItem: (item: PlannedRouteItem) => void;
+  onStartDragItem: (
+    itemIndex: number,
+    item: PlannedRouteItem,
+    event: ReactPointerEvent<HTMLButtonElement>
+  ) => void;
+  onRequestOrderEditing: () => void;
   onRequestInsertPlace: (request: RouteInsertRequest) => void;
+  onDropRouteItem: (targetIndex: number) => void;
+  activeDropIndex: number | null;
+  registerDropZone: (
+    targetIndex: number,
+    node: HTMLDivElement | null
+  ) => void;
 }) {
   const isReverseRow = rowIndex % 2 === 1;
   const cells: Array<RouteRowEntry | null> = Array.from(
@@ -387,7 +522,11 @@ function RouteRowGroup({
             >
               <StationNode
                 station={cell.station}
+                isOrderEditing={isOrderEditing}
                 onChangeStayMinutes={onChangeStayMinutes}
+                onSelectItem={onSelectItem}
+                onStartDragItem={onStartDragItem}
+                onRequestOrderEditing={onRequestOrderEditing}
               />
             </div>
           );
@@ -416,6 +555,11 @@ function RouteRowGroup({
             key={`${previousEntry.station.id}-${entry.station.id}`}
             x={x}
             travelMinutes={entry.station.incomingTravelMinutes ?? 0}
+            insertIndex={nextStation.itemIndex}
+            isOrderEditing={isOrderEditing}
+            isActiveDropZone={activeDropIndex === nextStation.itemIndex}
+            onDropRouteItem={onDropRouteItem}
+            registerDropZone={registerDropZone}
             onRequestInsertPlace={() =>
               onRequestInsertPlace({
                 day: day.day,
@@ -433,25 +577,58 @@ function RouteRowGroup({
 
 function StationNode({
   station,
+  isOrderEditing,
   onChangeStayMinutes,
+  onSelectItem,
+  onStartDragItem,
+  onRequestOrderEditing,
 }: {
   station: RouteStation;
+  isOrderEditing: boolean;
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
+  onSelectItem: (item: PlannedRouteItem) => void;
+  onStartDragItem: (
+    itemIndex: number,
+    item: PlannedRouteItem,
+    event: ReactPointerEvent<HTMLButtonElement>
+  ) => void;
+  onRequestOrderEditing: () => void;
 }) {
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const didLongPressRef = useRef(false);
   const isOverSchedule = station.item?.isOverSchedule ?? false;
+  const orderLabel =
+    station.type === "place" ? String(station.itemIndex + 1) : "S";
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressStartRef.current = null;
+  };
 
-  return (
-    <div className="relative z-20 flex min-w-0 flex-col items-center px-1">
+  useEffect(() => clearLongPressTimer, []);
+
+  const nodeContent = (
+    <>
       <div
-        className={`flex h-10 w-10 items-center justify-center rounded-full border-[3px] bg-white text-base shadow-sm ${
+        className={`relative flex h-10 w-10 items-center justify-center rounded-full border-[3px] bg-white text-base shadow-sm ${
           station.type === "start"
             ? "border-slate-300 text-brand-700"
-            : isOverSchedule
+            : isOrderEditing
+              ? "cursor-grab border-brand-600 ring-4 ring-brand-100 active:cursor-grabbing"
+              : isOverSchedule
               ? "border-amber-300"
               : "border-brand-500"
         }`}
       >
         {station.icon}
+        {isOrderEditing ? (
+          <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-black text-white shadow-sm">
+            {orderLabel}
+          </span>
+        ) : null}
       </div>
 
       <p
@@ -460,55 +637,592 @@ function StationNode({
       >
         {station.title}
       </p>
-      <p className="mt-0.5 text-[10px] text-slate-500">{station.subtitle}</p>
-
-      {station.item ? (
-        <>
-          <p className="mt-0.5 text-[10px] font-semibold text-brand-700">
-            {formatClock(station.item.startMinutes)}
-          </p>
-          <label className="mt-1 flex w-[58px] max-w-full items-center justify-center gap-0.5 rounded-full border border-brand-100 bg-brand-50 px-1.5 py-1">
-            <input
-              aria-label="체류 시간(분)"
-              type="number"
-              min={15}
-              max={360}
-              step={5}
-              value={station.item.stayMinutes}
-              onChange={(event) =>
-                onChangeStayMinutes(
-                  station.item.id,
-                  clampStayMinutes(Number(event.target.value))
-                )
-              }
-              className="w-6 bg-transparent text-center text-[11px] font-bold text-slate-800 outline-none"
-            />
-            <span className="text-[9px] text-slate-500">분</span>
-          </label>
-        </>
-      ) : (
-        <p className="mt-0.5 text-[10px] font-semibold text-brand-700">START</p>
+      {isOrderEditing ? null : (
+        <p className="mt-0.5 text-[10px] text-slate-500">{station.subtitle}</p>
       )}
+      {station.item && !isOrderEditing ? (
+        <p className="mt-0.5 text-[10px] font-semibold text-brand-700">
+          {formatClock(station.item.startMinutes)}
+        </p>
+      ) : !isOrderEditing ? (
+        <p className="mt-0.5 text-[10px] font-semibold text-brand-700">START</p>
+      ) : station.type === "start" ? (
+        <p className="mt-0.5 text-[10px] font-semibold text-brand-700">START</p>
+      ) : (
+        <p className="mt-0.5 text-[10px] font-semibold text-brand-700">
+          드래그
+        </p>
+      )}
+    </>
+  );
+
+  return (
+    <div className="relative z-20 flex min-w-0 flex-col items-center px-1">
+      {station.item ? (
+        <button
+          type="button"
+          data-route-drag-index={station.itemIndex}
+          draggable={false}
+          onPointerDown={(event) => {
+            if (isOrderEditing) {
+              onStartDragItem(
+                station.itemIndex,
+                station.item as PlannedRouteItem,
+                event
+              );
+              return;
+            }
+
+            if (event.button !== 0) {
+              return;
+            }
+
+            didLongPressRef.current = false;
+            longPressStartRef.current = {
+              x: event.clientX,
+              y: event.clientY,
+            };
+            longPressTimerRef.current = window.setTimeout(() => {
+              didLongPressRef.current = true;
+              clearLongPressTimer();
+              onRequestOrderEditing();
+            }, 420);
+          }}
+          onPointerMove={(event) => {
+            const startPoint = longPressStartRef.current;
+            if (!startPoint) {
+              return;
+            }
+
+            const moveDistance = Math.hypot(
+              event.clientX - startPoint.x,
+              event.clientY - startPoint.y
+            );
+
+            if (moveDistance > 8) {
+              clearLongPressTimer();
+            }
+          }}
+          onPointerUp={() => {
+            clearLongPressTimer();
+          }}
+          onPointerCancel={() => {
+            clearLongPressTimer();
+          }}
+          onClick={() => {
+            if (didLongPressRef.current) {
+              didLongPressRef.current = false;
+              return;
+            }
+
+            if (!isOrderEditing) {
+              onSelectItem(station.item as PlannedRouteItem);
+            }
+          }}
+          className={`flex min-w-0 flex-col items-center ${
+            isOrderEditing ? "route-order-drag-node" : ""
+          }`}
+        >
+          {nodeContent}
+        </button>
+      ) : (
+        nodeContent
+      )}
+
+      {station.item && !isOrderEditing ? (
+        <label className="mt-1 flex w-[58px] max-w-full items-center justify-center gap-0.5 rounded-full border border-brand-100 bg-brand-50 px-1.5 py-1">
+          <input
+            aria-label="체류 시간(분)"
+            type="number"
+            min={15}
+            max={360}
+            step={5}
+            value={station.item.stayMinutes}
+            onChange={(event) =>
+              onChangeStayMinutes(
+                station.item.id,
+                clampStayMinutes(Number(event.target.value))
+              )
+            }
+            className="w-6 bg-transparent text-center text-[11px] font-bold text-slate-800 outline-none"
+          />
+          <span className="text-[9px] text-slate-500">분</span>
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
+function PlaceCartRouteItemSheet({
+  item,
+  currentDay,
+  routePlan,
+  onClose,
+  onRemove,
+  onMovePlaceToDay,
+}: {
+  item: PlannedRouteItem;
+  currentDay: number;
+  routePlan: PlannedRouteDay[];
+  onClose: () => void;
+  onRemove: (placeId: string) => void;
+  onMovePlaceToDay: (
+    placeId: string,
+    targetDayNumber: number,
+    position: "first" | "last"
+  ) => void;
+}) {
+  const movableDays = routePlan.filter((day) => day.day !== currentDay);
+
+  return (
+    <div className="fixed inset-0 z-[2600] flex items-end bg-slate-950/30">
+      <button
+        type="button"
+        aria-label="장소 편집 닫기"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <section className="route-checkout-bottom-sheet-enter relative w-full rounded-t-[28px] border border-brand-100 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl">
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200" />
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-trip text-sm text-brand-700">장소 편집</p>
+            <h3 className="mt-2 truncate text-lg font-bold text-slate-900">
+              {item.place.title}
+            </h3>
+            <p className="mt-1 text-sm font-semibold text-brand-700">
+              {item.place.icon} {item.place.contentTypeLabel}
+              {item.place.categoryName !== item.place.contentTypeLabel
+                ? ` · ${item.place.categoryName}`
+                : ""}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
+          >
+            <IoClose />
+          </button>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-brand-100 bg-brand-50/70 px-3 py-3">
+          <p className="line-clamp-2 text-xs leading-5 text-slate-500">
+            {item.place.address || "주소 정보가 없습니다"}
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-white px-3 py-3">
+              <p className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                <IoTimeOutline className="text-brand-600" />
+                도착 시간
+              </p>
+              <p className="mt-1 text-base font-bold text-slate-900">
+                {formatClock(item.startMinutes)}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white px-3 py-3">
+              <p className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                <IoCarSportOutline className="text-brand-600" />
+                이동 시간
+              </p>
+              <p className="mt-1 text-base font-bold text-slate-900">
+                {getDurationText(item.travelMinutesFromPrevious)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {movableDays.length > 0 ? (
+          <section className="mt-4 rounded-2xl border border-brand-100 bg-white p-3">
+            <p className="text-xs font-bold text-slate-500">
+              다른 날짜로 이동
+            </p>
+            <div className="mt-3 space-y-2">
+              {movableDays.map((day) => (
+                <div
+                  key={day.day}
+                  className="flex items-center justify-between gap-2 rounded-2xl bg-brand-50/70 px-3 py-2"
+                >
+                  <span className="font-trip text-sm text-brand-700">
+                    DAY {day.day}
+                  </span>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onMovePlaceToDay(item.id, day.day, "first");
+                        onClose();
+                      }}
+                      className="rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700"
+                    >
+                      맨 앞
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onMovePlaceToDay(item.id, day.day, "last");
+                        onClose();
+                      }}
+                      className="rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700"
+                    >
+                      맨 뒤
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => {
+            onRemove(item.id);
+            onClose();
+          }}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600"
+        >
+          <IoTrashOutline />
+          이 루트에서 빼기
+        </button>
+      </section>
     </div>
   );
 }
 
 function PlaceCartRouteDayCard({
   day,
+  routePlan,
+  isOrderEditing,
+  comparisonDay,
   candidatePlaces,
   excludedPlaceIds,
   onChangeStayMinutes,
   onInsertPlace,
+  onRemovePlace,
+  onReorderDayItems,
+  onMovePlaceToDay,
+  onRequestOrderEditing,
+  onFinishOrderEditing,
   onRequestSearchPlace,
 }: PlaceCartRouteDayCardProps) {
   const [isRouteMapOpen, setIsRouteMapOpen] = useState(false);
+  const [draggedItem, setDraggedItem] = useState<DraggedDayItem | null>(null);
+  const [activeDropIndex, setActiveDropIndex] = useState<number | null>(null);
+  const [activeMoveDirection, setActiveMoveDirection] =
+    useState<AdjacentMoveDirection | null>(null);
+  const dropZoneRefs = useRef(new Map<number, HTMLDivElement>());
+  const previousDayDropZoneRef = useRef<HTMLDivElement | null>(null);
+  const nextDayDropZoneRef = useRef<HTMLDivElement | null>(null);
+  const draggedItemRef = useRef<DraggedDayItem | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
   const [insertRequest, setInsertRequest] =
     useState<RouteInsertRequest | null>(null);
+  const [selectedItem, setSelectedItem] = useState<PlannedRouteItem | null>(
+    null
+  );
   const routeStations = buildRouteStations(day);
   const routeRows = splitRouteRows(routeStations);
+  const currentDayIndex = routePlan.findIndex(
+    (routeDay) => routeDay.day === day.day
+  );
+  const previousDay =
+    currentDayIndex > 0 ? routePlan[currentDayIndex - 1] : null;
+  const nextDay =
+    currentDayIndex >= 0 && currentDayIndex < routePlan.length - 1
+      ? routePlan[currentDayIndex + 1]
+      : null;
+  const stopCurrentDrag = () => {
+    dragCleanupRef.current?.();
+    dragCleanupRef.current = null;
+    draggedItemRef.current = null;
+    setDraggedItem(null);
+    setActiveDropIndex(null);
+    setActiveMoveDirection(null);
+  };
+  const registerDropZone = (
+    targetIndex: number,
+    node: HTMLDivElement | null
+  ) => {
+    if (node) {
+      dropZoneRefs.current.set(targetIndex, node);
+      return;
+    }
+
+    dropZoneRefs.current.delete(targetIndex);
+  };
+  const getDropIndexAtPoint = (x: number, y: number) => {
+    let matchedIndex: number | null = null;
+    let matchedDistance = Number.POSITIVE_INFINITY;
+
+    dropZoneRefs.current.forEach((node, targetIndex) => {
+      const rect = node.getBoundingClientRect();
+      const isSegmentDropZone =
+        node.dataset.routeDropZoneKind === "segment";
+      const centerX = rect.left + rect.width / 2;
+      const centerY = isSegmentDropZone
+        ? rect.top
+        : rect.top + rect.height / 2;
+      const distance = Math.hypot(centerX - x, centerY - y);
+      const isInside = isSegmentDropZone
+        ? distance <= 24
+        : x >= rect.left &&
+          x <= rect.right &&
+          y >= rect.top &&
+          y <= rect.bottom;
+
+      if (
+        isInside &&
+        distance < matchedDistance
+      ) {
+        matchedIndex = targetIndex;
+        matchedDistance = distance;
+      }
+    });
+
+    return matchedIndex;
+  };
+  const getAdjacentMoveDirectionAtPoint = (
+    x: number,
+    y: number
+  ): AdjacentMoveDirection | null => {
+    const adjacentZones: Array<{
+      direction: AdjacentMoveDirection;
+      node: HTMLDivElement | null;
+    }> = [
+      { direction: "previous", node: previousDayDropZoneRef.current },
+      { direction: "next", node: nextDayDropZoneRef.current },
+    ];
+
+    for (const zone of adjacentZones) {
+      if (!zone.node) {
+        continue;
+      }
+
+      const rect = zone.node.getBoundingClientRect();
+      if (
+        x >= rect.left &&
+        x <= rect.right &&
+        y >= rect.top &&
+        y <= rect.bottom
+      ) {
+        return zone.direction;
+      }
+    }
+
+    return null;
+  };
+  const moveDraggedItemToAdjacentDay = (
+    item: PlannedRouteItem,
+    direction: AdjacentMoveDirection
+  ) => {
+    const targetDay = direction === "previous" ? previousDay : nextDay;
+
+    if (!targetDay) {
+      return false;
+    }
+
+    onMovePlaceToDay(
+      item.place.id,
+      targetDay.day,
+      direction === "previous" ? "last" : "first"
+    );
+    return true;
+  };
+  const handleDropRouteItem = (targetIndex: number) => {
+    if (!draggedItem) {
+      return;
+    }
+
+    onReorderDayItems(
+      day.day,
+      moveDayItem(day.items, draggedItem.itemIndex, targetIndex)
+    );
+    stopCurrentDrag();
+  };
+  const handleDropAdjacentDay = (direction: AdjacentMoveDirection) => {
+    if (!draggedItem) {
+      return;
+    }
+
+    moveDraggedItemToAdjacentDay(draggedItem.item, direction);
+    stopCurrentDrag();
+  };
+
+  const startDragItem = ({
+    itemIndex,
+    item,
+    clientX,
+    clientY,
+    button,
+    captureTarget,
+    pointerId,
+  }: {
+    itemIndex: number;
+    item: PlannedRouteItem;
+    clientX: number;
+    clientY: number;
+    button: number;
+    captureTarget: HTMLElement;
+    pointerId?: number;
+  }) => {
+    if (button !== 0) {
+      return;
+    }
+
+    let pointerCaptureTarget: HTMLElement | null = null;
+    if (pointerId != null && captureTarget.setPointerCapture) {
+      try {
+        captureTarget.setPointerCapture(pointerId);
+        pointerCaptureTarget = captureTarget;
+      } catch {
+        pointerCaptureTarget = null;
+      }
+    }
+    dragCleanupRef.current?.();
+
+    const initialDraggedItem: DraggedDayItem = {
+      itemIndex,
+      item,
+      startX: clientX,
+      startY: clientY,
+      x: clientX,
+      y: clientY,
+      isActive: false,
+    };
+    draggedItemRef.current = initialDraggedItem;
+    setDraggedItem(initialDraggedItem);
+    setActiveDropIndex(null);
+    setActiveMoveDirection(null);
+
+    const handleDragMove = (moveEvent: PointerEvent) => {
+      const currentDraggedItem = draggedItemRef.current;
+      if (!currentDraggedItem) {
+        return;
+      }
+
+      const deltaX = moveEvent.clientX - currentDraggedItem.startX;
+      const deltaY = moveEvent.clientY - currentDraggedItem.startY;
+      const moveDistance = Math.hypot(deltaX, deltaY);
+
+      if (!currentDraggedItem.isActive) {
+        if (moveDistance < 6) {
+          return;
+        }
+      }
+
+      moveEvent.preventDefault();
+      const nextDraggedItem = {
+        ...currentDraggedItem,
+        x: moveEvent.clientX,
+        y: moveEvent.clientY,
+        isActive: true,
+      };
+      draggedItemRef.current = nextDraggedItem;
+      setDraggedItem(nextDraggedItem);
+      const moveDirection = getAdjacentMoveDirectionAtPoint(
+        moveEvent.clientX,
+        moveEvent.clientY
+      );
+      setActiveMoveDirection(moveDirection);
+      setActiveDropIndex(
+        moveDirection
+          ? null
+          : getDropIndexAtPoint(moveEvent.clientX, moveEvent.clientY)
+      );
+    };
+
+    const handleDragEnd = (upEvent: PointerEvent) => {
+      const currentDraggedItem = draggedItemRef.current;
+      if (!currentDraggedItem) {
+        stopCurrentDrag();
+        return;
+      }
+
+      if (!currentDraggedItem.isActive) {
+        stopCurrentDrag();
+        return;
+      }
+
+      upEvent.preventDefault();
+      const moveDirection = getAdjacentMoveDirectionAtPoint(
+        upEvent.clientX,
+        upEvent.clientY
+      );
+      const didMoveToAdjacentDay = moveDirection
+        ? moveDraggedItemToAdjacentDay(currentDraggedItem.item, moveDirection)
+        : false;
+      const targetIndex = didMoveToAdjacentDay
+        ? null
+        : getDropIndexAtPoint(upEvent.clientX, upEvent.clientY);
+
+      if (targetIndex != null) {
+        onReorderDayItems(
+          day.day,
+          moveDayItem(day.items, currentDraggedItem.itemIndex, targetIndex)
+        );
+      }
+      stopCurrentDrag();
+    };
+
+    window.addEventListener("pointermove", handleDragMove, {
+      passive: false,
+    });
+    window.addEventListener("pointerup", handleDragEnd, { once: true });
+    window.addEventListener("pointercancel", handleDragEnd, { once: true });
+
+    dragCleanupRef.current = () => {
+      if (
+        pointerId != null &&
+        pointerCaptureTarget?.hasPointerCapture?.(pointerId)
+      ) {
+        try {
+          pointerCaptureTarget.releasePointerCapture(pointerId);
+        } catch {
+          // Pointer capture can already be released by the browser.
+        }
+      }
+      window.removeEventListener("pointermove", handleDragMove);
+      window.removeEventListener("pointerup", handleDragEnd);
+      window.removeEventListener("pointercancel", handleDragEnd);
+    };
+  };
+
+  const handleStartDragItem = (
+    itemIndex: number,
+    item: PlannedRouteItem,
+    event: ReactPointerEvent<HTMLButtonElement>
+  ) => {
+    startDragItem({
+      itemIndex,
+      item,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      button: "button" in event ? event.button : 0,
+      captureTarget: event.currentTarget,
+      pointerId: "pointerId" in event ? event.pointerId : undefined,
+    });
+  };
+
+  useEffect(() => {
+    if (!isOrderEditing) {
+      stopCurrentDrag();
+    }
+  }, [isOrderEditing]);
+
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.();
+    };
+  }, []);
+
+  const hasRouteComparison = Boolean(comparisonDay);
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-brand-200 bg-white shadow-sm">
+    <section
+      className="overflow-hidden rounded-3xl border border-brand-200 bg-white shadow-sm"
+    >
       <div className="flex items-center justify-between gap-3 border-b border-brand-100 bg-brand-50/70 px-4 py-3">
         <div>
           <p className="font-trip text-sm text-brand-700">DAY {day.day}</p>
@@ -519,14 +1233,27 @@ function PlaceCartRouteDayCard({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {isOrderEditing ? (
+            <button
+              type="button"
+              onClick={onFinishOrderEditing}
+              className="rounded-full border border-brand-600 bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm"
+            >
+              완료
+            </button>
+          ) : null}
           {day.items.length > 0 ? (
             <button
               type="button"
               onClick={() => setIsRouteMapOpen(true)}
-              className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-700 shadow-sm"
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm ${
+                hasRouteComparison
+                  ? "border-brand-600 bg-brand-600 text-white"
+                  : "border-brand-200 bg-white text-brand-700"
+              }`}
             >
               <IoMapOutline className="text-xs" />
-              루트보기
+              {hasRouteComparison ? "루트비교" : "루트보기"}
             </button>
           ) : null}
           <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-700 shadow-sm">
@@ -537,11 +1264,33 @@ function PlaceCartRouteDayCard({
 
       {day.items.length > 0 ? (
         <div className="px-6 py-4">
+          {isOrderEditing && previousDay ? (
+            <div
+              ref={previousDayDropZoneRef}
+              data-route-drop-zone-kind="previous-day"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                handleDropAdjacentDay("previous");
+              }}
+              className={`mb-3 rounded-2xl border border-dashed px-3 py-3 text-center text-xs font-bold transition ${
+                activeMoveDirection === "previous"
+                  ? "border-brand-600 bg-brand-600 text-white"
+                  : "border-brand-300 bg-brand-50/80 text-brand-700"
+              }`}
+            >
+              DAY {previousDay.day} 맨 뒤로 이동
+            </div>
+          ) : null}
           <div className="relative">
             <RouteConnectorLayer
               day={day}
               rows={routeRows}
+              isOrderEditing={isOrderEditing}
+              activeDropIndex={activeDropIndex}
               onRequestInsertPlace={setInsertRequest}
+              onDropRouteItem={handleDropRouteItem}
+              registerDropZone={registerDropZone}
             />
             <div
               className="relative z-10 flex flex-col"
@@ -553,17 +1302,61 @@ function PlaceCartRouteDayCard({
                   day={day}
                   row={row}
                   rowIndex={rowIndex}
+                  isOrderEditing={isOrderEditing}
                   onChangeStayMinutes={onChangeStayMinutes}
+                  onSelectItem={setSelectedItem}
+                  onStartDragItem={handleStartDragItem}
+                  onRequestOrderEditing={onRequestOrderEditing}
                   onRequestInsertPlace={setInsertRequest}
+                  onDropRouteItem={handleDropRouteItem}
+                  activeDropIndex={activeDropIndex}
+                  registerDropZone={registerDropZone}
                 />
               ))}
             </div>
           </div>
 
-          <div className="mt-3 flex items-center justify-between rounded-2xl border border-brand-100 bg-brand-50/60 px-3 py-2 text-[10px] text-slate-500">
-            <span>S자 순서</span>
-            <span>차량 이동 추정</span>
-          </div>
+          {isOrderEditing ? (
+            <div
+              ref={(node) => registerDropZone(day.items.length, node)}
+              data-route-drop-zone-kind="tail"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                handleDropRouteItem(day.items.length);
+              }}
+              className={`mt-3 rounded-2xl border border-dashed px-3 py-3 text-center text-xs font-bold transition ${
+                activeDropIndex === day.items.length
+                  ? "border-brand-600 bg-brand-600 text-white"
+                  : "border-brand-300 bg-brand-50/80 text-brand-700"
+              }`}
+            >
+              맨 뒤로 옮기려면 여기에 놓기
+            </div>
+          ) : (
+            <div className="mt-3 flex items-center justify-between rounded-2xl border border-brand-100 bg-brand-50/60 px-3 py-2 text-[10px] text-slate-500">
+              <span>S자 순서</span>
+              <span>차량 이동 추정</span>
+            </div>
+          )}
+          {isOrderEditing && nextDay ? (
+            <div
+              ref={nextDayDropZoneRef}
+              data-route-drop-zone-kind="next-day"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                handleDropAdjacentDay("next");
+              }}
+              className={`mt-3 rounded-2xl border border-dashed px-3 py-3 text-center text-xs font-bold transition ${
+                activeMoveDirection === "next"
+                  ? "border-brand-600 bg-brand-600 text-white"
+                  : "border-brand-300 bg-brand-50/80 text-brand-700"
+              }`}
+            >
+              DAY {nextDay.day} 맨 앞으로 이동
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="m-4 rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm text-slate-500">
@@ -573,6 +1366,7 @@ function PlaceCartRouteDayCard({
       {isRouteMapOpen ? (
         <PlaceCartRouteMapPopup
           day={day}
+          comparisonDay={comparisonDay ?? null}
           onClose={() => setIsRouteMapOpen(false)}
         />
       ) : null}
@@ -591,6 +1385,32 @@ function PlaceCartRouteDayCard({
             onRequestSearchPlace();
           }}
         />
+      ) : null}
+      {selectedItem ? (
+        <PlaceCartRouteItemSheet
+          item={selectedItem}
+          currentDay={day.day}
+          routePlan={routePlan}
+          onClose={() => setSelectedItem(null)}
+          onRemove={onRemovePlace}
+          onMovePlaceToDay={onMovePlaceToDay}
+        />
+      ) : null}
+      {draggedItem?.isActive ? (
+        <div
+          className="pointer-events-none fixed z-[3000] flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-2xl border border-brand-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 shadow-2xl"
+          style={{
+            left: draggedItem.x,
+            top: draggedItem.y,
+          }}
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50">
+            {draggedItem.item.place.icon}
+          </span>
+          <span className="max-w-[150px] truncate">
+            {draggedItem.item.place.title}
+          </span>
+        </div>
       ) : null}
     </section>
   );

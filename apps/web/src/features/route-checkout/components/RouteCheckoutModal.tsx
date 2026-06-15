@@ -430,6 +430,26 @@ function applyManualRouteInsertions(options: {
   });
 }
 
+function recalculateRoutePlanDays(options: {
+  routePlan: PlannedRouteDay[];
+  dailyStartMinutes: number;
+  dailyEndMinutes: number;
+  tempo: TravelTempo;
+  stayOverrides: Record<string, number>;
+  currentLocation: RouteStartLocation | null;
+}) {
+  return options.routePlan.map((day) =>
+    recalculateRouteDay({
+      day,
+      dailyStartMinutes: options.dailyStartMinutes,
+      dailyEndMinutes: options.dailyEndMinutes,
+      tempo: options.tempo,
+      stayOverrides: options.stayOverrides,
+      currentLocation: options.currentLocation,
+    })
+  );
+}
+
 function appendPlaceToRouteState(options: {
   state: RoutePlannerState;
   candidate: RoutePlannerPlace;
@@ -642,10 +662,29 @@ function RouteCheckoutModal({
     DEFAULT_SCHEDULE_END_TIME
   );
   const [tempo, setTempo] = useState<TravelTempo | null>(null);
-  const [stayOverrides, setStayOverrides] = useState<Record<string, number>>({});
-  const [manualInsertions, setManualInsertions] = useState<
+  const [appliedStayOverrides, setAppliedStayOverrides] = useState<
+    Record<string, number>
+  >({});
+  const [draftStayOverrides, setDraftStayOverrides] = useState<
+    Record<string, number>
+  >({});
+  const [appliedManualInsertions, setAppliedManualInsertions] = useState<
     ManualRouteInsertion[]
   >([]);
+  const [draftManualInsertions, setDraftManualInsertions] = useState<
+    ManualRouteInsertion[]
+  >([]);
+  const [appliedRemovedPlaceIds, setAppliedRemovedPlaceIds] = useState<string[]>(
+    []
+  );
+  const [draftRemovedPlaceIds, setDraftRemovedPlaceIds] = useState<string[]>([]);
+  const [appliedRoutePlanOverride, setAppliedRoutePlanOverride] = useState<
+    PlannedRouteDay[] | null
+  >(null);
+  const [draftRoutePlanOverride, setDraftRoutePlanOverride] = useState<
+    PlannedRouteDay[] | null
+  >(null);
+  const [isRouteOrderEditing, setIsRouteOrderEditing] = useState(false);
 
   const resetCheckoutState = useCallback(() => {
     setStep("cart");
@@ -654,8 +693,15 @@ function RouteCheckoutModal({
     setDailyStartTime(DEFAULT_DAILY_START_TIME);
     setScheduleEndTime(DEFAULT_SCHEDULE_END_TIME);
     setTempo(null);
-    setStayOverrides({});
-    setManualInsertions([]);
+    setAppliedStayOverrides({});
+    setDraftStayOverrides({});
+    setAppliedManualInsertions([]);
+    setDraftManualInsertions([]);
+    setAppliedRemovedPlaceIds([]);
+    setDraftRemovedPlaceIds([]);
+    setAppliedRoutePlanOverride(null);
+    setDraftRoutePlanOverride(null);
+    setIsRouteOrderEditing(false);
   }, []);
 
   useEffect(() => {
@@ -682,39 +728,135 @@ function RouteCheckoutModal({
           ? "당일치기는 일정 종료 시간이 출발 시간보다 늦어야 합니다."
           : "";
 
+  const isRouteEditDirty = useMemo(
+    () =>
+      JSON.stringify(draftStayOverrides) !==
+        JSON.stringify(appliedStayOverrides) ||
+      JSON.stringify(draftManualInsertions) !==
+        JSON.stringify(appliedManualInsertions) ||
+      JSON.stringify([...draftRemovedPlaceIds].sort()) !==
+        JSON.stringify([...appliedRemovedPlaceIds].sort()) ||
+      JSON.stringify(draftRoutePlanOverride) !==
+        JSON.stringify(appliedRoutePlanOverride),
+    [
+      appliedManualInsertions,
+      appliedRemovedPlaceIds,
+      appliedRoutePlanOverride,
+      appliedStayOverrides,
+      draftManualInsertions,
+      draftRemovedPlaceIds,
+      draftRoutePlanOverride,
+      draftStayOverrides,
+    ]
+  );
+
   const routePlan = useMemo(() => {
     if (!tempo || !isScheduleValid) {
       return [];
     }
 
+    const removedPlaceIdSet = new Set(draftRemovedPlaceIds);
     const baseRoutePlan = buildRoutePlan({
-      savedPlaces,
+      savedPlaces: savedPlaces.filter(
+        (item) => !removedPlaceIdSet.has(item.place.id)
+      ),
       travelStartDate,
       tripDays,
       dailyStartMinutes,
       dailyEndMinutes: scheduleEndMinutes,
       tempo,
-      stayOverrides,
+      stayOverrides: draftStayOverrides,
       currentLocation,
     });
 
-    return applyManualRouteInsertions({
+    const routePlanWithInsertions = applyManualRouteInsertions({
       routePlan: baseRoutePlan,
-      insertions: manualInsertions,
+      insertions: draftManualInsertions,
       dailyStartMinutes,
       dailyEndMinutes: scheduleEndMinutes,
       tempo,
-      stayOverrides,
+      stayOverrides: draftStayOverrides,
+      currentLocation,
+    });
+
+    if (!draftRoutePlanOverride) {
+      return routePlanWithInsertions;
+    }
+
+    return recalculateRoutePlanDays({
+      routePlan: draftRoutePlanOverride,
+      dailyStartMinutes,
+      dailyEndMinutes: scheduleEndMinutes,
+      tempo,
+      stayOverrides: draftStayOverrides,
       currentLocation,
     });
   }, [
     currentLocation,
     dailyStartMinutes,
+    draftManualInsertions,
+    draftRemovedPlaceIds,
+    draftRoutePlanOverride,
+    draftStayOverrides,
     isScheduleValid,
-    manualInsertions,
     savedPlaces,
     scheduleEndMinutes,
-    stayOverrides,
+    tempo,
+    travelStartDate,
+    tripDays,
+  ]);
+
+  const appliedRoutePlan = useMemo(() => {
+    if (!tempo || !isScheduleValid) {
+      return [];
+    }
+
+    const removedPlaceIdSet = new Set(appliedRemovedPlaceIds);
+    const baseRoutePlan = buildRoutePlan({
+      savedPlaces: savedPlaces.filter(
+        (item) => !removedPlaceIdSet.has(item.place.id)
+      ),
+      travelStartDate,
+      tripDays,
+      dailyStartMinutes,
+      dailyEndMinutes: scheduleEndMinutes,
+      tempo,
+      stayOverrides: appliedStayOverrides,
+      currentLocation,
+    });
+
+    const routePlanWithInsertions = applyManualRouteInsertions({
+      routePlan: baseRoutePlan,
+      insertions: appliedManualInsertions,
+      dailyStartMinutes,
+      dailyEndMinutes: scheduleEndMinutes,
+      tempo,
+      stayOverrides: appliedStayOverrides,
+      currentLocation,
+    });
+
+    if (!appliedRoutePlanOverride) {
+      return routePlanWithInsertions;
+    }
+
+    return recalculateRoutePlanDays({
+      routePlan: appliedRoutePlanOverride,
+      dailyStartMinutes,
+      dailyEndMinutes: scheduleEndMinutes,
+      tempo,
+      stayOverrides: appliedStayOverrides,
+      currentLocation,
+    });
+  }, [
+    appliedManualInsertions,
+    appliedRemovedPlaceIds,
+    appliedRoutePlanOverride,
+    appliedStayOverrides,
+    currentLocation,
+    dailyStartMinutes,
+    isScheduleValid,
+    savedPlaces,
+    scheduleEndMinutes,
     tempo,
     travelStartDate,
     tripDays,
@@ -734,6 +876,7 @@ function RouteCheckoutModal({
     }
 
     if (step === "result") {
+      setIsRouteOrderEditing(false);
       setStep("tempo");
       return;
     }
@@ -750,13 +893,89 @@ function RouteCheckoutModal({
     request: RouteInsertRequest,
     place: MapSheetPlace
   ) => {
-    setManualInsertions((previous) => [
-      ...previous.filter((insertion) => insertion.place.id !== place.id),
-      {
-        request,
+    if (!tempo) {
+      return;
+    }
+
+    const recommendedStayMinutes = getRecommendedStayMinutes(place, tempo);
+    const nextRoutePlan = routePlan.map((day) => {
+      if (day.day !== request.day) {
+        return {
+          ...day,
+          items: day.items.filter((item) => item.place.id !== place.id),
+        };
+      }
+
+      const nextItems = day.items.filter((item) => item.place.id !== place.id);
+      nextItems.splice(Math.min(request.insertIndex, nextItems.length), 0, {
+        id: place.id,
         place,
-      },
-    ]);
+        stayMinutes: draftStayOverrides[place.id] ?? recommendedStayMinutes,
+        recommendedStayMinutes,
+        startMinutes: 0,
+        endMinutes: 0,
+        travelMinutesFromPrevious: 0,
+        isOverSchedule: false,
+      });
+
+      return {
+        ...day,
+        items: nextItems,
+      };
+    });
+
+    setDraftRoutePlanOverride(nextRoutePlan);
+    setDraftManualInsertions([]);
+    setDraftRemovedPlaceIds((previous) =>
+      previous.filter((placeId) => placeId !== place.id)
+    );
+  };
+
+  const handleRemoveRoutePlace = (placeId: string) => {
+    if (routePlan.length > 0) {
+      setDraftRoutePlanOverride(
+        routePlan.map((day) => ({
+          ...day,
+          items: day.items.filter((item) => item.place.id !== placeId),
+        }))
+      );
+      setDraftManualInsertions([]);
+      setDraftRemovedPlaceIds([]);
+    } else {
+      setDraftRemovedPlaceIds((previous) =>
+        previous.includes(placeId) ? previous : [...previous, placeId]
+      );
+    }
+
+    setDraftManualInsertions((previous) =>
+      previous.filter((insertion) => insertion.place.id !== placeId)
+    );
+    setDraftStayOverrides((previous) => {
+      const { [placeId]: _removedStayMinutes, ...nextOverrides } = previous;
+      return nextOverrides;
+    });
+  };
+
+  const handleReorderRoutePlan = (nextRoutePlan: PlannedRouteDay[]) => {
+    setDraftRoutePlanOverride(nextRoutePlan);
+    setDraftManualInsertions([]);
+    setDraftRemovedPlaceIds([]);
+  };
+
+  const handleApplyRouteEdits = () => {
+    setAppliedStayOverrides(draftStayOverrides);
+    setAppliedManualInsertions(draftManualInsertions);
+    setAppliedRemovedPlaceIds(draftRemovedPlaceIds);
+    setAppliedRoutePlanOverride(draftRoutePlanOverride);
+    setIsRouteOrderEditing(false);
+  };
+
+  const handleCancelRouteEdits = () => {
+    setDraftStayOverrides(appliedStayOverrides);
+    setDraftManualInsertions(appliedManualInsertions);
+    setDraftRemovedPlaceIds(appliedRemovedPlaceIds);
+    setDraftRoutePlanOverride(appliedRoutePlanOverride);
+    setIsRouteOrderEditing(false);
   };
 
   const handleNext = () => {
@@ -787,9 +1006,9 @@ function RouteCheckoutModal({
     step === "tempo" ? "루트 짜기" : step === "result" ? "완료" : "다음";
 
   return (
-    <section className="route-checkout-modal-enter fixed inset-0 z-[1700] bg-white">
-      <div className="flex h-full flex-col">
-        <header className="flex items-center justify-between border-b border-brand-100 px-4 py-3">
+    <section className="route-checkout-modal-enter fixed inset-0 z-[1700] h-dvh overflow-hidden bg-white">
+      <div className="flex h-full min-h-0 flex-col">
+        <header className="flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3">
           <div className="flex items-center">
             <button
               type="button"
@@ -849,31 +1068,63 @@ function RouteCheckoutModal({
             {step === "result" && tempo ? (
               <PlaceCartRouteResultStep
                 routePlan={routePlan}
+                baselineRoutePlan={appliedRoutePlan}
                 tempo={tempo}
                 dailyEndMinutes={scheduleEndMinutes}
                 candidatePlaces={insertCandidatePlaces}
+                hasPendingChanges={isRouteEditDirty}
                 onChangeStayMinutes={(placeId, minutes) => {
-                  setStayOverrides((previous) => ({
+                  setDraftStayOverrides((previous) => ({
                     ...previous,
                     [placeId]: minutes,
                   }));
                 }}
                 onInsertPlace={handleInsertPlace}
+                onRemovePlace={handleRemoveRoutePlace}
+                onReorderRoutePlan={handleReorderRoutePlan}
+                onOrderEditingChange={setIsRouteOrderEditing}
                 onRequestSearchPlace={onRequestSearchPlace}
               />
             ) : null}
           </div>
         </div>
 
-        <footer className="border-t border-brand-100 px-4 py-4">
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={nextDisabled}
-            className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
-          >
-            {nextButtonLabel}
-          </button>
+        <footer className="shrink-0 border-t border-brand-100 px-4 py-4">
+          {step === "result" && isRouteOrderEditing ? (
+            <button
+              type="button"
+              disabled
+              className="w-full rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-700 opacity-80"
+            >
+              순서 변경을 완료해 주세요
+            </button>
+          ) : step === "result" && isRouteEditDirty ? (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleCancelRouteEdits}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600"
+              >
+                변경 취소
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyRouteEdits}
+                className="rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
+              >
+                변경 적용
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={nextDisabled}
+              className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+            >
+              {nextButtonLabel}
+            </button>
+          )}
         </footer>
       </div>
     </section>

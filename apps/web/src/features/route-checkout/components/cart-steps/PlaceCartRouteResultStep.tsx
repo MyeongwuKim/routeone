@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import PlaceCartRouteDayCard from "./PlaceCartRouteDayCard";
 import type { TravelTempo } from "./PlaceCartTempoStep";
 import type { MapSheetPlace } from "@/stores/mapSheetStore";
@@ -5,11 +6,16 @@ import type { PlannedRouteDay, RouteInsertRequest } from "./routePlanTypes";
 
 type PlaceCartRouteResultStepProps = {
   routePlan: PlannedRouteDay[];
+  baselineRoutePlan: PlannedRouteDay[];
   tempo: TravelTempo;
   dailyEndMinutes: number;
   candidatePlaces: MapSheetPlace[];
+  hasPendingChanges: boolean;
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
   onInsertPlace: (request: RouteInsertRequest, place: MapSheetPlace) => void;
+  onRemovePlace: (placeId: string) => void;
+  onReorderRoutePlan: (routePlan: PlannedRouteDay[]) => void;
+  onOrderEditingChange: (isEditing: boolean) => void;
   onRequestSearchPlace: () => void;
 };
 
@@ -26,26 +32,143 @@ function formatClock(totalMinutes: number) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+function isSameRouteDay(left: PlannedRouteDay, right: PlannedRouteDay) {
+  if (
+    left.startLocation?.lat !== right.startLocation?.lat ||
+    left.startLocation?.lng !== right.startLocation?.lng ||
+    left.items.length !== right.items.length
+  ) {
+    return false;
+  }
+
+  return left.items.every(
+    (item, index) => item.place.id === right.items[index]?.place.id
+  );
+}
+
 function PlaceCartRouteResultStep({
   routePlan,
+  baselineRoutePlan,
   tempo,
   dailyEndMinutes,
   candidatePlaces,
+  hasPendingChanges,
   onChangeStayMinutes,
   onInsertPlace,
+  onRemovePlace,
+  onReorderRoutePlan,
+  onOrderEditingChange,
   onRequestSearchPlace,
 }: PlaceCartRouteResultStepProps) {
+  const [isOrderEditing, setIsOrderEditing] = useState(false);
   const hasOverSchedule = routePlan.some((day) =>
     day.items.some((item) => item.isOverSchedule)
   );
+  const hasEditableRoute = routePlan.some((day) => day.items.length > 0);
   const excludedPlaceIds = routePlan.flatMap((day) =>
     day.items.map((item) => item.place.id)
   );
+  const getBaselineDay = (dayNumber: number) =>
+    baselineRoutePlan.find((day) => day.day === dayNumber) ?? null;
+  const startOrderEditing = () => {
+    if (!hasEditableRoute || isOrderEditing) {
+      return;
+    }
+
+    setIsOrderEditing(true);
+    onOrderEditingChange(true);
+  };
+  const finishOrderEditing = () => {
+    if (!isOrderEditing) {
+      return;
+    }
+
+    setIsOrderEditing(false);
+    onOrderEditingChange(false);
+  };
+  const getComparisonDay = (day: PlannedRouteDay) => {
+    const baselineDay = getBaselineDay(day.day);
+
+    if (!baselineDay || isSameRouteDay(day, baselineDay)) {
+      return null;
+    }
+
+    return baselineDay;
+  };
+  const handleReorderDayItems = (
+    dayNumber: number,
+    nextItems: PlannedRouteDay["items"]
+  ) => {
+    onReorderRoutePlan(
+      routePlan.map((day) =>
+        day.day === dayNumber
+          ? {
+              ...day,
+              items: nextItems,
+            }
+          : day
+      )
+    );
+  };
+  const handleMovePlaceToDay = (
+    placeId: string,
+    targetDayNumber: number,
+    position: "first" | "last"
+  ) => {
+    const movedItem = routePlan
+      .flatMap((day) => day.items)
+      .find((item) => item.place.id === placeId);
+
+    if (!movedItem) {
+      return;
+    }
+
+    const nextRoutePlan = routePlan.map((day) => {
+      const nextItems = day.items.filter((item) => item.place.id !== placeId);
+
+      if (day.day !== targetDayNumber) {
+        return {
+          ...day,
+          items: nextItems,
+        };
+      }
+
+      return {
+        ...day,
+        items:
+          position === "first"
+            ? [movedItem, ...nextItems]
+            : [...nextItems, movedItem],
+      };
+    });
+
+    onReorderRoutePlan(nextRoutePlan);
+  };
+
+  useEffect(() => {
+    if (!hasEditableRoute && isOrderEditing) {
+      setIsOrderEditing(false);
+      onOrderEditingChange(false);
+    }
+  }, [hasEditableRoute, isOrderEditing, onOrderEditingChange]);
+
+  useEffect(() => {
+    return () => onOrderEditingChange(false);
+  }, [onOrderEditingChange]);
 
   return (
     <div className="space-y-4">
       <div>
-        <p className="font-trip text-sm text-brand-700">ROUTE RESULT</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-trip text-sm text-brand-700">ROUTE RESULT</p>
+            {hasPendingChanges ? (
+              <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+                수정 중
+              </span>
+            ) : null}
+          </div>
+        </div>
         <p className="mt-1 text-xl font-semibold text-slate-900">
           추천 루트를 만들었어요
         </p>
@@ -67,10 +190,18 @@ function PlaceCartRouteResultStep({
           <PlaceCartRouteDayCard
             key={day.day}
             day={day}
+            routePlan={routePlan}
+            isOrderEditing={isOrderEditing}
+            comparisonDay={getComparisonDay(day)}
             candidatePlaces={candidatePlaces}
             excludedPlaceIds={excludedPlaceIds}
             onChangeStayMinutes={onChangeStayMinutes}
             onInsertPlace={onInsertPlace}
+            onRemovePlace={onRemovePlace}
+            onReorderDayItems={handleReorderDayItems}
+            onMovePlaceToDay={handleMovePlaceToDay}
+            onRequestOrderEditing={startOrderEditing}
+            onFinishOrderEditing={finishOrderEditing}
             onRequestSearchPlace={onRequestSearchPlace}
           />
         ))}

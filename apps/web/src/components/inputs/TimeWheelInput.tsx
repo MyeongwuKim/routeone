@@ -67,6 +67,25 @@ type WheelColumnProps = {
 function WheelColumn({ options, selectedValue, onSelect, loop = true }: WheelColumnProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollResetTimerRef = useRef<number | null>(null);
+  const hasSyncedInitialValueRef = useRef(false);
+  const isProgrammaticScrollRef = useRef(false);
+  const lastEmittedValueRef = useRef(selectedValue);
+
+  const getValueScrollTop = (value: string) => {
+    const optionIndex = Math.max(options.indexOf(value), 0);
+
+    if (!loop) {
+      return optionIndex * ROW_HEIGHT;
+    }
+
+    return (Math.floor(REPEAT_COUNT / 2) * options.length + optionIndex) * ROW_HEIGHT;
+  };
+
+  const resetProgrammaticScrollFlag = () => {
+    window.requestAnimationFrame(() => {
+      isProgrammaticScrollRef.current = false;
+    });
+  };
 
   const repeatedOptions = useMemo(() => {
     if (!loop) {
@@ -85,14 +104,15 @@ function WheelColumn({ options, selectedValue, onSelect, loop = true }: WheelCol
       return;
     }
 
-    const optionIndex = Math.max(options.indexOf(selectedValue), 0);
-    if (loop) {
-      const middleIndex = Math.floor(REPEAT_COUNT / 2) * options.length + optionIndex;
-      container.scrollTop = middleIndex * ROW_HEIGHT;
+    if (hasSyncedInitialValueRef.current && lastEmittedValueRef.current === selectedValue) {
       return;
     }
 
-    container.scrollTop = optionIndex * ROW_HEIGHT;
+    hasSyncedInitialValueRef.current = true;
+    lastEmittedValueRef.current = selectedValue;
+    isProgrammaticScrollRef.current = true;
+    container.scrollTop = getValueScrollTop(selectedValue);
+    resetProgrammaticScrollFlag();
   }, [loop, options, selectedValue]);
 
   useEffect(() => {
@@ -120,13 +140,21 @@ function WheelColumn({ options, selectedValue, onSelect, loop = true }: WheelCol
             ? ((currentIndex % options.length) + options.length) % options.length
             : Math.min(Math.max(currentIndex, 0), options.length - 1);
           const currentValue = options[normalizedIndex];
-          onSelect(currentValue);
+
+          if (currentValue !== lastEmittedValueRef.current) {
+            lastEmittedValueRef.current = currentValue;
+            onSelect(currentValue);
+          }
 
           if (!loop) {
             return;
           }
 
           scrollResetTimerRef.current = window.setTimeout(() => {
+            if (isProgrammaticScrollRef.current) {
+              return;
+            }
+
             const minIndex = options.length * 3;
             const maxIndex = options.length * (REPEAT_COUNT - 3);
             if (currentIndex > minIndex && currentIndex < maxIndex) {
@@ -134,8 +162,10 @@ function WheelColumn({ options, selectedValue, onSelect, loop = true }: WheelCol
             }
 
             const middleIndex = Math.floor(REPEAT_COUNT / 2) * options.length + normalizedIndex;
+            isProgrammaticScrollRef.current = true;
             target.scrollTo({ top: middleIndex * ROW_HEIGHT, behavior: "auto" });
-          }, 60);
+            resetProgrammaticScrollFlag();
+          }, 120);
         }}
       >
         {repeatedOptions.map((option) => (

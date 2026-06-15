@@ -134,7 +134,7 @@ function PlaceCartRouteInsertSheet({
         className="absolute inset-0 cursor-default"
         onClick={onClose}
       />
-      <section className="route-checkout-modal-enter relative w-full rounded-t-[28px] border border-brand-100 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl">
+      <section className="route-checkout-bottom-sheet-enter relative flex h-[min(72dvh,780px)] max-h-[calc(100dvh-1rem)] w-full flex-col overflow-hidden rounded-t-[28px] border border-brand-100 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl">
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200" />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -192,7 +192,7 @@ function PlaceCartRouteInsertSheet({
           })}
         </div>
 
-        <div className="mt-4 max-h-[44vh] space-y-2 overflow-y-auto pb-2">
+        <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pb-2 pr-1">
           {recommendedPlaces.length > 0 ? (
             recommendedPlaces.map(({ place, fit }) => (
               <button
@@ -241,7 +241,7 @@ function PlaceCartRouteInsertSheet({
         <button
           type="button"
           onClick={onRequestSearchPlace}
-          className="mt-2 w-full rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-700"
+          className="mt-2 w-full shrink-0 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-700"
         >
           전체 검색에서 직접 찾기
         </button>

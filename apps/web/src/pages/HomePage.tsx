@@ -1347,7 +1347,6 @@ function HomePage() {
         onRemovePlace={removeSavedPlace}
         onClearPlaces={clearSavedPlaces}
         onRequestSearchPlace={() => {
-          closeSavedList();
           setIsSearchPopupOpen(true);
           window.setTimeout(() => searchInputRef.current?.focus(), 0);
         }}
