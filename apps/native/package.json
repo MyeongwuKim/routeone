@@ -1,0 +1,25 @@
+{
+  "name": "native",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "build:webview": "node scripts/sync-web-build.mjs",
+    "sync:web": "node scripts/sync-web-build.mjs",
+    "start": "npm run build:webview -- --skip-build && expo start",
+    "start:bundle": "npm run build:webview && expo start",
+    "android": "npm run build:webview && expo run:android",
+    "ios": "npm run build:webview && expo run:ios",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "^56.0.0",
+    "react": "19.2.3",
+    "react-native": "0.85.0",
+    "react-native-webview": "13.16.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.0",
+    "typescript": "~6.0.2"
+  }
+}

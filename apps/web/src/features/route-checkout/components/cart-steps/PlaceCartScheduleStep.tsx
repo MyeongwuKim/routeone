@@ -1,18 +1,6 @@
 import { useEffect, useState } from "react";
 import { DateInput, TimeWheelInput } from "@/components/inputs";
-
-type PlaceCartScheduleStepProps = {
-  travelStartDate: string;
-  tripDays: number;
-  dailyStartTime: string;
-  scheduleEndTime: string;
-  isScheduleValid: boolean;
-  validationMessage: string;
-  onChangeTravelStartDate: (value: string) => void;
-  onChangeTripDays: (value: number) => void;
-  onChangeDailyStartTime: (value: string) => void;
-  onChangeScheduleEndTime: (value: string) => void;
-};
+import { useRouteCheckout } from "../RouteCheckoutContext";
 
 function toDateValue(date: Date) {
   const year = date.getFullYear();
@@ -45,18 +33,19 @@ function formatDateLabel(value: string) {
   ).padStart(2, "0")}`;
 }
 
-function PlaceCartScheduleStep({
-  travelStartDate,
-  tripDays,
-  dailyStartTime,
-  scheduleEndTime,
-  isScheduleValid,
-  validationMessage,
-  onChangeTravelStartDate,
-  onChangeTripDays,
-  onChangeDailyStartTime,
-  onChangeScheduleEndTime,
-}: PlaceCartScheduleStepProps) {
+function PlaceCartScheduleStep() {
+  const {
+    travelStartDate,
+    setTravelStartDate,
+    tripDays,
+    setTripDays,
+    dailyStartTime,
+    setDailyStartTime,
+    scheduleEndTime,
+    setScheduleEndTime,
+    isScheduleValid,
+    scheduleValidationMessage,
+  } = useRouteCheckout();
   const [isCustomTripDaysOpen, setIsCustomTripDaysOpen] = useState(false);
   const [customTripDaysInput, setCustomTripDaysInput] = useState(String(tripDays));
 
@@ -90,7 +79,7 @@ function PlaceCartScheduleStep({
 
         <label className="block">
           <p className="mb-2 text-sm font-semibold text-slate-700">여행 시작일</p>
-          <DateInput value={travelStartDate} onChange={onChangeTravelStartDate} />
+          <DateInput value={travelStartDate} onChange={setTravelStartDate} />
         </label>
 
         <div>
@@ -100,7 +89,7 @@ function PlaceCartScheduleStep({
               <button
                 key={dayCount}
                 type="button"
-                onClick={() => onChangeTripDays(dayCount)}
+                onClick={() => setTripDays(dayCount)}
                 className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
                   tripDays === dayCount
                     ? "border-brand-500 bg-brand-600 text-white"
@@ -135,7 +124,7 @@ function PlaceCartScheduleStep({
             value={dailyStartTime}
             title="매일 출발시간 설정"
             description="여행하는 날마다 이 시간에 일정을 시작해요."
-            onChange={onChangeDailyStartTime}
+            onChange={setDailyStartTime}
           />
         </label>
 
@@ -145,11 +134,11 @@ function PlaceCartScheduleStep({
             value={scheduleEndTime}
             title="일정 종료 희망시간 설정"
             description="하루 일정을 마무리하고 싶은 시각이에요."
-            onChange={onChangeScheduleEndTime}
+            onChange={setScheduleEndTime}
           />
         </label>
 
-        {!isScheduleValid ? <p className="text-xs text-rose-600">{validationMessage}</p> : null}
+        {!isScheduleValid ? <p className="text-xs text-rose-600">{scheduleValidationMessage}</p> : null}
       </div>
 
       {isCustomTripDaysOpen ? (
@@ -183,7 +172,7 @@ function PlaceCartScheduleStep({
                   if (!canSaveCustomTripDays) {
                     return;
                   }
-                  onChangeTripDays(Math.floor(customTripDaysValue));
+                  setTripDays(Math.floor(customTripDaysValue));
                   setIsCustomTripDaysOpen(false);
                 }}
                 className="rounded-2xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"

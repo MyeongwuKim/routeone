@@ -1,11 +1,10 @@
+import { useRouteCheckout } from "../RouteCheckoutContext";
+
 export type TravelTempo = "relaxed" | "balanced" | "packed";
 
-type PlaceCartTempoStepProps = {
-  tempo: TravelTempo | null;
-  onSelectTempo: (value: TravelTempo) => void;
-};
+function PlaceCartTempoStep() {
+  const { tempo, setTempo } = useRouteCheckout();
 
-function PlaceCartTempoStep({ tempo, onSelectTempo }: PlaceCartTempoStepProps) {
   return (
     <div className="space-y-4">
       <div>
@@ -15,7 +14,7 @@ function PlaceCartTempoStep({ tempo, onSelectTempo }: PlaceCartTempoStepProps) {
 
       <button
         type="button"
-        onClick={() => onSelectTempo("relaxed")}
+        onClick={() => setTempo("relaxed")}
         className={`w-full rounded-2xl border px-4 py-4 text-left ${
           tempo === "relaxed" ? "border-brand-500 bg-brand-50" : "border-brand-200 bg-white"
         }`}
@@ -26,7 +25,7 @@ function PlaceCartTempoStep({ tempo, onSelectTempo }: PlaceCartTempoStepProps) {
 
       <button
         type="button"
-        onClick={() => onSelectTempo("balanced")}
+        onClick={() => setTempo("balanced")}
         className={`w-full rounded-2xl border px-4 py-4 text-left ${
           tempo === "balanced" ? "border-brand-500 bg-brand-50" : "border-brand-200 bg-white"
         }`}
@@ -37,7 +36,7 @@ function PlaceCartTempoStep({ tempo, onSelectTempo }: PlaceCartTempoStepProps) {
 
       <button
         type="button"
-        onClick={() => onSelectTempo("packed")}
+        onClick={() => setTempo("packed")}
         className={`w-full rounded-2xl border px-4 py-4 text-left ${
           tempo === "packed" ? "border-brand-500 bg-brand-50" : "border-brand-200 bg-white"
         }`}

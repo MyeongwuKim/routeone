@@ -10,7 +10,7 @@ import {
   getRoutePlaceCategory,
   type RoutePlaceCategory,
 } from "@/lib/placeCategory";
-import type { MapSheetPlace } from "@/stores/mapSheetStore";
+import type { MapSheetPlace } from "@/types/place";
 import type { RouteInsertRequest } from "./routePlanTypes";
 
 type InsertFilter = "all" | RoutePlaceCategory;

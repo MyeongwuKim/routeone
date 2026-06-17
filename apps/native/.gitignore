@@ -1,0 +1,16 @@
+node_modules
+.expo
+dist
+build
+coverage
+*.log
+ios
+android
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Generated web bundle
+src/generated/webBundle.ts

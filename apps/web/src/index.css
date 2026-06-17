@@ -177,7 +177,7 @@ body {
 }
 
 .route-order-drag-node {
-  touch-action: manipulation;
+  touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
   cursor: grab;

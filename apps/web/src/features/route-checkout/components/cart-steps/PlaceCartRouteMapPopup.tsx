@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IoClose } from "react-icons/io5";
 import {
   PLACE_BUBBLE_MARKER_SIZE,
@@ -41,6 +41,10 @@ const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 
 type RouteDisplayVariant = "current" | "comparison";
 type RouteMapViewMode = "all" | "comparison" | "current";
+type RouteSegmentSelection = {
+  variant: RouteDisplayVariant;
+  segmentId: string;
+};
 
 const ROUTE_VIEW_OPTIONS: Array<{ id: RouteMapViewMode; label: string }> = [
   { id: "all", label: "전체" },
@@ -61,6 +65,7 @@ const ROUTE_SEGMENT_COLORS = [
 
 const ROUTE_ORIGINAL_COLOR = "#6366f1";
 const ROUTE_CURRENT_COLOR = "#14b8a6";
+const ROUTE_SEGMENT_FOCUS_ZOOM = 13;
 
 function escapeMarkerHtml(text: string) {
   return text
@@ -111,6 +116,24 @@ function buildRouteMapPoints(day: PlannedRouteDay): RouteMapPoint[] {
 
 function getRouteSegmentColor(index: number) {
   return ROUTE_SEGMENT_COLORS[index % ROUTE_SEGMENT_COLORS.length];
+}
+
+function getRouteSegmentDisplayColor({
+  index,
+  variant,
+  hasComparisonRoute,
+  routeViewMode,
+}: {
+  index: number;
+  variant: RouteDisplayVariant;
+  hasComparisonRoute: boolean;
+  routeViewMode: RouteMapViewMode;
+}) {
+  if (hasComparisonRoute && routeViewMode === "all") {
+    return variant === "comparison" ? ROUTE_ORIGINAL_COLOR : ROUTE_CURRENT_COLOR;
+  }
+
+  return getRouteSegmentColor(index);
 }
 
 function buildFallbackRouteSegments(points: RouteMapPoint[]): RouteMapSegment[] {
@@ -171,27 +194,37 @@ function createRoutePointBubbleMarkerIconHtml({
   point,
   variant,
   showVariantBadge,
+  focusColor,
 }: {
   point: RouteMapPoint;
   variant: RouteDisplayVariant;
   showVariantBadge: boolean;
+  focusColor?: string;
 }) {
   const isStart = point.variant === "start";
   const isComparison = variant === "comparison";
-  const toneColor = isComparison ? "#94a3b8" : "#14b8a6";
-  const toneDarkColor = isComparison ? "#475569" : "#0f766e";
-  const borderColor = isStart ? "#cbd5e1" : toneColor;
-  const labelBackground = isStart
-    ? "#f1f5f9"
-    : isComparison
-      ? "#f1f5f9"
-      : "#ccfbf1";
-  const labelText = isStart ? "#334155" : toneDarkColor;
-  const shadowColor = isComparison
-    ? "rgba(71,85,105,0.18)"
+  const toneColor = focusColor ?? (isComparison ? "#94a3b8" : "#14b8a6");
+  const toneDarkColor = focusColor ?? (isComparison ? "#475569" : "#0f766e");
+  const borderColor = isStart && !focusColor ? "#cbd5e1" : toneColor;
+  const labelBackground = focusColor
+    ? `${focusColor}1f`
     : isStart
-      ? "rgba(15,23,42,0.12)"
-      : "rgba(15,118,110,0.18)";
+      ? "#f1f5f9"
+      : isComparison
+        ? "#f1f5f9"
+        : "#ccfbf1";
+  const labelText = focusColor
+    ? toneDarkColor
+    : isStart
+      ? "#334155"
+      : toneDarkColor;
+  const shadowColor = focusColor
+    ? `${focusColor}3d`
+    : isComparison
+      ? "rgba(71,85,105,0.18)"
+      : isStart
+        ? "rgba(15,23,42,0.12)"
+        : "rgba(15,118,110,0.18)";
   const badgeLabel = isComparison ? "원래" : "현재";
 
   return `
@@ -292,6 +325,148 @@ function createRoutePointBubbleMarkerIconHtml({
   `;
 }
 
+function getRouteSegmentKey(
+  variant: RouteDisplayVariant,
+  segmentId: string
+) {
+  return `${variant}:${segmentId}`;
+}
+
+function enableRouteMapWheelZoom(routeMap: any) {
+  if (typeof routeMap.setOptions !== "function") {
+    return;
+  }
+
+  try {
+    routeMap.setOptions({
+      scrollWheel: true,
+    });
+  } catch {
+    routeMap.setOptions("scrollWheel", true);
+  }
+}
+
+function getRouteSegmentFocusPoint(path: RoutePathPoint[]) {
+  if (path.length === 0) {
+    return null;
+  }
+
+  if (path.length === 1) {
+    return path[0];
+  }
+
+  if (path.length === 2) {
+    const [start, end] = path;
+
+    return {
+      lat: (start.lat + end.lat) / 2,
+      lng: (start.lng + end.lng) / 2,
+    };
+  }
+
+  return path[Math.floor(path.length / 2)];
+}
+
+function moveMapToRouteSegment({
+  routeMap,
+  naverMaps,
+  segment,
+}: {
+  routeMap: any;
+  naverMaps: any;
+  segment: RouteMapSegment;
+}) {
+  const focusPoint = getRouteSegmentFocusPoint(segment.path);
+
+  if (!focusPoint) {
+    return;
+  }
+
+  const center = new naverMaps.LatLng(focusPoint.lat, focusPoint.lng);
+
+  try {
+    if (typeof routeMap.morph === "function") {
+      routeMap.morph(center, ROUTE_SEGMENT_FOCUS_ZOOM);
+      return;
+    }
+  } catch {
+    // 일부 환경에서 morph가 실패하면 아래 기본 이동 방식으로 보정해요.
+  }
+
+  if (typeof routeMap.setZoom === "function") {
+    routeMap.setZoom(ROUTE_SEGMENT_FOCUS_ZOOM);
+  }
+
+  if (typeof routeMap.panTo === "function") {
+    routeMap.panTo(center);
+    return;
+  }
+
+  if (typeof routeMap.setCenter === "function") {
+    routeMap.setCenter(center);
+  }
+}
+
+type RouteSegmentSelectCardProps = {
+  segment: RouteMapSegment;
+  segmentColor: string;
+  variant: RouteDisplayVariant;
+  isSelected: boolean;
+  onSelect: (
+    variant: RouteDisplayVariant,
+    segment: RouteMapSegment,
+    isAlreadySelected: boolean
+  ) => void;
+};
+
+const RouteSegmentSelectCard = memo(function RouteSegmentSelectCard({
+  segment,
+  segmentColor,
+  variant,
+  isSelected,
+  onSelect,
+}: RouteSegmentSelectCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(variant, segment, isSelected)}
+      className={`min-w-[180px] rounded-2xl border px-3 py-2 text-left transition ${
+        isSelected
+          ? "bg-white shadow-sm"
+          : variant === "comparison"
+            ? "border-slate-200 bg-white"
+            : "border-brand-100 bg-white"
+      }`}
+      style={
+        isSelected
+          ? {
+              borderColor: segmentColor,
+              boxShadow: `0 0 0 2px ${segmentColor}33, 0 14px 24px rgba(15, 23, 42, 0.12)`,
+            }
+          : undefined
+      }
+    >
+      <span
+        className={`mb-2 block rounded-full ${
+          isSelected ? "h-2 w-14" : "h-1.5 w-10"
+        }`}
+        style={{
+          backgroundColor: segmentColor,
+        }}
+      />
+      <p
+        className={`text-[10px] font-black ${
+          variant === "comparison" ? "text-slate-500" : "text-brand-700"
+        }`}
+      >
+        {segment.from.sequenceLabel} → {segment.to.sequenceLabel}
+      </p>
+      <p className="mt-1 truncate text-xs font-semibold text-slate-900">
+        {segment.from.title} → {segment.to.title}
+      </p>
+    </button>
+  );
+});
 
 function PlaceCartRouteMapPopup({
   day,
@@ -321,6 +496,8 @@ function PlaceCartRouteMapPopup({
   const [comparisonRouteSegments, setComparisonRouteSegments] = useState(
     comparisonFallbackSegments
   );
+  const [selectedSegment, setSelectedSegment] =
+    useState<RouteSegmentSelection | null>(null);
   const hasComparisonRoute = Boolean(
     comparisonDay && comparisonRoutePoints.length > 1
   );
@@ -365,11 +542,81 @@ function PlaceCartRouteMapPopup({
     shouldShowComparisonRoute,
     shouldShowCurrentRoute,
   ]);
+  const selectedRouteSegmentView = useMemo(() => {
+    if (!selectedSegment) {
+      return null;
+    }
+
+    const group = visibleRoutePointGroups.find(
+      (routeGroup) => routeGroup.key === selectedSegment.variant
+    );
+
+    if (!group) {
+      return null;
+    }
+
+    const segmentIndex = group.segments.findIndex(
+      (segment) => segment.id === selectedSegment.segmentId
+    );
+
+    if (segmentIndex < 0) {
+      return null;
+    }
+
+    const segment = group.segments[segmentIndex];
+
+    return {
+      segment,
+      color: getRouteSegmentDisplayColor({
+        index: segmentIndex,
+        variant: group.key,
+        hasComparisonRoute,
+        routeViewMode,
+      }),
+    };
+  }, [
+    hasComparisonRoute,
+    routeViewMode,
+    selectedSegment,
+    visibleRoutePointGroups,
+  ]);
 
   const clearOverlays = () => {
     overlayRefs.current.forEach((overlay) => overlay.setMap(null));
     overlayRefs.current = [];
   };
+
+  const focusRouteSegment = useCallback(
+    (
+      variant: RouteDisplayVariant,
+      segment: RouteMapSegment,
+      isAlreadySelected: boolean
+    ) => {
+      const naverMaps = window.naver?.maps;
+      const routeMap = mapInstanceRef.current;
+
+      if (isAlreadySelected) {
+        setSelectedSegment(null);
+        return;
+      }
+
+      setSelectedSegment({
+        variant,
+        segmentId: segment.id,
+      });
+
+      if (!naverMaps || !routeMap || segment.path.length === 0) {
+        return;
+      }
+
+      moveMapToRouteSegment({
+        routeMap,
+        naverMaps,
+        segment,
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     if (!hasComparisonRoute && routeViewMode !== "all") {
@@ -493,6 +740,7 @@ function PlaceCartRouteMapPopup({
         minZoom: 7,
         mapTypeId: naverMaps.MapTypeId.NORMAL,
         zoomControl: true,
+        scrollWheel: true,
         mapDataControl: false,
         scaleControl: false,
         logoControl: false,
@@ -501,10 +749,30 @@ function PlaceCartRouteMapPopup({
     } else {
       naverMaps.Event.trigger(routeMap, "resize");
     }
+    enableRouteMapWheelZoom(routeMap);
 
     clearOverlays();
 
     const bounds = new naverMaps.LatLngBounds();
+    const selectedRouteSegment = selectedRouteSegmentView?.segment ?? null;
+    const selectedSegmentColor = selectedRouteSegmentView?.color;
+    const shouldShowPointMarker = (
+      point: RouteMapPoint,
+      variant: RouteDisplayVariant
+    ) => {
+      if (!selectedSegment || !selectedRouteSegment) {
+        return true;
+      }
+
+      if (selectedSegment.variant !== variant) {
+        return false;
+      }
+
+      return (
+        point.id === selectedRouteSegment.from.id ||
+        point.id === selectedRouteSegment.to.id
+      );
+    };
     const createPath = (path: Array<{ lat: number; lng: number }>) =>
       path.map((point) => {
         const latLng = new naverMaps.LatLng(point.lat, point.lng);
@@ -517,6 +785,10 @@ function PlaceCartRouteMapPopup({
       variant: RouteDisplayVariant
     ) => {
       points.forEach((point, index) => {
+        if (!shouldShowPointMarker(point, variant)) {
+          return;
+        }
+
         const position = new naverMaps.LatLng(point.lat, point.lng);
         bounds.extend(position);
 
@@ -537,6 +809,10 @@ function PlaceCartRouteMapPopup({
               point,
               variant,
               showVariantBadge: hasComparisonRoute && routeViewMode === "all",
+              focusColor:
+                selectedSegment?.variant === variant
+                  ? selectedSegmentColor
+                  : undefined,
             }),
             anchor: new naverMaps.Point(
               PLACE_BUBBLE_MARKER_SIZE.anchorX,
@@ -555,24 +831,55 @@ function PlaceCartRouteMapPopup({
       segments.forEach((segment, index) => {
         const path = createPath(segment.path);
         const isAllComparisonView = hasComparisonRoute && routeViewMode === "all";
-        const shouldUseSegmentColor = !isAllComparisonView;
         const isComparisonLine = variant === "comparison";
+        const segmentColor = getRouteSegmentDisplayColor({
+          index,
+          variant,
+          hasComparisonRoute,
+          routeViewMode,
+        });
+        const segmentKey = getRouteSegmentKey(variant, segment.id);
+        const isSelectedSegment =
+          selectedSegment &&
+          getRouteSegmentKey(
+            selectedSegment.variant,
+            selectedSegment.segmentId
+          ) === segmentKey;
+        const hasSelectedSegment = Boolean(selectedSegment);
+
+        if (isSelectedSegment) {
+          const highlightLine = new naverMaps.Polyline({
+            map: routeMap,
+            path,
+            strokeColor: segmentColor,
+            strokeWeight: 18,
+            strokeOpacity: 0.24,
+            strokeStyle: "solid",
+            strokeLineCap: "round",
+            strokeLineJoin: "round",
+            zIndex: 980,
+          });
+          overlayRefs.current.push(highlightLine);
+        }
+
         const routeLine = new naverMaps.Polyline({
           map: routeMap,
           path,
-          strokeColor: shouldUseSegmentColor
-            ? getRouteSegmentColor(index)
-            : isComparisonLine
-              ? ROUTE_ORIGINAL_COLOR
-              : ROUTE_CURRENT_COLOR,
+          strokeColor: segmentColor,
           strokeWeight:
-            isAllComparisonView && isComparisonLine
+            isSelectedSegment
+              ? 11
+              : isAllComparisonView && isComparisonLine
               ? 7
               : isAllComparisonView
                 ? 6
                 : 5,
           strokeOpacity:
-            isAllComparisonView && isComparisonLine
+            isSelectedSegment
+              ? 1
+              : hasSelectedSegment
+                ? 0.12
+              : isAllComparisonView && isComparisonLine
               ? 0.7
               : isAllComparisonView
                 ? 0.56
@@ -583,7 +890,11 @@ function PlaceCartRouteMapPopup({
               : "solid",
           strokeLineCap: "round",
           strokeLineJoin: "round",
-          zIndex: variant === "comparison" ? 380 + index : 430 + index,
+          zIndex: isSelectedSegment
+            ? 1000
+            : variant === "comparison"
+              ? 380 + index
+              : 430 + index,
         });
 
         overlayRefs.current.push(routeLine);
@@ -605,14 +916,18 @@ function PlaceCartRouteMapPopup({
     }
 
     try {
-      routeMap.fitBounds(bounds, {
-        top: 56,
-        right: 92,
-        bottom: 184,
-        left: 92,
-      });
+      if (!selectedSegment) {
+        routeMap.fitBounds(bounds, {
+          top: 56,
+          right: 92,
+          bottom: 184,
+          left: 92,
+        });
+      }
     } catch {
-      routeMap.fitBounds(bounds);
+      if (!selectedSegment) {
+        routeMap.fitBounds(bounds);
+      }
     }
 
     requestAnimationFrame(() => {
@@ -626,6 +941,8 @@ function PlaceCartRouteMapPopup({
     routePoints,
     routeSegments,
     routeViewMode,
+    selectedSegment,
+    selectedRouteSegmentView,
     shouldShowComparisonRoute,
     shouldShowCurrentRoute,
   ]);
@@ -672,7 +989,10 @@ function PlaceCartRouteMapPopup({
                       key={option.id}
                       type="button"
                       aria-pressed={isSelected}
-                      onClick={() => setRouteViewMode(option.id)}
+                      onClick={() => {
+                        setSelectedSegment(null);
+                        setRouteViewMode(option.id);
+                      }}
                       className={`rounded-xl px-2 py-2 text-xs font-bold transition ${
                         isSelected
                           ? "bg-brand-600 text-white shadow-sm"
@@ -684,6 +1004,35 @@ function PlaceCartRouteMapPopup({
                   );
                 })}
               </div>
+            </div>
+          ) : null}
+          {selectedRouteSegmentView ? (
+            <div
+              className={`absolute left-4 flex max-w-[calc(100%-2rem)] items-center gap-3 rounded-full border bg-white/95 px-3 py-2 shadow-sm backdrop-blur ${
+                hasComparisonRoute ? "top-20" : "top-4"
+              }`}
+              style={{
+                borderColor: selectedRouteSegmentView.color,
+                boxShadow: `0 12px 26px ${selectedRouteSegmentView.color}24`,
+              }}
+            >
+              <span
+                className="inline-flex min-w-0 items-center gap-2 text-xs font-black"
+                style={{ color: selectedRouteSegmentView.color }}
+              >
+                <span
+                  className="h-2 w-7 shrink-0 rounded-full"
+                  style={{ backgroundColor: selectedRouteSegmentView.color }}
+                />
+                구간 하이라이트 중
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedSegment(null)}
+                className="shrink-0 rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-black text-slate-600"
+              >
+                전체 보기
+              </button>
             </div>
           ) : null}
           {!isSdkReady || isRouteLoading ? (
@@ -768,42 +1117,29 @@ function PlaceCartRouteMapPopup({
                   {group.segments.length > 0 ? (
                     <div className="scrollbar-hide mt-1 flex gap-2 overflow-x-auto pb-1">
                       {group.segments.map((segment, segmentIndex) => {
+                        const isSelectedSegment =
+                          selectedSegment &&
+                          getRouteSegmentKey(
+                            selectedSegment.variant,
+                            selectedSegment.segmentId
+                          ) === getRouteSegmentKey(group.key, segment.id);
                         const segmentColor =
-                          hasComparisonRoute && routeViewMode === "all"
-                            ? group.key === "comparison"
-                              ? ROUTE_ORIGINAL_COLOR
-                              : ROUTE_CURRENT_COLOR
-                            : getRouteSegmentColor(segmentIndex);
+                          getRouteSegmentDisplayColor({
+                            index: segmentIndex,
+                            variant: group.key,
+                            hasComparisonRoute,
+                            routeViewMode,
+                          });
 
                         return (
-                          <div
+                          <RouteSegmentSelectCard
                             key={`${group.key}-${segment.id}`}
-                            className={`min-w-[180px] rounded-2xl border px-3 py-2 ${
-                              group.key === "comparison"
-                                ? "border-slate-200 bg-white"
-                                : "border-brand-100 bg-white"
-                            }`}
-                          >
-                            <span
-                              className="mb-2 block h-1.5 w-10 rounded-full"
-                              style={{
-                                backgroundColor: segmentColor,
-                              }}
-                            />
-                            <p
-                              className={`text-[10px] font-black ${
-                                group.key === "comparison"
-                                  ? "text-slate-500"
-                                  : "text-brand-700"
-                              }`}
-                            >
-                              {segment.from.sequenceLabel} →{" "}
-                              {segment.to.sequenceLabel}
-                            </p>
-                            <p className="mt-1 truncate text-xs font-semibold text-slate-900">
-                              {segment.from.title} → {segment.to.title}
-                            </p>
-                          </div>
+                            segment={segment}
+                            segmentColor={segmentColor}
+                            variant={group.key}
+                            isSelected={Boolean(isSelectedSegment)}
+                            onSelect={focusRouteSegment}
+                          />
                         );
                       })}
                     </div>

@@ -1,4 +1,4 @@
-import type { MapSheetPlace } from "@/stores/mapSheetStore";
+import type { MapSheetPlace } from "@/types/place";
 
 export type RouteInsertPoint = {
   title: string;
@@ -12,6 +12,11 @@ export type RouteInsertRequest = {
   insertIndex: number;
   from: RouteInsertPoint;
   to: RouteInsertPoint;
+};
+
+export type RouteStartLocation = {
+  lat: number;
+  lng: number;
 };
 
 export type PlannedRouteItem = {
@@ -29,9 +34,11 @@ export type PlannedRouteDay = {
   day: number;
   date: string;
   startsFromCurrentLocation: boolean;
-  startLocation: {
-    lat: number;
-    lng: number;
-  } | null;
+  startLocation: RouteStartLocation | null;
   items: PlannedRouteItem[];
+};
+
+export type ManualRouteInsertion = {
+  request: RouteInsertRequest;
+  place: MapSheetPlace;
 };

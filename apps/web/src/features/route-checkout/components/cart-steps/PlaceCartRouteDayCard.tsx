@@ -11,12 +11,11 @@ import {
   useEffect,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import PlaceCartRouteMapPopup from "./PlaceCartRouteMapPopup";
 import PlaceCartRouteInsertSheet from "./PlaceCartRouteInsertSheet";
-import type { MapSheetPlace } from "@/stores/mapSheetStore";
+import type { MapSheetPlace } from "@/types/place";
 import type {
   PlannedRouteDay,
   PlannedRouteItem,
@@ -59,6 +58,26 @@ type DraggedDayItem = {
 };
 
 type AdjacentMoveDirection = "previous" | "next";
+
+type DragStartPayload = {
+  itemIndex: number;
+  item: PlannedRouteItem;
+  clientX: number;
+  clientY: number;
+  button: number;
+  captureTarget: HTMLElement;
+  pointerId?: number;
+};
+
+type LongPressPointer = {
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  button: number;
+  captureTarget: HTMLElement;
+  pointerId?: number;
+};
 
 type RouteStation =
   | {
@@ -458,11 +477,7 @@ function RouteRowGroup({
   isOrderEditing: boolean;
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
   onSelectItem: (item: PlannedRouteItem) => void;
-  onStartDragItem: (
-    itemIndex: number,
-    item: PlannedRouteItem,
-    event: ReactPointerEvent<HTMLButtonElement>
-  ) => void;
+  onStartDragItem: (payload: DragStartPayload) => void;
   onRequestOrderEditing: () => void;
   onRequestInsertPlace: (request: RouteInsertRequest) => void;
   onDropRouteItem: (targetIndex: number) => void;
@@ -587,15 +602,11 @@ function StationNode({
   isOrderEditing: boolean;
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
   onSelectItem: (item: PlannedRouteItem) => void;
-  onStartDragItem: (
-    itemIndex: number,
-    item: PlannedRouteItem,
-    event: ReactPointerEvent<HTMLButtonElement>
-  ) => void;
+  onStartDragItem: (payload: DragStartPayload) => void;
   onRequestOrderEditing: () => void;
 }) {
   const longPressTimerRef = useRef<number | null>(null);
-  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressPointerRef = useRef<LongPressPointer | null>(null);
   const didLongPressRef = useRef(false);
   const isOverSchedule = station.item?.isOverSchedule ?? false;
   const orderLabel =
@@ -605,7 +616,7 @@ function StationNode({
       window.clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
-    longPressStartRef.current = null;
+    longPressPointerRef.current = null;
   };
 
   useEffect(() => clearLongPressTimer, []);
@@ -665,11 +676,15 @@ function StationNode({
           draggable={false}
           onPointerDown={(event) => {
             if (isOrderEditing) {
-              onStartDragItem(
-                station.itemIndex,
-                station.item as PlannedRouteItem,
-                event
-              );
+              onStartDragItem({
+                itemIndex: station.itemIndex,
+                item: station.item as PlannedRouteItem,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                button: event.button,
+                captureTarget: event.currentTarget,
+                pointerId: event.pointerId,
+              });
               return;
             }
 
@@ -678,25 +693,46 @@ function StationNode({
             }
 
             didLongPressRef.current = false;
-            longPressStartRef.current = {
-              x: event.clientX,
-              y: event.clientY,
+            longPressPointerRef.current = {
+              startX: event.clientX,
+              startY: event.clientY,
+              currentX: event.clientX,
+              currentY: event.clientY,
+              button: event.button,
+              captureTarget: event.currentTarget,
+              pointerId: event.pointerId,
             };
             longPressTimerRef.current = window.setTimeout(() => {
+              const pointer = longPressPointerRef.current;
+              if (!pointer) {
+                return;
+              }
+
               didLongPressRef.current = true;
               clearLongPressTimer();
               onRequestOrderEditing();
+              onStartDragItem({
+                itemIndex: station.itemIndex,
+                item: station.item as PlannedRouteItem,
+                clientX: pointer.currentX,
+                clientY: pointer.currentY,
+                button: pointer.button,
+                captureTarget: pointer.captureTarget,
+                pointerId: pointer.pointerId,
+              });
             }, 420);
           }}
           onPointerMove={(event) => {
-            const startPoint = longPressStartRef.current;
-            if (!startPoint) {
+            const pointer = longPressPointerRef.current;
+            if (!pointer) {
               return;
             }
 
+            pointer.currentX = event.clientX;
+            pointer.currentY = event.clientY;
             const moveDistance = Math.hypot(
-              event.clientX - startPoint.x,
-              event.clientY - startPoint.y
+              event.clientX - pointer.startX,
+              event.clientY - pointer.startY
             );
 
             if (moveDistance > 8) {
@@ -1058,15 +1094,7 @@ function PlaceCartRouteDayCard({
     button,
     captureTarget,
     pointerId,
-  }: {
-    itemIndex: number;
-    item: PlannedRouteItem;
-    clientX: number;
-    clientY: number;
-    button: number;
-    captureTarget: HTMLElement;
-    pointerId?: number;
-  }) => {
+  }: DragStartPayload) => {
     if (button !== 0) {
       return;
     }
@@ -1096,7 +1124,14 @@ function PlaceCartRouteDayCard({
     setActiveDropIndex(null);
     setActiveMoveDirection(null);
 
+    const isCurrentDragPointer = (event: PointerEvent) =>
+      pointerId == null || event.pointerId === pointerId;
+
     const handleDragMove = (moveEvent: PointerEvent) => {
+      if (!isCurrentDragPointer(moveEvent)) {
+        return;
+      }
+
       const currentDraggedItem = draggedItemRef.current;
       if (!currentDraggedItem) {
         return;
@@ -1134,6 +1169,10 @@ function PlaceCartRouteDayCard({
     };
 
     const handleDragEnd = (upEvent: PointerEvent) => {
+      if (!isCurrentDragPointer(upEvent)) {
+        return;
+      }
+
       const currentDraggedItem = draggedItemRef.current;
       if (!currentDraggedItem) {
         stopCurrentDrag();
@@ -1166,11 +1205,21 @@ function PlaceCartRouteDayCard({
       stopCurrentDrag();
     };
 
+    const handleLostPointerCapture = (event: PointerEvent) => {
+      if (isCurrentDragPointer(event)) {
+        stopCurrentDrag();
+      }
+    };
+
     window.addEventListener("pointermove", handleDragMove, {
       passive: false,
     });
     window.addEventListener("pointerup", handleDragEnd, { once: true });
     window.addEventListener("pointercancel", handleDragEnd, { once: true });
+    pointerCaptureTarget?.addEventListener(
+      "lostpointercapture",
+      handleLostPointerCapture
+    );
 
     dragCleanupRef.current = () => {
       if (
@@ -1186,23 +1235,15 @@ function PlaceCartRouteDayCard({
       window.removeEventListener("pointermove", handleDragMove);
       window.removeEventListener("pointerup", handleDragEnd);
       window.removeEventListener("pointercancel", handleDragEnd);
+      pointerCaptureTarget?.removeEventListener(
+        "lostpointercapture",
+        handleLostPointerCapture
+      );
     };
   };
 
-  const handleStartDragItem = (
-    itemIndex: number,
-    item: PlannedRouteItem,
-    event: ReactPointerEvent<HTMLButtonElement>
-  ) => {
-    startDragItem({
-      itemIndex,
-      item,
-      clientX: event.clientX,
-      clientY: event.clientY,
-      button: "button" in event ? event.button : 0,
-      captureTarget: event.currentTarget,
-      pointerId: "pointerId" in event ? event.pointerId : undefined,
-    });
+  const handleStartDragItem = (payload: DragStartPayload) => {
+    startDragItem(payload);
   };
 
   useEffect(() => {
@@ -1236,7 +1277,11 @@ function PlaceCartRouteDayCard({
           {isOrderEditing ? (
             <button
               type="button"
-              onClick={onFinishOrderEditing}
+              onPointerDown={stopCurrentDrag}
+              onClick={() => {
+                stopCurrentDrag();
+                onFinishOrderEditing();
+              }}
               className="rounded-full border border-brand-600 bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm"
             >
               완료

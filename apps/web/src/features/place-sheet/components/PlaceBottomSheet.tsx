@@ -27,11 +27,10 @@ import {
 } from "@/lib/placeCategory";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
-import {
-  useMapSheetStore,
-  type MapSheetPlace,
-} from "@/stores/mapSheetStore";
+import { useMapSheetStore } from "@/stores/mapSheetStore";
+import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
+import type { MapSheetPlace } from "@/types/place";
 
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
 const NAVER_MAP_SCHEME_APP_NAME = "routeone.web";
@@ -178,11 +177,10 @@ function PlaceBottomSheet() {
     sheetMode,
     sheetResetVersion,
     selectedPlace,
-    savedPlaceIds,
     openSheet,
     resetSheet,
-    toggleSavedPlace,
   } = useMapSheetStore();
+  const { savedPlaceIds, toggleSavedPlace } = usePlaceCartStore();
   const showToast = useUiToastStore((state) => state.showToast);
   const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
 

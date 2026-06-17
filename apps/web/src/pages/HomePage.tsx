@@ -38,9 +38,10 @@ import {
 import {
   useMapSheetStore,
   type MapSheetMode,
-  type MapSheetPlace,
 } from "@/stores/mapSheetStore";
+import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
+import type { MapSheetPlace } from "@/types/place";
 
 const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
@@ -406,6 +407,8 @@ function HomePage() {
     openSheet,
     closeSheet,
     resetSheet,
+  } = useMapSheetStore();
+  const {
     savedPlaceIds,
     savedPlaces,
     isSavedListOpen,
@@ -413,7 +416,7 @@ function HomePage() {
     closeSavedList,
     removeSavedPlace,
     clearSavedPlaces,
-  } = useMapSheetStore();
+  } = usePlaceCartStore();
   const showLoading = useUiLoadingStore((state) => state.showLoading);
   const hideLoading = useUiLoadingStore((state) => state.hideLoading);
 
