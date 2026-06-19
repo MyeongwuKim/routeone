@@ -1,0 +1,5 @@
+mutation ShareRoute($routeId: ID!) {
+  shareRoute(routeId: $routeId) {
+    ...RouteSummaryFields
+  }
+}

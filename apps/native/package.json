@@ -4,12 +4,18 @@
   "private": true,
   "main": "index.ts",
   "scripts": {
+    "postinstall": "node scripts/patch-expo-modules-jsi.mjs",
+    "patch:expo-modules-jsi": "node scripts/patch-expo-modules-jsi.mjs",
     "build:webview": "node scripts/sync-web-build.mjs",
     "sync:web": "node scripts/sync-web-build.mjs",
-    "start": "npm run build:webview -- --skip-build && expo start",
-    "start:bundle": "npm run build:webview && expo start",
-    "android": "npm run build:webview && expo run:android",
-    "ios": "npm run build:webview && expo run:ios",
+    "start": "pnpm run start:dev-client",
+    "start:dev-client": "pnpm run build:webview -- --skip-build && expo start --dev-client",
+    "start:go": "pnpm run build:webview -- --skip-build && expo start",
+    "start:bundle": "pnpm run build:webview && expo start --dev-client",
+    "start:bundle:go": "pnpm run build:webview && expo start",
+    "preios": "pnpm run patch:expo-modules-jsi",
+    "android": "pnpm run build:webview && expo run:android",
+    "ios": "pnpm run build:webview && expo run:ios",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -20,6 +26,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
+    "babel-preset-expo": "~56.0.15",
     "typescript": "~6.0.2"
   }
 }

@@ -1,6 +1,11 @@
 export const CAFE_LCLS_CODE = "FD050100";
 
-export type PlaceCategoryLabel = "관광지" | "음식점" | "카페" | "장소";
+export type PlaceCategoryLabel =
+  | "관광지"
+  | "음식점"
+  | "카페"
+  | "축제/공연"
+  | "장소";
 export type RoutePlaceCategory = "tourist" | "food" | "cafe";
 
 type PlaceCategorySource = {
@@ -60,10 +65,15 @@ export function getPlaceCategoryLabel(
     return "음식점";
   }
 
+  if (place.contentTypeId === "15") {
+    return "축제/공연";
+  }
+
   if (
     place.contentTypeLabel === "관광지" ||
     place.contentTypeLabel === "음식점" ||
-    place.contentTypeLabel === "카페"
+    place.contentTypeLabel === "카페" ||
+    place.contentTypeLabel === "축제/공연"
   ) {
     return place.contentTypeLabel;
   }
@@ -78,6 +88,10 @@ export function getPlaceCategoryIcon(categoryLabel: PlaceCategoryLabel) {
 
   if (categoryLabel === "음식점") {
     return "🍽";
+  }
+
+  if (categoryLabel === "축제/공연") {
+    return "🎉";
   }
 
   if (categoryLabel === "장소") {

@@ -16,6 +16,8 @@ export default defineConfig(({ mode }) => {
     env.VITE_NAVER_MAP_API_KEY ??
     env.VITE_NCP_MAPS_KEY ??
     ''
+  const graphqlProxyTarget =
+    env.VITE_GRAPHQL_PROXY_TARGET ?? env.API_URL ?? 'http://localhost:4000'
 
   if (!naverMapClientId || !naverMapClientSecret) {
     console.warn(
@@ -44,6 +46,10 @@ export default defineConfig(({ mode }) => {
             "x-ncp-apigw-api-key-id": naverMapClientId,
             "x-ncp-apigw-api-key": naverMapClientSecret,
           },
+        },
+        "/graphql": {
+          target: graphqlProxyTarget,
+          changeOrigin: true,
         },
       },
     },

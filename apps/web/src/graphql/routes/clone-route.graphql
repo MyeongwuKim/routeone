@@ -1,0 +1,5 @@
+mutation CloneRoute($input: CloneRouteInput!) {
+  cloneRoute(input: $input) {
+    ...RouteDetailFields
+  }
+}

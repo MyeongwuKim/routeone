@@ -167,7 +167,7 @@ function createMapSheetPlaceFromNearbyPlace({
     contentTypeLabel: categoryLabel,
     categoryName,
     icon: categoryIcon,
-    images: [place.firstImage, place.secondImage].filter(Boolean),
+    images: [place.firstImage].filter(Boolean),
   };
 }
 

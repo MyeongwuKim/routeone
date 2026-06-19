@@ -11,16 +11,30 @@ React Native WebView로 `apps/web` 빌드 산출물을 감싸는 하이브리드
 
 ## 실행
 
+이 앱은 Expo Go가 아니라 native WebView 앱으로 확인하는 흐름을 기본으로 잡아요.
+
+시뮬레이터에 네이티브 앱을 빌드하고 실행하려면 루트에서 아래 명령을 사용해요.
+
 ```bash
-cd apps/native
-npm install
-npm run start
+pnpm native:ios
+```
+
+이미 앱이 설치되어 있고 Metro만 다시 띄울 때는 dev client 모드로 실행해요.
+
+```bash
+pnpm native:start
+```
+
+Expo Go로 열어야 하는 경우에만 아래 명령을 사용해요.
+
+```bash
+pnpm native:start:go
 ```
 
 웹앱까지 다시 빌드해서 번들을 갱신하려면 아래 명령을 사용해요.
 
 ```bash
-npm run build:webview
+pnpm native:build:webview
 ```
 
 ## 환경변수

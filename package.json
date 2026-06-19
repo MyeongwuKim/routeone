@@ -1,0 +1,24 @@
+{
+  "name": "routeone",
+  "private": true,
+  "packageManager": "pnpm@10.20.0",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api dev",
+    "dev:web": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "build:api": "pnpm --filter api build",
+    "build:web": "pnpm --filter web build",
+    "lint": "pnpm --filter web lint",
+    "preview:web": "pnpm --filter web preview",
+    "native:start": "pnpm --filter native start",
+    "native:start:dev-client": "pnpm --filter native start:dev-client",
+    "native:start:go": "pnpm --filter native start:go",
+    "native:start:bundle": "pnpm --filter native start:bundle",
+    "native:android": "pnpm --filter native android",
+    "native:ios": "pnpm --filter native ios",
+    "native:typecheck": "pnpm --filter native typecheck",
+    "native:sync:web": "pnpm --filter native sync:web",
+    "native:build:webview": "pnpm --filter native build:webview"
+  }
+}

@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  email       String?       @unique
+  displayName String?
+  avatarUrl   String?
+  locale      String?
+
+  accounts AuthAccount[]
+  routes   Route[]
+  likes    RouteLike[]
+  saves    RouteSave[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuthAccount {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String        @db.ObjectId
+  provider          OAuthProvider
+  providerAccountId String
+  email             String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Route {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId  String @db.ObjectId
+
+  sourceRouteId String? @db.ObjectId
+
+  countryCode           String  @default("KR")
+  primaryRegionCode     String?
+  primaryRegionLabelKey String?
+
+  tripDays        Int       @default(1)
+  travelStartDate DateTime?
+  travelEndDate   DateTime?
+
+  status     RouteStatus     @default(DRAFT)
+  visibility RouteVisibility @default(PRIVATE)
+
+  totalStopCount     Int @default(0)
+  completedStopCount Int @default(0)
+  likeCount          Int @default(0)
+  saveCount          Int @default(0)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  sharedAt    DateTime?
+
+  owner User @relation(fields: [ownerId], references: [id])
+  days  RouteDay[]
+  stops RouteStop[]
+  likes RouteLike[]
+  saves RouteSave[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, status])
+  @@index([visibility, sharedAt])
+  @@index([primaryRegionCode])
+  @@index([sourceRouteId])
+}
+
+model RouteDay {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  routeId String @db.ObjectId
+
+  dayIndex Int
+  date     DateTime?
+
+  route Route       @relation(fields: [routeId], references: [id])
+  stops RouteStop[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([routeId, dayIndex])
+  @@index([routeId])
+}
+
+model RouteStop {
+  id      String  @id @default(auto()) @map("_id") @db.ObjectId
+  routeId String  @db.ObjectId
+  dayId   String? @db.ObjectId
+
+  order Int
+  place PlaceSnapshot
+
+  stayMinutes Int?
+  memo        String?
+
+  visitStatus VisitStatus @default(PENDING)
+  visitedAt   DateTime?
+
+  route Route     @relation(fields: [routeId], references: [id])
+  day   RouteDay? @relation(fields: [dayId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([routeId, order])
+  @@index([dayId, order])
+}
+
+model RouteLike {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  userId  String @db.ObjectId
+  routeId String @db.ObjectId
+
+  user  User  @relation(fields: [userId], references: [id])
+  route Route @relation(fields: [routeId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, routeId])
+  @@index([routeId])
+}
+
+model RouteSave {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  userId  String @db.ObjectId
+  routeId String @db.ObjectId
+
+  user  User  @relation(fields: [userId], references: [id])
+  route Route @relation(fields: [routeId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, routeId])
+  @@index([routeId])
+}
+
+type PlaceSnapshot {
+  provider      PlaceProvider
+  externalId    String?
+  contentId     String?
+  contentTypeId String?
+  title         String
+  address       String?
+  lat           Float
+  lng           Float
+  categoryLabel String?
+  categoryName  String?
+  imageUrl      String?
+  regionCode    String?
+  regionLabelKey String?
+}
+
+enum OAuthProvider {
+  GOOGLE
+  APPLE
+}
+
+enum RouteStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+}
+
+enum RouteVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum VisitStatus {
+  PENDING
+  VISITED
+  SKIPPED
+}
+
+enum PlaceProvider {
+  TOUR_API
+  NAVER
+  CUSTOM
+}

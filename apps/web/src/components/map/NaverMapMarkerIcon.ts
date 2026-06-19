@@ -6,6 +6,11 @@ export type MapMarkerBadge = {
   text: string;
 };
 
+export type BadgeMarkerHighlightOptions = {
+  highlighted?: boolean;
+  highlightLabel?: string;
+};
+
 export type PlaceBubbleMarkerVariant = "start" | "place";
 
 export type PlaceBubbleMarkerOptions = {
@@ -75,51 +80,125 @@ function getRankBadgeStyle(rankLabel?: string) {
 
 export function createBadgeMarkerIconHtml(
   badge: MapMarkerBadge,
-  rankLabel?: string
+  rankLabel?: string,
+  options: BadgeMarkerHighlightOptions = {}
 ) {
   const rankBadgeStyle = getRankBadgeStyle(rankLabel);
+  const isHighlighted = Boolean(options.highlighted);
+  const outerSize = isHighlighted ? 54 : 34;
+  const markerSize = isHighlighted ? 38 : 34;
+  const borderWidth = isHighlighted ? 3 : 2;
+  const fontSize = isHighlighted ? 17 : 15;
+  const highlightLabel = options.highlightLabel ?? "오늘";
 
   return `
     <div style="
       position:relative;
-      width:34px;
-      height:34px;
-      border-radius:9999px;
-      border:2px solid ${badge.border};
-      background:${badge.background};
-      color:${badge.text};
+      width:${outerSize}px;
+      height:${outerSize}px;
       display:flex;
       align-items:center;
       justify-content:center;
-      font-size:15px;
-      font-weight:700;
-      line-height:1;
-      box-shadow:0 4px 10px rgba(15,23,42,0.18);
-      letter-spacing:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
       user-select:none;
     ">
-      <span>${escapeHtml(badge.icon)}</span>
       ${
-        rankLabel
+        isHighlighted
+          ? `<style>
+              @keyframes routeoneFestivalPulse {
+                0% { transform:scale(0.78); opacity:0.55; }
+                70% { transform:scale(1.28); opacity:0; }
+                100% { transform:scale(1.28); opacity:0; }
+              }
+            </style>
+            <span style="
+              position:absolute;
+              inset:5px;
+              border-radius:9999px;
+              border:2px solid ${badge.border};
+              background:${badge.background};
+              opacity:0.55;
+              animation:routeoneFestivalPulse 1.6s ease-out infinite;
+            "></span>
+            <span style="
+              position:absolute;
+              inset:6px;
+              border-radius:9999px;
+              border:2px solid ${badge.border};
+              opacity:0.5;
+            "></span>`
+          : ""
+      }
+      <div style="
+        position:relative;
+        width:${markerSize}px;
+        height:${markerSize}px;
+        border-radius:9999px;
+        border:${borderWidth}px solid ${badge.border};
+        background:${badge.background};
+        color:${badge.text};
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:${fontSize}px;
+        font-weight:700;
+        line-height:1;
+        box-shadow:${
+          isHighlighted
+            ? "0 7px 18px rgba(220,38,38,0.32), 0 3px 8px rgba(15,23,42,0.2)"
+            : "0 4px 10px rgba(15,23,42,0.18)"
+        };
+        letter-spacing:0;
+        z-index:1;
+      ">
+        <span>${escapeHtml(badge.icon)}</span>
+        ${
+          rankLabel
+            ? `<span style="
+                position:absolute;
+                top:-8px;
+                right:-8px;
+                min-width:18px;
+                height:18px;
+                border-radius:9999px;
+                border:2px solid ${rankBadgeStyle.border};
+                background:${rankBadgeStyle.background};
+                color:${rankBadgeStyle.text};
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-size:10px;
+                font-weight:800;
+                line-height:1;
+                padding:0 3px;
+                box-shadow:0 3px 8px rgba(15,23,42,0.2);
+              ">${escapeHtml(rankLabel)}</span>`
+            : ""
+        }
+      </div>
+      ${
+        isHighlighted
           ? `<span style="
               position:absolute;
-              top:-8px;
-              right:-8px;
-              min-width:18px;
-              height:18px;
+              left:50%;
+              bottom:0;
+              transform:translateX(-50%);
+              height:15px;
               border-radius:9999px;
-              border:2px solid ${rankBadgeStyle.border};
-              background:${rankBadgeStyle.background};
-              color:${rankBadgeStyle.text};
+              border:1px solid #fecaca;
+              background:#fff1f2;
+              color:#be123c;
               display:flex;
               align-items:center;
               justify-content:center;
-              font-size:10px;
+              font-size:9px;
               font-weight:800;
               line-height:1;
-              padding:0 3px;
-              box-shadow:0 3px 8px rgba(15,23,42,0.2);
-            ">${escapeHtml(rankLabel)}</span>`
+              padding:0 5px;
+              white-space:nowrap;
+              box-shadow:0 2px 6px rgba(190,18,60,0.16);
+              z-index:2;
+            ">${escapeHtml(highlightLabel)}</span>`
           : ""
       }
     </div>

@@ -1,0 +1,67 @@
+fragment RoutePlaceFields on PlaceSnapshot {
+  provider
+  externalId
+  contentId
+  contentTypeId
+  title
+  address
+  lat
+  lng
+  categoryLabel
+  categoryName
+  imageUrl
+  regionCode
+  regionLabelKey
+}
+
+fragment RouteStopFields on RouteStop {
+  id
+  routeId
+  dayId
+  order
+  place {
+    ...RoutePlaceFields
+  }
+  stayMinutes
+  memo
+  visitStatus
+  visitedAt
+}
+
+fragment RouteSummaryFields on Route {
+  id
+  sourceRouteId
+  countryCode
+  primaryRegionCode
+  primaryRegionLabelKey
+  tripDays
+  travelStartDate
+  travelEndDate
+  status
+  visibility
+  totalStopCount
+  completedStopCount
+  likeCount
+  saveCount
+  startedAt
+  completedAt
+  sharedAt
+  createdAt
+  updatedAt
+}
+
+fragment RouteDetailFields on Route {
+  ...RouteSummaryFields
+  days {
+    id
+    routeId
+    dayIndex
+    date
+    stops {
+      ...RouteStopFields
+    }
+  }
+  stops {
+    ...RouteStopFields
+  }
+}

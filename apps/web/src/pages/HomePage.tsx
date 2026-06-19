@@ -9,6 +9,7 @@ import {
   IoMapOutline,
   IoRestaurantOutline,
   IoSearch,
+  IoTicketOutline,
 } from "react-icons/io5";
 import PlaceBottomSheet from "@/features/place-sheet/components/PlaceBottomSheet";
 import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
@@ -30,6 +31,7 @@ import {
 import {
   buildLatestConcentrationMap,
   fetchGangwonAttractions,
+  fetchGangwonFestivals,
   fetchLclsSystemNameMap,
   fetchTouristConcentrationPoints,
   normalizeTouristPlaceNameForMatch,
@@ -127,7 +129,7 @@ type CurrentLocation = {
   lng: number;
 };
 
-type SearchFilter = "all" | RoutePlaceCategory;
+type SearchFilter = "all" | RoutePlaceCategory | "festival";
 type AttractionLoadingStage =
   | "idle"
   | "fetching-places"
@@ -335,6 +337,14 @@ function matchesPlaceFilter(
     return true;
   }
 
+  if (filter === "festival") {
+    return attraction.contentTypeId === "15";
+  }
+
+  if (filter === "tourist" && attraction.contentTypeId === "15") {
+    return false;
+  }
+
   return (
     getRoutePlaceCategory({
       contentTypeId: attraction.contentTypeId,
@@ -383,7 +393,7 @@ function createMapSheetPlaceFromAttraction({
     contentTypeLabel: markerType.contentTypeLabel,
     categoryName: markerType.typeName,
     icon: markerType.badge.icon,
-    images: [attraction.firstImage, attraction.secondImage].filter(Boolean),
+    images: [attraction.firstImage].filter(Boolean),
   };
 }
 
@@ -455,7 +465,7 @@ function HomePage() {
     gcTime: Infinity,
   });
 
-  const attractionsQuery = useQuery({
+const attractionsQuery = useQuery({
     queryKey: ["gangwon-attractions", selectedSigunguCode],
     enabled: mapReady && Boolean(TOUR_API_SERVICE_KEY),
     queryFn: async () => {
@@ -463,10 +473,16 @@ function HomePage() {
       const signguCode = GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode];
       const lclsNameByCode = await fetchLclsSystemNameMap(TOUR_API_SERVICE_KEY);
       lclsNameByCode[CAFE_LCLS_CODE] = lclsNameByCode[CAFE_LCLS_CODE] || "카페";
-      const attractions = await fetchGangwonAttractions(TOUR_API_SERVICE_KEY, {
-        sigunguCode: selectedSigunguCode || undefined,
-        contentTypeIds: ["12", "39"],
-      });
+      const [attractions, festivals] = await Promise.all([
+        fetchGangwonAttractions(TOUR_API_SERVICE_KEY, {
+          sigunguCode: selectedSigunguCode || undefined,
+          contentTypeIds: ["12", "39"],
+        }),
+        fetchGangwonFestivals(TOUR_API_SERVICE_KEY, {
+          sigunguCode: selectedSigunguCode || undefined,
+          lookAheadDays: 90,
+        }).catch(() => [] as GangwonAttraction[]),
+      ]);
       setAttractionLoadingStage("ranking");
       const concentrationPoints = await fetchTouristConcentrationPoints(
         TOUR_API_SERVICE_KEY,
@@ -476,19 +492,22 @@ function HomePage() {
           numOfRows: 2000,
         }
       );
-      const dedupedAttractions = attractions.filter((attraction, index, array) => {
-        const key = `${attraction.title.trim().toLowerCase()}|${attraction.address
-          .trim()
-          .toLowerCase()}`;
-        return (
-          array.findIndex((candidate) => {
-            const candidateKey = `${candidate.title.trim().toLowerCase()}|${candidate.address
-              .trim()
-              .toLowerCase()}`;
-            return candidateKey === key;
-          }) === index
-        );
-      });
+      const attractionsWithFestivals = [...attractions, ...festivals];
+      const dedupedAttractions = attractionsWithFestivals.filter(
+        (attraction, index, array) => {
+          const key = `${attraction.title.trim().toLowerCase()}|${attraction.address
+            .trim()
+            .toLowerCase()}`;
+          return (
+            array.findIndex((candidate) => {
+              const candidateKey = `${candidate.title
+                .trim()
+                .toLowerCase()}|${candidate.address.trim().toLowerCase()}`;
+              return candidateKey === key;
+            }) === index
+          );
+        }
+      );
       const filteredAttractions = dedupedAttractions.filter(
         (attraction) => !shouldHideAttraction(attraction, lclsNameByCode)
       );
@@ -542,6 +561,17 @@ function HomePage() {
     gcTime: 1000 * 60 * 60 * 24,
   });
 
+  const festivalsQuery = useQuery({
+    queryKey: ["gangwon-festivals", "90-days"],
+    enabled: mapReady && Boolean(TOUR_API_SERVICE_KEY),
+    queryFn: async () =>
+      fetchGangwonFestivals(TOUR_API_SERVICE_KEY, {
+        lookAheadDays: 90,
+      }).catch(() => [] as GangwonAttraction[]),
+    staleTime: 1000 * 60 * 60 * 12,
+    gcTime: 1000 * 60 * 60 * 24,
+  });
+
   const boundaryBySigunguCode = boundaryQuery.data ?? {};
   const isBoundaryDataReady = boundaryQuery.isSuccess || boundaryQuery.isError;
   const isAttractionLoading = attractionsQuery.isFetching;
@@ -550,6 +580,22 @@ function HomePage() {
     : attractionsQuery.error instanceof Error
       ? attractionsQuery.error.message
       : null;
+  const festivalCountBySigunguCode = useMemo(() => {
+    const map = new Map<string, number>();
+
+    (festivalsQuery.data ?? []).forEach((festival) => {
+      if (!festival.tourApiSigunguCode) {
+        return;
+      }
+
+      map.set(
+        festival.tourApiSigunguCode,
+        (map.get(festival.tourApiSigunguCode) ?? 0) + 1
+      );
+    });
+
+    return map;
+  }, [festivalsQuery.data]);
   const orderedRegions = useMemo(() => {
     if (!currentLocation) {
       return GANGWON_REGIONS;
@@ -1187,17 +1233,24 @@ function HomePage() {
       const rank = topRankByAttractionId.get(attraction.id) ?? null;
       const touristTrendName =
         trendNameByAttractionId.get(attraction.id) ?? attraction.title;
+      const isTodayFestival = attraction.isTodayFestival;
+      const markerAnchor = isTodayFestival ? 27 : 17;
 
       const marker = new naverMaps.Marker({
         map: mapInstance,
         position,
         title: attraction.title,
-        zIndex: rank ? 2000 - rank : 1100,
+        zIndex: isTodayFestival ? 2600 : rank ? 2000 - rank : 1100,
         icon: {
-          content: rank
-            ? createBadgeMarkerIconHtml(markerType.badge, `${rank}`)
-            : createBadgeMarkerIconHtml(markerType.badge),
-          anchor: new naverMaps.Point(17, 17),
+          content: createBadgeMarkerIconHtml(
+            markerType.badge,
+            rank ? `${rank}` : undefined,
+            {
+              highlighted: isTodayFestival,
+              highlightLabel: "오늘",
+            }
+          ),
+          anchor: new naverMaps.Point(markerAnchor, markerAnchor),
         },
       });
 
@@ -1280,19 +1333,32 @@ function HomePage() {
         <div className="flex w-max min-w-full gap-2 pr-3">
           {orderedRegions.map((region) => {
             const isActive = selectedSigunguCode === region.sigunguCode;
+            const festivalCount =
+              festivalCountBySigunguCode.get(region.sigunguCode) ?? 0;
 
             return (
               <button
                 key={region.sigunguCode || "all"}
                 type="button"
                 onClick={() => setSelectedSigunguCode(region.sigunguCode)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition ${
+                className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold shadow-sm transition ${
                   isActive
                     ? "border-brand-500 bg-brand-600 text-white"
                     : "border-brand-200 bg-white/95 text-slate-600"
                 }`}
               >
-                {region.label}
+                <span>{region.label}</span>
+                {festivalCount > 0 ? (
+                  <span
+                    className={`inline-flex h-5 items-center rounded-full px-1.5 text-[10px] font-bold ${
+                      isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-rose-50 text-rose-700"
+                    }`}
+                  >
+                    🎉 {festivalCount}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -1306,6 +1372,7 @@ function HomePage() {
             { key: "tourist", label: "관광지" },
             { key: "food", label: "음식점" },
             { key: "cafe", label: "카페" },
+            { key: "festival", label: "축제" },
           ].map((filter) => {
             const isActive = searchFilter === filter.key;
             return (
@@ -1328,8 +1395,10 @@ function HomePage() {
                   <IoLocationSharp className="text-sm" />
                 ) : filter.key === "food" ? (
                   <IoRestaurantOutline className="text-sm" />
-                ) : (
+                ) : filter.key === "cafe" ? (
                   <IoCafeOutline className="text-sm" />
+                ) : (
+                  <IoTicketOutline className="text-sm" />
                 )}
                 <span>{filter.label}</span>
               </button>
@@ -1375,7 +1444,7 @@ function HomePage() {
                     ref={searchInputRef}
                     value={searchKeyword}
                     onChange={(event) => setSearchKeyword(event.target.value)}
-                    placeholder="강원도 명소, 카페, 음식점 검색"
+                    placeholder="강원도 명소, 카페, 음식점, 축제 검색"
                     className="ml-2 w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none"
                   />
                   {searchKeyword ? (
@@ -1401,6 +1470,7 @@ function HomePage() {
                   { key: "tourist", label: "관광지" },
                   { key: "food", label: "음식점" },
                   { key: "cafe", label: "카페" },
+                  { key: "festival", label: "축제" },
                 ].map((filter) => {
                   const isActive = searchFilter === filter.key;
                   return (
@@ -1435,7 +1505,13 @@ function HomePage() {
                           thumbnailUrl={item.thumbnailUrl}
                           fallbackIcon={item.icon}
                           distanceLabel={item.distanceLabel}
-                          badgeLabel={item.rank ? `집중률 ${item.rank}위` : null}
+                          badgeLabel={
+                            item.attraction.isTodayFestival
+                              ? "오늘 진행 중"
+                              : item.rank
+                                ? `집중률 ${item.rank}위`
+                                : null
+                          }
                           onClick={() => {
                             appendRecentSearch(searchKeyword);
                             setSearchKeyword(item.attraction.title);

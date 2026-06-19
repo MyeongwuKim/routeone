@@ -1,0 +1,5 @@
+mutation MarkRouteStopVisited($stopId: ID!, $visited: Boolean = true) {
+  markRouteStopVisited(stopId: $stopId, visited: $visited) {
+    ...RouteDetailFields
+  }
+}

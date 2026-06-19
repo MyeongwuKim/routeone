@@ -1,0 +1,5 @@
+query RouteById($id: ID!) {
+  route(id: $id) {
+    ...RouteDetailFields
+  }
+}

@@ -9,9 +9,12 @@ const webRoot = path.resolve(nativeRoot, "../web");
 const webDist = path.join(webRoot, "dist");
 const generatedFile = path.join(nativeRoot, "src/generated/webBundle.ts");
 const shouldSkipBuild = process.argv.includes("--skip-build");
+const packageManager = process.env.npm_execpath?.includes("pnpm")
+  ? "pnpm"
+  : "npm";
 
 if (!shouldSkipBuild) {
-  const result = spawnSync("npm", ["run", "build"], {
+  const result = spawnSync(packageManager, ["run", "build"], {
     cwd: webRoot,
     stdio: "inherit",
     shell: process.platform === "win32"

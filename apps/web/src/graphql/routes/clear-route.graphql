@@ -1,0 +1,5 @@
+mutation ClearRoute($routeId: ID!) {
+  clearRoute(routeId: $routeId) {
+    ...RouteDetailFields
+  }
+}

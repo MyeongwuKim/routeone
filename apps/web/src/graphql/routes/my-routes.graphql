@@ -1,0 +1,5 @@
+query MyRoutes($status: RouteStatus) {
+  myRoutes(status: $status) {
+    ...RouteDetailFields
+  }
+}

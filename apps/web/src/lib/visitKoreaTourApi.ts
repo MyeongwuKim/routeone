@@ -3,6 +3,7 @@ const TOUR_LCLS_CODE_BASE_URL = "/tour-api/B551011/KorService2/lclsSystmCode2";
 const TOUR_DETAIL_COMMON_BASE_URL =
   "/tour-api/B551011/KorService2/detailCommon2";
 const TOUR_DETAIL_IMAGE_BASE_URL = "/tour-api/B551011/KorService2/detailImage2";
+const TOUR_FESTIVAL_BASE_URL = "/tour-api/B551011/KorService2/searchFestival2";
 const TOUR_TATS_CONCENTRATION_BASE_URL =
   "/tour-api/B551011/TatsCnctrRateService/tatsCnctrRatedList";
 const TOUR_LOCATION_BASED_BASE_URL =
@@ -28,11 +29,17 @@ type TourApiItem = {
   addr1?: string;
   contentid?: string;
   contenttypeid?: string;
+  areacode?: string;
   lclsSystm1?: string;
   lclsSystm2?: string;
   lclsSystm3?: string;
   firstimage?: string;
   firstimage2?: string;
+  eventstartdate?: string;
+  eventenddate?: string;
+  eventStartDate?: string;
+  eventEndDate?: string;
+  sigungucode?: string;
   overview?: string;
   originimgurl?: string;
   smallimageurl?: string;
@@ -88,6 +95,10 @@ export type GangwonAttraction = {
   lclsSystm3: string;
   firstImage: string;
   secondImage: string;
+  eventStartDate: string;
+  eventEndDate: string;
+  isTodayFestival: boolean;
+  tourApiSigunguCode: string;
 };
 
 export type TourPlaceDetail = {
@@ -133,6 +144,12 @@ export type NearbyTouristPlace = {
 type FetchGangwonAttractionsOptions = {
   sigunguCode?: string;
   contentTypeIds?: string[];
+};
+
+type FetchGangwonFestivalsOptions = {
+  sigunguCode?: string;
+  today?: Date;
+  lookAheadDays?: number;
 };
 
 type FetchTouristConcentrationOptions = {
@@ -229,6 +246,69 @@ function normalizeYmd(rawValue: unknown) {
   return digitsOnly;
 }
 
+function formatTourApiYmd(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+
+  return `${year}${month}${day}`;
+}
+
+function addDateDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function isYmdInRange(ymd: string, startYmd: string, endYmd: string) {
+  if (!ymd || !startYmd) {
+    return false;
+  }
+
+  const resolvedEndYmd = endYmd || startYmd;
+  return startYmd <= ymd && ymd <= resolvedEndYmd;
+}
+
+const GANGWON_SIGUNGU_CODE_BY_NAME: Record<string, string> = {
+  강릉: "1",
+  고성: "2",
+  동해: "3",
+  삼척: "4",
+  속초: "5",
+  양구: "6",
+  양양: "7",
+  영월: "8",
+  원주: "9",
+  인제: "10",
+  정선: "11",
+  철원: "12",
+  춘천: "13",
+  태백: "14",
+  평창: "15",
+  홍천: "16",
+  화천: "17",
+  횡성: "18",
+};
+
+function inferGangwonSigunguCode(address?: string) {
+  if (!address || !/강원/.test(address)) {
+    return "";
+  }
+
+  const matchedName = Object.keys(GANGWON_SIGUNGU_CODE_BY_NAME).find((name) =>
+    new RegExp(`${name}(시|군)`).test(address)
+  );
+
+  return matchedName ? GANGWON_SIGUNGU_CODE_BY_NAME[matchedName] : "";
+}
+
+function isGangwonTourApiItem(item: TourApiItem) {
+  return (
+    item.areacode === GANGWON_AREA_CODE ||
+    Boolean(inferGangwonSigunguCode(item.addr1))
+  );
+}
+
 function readNumberFromUnknown(
   source: Record<string, unknown>,
   keys: string[]
@@ -257,6 +337,56 @@ function readStringFromUnknown(
     }
   }
   return "";
+}
+
+function parseGangwonAttraction(
+  item: TourApiItem,
+  contentTypeId: string,
+  index: number,
+  options?: {
+    todayYmd?: string;
+    forceTodayFestival?: boolean;
+  }
+) {
+  const lat = Number(item.mapy);
+  const lng = Number(item.mapx);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+
+  const eventStartDate =
+    normalizeYmd(item.eventstartdate) ?? normalizeYmd(item.eventStartDate) ?? "";
+  const eventEndDate =
+    normalizeYmd(item.eventenddate) ?? normalizeYmd(item.eventEndDate) ?? "";
+  const resolvedContentTypeId = item.contenttypeid ?? contentTypeId;
+  const isTodayFestival =
+    resolvedContentTypeId === "15" &&
+    (options?.forceTodayFestival ||
+      Boolean(
+        options?.todayYmd &&
+          isYmdInRange(options.todayYmd, eventStartDate, eventEndDate)
+      ));
+
+  return {
+    id:
+      item.contentid ??
+      `${item.title ?? "spot"}-${resolvedContentTypeId}-${index}`,
+    title: item.title ?? "이름 없음",
+    address: item.addr1 ?? "주소 정보 없음",
+    lat,
+    lng,
+    contentTypeId: resolvedContentTypeId,
+    lclsSystm1: item.lclsSystm1 ?? "",
+    lclsSystm2: item.lclsSystm2 ?? "",
+    lclsSystm3: item.lclsSystm3 ?? "",
+    firstImage: item.firstimage ?? "",
+    secondImage: item.firstimage2 ?? "",
+    eventStartDate,
+    eventEndDate,
+    isTodayFestival,
+    tourApiSigunguCode: item.sigungucode || inferGangwonSigunguCode(item.addr1),
+  } satisfies GangwonAttraction;
 }
 
 function normalizeTouristName(rawName: string) {
@@ -521,28 +651,7 @@ export async function fetchGangwonAttractions(
 
       return aggregatedItems
         .map((item, index): GangwonAttraction | null => {
-          const lat = Number(item.mapy);
-          const lng = Number(item.mapx);
-
-          if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-            return null;
-          }
-
-          return {
-            id:
-              item.contentid ??
-              `${item.title ?? "spot"}-${contentTypeId}-${index}`,
-            title: item.title ?? "이름 없음",
-            address: item.addr1 ?? "주소 정보 없음",
-            lat,
-            lng,
-            contentTypeId: item.contenttypeid ?? contentTypeId,
-            lclsSystm1: item.lclsSystm1 ?? "",
-            lclsSystm2: item.lclsSystm2 ?? "",
-            lclsSystm3: item.lclsSystm3 ?? "",
-            firstImage: item.firstimage ?? "",
-            secondImage: item.firstimage2 ?? "",
-          };
+          return parseGangwonAttraction(item, contentTypeId, index);
         })
         .filter((item): item is GangwonAttraction => item !== null);
     })
@@ -555,6 +664,117 @@ export async function fetchGangwonAttractions(
       unique.set(uniqueKey, attraction);
     }
   });
+
+  return [...unique.values()];
+}
+
+export async function fetchGangwonFestivals(
+  serviceKey: string,
+  options: FetchGangwonFestivalsOptions = {}
+) {
+  if (!serviceKey) {
+    throw new Error("VisitKorea service key is missing.");
+  }
+
+  const today = options.today ?? new Date();
+  const todayYmd = formatTourApiYmd(today);
+  const lookAheadDays = Math.max(0, Math.min(366, options.lookAheadDays ?? 90));
+  const rangeEndYmd = formatTourApiYmd(addDateDays(today, lookAheadDays));
+  const searchStartYmd = formatTourApiYmd(addDateDays(today, -366));
+  const pageSize = 200;
+  const maxPagesSafetyLimit = 20;
+  const aggregatedItems: TourApiItem[] = [];
+  let totalPages = Number.POSITIVE_INFINITY;
+
+  for (let pageNo = 1; pageNo <= totalPages; pageNo += 1) {
+    if (pageNo > maxPagesSafetyLimit) {
+      break;
+    }
+
+    const query = new URLSearchParams({
+      serviceKey: normalizeServiceKey(serviceKey),
+      MobileOS: "ETC",
+      MobileApp: "RouteOne",
+      _type: "json",
+      numOfRows: `${pageSize}`,
+      pageNo: `${pageNo}`,
+      arrange: "A",
+      eventStartDate: searchStartYmd,
+    });
+
+    const response = await fetch(
+      `${TOUR_FESTIVAL_BASE_URL}?${query.toString()}`
+    );
+
+    if (!response.ok) {
+      const errorText = (await response.text()).trim();
+      throw new Error(
+        `Tour festival request failed: ${response.status}${
+          errorText ? ` (${errorText})` : ""
+        }`
+      );
+    }
+
+    const data = (await response.json()) as TourApiResponse;
+    const resultCode = data.response?.header?.resultCode;
+
+    if (resultCode && resultCode !== "0000") {
+      const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
+      throw new Error(`Tour festival API error: ${resultCode} ${resultMsg}`);
+    }
+
+    const items = toArray(data.response?.body?.items?.item);
+    if (items.length === 0) {
+      break;
+    }
+    aggregatedItems.push(...items);
+
+    const totalCount = Number(data.response?.body?.totalCount ?? 0);
+    if (Number.isFinite(totalCount) && totalCount > 0) {
+      totalPages = Math.ceil(totalCount / pageSize);
+    }
+
+    if (items.length < pageSize) {
+      break;
+    }
+  }
+
+  const unique = new Map<string, GangwonAttraction>();
+  aggregatedItems
+    .filter(isGangwonTourApiItem)
+    .map((item, index) =>
+      parseGangwonAttraction(item, "15", index, {
+        todayYmd,
+        forceTodayFestival: false,
+      })
+    )
+    .filter((item): item is GangwonAttraction => item !== null)
+    .filter((festival) => {
+      if (!festival.eventStartDate) {
+        return false;
+      }
+
+      const eventEndDate = festival.eventEndDate || festival.eventStartDate;
+      return festival.eventStartDate <= rangeEndYmd && eventEndDate >= todayYmd;
+    })
+    .filter(
+      (festival) =>
+        !options.sigunguCode ||
+        festival.tourApiSigunguCode === options.sigunguCode
+    )
+    .forEach((festival) => {
+      const uniqueKey = `${festival.id}-${festival.contentTypeId}`;
+      if (!unique.has(uniqueKey)) {
+        unique.set(uniqueKey, {
+          ...festival,
+          isTodayFestival: isYmdInRange(
+            todayYmd,
+            festival.eventStartDate,
+            festival.eventEndDate
+          ),
+        });
+      }
+    });
 
   return [...unique.values()];
 }

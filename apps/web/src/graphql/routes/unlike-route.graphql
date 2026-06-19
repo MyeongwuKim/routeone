@@ -1,0 +1,9 @@
+mutation UnlikeRoute($routeId: ID!) {
+  unlikeRoute(routeId: $routeId) {
+    liked
+    saved
+    route {
+      ...RouteSummaryFields
+    }
+  }
+}

@@ -1,0 +1,5 @@
+query SharedRoutes($regionCode: String, $limit: Int) {
+  sharedRoutes(regionCode: $regionCode, limit: $limit) {
+    ...RouteSummaryFields
+  }
+}

@@ -1,0 +1,9 @@
+mutation UnsaveRoute($routeId: ID!) {
+  unsaveRoute(routeId: $routeId) {
+    saved
+    liked
+    route {
+      ...RouteSummaryFields
+    }
+  }
+}

@@ -30,6 +30,11 @@ type NativeFetchResponse =
       error: string;
     };
 
+type NativeFetchTarget = {
+  url: string;
+  headers: Record<string, string>;
+};
+
 const WEBVIEW_BASE_URL = "https://routeone.native";
 const TOUR_API_ORIGIN = "https://apis.data.go.kr";
 const NAVER_DIRECTIONS_ORIGIN = "https://maps.apigw.ntruss.com";
@@ -178,7 +183,7 @@ function isNativeFetchRequest(value: unknown): value is NativeFetchRequest {
   );
 }
 
-function resolveNativeFetchTarget(urlValue: string) {
+function resolveNativeFetchTarget(urlValue: string): NativeFetchTarget | null {
   const url = new URL(urlValue, WEBVIEW_BASE_URL);
 
   if (url.pathname.startsWith("/tour-api/")) {
