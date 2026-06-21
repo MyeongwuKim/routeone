@@ -3,17 +3,23 @@ import { gql } from "graphql-tag";
 import type { GraphQLContext } from "../../context.js";
 import { requireUser } from "../../lib/auth.js";
 import {
+  appendRouteDays,
   clearRoute,
   cloneRoute,
   createRoute,
+  deleteRoute,
+  deleteRouteDay,
   getPublicRoutes,
   getSavedRoutes,
   markRouteStopVisited,
+  reorderRouteStops,
   setRouteLike,
   setRouteSave,
   shareRoute,
   type CloneRouteInput,
+  type AppendRouteDaysInput,
   type CreateRouteInput,
+  type ReorderRouteStopsInput,
 } from "./route.service.js";
 
 export const routeTypeDefs = gql`
@@ -112,6 +118,10 @@ export const routeTypeDefs = gql`
     saved: Boolean!
   }
 
+  type DeletedRoutePayload {
+    id: ID!
+  }
+
   input PlaceSnapshotInput {
     provider: PlaceProvider!
     externalId: String
@@ -151,6 +161,20 @@ export const routeTypeDefs = gql`
     startImmediately: Boolean
   }
 
+  input AppendRouteDaysInput {
+    routeId: ID!
+    tripDays: Int!
+    travelStartDate: DateTime
+    travelEndDate: DateTime
+    stops: [CreateRouteStopInput!]
+  }
+
+  input ReorderRouteStopsInput {
+    routeId: ID!
+    dayId: ID!
+    stopIds: [ID!]!
+  }
+
   extend type Query {
     myRoutes(status: RouteStatus): [Route!]!
     savedRoutes: [Route!]!
@@ -160,7 +184,11 @@ export const routeTypeDefs = gql`
 
   extend type Mutation {
     createRoute(input: CreateRouteInput!): Route!
+    appendRouteDays(input: AppendRouteDaysInput!): Route!
+    deleteRoute(routeId: ID!): DeletedRoutePayload!
+    deleteRouteDay(dayId: ID!): Route!
     markRouteStopVisited(stopId: ID!, visited: Boolean = true): Route!
+    reorderRouteStops(input: ReorderRouteStopsInput!): Route!
     clearRoute(routeId: ID!): Route!
     shareRoute(routeId: ID!): Route!
     likeRoute(routeId: ID!): RouteInteractionPayload!
@@ -188,6 +216,10 @@ type CreateRouteArgs = {
   input: CreateRouteInput;
 };
 
+type AppendRouteDaysArgs = {
+  input: AppendRouteDaysInput;
+};
+
 type MarkRouteStopVisitedArgs = {
   stopId: string;
   visited?: boolean | null;
@@ -197,8 +229,16 @@ type RouteIdArgs = {
   routeId: string;
 };
 
+type DayIdArgs = {
+  dayId: string;
+};
+
 type CloneRouteArgs = {
   input: CloneRouteInput;
+};
+
+type ReorderRouteStopsArgs = {
+  input: ReorderRouteStopsInput;
 };
 
 export const routeResolvers = {
@@ -265,6 +305,22 @@ export const routeResolvers = {
       const user = requireUser(context);
       return createRoute(context.prisma, user, args.input);
     },
+    appendRouteDays(
+      _parent: unknown,
+      args: AppendRouteDaysArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return appendRouteDays(context.prisma, user, args.input);
+    },
+    deleteRoute(_parent: unknown, args: RouteIdArgs, context: GraphQLContext) {
+      const user = requireUser(context);
+      return deleteRoute(context.prisma, user, args.routeId);
+    },
+    deleteRouteDay(_parent: unknown, args: DayIdArgs, context: GraphQLContext) {
+      const user = requireUser(context);
+      return deleteRouteDay(context.prisma, user, args.dayId);
+    },
     markRouteStopVisited(
       _parent: unknown,
       args: MarkRouteStopVisitedArgs,
@@ -277,6 +333,14 @@ export const routeResolvers = {
         args.stopId,
         args.visited ?? true
       );
+    },
+    reorderRouteStops(
+      _parent: unknown,
+      args: ReorderRouteStopsArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return reorderRouteStops(context.prisma, user, args.input);
     },
     clearRoute(_parent: unknown, args: RouteIdArgs, context: GraphQLContext) {
       const user = requireUser(context);

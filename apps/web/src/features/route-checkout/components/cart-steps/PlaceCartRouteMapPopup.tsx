@@ -91,7 +91,7 @@ function buildRouteMapPoints(day: PlannedRouteDay): RouteMapPoint[] {
       ? [
           {
             id: "current-location",
-            title: "내 위치",
+            title: "출발 위치",
             subtitle: "출발",
             icon: "📍",
             sequenceLabel: "S",
@@ -977,7 +977,7 @@ function PlaceCartRouteMapPopup({
         </header>
 
         <div className="relative min-h-0 flex-1">
-          <div ref={mapRef} className="h-full w-full" />
+          <div ref={mapRef} className="naver-map-root" />
           {hasComparisonRoute ? (
             <div className="absolute inset-x-4 top-4 rounded-2xl border border-brand-100 bg-white/95 p-1 shadow-sm backdrop-blur">
               <div className="grid grid-cols-3 gap-1">

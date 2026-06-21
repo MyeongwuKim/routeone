@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   IoArrowBack,
@@ -8,6 +14,9 @@ import {
   IoClose,
   IoInformationCircleOutline,
   IoNavigate,
+  IoCallOutline,
+  IoCalendarClearOutline,
+  IoTimeOutline,
 } from "react-icons/io5";
 import { usePlaceSheetLayout } from "../hooks/usePlaceSheetLayout";
 import PlaceTrendChart from "./PlaceTrendChart";
@@ -125,6 +134,51 @@ function formatNearbyDistance(distanceM: number | null) {
   return `${Math.round(distanceM)}m`;
 }
 
+function PlaceInfoRow({
+  label,
+  value,
+  icon = "time",
+}: {
+  label: string;
+  value: string;
+  icon?: "time" | "calendar" | "call";
+}) {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <div className="flex min-h-16 items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/70 px-3 py-3 text-xs">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-base text-brand-600 shadow-sm">
+        {icon === "call" ? (
+          <IoCallOutline />
+        ) : icon === "calendar" ? (
+          <IoCalendarClearOutline />
+        ) : (
+          <IoTimeOutline />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-black text-brand-700">{label}</p>
+        <p className="mt-1 line-clamp-2 leading-5 text-slate-600">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function CompactHoursBadge({ value }: { value: string }) {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <span className="inline-flex max-w-[10rem] items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100">
+      <IoTimeOutline className="shrink-0 text-sm" />
+      <span className="truncate">{value}</span>
+    </span>
+  );
+}
+
 function getNearbyPlaceCategoryLabel(place: NearbyTouristPlace) {
   return getPlaceCategoryLabel(place);
 }
@@ -183,6 +237,8 @@ function PlaceBottomSheet() {
   const { savedPlaceIds, toggleSavedPlace } = usePlaceCartStore();
   const showToast = useUiToastStore((state) => state.showToast);
   const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null);
+  const imageSwipeStartXRef = useRef<number | null>(null);
 
   const previewMapRef = useRef<HTMLDivElement | null>(null);
   const previewMapInstanceRef = useRef<any>(null);
@@ -232,6 +288,9 @@ function PlaceBottomSheet() {
       return {
         overview: detail.overview,
         images: loadedImages,
+        operatingHours: detail.operatingHours,
+        restDate: detail.restDate,
+        infoCenter: detail.infoCenter,
       };
     },
     staleTime: 1000 * 60 * 60 * 24,
@@ -330,6 +389,9 @@ function PlaceBottomSheet() {
 
   const detailOverview = detailQuery.data?.overview ?? "";
   const detailImages = detailQuery.data?.images ?? [];
+  const detailOperatingHours = detailQuery.data?.operatingHours ?? "";
+  const detailRestDate = detailQuery.data?.restDate ?? "";
+  const detailInfoCenter = detailQuery.data?.infoCenter ?? "";
   const isSelectedPlaceDetailReady =
     !hasTourApiServiceKey ||
     (Boolean(selectedPlaceKey) &&
@@ -429,6 +491,49 @@ function PlaceBottomSheet() {
       "_blank",
       "noopener,noreferrer"
     );
+  };
+  const closeImageViewer = () => setActiveImageIndex(null);
+  const showPreviousImage = () => {
+    setActiveImageIndex((index) => {
+      if (index == null || activeImageList.length === 0) {
+        return index;
+      }
+
+      return (index - 1 + activeImageList.length) % activeImageList.length;
+    });
+  };
+  const showNextImage = () => {
+    setActiveImageIndex((index) => {
+      if (index == null || activeImageList.length === 0) {
+        return index;
+      }
+
+      return (index + 1) % activeImageList.length;
+    });
+  };
+  const handleImageViewerPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    imageSwipeStartXRef.current = event.clientX;
+  };
+  const handleImageViewerPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const startX = imageSwipeStartXRef.current;
+    imageSwipeStartXRef.current = null;
+
+    if (startX == null) {
+      return;
+    }
+
+    const deltaX = event.clientX - startX;
+    const swipeThreshold = 48;
+
+    if (Math.abs(deltaX) < swipeThreshold) {
+      return;
+    }
+
+    if (deltaX < 0) {
+      showNextImage();
+    } else {
+      showPreviousImage();
+    }
   };
 
   const handleSelectNearbyPlace = (place: NearbyTouristPlace) => {
@@ -669,9 +774,14 @@ function PlaceBottomSheet() {
                   <p className="font-trip text-[30px] leading-[1.15] text-slate-900">
                     {selectedPlace.title}
                   </p>
-                  <p className="mt-3 text-sm font-semibold text-brand-700">
-                    {selectedPlace.icon} {selectedPlace.contentTypeLabel}
-                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-brand-700">
+                      {selectedPlace.icon} {selectedPlace.contentTypeLabel}
+                    </p>
+                    {isSelectedPlaceDetailReady ? (
+                      <CompactHoursBadge value={detailOperatingHours} />
+                    ) : null}
+                  </div>
                   {shouldShowCategoryName ? (
                     <p className="mt-1 text-sm text-slate-600">
                       {selectedPlace.categoryName}
@@ -731,7 +841,15 @@ function PlaceBottomSheet() {
                           key={`${imageUrl}-${index}`}
                           src={imageUrl}
                           alt={`${selectedPlace.title} 이미지 ${index + 1}`}
-                          className="h-44 w-40 shrink-0 snap-start rounded-2xl border border-brand-100 bg-brand-50 object-cover"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setActiveImageIndex(index)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              setActiveImageIndex(index);
+                            }
+                          }}
+                          className="h-44 w-40 shrink-0 snap-start cursor-zoom-in rounded-2xl border border-brand-100 bg-brand-50 object-cover"
                         />
                       ))}
                       <div className="flex h-44 w-40 shrink-0 snap-start flex-col items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 text-center text-sm text-slate-500">
@@ -810,6 +928,20 @@ function PlaceBottomSheet() {
                       관광공사 오픈 API에서 제공하는 상세 설명이 아직 없습니다.
                     </div>
                   )}
+                  {detailRestDate || detailInfoCenter ? (
+                    <div className="mt-3 grid gap-2">
+                      <PlaceInfoRow
+                        label="휴무일"
+                        value={detailRestDate}
+                        icon="calendar"
+                      />
+                      <PlaceInfoRow
+                        label="문의"
+                        value={detailInfoCenter}
+                        icon="call"
+                      />
+                    </div>
+                  ) : null}
                 </div>
 
                 <PlaceTrendChart
@@ -969,6 +1101,77 @@ function PlaceBottomSheet() {
             </p>
           </section>
         </div>
+      ) : null}
+
+      {activeImageIndex != null && activeImageList[activeImageIndex] ? (
+        <section className="fixed inset-0 z-[2700] flex items-center justify-center bg-white/35 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
+          <button
+            type="button"
+            aria-label="이미지 보기 닫기"
+            onClick={closeImageViewer}
+            className="absolute inset-0 cursor-zoom-out"
+          />
+
+          <div
+            className="relative z-10 flex h-full w-full max-w-3xl touch-pan-y flex-col items-center justify-center"
+            onPointerDown={handleImageViewerPointerDown}
+            onPointerUp={handleImageViewerPointerUp}
+            onPointerCancel={() => {
+              imageSwipeStartXRef.current = null;
+            }}
+          >
+            <div className="w-full overflow-hidden rounded-3xl">
+              <div
+                className="flex transition-transform duration-300 ease-out"
+                style={{
+                  transform: `translateX(-${activeImageIndex * 100}%)`,
+                }}
+              >
+                {activeImageList.map((imageUrl, index) => (
+                  <div
+                    key={`${imageUrl}-viewer-${index}`}
+                    className="flex min-w-full items-center justify-center"
+                  >
+                    <img
+                      src={imageUrl}
+                      alt={`${selectedPlace.title} 이미지 ${index + 1}`}
+                      draggable={false}
+                      className="max-h-[78dvh] max-w-full select-none rounded-3xl object-contain shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4 rounded-full bg-slate-900/45 px-3 py-1 text-xs font-bold text-white shadow-sm backdrop-blur">
+              {activeImageIndex + 1} / {activeImageList.length}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            aria-label="이전 이미지"
+            onClick={showPreviousImage}
+            className="absolute left-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/65 text-2xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            aria-label="다음 이미지"
+            onClick={showNextImage}
+            className="absolute right-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/65 text-2xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80"
+          >
+            ›
+          </button>
+          <button
+            type="button"
+            aria-label="이미지 보기 닫기"
+            onClick={closeImageViewer}
+            className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex size-10 items-center justify-center rounded-full bg-white/65 text-xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80"
+          >
+            <IoClose />
+          </button>
+        </section>
       ) : null}
     </>
   );

@@ -1,0 +1,5 @@
+mutation DeleteRouteDay($dayId: ID!) {
+  deleteRouteDay(dayId: $dayId) {
+    ...RouteDetailFields
+  }
+}

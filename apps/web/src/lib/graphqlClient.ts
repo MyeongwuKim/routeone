@@ -1,5 +1,6 @@
 import { print } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
+import { getAuthToken } from "./authToken";
 
 const GRAPHQL_ENDPOINT =
   import.meta.env.VITE_GRAPHQL_ENDPOINT ?? "/graphql";
@@ -15,11 +16,18 @@ export async function requestGraphQL<TResult, TVariables>(
   document: TypedDocumentNode<TResult, TVariables>,
   variables?: TVariables
 ) {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const token = getAuthToken();
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(GRAPHQL_ENDPOINT, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({
       query: print(document),
       variables,

@@ -10,6 +10,7 @@ import {
   getRoutePlaceCategory,
   type RoutePlaceCategory,
 } from "@/lib/placeCategory";
+import { hasDuplicatePlace } from "@/lib/placeDuplicate";
 import type { MapSheetPlace } from "@/types/place";
 import type { RouteInsertRequest } from "./routePlanTypes";
 
@@ -18,7 +19,7 @@ type InsertFilter = "all" | RoutePlaceCategory;
 type PlaceCartRouteInsertSheetProps = {
   request: RouteInsertRequest;
   candidatePlaces: MapSheetPlace[];
-  excludedPlaceIds: string[];
+  excludedPlaceKeys: string[];
   onClose: () => void;
   onSelectPlace: (place: MapSheetPlace, request: RouteInsertRequest) => void;
   onRequestSearchPlace: () => void;
@@ -85,22 +86,22 @@ function getSegmentFitScore(place: MapSheetPlace, request: RouteInsertRequest) {
 function PlaceCartRouteInsertSheet({
   request,
   candidatePlaces,
-  excludedPlaceIds,
+  excludedPlaceKeys,
   onClose,
   onSelectPlace,
   onRequestSearchPlace,
 }: PlaceCartRouteInsertSheetProps) {
   const [activeFilter, setActiveFilter] = useState<InsertFilter>("all");
   const [keyword, setKeyword] = useState("");
-  const excludedIdSet = useMemo(
-    () => new Set(excludedPlaceIds),
-    [excludedPlaceIds]
+  const excludedKeySet = useMemo(
+    () => new Set(excludedPlaceKeys),
+    [excludedPlaceKeys]
   );
   const keywordText = keyword.trim().toLowerCase();
   const recommendedPlaces = useMemo(
     () =>
       candidatePlaces
-        .filter((place) => !excludedIdSet.has(place.id))
+        .filter((place) => !hasDuplicatePlace(place, excludedKeySet))
         .filter((place) => {
           if (activeFilter === "all") {
             return true;
@@ -123,7 +124,7 @@ function PlaceCartRouteInsertSheet({
         }))
         .sort((a, b) => a.fit.score - b.fit.score)
         .slice(0, 8),
-    [activeFilter, candidatePlaces, excludedIdSet, keywordText, request]
+    [activeFilter, candidatePlaces, excludedKeySet, keywordText, request]
   );
 
   return (

@@ -1,19 +1,25 @@
 import {
+  AppendRouteDaysDocument,
   ClearRouteDocument,
   CloneRouteDocument,
   CreateRouteDocument,
+  DeleteRouteDayDocument,
+  DeleteRouteDocument,
   LikeRouteDocument,
   MarkRouteStopVisitedDocument,
   MyRoutesDocument,
+  ReorderRouteStopsDocument,
   RouteByIdDocument,
   SaveRouteDocument,
   ShareRouteDocument,
   SharedRoutesDocument,
   UnlikeRouteDocument,
   UnsaveRouteDocument,
+  type AppendRouteDaysInput,
   type CloneRouteInput,
   type CreateRouteInput,
   type MyRoutesQueryVariables,
+  type ReorderRouteStopsInput,
   type SharedRoutesQueryVariables,
 } from "@/generated/graphql";
 import { requestGraphQL } from "@/lib/graphqlClient";
@@ -37,10 +43,30 @@ export const routeApi = {
       input,
     });
   },
+  appendRouteDays(input: AppendRouteDaysInput) {
+    return requestGraphQL(AppendRouteDaysDocument, {
+      input,
+    });
+  },
+  deleteRoute(routeId: RouteId) {
+    return requestGraphQL(DeleteRouteDocument, {
+      routeId,
+    });
+  },
+  deleteRouteDay(dayId: RouteId) {
+    return requestGraphQL(DeleteRouteDayDocument, {
+      dayId,
+    });
+  },
   markRouteStopVisited(stopId: RouteId, visited = true) {
     return requestGraphQL(MarkRouteStopVisitedDocument, {
       stopId,
       visited,
+    });
+  },
+  reorderRouteStops(input: ReorderRouteStopsInput) {
+    return requestGraphQL(ReorderRouteStopsDocument, {
+      input,
     });
   },
   clearRoute(routeId: RouteId) {

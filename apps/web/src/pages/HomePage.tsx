@@ -42,6 +42,7 @@ import {
   type MapSheetMode,
 } from "@/stores/mapSheetStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
+import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
 import type { MapSheetPlace } from "@/types/place";
 
@@ -135,6 +136,9 @@ type AttractionLoadingStage =
   | "fetching-places"
   | "ranking"
   | "rendering-markers";
+
+const OVERLAPPING_MARKER_DISTANCE_METERS = 36;
+const OVERLAPPING_MARKER_OFFSET_DEGREES = 0.0002;
 
 const CONTENT_TYPE_BADGES: Record<string, MapMarkerBadge> = {
   "12": {
@@ -306,6 +310,78 @@ function formatDistanceLabel(distanceM: number | null) {
   return `${Math.round(distanceM)}m`;
 }
 
+function getAttractionMarkerKey(attraction: GangwonAttraction) {
+  return `${attraction.id}-${attraction.contentTypeId}`;
+}
+
+function buildSpreadMarkerPositionMap(attractions: GangwonAttraction[]) {
+  const groups: Array<{
+    anchor: CurrentLocation;
+    attractions: GangwonAttraction[];
+  }> = [];
+
+  attractions.forEach((attraction) => {
+    const position = {
+      lat: attraction.lat,
+      lng: attraction.lng,
+    };
+    const overlappingGroup = groups.find(
+      (group) =>
+        calculateDistanceMeters(group.anchor, position) <
+        OVERLAPPING_MARKER_DISTANCE_METERS
+    );
+
+    if (overlappingGroup) {
+      overlappingGroup.attractions.push(attraction);
+      return;
+    }
+
+    groups.push({
+      anchor: position,
+      attractions: [attraction],
+    });
+  });
+
+  const positionByKey = new Map<string, CurrentLocation>();
+
+  groups.forEach((group) => {
+    if (group.attractions.length === 1) {
+      const [attraction] = group.attractions;
+
+      if (!attraction) {
+        return;
+      }
+
+      positionByKey.set(getAttractionMarkerKey(attraction), {
+        lat: attraction.lat,
+        lng: attraction.lng,
+      });
+      return;
+    }
+
+    const lngScale = Math.max(
+      0.4,
+      Math.cos((group.anchor.lat * Math.PI) / 180)
+    );
+
+    group.attractions.forEach((attraction, index) => {
+      const angle =
+        -Math.PI / 2 + (2 * Math.PI * index) / group.attractions.length;
+
+      positionByKey.set(getAttractionMarkerKey(attraction), {
+        lat:
+          attraction.lat +
+          Math.sin(angle) * OVERLAPPING_MARKER_OFFSET_DEGREES,
+        lng:
+          attraction.lng +
+          (Math.cos(angle) * OVERLAPPING_MARKER_OFFSET_DEGREES) / lngScale,
+      });
+    });
+  });
+
+  return positionByKey;
+}
+
 function getTouristNameMatchScore(placeTitle: string, touristName: string) {
   const normalizedPlace = normalizeTouristPlaceNameForMatch(placeTitle);
   const normalizedTourist = normalizeTouristPlaceNameForMatch(touristName);
@@ -429,6 +505,10 @@ function HomePage() {
   } = usePlaceCartStore();
   const showLoading = useUiLoadingStore((state) => state.showLoading);
   const hideLoading = useUiLoadingStore((state) => state.hideLoading);
+  const appendTarget = useRouteEditFlowStore((state) => state.appendTarget);
+  const clearAppendTarget = useRouteEditFlowStore(
+    (state) => state.clearAppendTarget
+  );
 
   const [selectedSigunguCode, setSelectedSigunguCode] = useState<string>(
     GANGWON_REGIONS[0].sigunguCode
@@ -441,6 +521,8 @@ function HomePage() {
   );
   const [attractionLoadingStage, setAttractionLoadingStage] =
     useState<AttractionLoadingStage>("idle");
+  const [hasRenderedAttractionMarkers, setHasRenderedAttractionMarkers] =
+    useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([
     "경포해변",
     "속초해수욕장",
@@ -580,6 +662,13 @@ const attractionsQuery = useQuery({
     : attractionsQuery.error instanceof Error
       ? attractionsQuery.error.message
       : null;
+  const shouldShowAttractionLoader =
+    Boolean(TOUR_API_SERVICE_KEY) &&
+    !mapError &&
+    (attractionLoadingStage !== "idle" ||
+      !mapReady ||
+      (attractionsQuery.isFetching && !hasRenderedAttractionMarkers) ||
+      Boolean(attractionsQuery.data && !hasRenderedAttractionMarkers));
   const festivalCountBySigunguCode = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -798,12 +887,25 @@ const attractionsQuery = useQuery({
   }, [isSearchPopupOpen]);
 
   useEffect(() => {
-    if (attractionLoadingStage === "idle" || isSearchPopupOpen) {
+    if (!shouldShowAttractionLoader || isSearchPopupOpen) {
       hideLoading();
       return;
     }
 
-    if (attractionLoadingStage === "fetching-places") {
+    if (!mapReady) {
+      showLoading({
+        title: "지도를 준비하고 있어요",
+        description: "지도를 다시 연결하는 중",
+        footerText: "감자 분석 모드 진행 중",
+        animation: "map-rendering",
+      });
+      return;
+    }
+
+    if (
+      attractionLoadingStage === "fetching-places" ||
+      (attractionsQuery.isFetching && !attractionsQuery.data)
+    ) {
       showLoading({
         title: "장소 데이터를 찾고 있어요",
         description: "지도를 보면서 장소 후보를 찾는 중",
@@ -813,7 +915,7 @@ const attractionsQuery = useQuery({
       return;
     }
 
-    if (attractionLoadingStage === "ranking") {
+    if (attractionLoadingStage === "ranking" || attractionsQuery.isFetching) {
       showLoading({
         title: "순위를 매기고 있어요",
         description: "방문자 집중률 데이터를 정리하는 중",
@@ -829,7 +931,16 @@ const attractionsQuery = useQuery({
       footerText: "감자 분석 모드 진행 중",
       animation: "map-rendering",
     });
-  }, [attractionLoadingStage, hideLoading, isSearchPopupOpen, showLoading]);
+  }, [
+    attractionLoadingStage,
+    attractionsQuery.data,
+    attractionsQuery.isFetching,
+    hideLoading,
+    isSearchPopupOpen,
+    mapReady,
+    shouldShowAttractionLoader,
+    showLoading,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -1203,6 +1314,7 @@ const attractionsQuery = useQuery({
     }
 
     closeSheet();
+    setHasRenderedAttractionMarkers(false);
     clearMarkers();
   }, [closeSheet, mapReady, selectedSigunguCode]);
 
@@ -1216,17 +1328,35 @@ const attractionsQuery = useQuery({
     }
 
     setAttractionLoadingStage("rendering-markers");
+    setHasRenderedAttractionMarkers(false);
     clearMarkers();
     const markerBounds = new naverMaps.LatLngBounds();
     let visibleMarkerCount = 0;
+    const visibleAttractions = attractionData.allAttractions
+      .map((attraction) => ({
+        attraction,
+        markerType: resolveMarkerType(
+          attraction,
+          attractionData.lclsNameByCode
+        ),
+      }))
+      .filter(({ attraction, markerType }) =>
+        matchesPlaceFilter(attraction, markerType, searchFilter)
+      );
+    const spreadPositionByMarkerKey = buildSpreadMarkerPositionMap(
+      visibleAttractions.map(({ attraction }) => attraction)
+    );
 
-    attractionData.allAttractions.forEach((attraction) => {
-      const markerType = resolveMarkerType(attraction, attractionData.lclsNameByCode);
-      if (!matchesPlaceFilter(attraction, markerType, searchFilter)) {
-        return;
-      }
-
-      const position = new naverMaps.LatLng(attraction.lat, attraction.lng);
+    visibleAttractions.forEach(({ attraction, markerType }) => {
+      const spreadPosition =
+        spreadPositionByMarkerKey.get(getAttractionMarkerKey(attraction)) ?? {
+          lat: attraction.lat,
+          lng: attraction.lng,
+        };
+      const position = new naverMaps.LatLng(
+        spreadPosition.lat,
+        spreadPosition.lng
+      );
       markerBounds.extend(position);
       visibleMarkerCount += 1;
 
@@ -1272,6 +1402,7 @@ const attractionsQuery = useQuery({
       smooth: true,
       fallbackBounds: visibleMarkerCount > 0 ? markerBounds : null,
     });
+    setHasRenderedAttractionMarkers(true);
     setAttractionLoadingStage("idle");
   }, [
     attractionsQuery.data,
@@ -1407,11 +1538,51 @@ const attractionsQuery = useQuery({
         </div>
       </div>
 
+      {appendTarget ? (
+        <div className="pointer-events-auto absolute inset-x-3 top-[calc(max(0.75rem,env(safe-area-inset-top))+9rem)] z-30 rounded-2xl border border-brand-200 bg-white/95 p-3 shadow-md backdrop-blur">
+          <div className="flex items-start gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-sm font-black text-brand-700">
+              D{appendTarget.nextDayIndex}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black text-slate-900">
+                {appendTarget.routeTitle}에 DAY 추가 중
+              </p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                장소를 담고 체크아웃에서 추가할 일정을 확인해요
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetSheet();
+                    openSavedList();
+                  }}
+                  className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-bold text-white"
+                >
+                  체크아웃
+                </button>
+                <button
+                  type="button"
+                  onClick={clearAppendTarget}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <RouteCheckoutModal
         isOpen={isSavedListOpen}
         savedPlaces={savedPlaces}
         insertCandidatePlaces={routeInsertCandidatePlaces}
         currentLocation={routeStartLocation}
+        appendRouteTitle={appendTarget?.routeTitle}
+        initialTravelStartDate={appendTarget?.suggestedStartDate}
+        initialTripDays={appendTarget ? 1 : undefined}
         onClose={closeSavedList}
         onSelectPlace={(place) => {
           openSheet(place, { mode: "full-popup" });

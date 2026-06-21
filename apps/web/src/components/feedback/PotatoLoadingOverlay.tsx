@@ -66,6 +66,10 @@ function PotatoLoadingStyles() {
           0%, 20%, 100% { opacity: 0.2; transform: scale(0.8); }
           40%, 70% { opacity: 1; transform: scale(1); }
         }
+        @keyframes potatoQuestionTilt {
+          0%, 100% { transform: rotate(-6deg); }
+          50% { transform: rotate(7deg); }
+        }
       `}
     </style>
   );
@@ -83,13 +87,18 @@ function PotatoCharacter({
   const isMapRendering = animation === "map-rendering";
   const isSearching = animation === "searching";
   const isPondering = animation === "pondering";
+  const isEmpty = animation === "empty";
   const shouldHoldMap = isMapThinking || isRanking || isMapRendering;
 
   return (
     <div className={`${compact ? "h-20 w-20" : "h-24 w-24"} relative shrink-0`}>
       <div
         className="absolute bottom-[6px] left-1/2 h-3 w-14 -translate-x-1/2 rounded-full bg-slate-400/30"
-        style={{ animation: "potatoShadowPulse 1.8s ease-in-out infinite" }}
+        style={{
+          animation: isEmpty
+            ? "none"
+            : "potatoShadowPulse 1.8s ease-in-out infinite",
+        }}
       />
       <svg
         viewBox="0 0 120 120"
@@ -97,9 +106,10 @@ function PotatoCharacter({
         style={{
           animation: isMapThinking
             ? "potatoThinkTilt 1.1s ease-in-out infinite"
-            : isPondering || isSearching
+            : isPondering || isSearching || isEmpty
               ? "none"
               : "potatoFloat 1.6s ease-in-out infinite",
+          transformOrigin: "60px 64px",
         }}
         aria-hidden="true"
       >
@@ -133,9 +143,9 @@ function PotatoCharacter({
           <g
             style={{
               animation:
-                isMapThinking || isPondering
-                  ? "potatoEyeMove 1.2s ease-in-out infinite"
-                  : "none",
+                  isMapThinking || isPondering
+                    ? "potatoEyeMove 1.2s ease-in-out infinite"
+                    : "none",
             }}
           >
             <g
@@ -314,6 +324,45 @@ function PotatoCharacter({
               strokeLinecap="round"
             />
             <circle cx="63.5" cy="68.5" r="2.2" fill="#2A1A13" />
+          </g>
+        ) : null}
+
+        {isEmpty ? (
+          <g>
+            <path
+              d="M42 73 C34 68,29 64,25 58"
+              fill="none"
+              stroke="#2A1A13"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+            />
+            <path
+              d="M78 73 C86 68,91 64,95 58"
+              fill="none"
+              stroke="#2A1A13"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+            />
+            <circle cx="24.5" cy="57.5" r="2.4" fill="#2A1A13" />
+            <circle cx="95.5" cy="57.5" r="2.4" fill="#2A1A13" />
+            <g
+              style={{
+                animation: "potatoQuestionTilt 1.35s ease-in-out infinite",
+                transformOrigin: "88px 30px",
+              }}
+            >
+              <circle cx="88" cy="30" r="11" fill="#ffffff" stroke="#2A1A13" strokeWidth="1.7" />
+              <text
+                x="88"
+                y="35"
+                textAnchor="middle"
+                fontSize="17"
+                fill="#2563EB"
+                fontWeight="800"
+              >
+                ?
+              </text>
+            </g>
           </g>
         ) : null}
 

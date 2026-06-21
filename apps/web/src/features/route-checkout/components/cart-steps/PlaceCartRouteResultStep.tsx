@@ -1,10 +1,26 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { IoLocationSharp } from "react-icons/io5";
+import { routeCheckoutApi } from "@/api/routeCheckoutApi";
+import { routeApi } from "@/api/routeApi";
+import {
+  MY_ROUTES_QUERY_KEY,
+  upsertMyRouteCache,
+} from "@/features/my-route/myRouteCache";
+import { useUiToastStore } from "@/stores/uiToastStore";
+import { useUiModalStore } from "@/stores/uiModalStore";
+import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
+import { createPlaceDuplicateKeySet } from "@/lib/placeDuplicate";
 import { useRouteCheckout } from "../RouteCheckoutContext";
 import PlaceCartRouteDayCard from "./PlaceCartRouteDayCard";
+import StartLocationPickerPopup from "./StartLocationPickerPopup";
 import type { TravelTempo } from "./PlaceCartTempoStep";
 import { useRouteResultEditor } from "./useRouteResultEditor";
+import { findRouteDateConflict } from "../../utils/routeDateConflict";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
+import type { MyRoutesQuery } from "@/generated/graphql";
 import type { PlannedRouteDay, RouteStartLocation } from "./routePlanTypes";
 
 type PlaceCartRouteResultStepProps = {
@@ -12,6 +28,7 @@ type PlaceCartRouteResultStepProps = {
   candidatePlaces: MapSheetPlace[];
   currentLocation: RouteStartLocation | null;
   onClose: () => void;
+  onClearPlaces: () => void;
   onRequestSearchPlace: () => void;
 };
 
@@ -28,6 +45,18 @@ function formatClock(totalMinutes: number) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+function formatDurationText(totalMinutes: number) {
+  const normalizedMinutes = Math.max(0, Math.round(totalMinutes));
+
+  if (normalizedMinutes < 60) {
+    return `${normalizedMinutes}분`;
+  }
+
+  const hour = Math.floor(normalizedMinutes / 60);
+  const minute = normalizedMinutes % 60;
+  return minute > 0 ? `${hour}시간 ${minute}분` : `${hour}시간`;
+}
+
 function isSameRouteDay(left: PlannedRouteDay, right: PlannedRouteDay) {
   if (
     left.startLocation?.lat !== right.startLocation?.lat ||
@@ -42,16 +71,32 @@ function isSameRouteDay(left: PlannedRouteDay, right: PlannedRouteDay) {
   );
 }
 
+function getRouteSaveErrorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "루트 저장에 실패했어요. 잠시 후 다시 시도해 주세요.";
+}
+
 function PlaceCartRouteResultStep({
   savedPlaces,
   candidatePlaces,
   currentLocation,
   onClose,
+  onClearPlaces,
   onRequestSearchPlace,
 }: PlaceCartRouteResultStepProps) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const showToast = useUiToastStore((state) => state.showToast);
+  const openModal = useUiModalStore((state) => state.openModal);
+  const appendTarget = useRouteEditFlowStore((state) => state.appendTarget);
+  const clearAppendTarget = useRouteEditFlowStore(
+    (state) => state.clearAppendTarget
+  );
   const {
     travelStartDate,
     tripDays,
+    setStep,
     dailyStartMinutes,
     scheduleEndMinutes,
     tempo,
@@ -60,8 +105,10 @@ function PlaceCartRouteResultStep({
   const {
     routePlan,
     appliedRoutePlan,
+    startLocation,
     isRouteEditDirty,
     handleChangeStayMinutes,
+    handleChangeStartLocation,
     handleInsertPlace,
     handleRemoveRoutePlace,
     handleReorderRoutePlan,
@@ -78,13 +125,22 @@ function PlaceCartRouteResultStep({
     currentLocation,
   });
   const [isOrderEditing, setIsOrderEditing] = useState(false);
+  const [isSavingRoute, setIsSavingRoute] = useState(false);
+  const [isStartLocationPickerOpen, setIsStartLocationPickerOpen] =
+    useState(false);
   const hasOverSchedule = routePlan.some((day) =>
     day.items.some((item) => item.isOverSchedule)
   );
   const hasEditableRoute = routePlan.some((day) => day.items.length > 0);
-  const excludedPlaceIds = routePlan.flatMap((day) =>
-    day.items.map((item) => item.place.id)
-  );
+  const firstRouteItem =
+    routePlan.find((day) => day.items.length > 0)?.items[0] ?? null;
+  const firstTravelMinutes = firstRouteItem?.travelMinutesFromPrevious ?? null;
+  const isRouteOrderEditing = isOrderEditing && hasEditableRoute;
+  const excludedPlaceKeys = [
+    ...createPlaceDuplicateKeySet(
+      routePlan.flatMap((day) => day.items.map((item) => item.place))
+    ),
+  ];
   const getBaselineDay = (dayNumber: number) =>
     appliedRoutePlan.find((day) => day.day === dayNumber) ?? null;
   const startOrderEditing = () => {
@@ -160,12 +216,6 @@ function PlaceCartRouteResultStep({
     handleReorderRoutePlan(nextRoutePlan);
   };
 
-  useEffect(() => {
-    if (!hasEditableRoute && isOrderEditing) {
-      setIsOrderEditing(false);
-    }
-  }, [hasEditableRoute, isOrderEditing]);
-
   if (!tempo) {
     return null;
   }
@@ -178,6 +228,94 @@ function PlaceCartRouteResultStep({
   const handleCancelResultEdits = () => {
     handleCancelRouteEdits();
     setIsOrderEditing(false);
+  };
+  const handleSaveRoute = async () => {
+    if (isSavingRoute) {
+      return;
+    }
+
+    if (!hasEditableRoute) {
+      showToast("저장할 장소가 없어요.");
+      return;
+    }
+
+    setIsSavingRoute(true);
+
+    try {
+      const routesData =
+        queryClient.getQueryData<MyRoutesQuery>(MY_ROUTES_QUERY_KEY) ??
+        (await queryClient.fetchQuery<MyRoutesQuery>({
+          queryKey: MY_ROUTES_QUERY_KEY,
+          queryFn: () => routeApi.myRoutes(),
+        }));
+      const conflict = findRouteDateConflict({
+        routes: routesData.myRoutes,
+        travelStartDate,
+        tripDays,
+        excludeRouteId: appendTarget?.routeId,
+      });
+
+      if (conflict) {
+        openModal({
+          title: "이미 일정이 있어요",
+          description: `${conflict.requestedRangeLabel} 일정이 기존 ${conflict.existingRangeLabel} 일정과 겹쳐서 저장할 수 없어요.`,
+          detail: "내 루트에서 기존 일정을 확인하거나 여행 날짜를 다시 선택해 주세요.",
+          actions: [
+            {
+              label: "내 루트 보기",
+              variant: "secondary",
+              onClick: () => {
+                onClose();
+                navigate("/my-route");
+              },
+            },
+            {
+              label: "날짜 다시 선택",
+              variant: "primary",
+              onClick: () => {
+                setStep("schedule");
+              },
+            },
+          ],
+        });
+        setIsSavingRoute(false);
+        return;
+      }
+
+      if (appendTarget) {
+        const route = await routeCheckoutApi.appendRouteDays(appendTarget.routeId, {
+          routePlan,
+          travelStartDate,
+          tripDays,
+        });
+        queryClient.setQueryData<MyRoutesQuery>(
+          MY_ROUTES_QUERY_KEY,
+          (currentData) => upsertMyRouteCache(currentData, route.appendRouteDays)
+        );
+      } else {
+        const route = await routeCheckoutApi.saveRoutePlan({
+          routePlan,
+          travelStartDate,
+          tripDays,
+        });
+        queryClient.setQueryData<MyRoutesQuery>(
+          MY_ROUTES_QUERY_KEY,
+          (currentData) => upsertMyRouteCache(currentData, route.createRoute)
+        );
+
+        showToast(`${route.createRoute.totalStopCount}개 장소로 루트를 저장했어요.`);
+      }
+
+      if (appendTarget) {
+        showToast(`${appendTarget.routeTitle}에 DAY를 추가했어요.`);
+      }
+      clearAppendTarget();
+      onClearPlaces();
+      onClose();
+    } catch (error) {
+      showToast(getRouteSaveErrorMessage(error), 2600);
+      setIsSavingRoute(false);
+    }
   };
 
   return (
@@ -196,11 +334,12 @@ function PlaceCartRouteResultStep({
               </div>
             </div>
             <p className="mt-1 text-xl font-semibold text-slate-900">
-              추천 루트를 만들었어요
+              {appendTarget ? "추가할 DAY를 만들었어요" : "추천 루트를 만들었어요"}
             </p>
             <p className="mt-2 text-xs leading-5 text-slate-500">
-              {TEMPO_LABEL[tempo]} 템포 기준 추천 체류시간과 거리 기반 차량 이동
-              추정치로 배치한 일정입니다. 체류시간은 역 카드에서 직접 수정할 수 있어요.
+              {appendTarget
+                ? `${appendTarget.routeTitle}에 붙일 새 DAY입니다. 체류시간과 순서를 확인한 뒤 추가해요.`
+                : `${TEMPO_LABEL[tempo]} 템포 기준 추천 체류시간과 거리 기반 차량 이동 추정치로 배치한 일정입니다. 체류시간은 역 카드에서 직접 수정할 수 있어요.`}
             </p>
           </div>
 
@@ -212,15 +351,40 @@ function PlaceCartRouteResultStep({
           ) : null}
 
           <div className="space-y-4">
+            {startLocation ? (
+              <section className="rounded-2xl border border-brand-100 bg-white px-4 py-3 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1 text-xs font-black text-brand-700">
+                      <IoLocationSharp className="text-sm" />
+                      출발 위치
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">
+                      {firstTravelMinutes != null && firstTravelMinutes >= 60
+                        ? `첫 장소까지 약 ${formatDurationText(firstTravelMinutes)} 걸려요. 실제 출발지가 다르면 시작 마커를 옮겨요.`
+                        : "현재 위치와 여행 지역이 다르면 시작 마커를 옮겨 다시 계산해요."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsStartLocationPickerOpen(true)}
+                    className="shrink-0 rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700"
+                  >
+                    마커 이동
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
             {routePlan.map((day) => (
               <PlaceCartRouteDayCard
                 key={day.day}
                 day={day}
                 routePlan={routePlan}
-                isOrderEditing={isOrderEditing}
+                isOrderEditing={isRouteOrderEditing}
                 comparisonDay={getComparisonDay(day)}
                 candidatePlaces={candidatePlaces}
-                excludedPlaceIds={excludedPlaceIds}
+                excludedPlaceKeys={excludedPlaceKeys}
                 onChangeStayMinutes={handleChangeStayMinutes}
                 onInsertPlace={handleInsertPlace}
                 onRemovePlace={handleRemoveRoutePlace}
@@ -236,7 +400,7 @@ function PlaceCartRouteResultStep({
       </div>
 
       <footer className="shrink-0 border-t border-brand-100 px-4 py-4">
-        {isOrderEditing ? (
+        {isRouteOrderEditing ? (
           <button
             type="button"
             disabled
@@ -264,13 +428,27 @@ function PlaceCartRouteResultStep({
         ) : (
           <button
             type="button"
-            onClick={onClose}
-            className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
+            onClick={handleSaveRoute}
+            disabled={isSavingRoute || !hasEditableRoute}
+            className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
           >
-            완료
+            {isSavingRoute
+              ? "저장 중..."
+              : appendTarget
+                ? "DAY 추가"
+                : "완료"}
           </button>
         )}
       </footer>
+
+      {isStartLocationPickerOpen && startLocation ? (
+        <StartLocationPickerPopup
+          routePlan={routePlan}
+          initialLocation={startLocation}
+          onClose={() => setIsStartLocationPickerOpen(false)}
+          onApply={handleChangeStartLocation}
+        />
+      ) : null}
     </div>
   );
 }

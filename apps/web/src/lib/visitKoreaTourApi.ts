@@ -2,6 +2,8 @@ const TOUR_API_BASE_URL = "/tour-api/B551011/KorService2/areaBasedList2";
 const TOUR_LCLS_CODE_BASE_URL = "/tour-api/B551011/KorService2/lclsSystmCode2";
 const TOUR_DETAIL_COMMON_BASE_URL =
   "/tour-api/B551011/KorService2/detailCommon2";
+const TOUR_DETAIL_INTRO_BASE_URL =
+  "/tour-api/B551011/KorService2/detailIntro2";
 const TOUR_DETAIL_IMAGE_BASE_URL = "/tour-api/B551011/KorService2/detailImage2";
 const TOUR_FESTIVAL_BASE_URL = "/tour-api/B551011/KorService2/searchFestival2";
 const TOUR_TATS_CONCENTRATION_BASE_URL =
@@ -104,6 +106,9 @@ export type GangwonAttraction = {
 export type TourPlaceDetail = {
   overview: string;
   images: string[];
+  operatingHours: string;
+  restDate: string;
+  infoCenter: string;
 };
 
 export type TouristConcentrationPoint = {
@@ -205,6 +210,99 @@ function stripHtml(htmlText?: string) {
     .replaceAll(/<[^>]*>/g, " ")
     .replaceAll(/\s+/g, " ")
     .trim();
+}
+
+function readIntroText(
+  source: Record<string, unknown> | null | undefined,
+  keys: string[]
+) {
+  if (!source) {
+    return "";
+  }
+
+  for (const key of keys) {
+    const rawValue = source[key];
+    if (typeof rawValue !== "string" && typeof rawValue !== "number") {
+      continue;
+    }
+
+    const value = stripHtml(String(rawValue));
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function getTourIntroFields(
+  source: Record<string, unknown> | null | undefined,
+  contentTypeId?: string
+) {
+  const commonOperatingHourKeys = [
+    "usetime",
+    "usetimeculture",
+    "usetimeleports",
+    "opentime",
+    "opentimefood",
+    "playtime",
+    "usetimefestival",
+  ];
+  const commonRestDateKeys = [
+    "restdate",
+    "restdateculture",
+    "restdateleports",
+    "restdateshopping",
+    "restdatefood",
+  ];
+  const commonInfoCenterKeys = [
+    "infocenter",
+    "infocenterculture",
+    "infocenterleports",
+    "infocentershopping",
+    "infocenterfood",
+    "sponsor1tel",
+    "sponsor2tel",
+  ];
+
+  const operatingHourKeysByType: Record<string, string[]> = {
+    "12": ["usetime"],
+    "14": ["usetimeculture"],
+    "15": ["playtime", "usetimefestival"],
+    "28": ["usetimeleports"],
+    "38": ["opentime"],
+    "39": ["opentimefood"],
+  };
+  const restDateKeysByType: Record<string, string[]> = {
+    "12": ["restdate"],
+    "14": ["restdateculture"],
+    "28": ["restdateleports"],
+    "38": ["restdateshopping"],
+    "39": ["restdatefood"],
+  };
+  const infoCenterKeysByType: Record<string, string[]> = {
+    "12": ["infocenter"],
+    "14": ["infocenterculture"],
+    "15": ["sponsor1tel", "sponsor2tel"],
+    "28": ["infocenterleports"],
+    "38": ["infocentershopping"],
+    "39": ["infocenterfood"],
+  };
+
+  return {
+    operatingHours: readIntroText(source, [
+      ...(contentTypeId ? (operatingHourKeysByType[contentTypeId] ?? []) : []),
+      ...commonOperatingHourKeys,
+    ]),
+    restDate: readIntroText(source, [
+      ...(contentTypeId ? (restDateKeysByType[contentTypeId] ?? []) : []),
+      ...commonRestDateKeys,
+    ]),
+    infoCenter: readIntroText(source, [
+      ...(contentTypeId ? (infoCenterKeysByType[contentTypeId] ?? []) : []),
+      ...commonInfoCenterKeys,
+    ]),
+  };
 }
 
 function canonicalizeImageUrl(rawUrl: string) {
@@ -836,7 +934,7 @@ export async function fetchLclsSystemNameMap(serviceKey: string) {
 export async function fetchTourPlaceDetail(
   serviceKey: string,
   contentId: string,
-  _contentTypeId?: string
+  contentTypeId?: string
 ) {
   if (!serviceKey || !contentId) {
     throw new Error("Tour place detail params are missing.");
@@ -863,9 +961,21 @@ export async function fetchTourPlaceDetail(
     pageNo: "1",
   });
 
-  const [commonResponse, imageResponse] = await Promise.all([
+  const introQuery = new URLSearchParams({
+    serviceKey: normalizeServiceKey(serviceKey),
+    MobileOS: "ETC",
+    MobileApp: "RouteOne",
+    _type: "json",
+    contentId,
+    contentTypeId: contentTypeId ?? "",
+    numOfRows: "10",
+    pageNo: "1",
+  });
+
+  const [commonResponse, imageResponse, introResponse] = await Promise.all([
     fetch(`${TOUR_DETAIL_COMMON_BASE_URL}?${commonQuery.toString()}`),
     fetch(`${TOUR_DETAIL_IMAGE_BASE_URL}?${imageQuery.toString()}`),
+    fetch(`${TOUR_DETAIL_INTRO_BASE_URL}?${introQuery.toString()}`),
   ]);
 
   if (!commonResponse.ok) {
@@ -898,11 +1008,28 @@ export async function fetchTourPlaceDetail(
     }
   }
 
+  let introFields = {
+    operatingHours: "",
+    restDate: "",
+    infoCenter: "",
+  };
+  if (introResponse.ok) {
+    const introData = (await introResponse.json()) as TourApiResponse;
+    const introCode = introData.response?.header?.resultCode;
+    if (!introCode || introCode === "0000") {
+      const introItem = toArray(introData.response?.body?.items?.item)[0] as
+        | Record<string, unknown>
+        | undefined;
+      introFields = getTourIntroFields(introItem, contentTypeId);
+    }
+  }
+
   const images = dedupeImageUrls(detailImageUrls);
 
   return {
     overview: stripHtml(commonItem?.overview),
     images,
+    ...introFields,
   } satisfies TourPlaceDetail;
 }
 

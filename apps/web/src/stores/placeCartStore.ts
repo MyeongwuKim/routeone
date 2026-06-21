@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isSamePlaceDuplicate } from "@/lib/placeDuplicate";
 import type { MapSheetPlace } from "@/types/place";
 
 export type SavedPlaceItem = {
@@ -193,22 +194,28 @@ export const usePlaceCartStore = create<PlaceCartState>((set) => ({
     }),
   toggleSavedPlace: (place, thumbnailUrl = "") =>
     set((state) => {
-      const exists = state.savedPlaceIds.includes(place.id);
+      const exists = state.savedPlaces.some((item) =>
+        isSamePlaceDuplicate(item.place, place)
+      );
+      const nextSavedPlaces = exists
+        ? state.savedPlaces.filter(
+            (item) => !isSamePlaceDuplicate(item.place, place)
+          )
+        : [
+            {
+              id: place.id,
+              place,
+              thumbnailUrl: getSavedPlaceThumbnailUrl(place, thumbnailUrl),
+              savedAt: Date.now(),
+            },
+            ...state.savedPlaces.filter(
+              (item) => !isSamePlaceDuplicate(item.place, place)
+            ),
+          ];
+
       return {
-        savedPlaceIds: exists
-          ? state.savedPlaceIds.filter((id) => id !== place.id)
-          : [...state.savedPlaceIds, place.id],
-        savedPlaces: exists
-          ? state.savedPlaces.filter((item) => item.id !== place.id)
-          : [
-              {
-                id: place.id,
-                place,
-                thumbnailUrl: getSavedPlaceThumbnailUrl(place, thumbnailUrl),
-                savedAt: Date.now(),
-              },
-              ...state.savedPlaces.filter((item) => item.id !== place.id),
-            ],
+        savedPlaceIds: nextSavedPlaces.map((item) => item.id),
+        savedPlaces: nextSavedPlaces,
       };
     }),
   removeSavedPlace: (placeId) =>

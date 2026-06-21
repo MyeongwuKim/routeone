@@ -1,0 +1,11 @@
+query Me {
+  me {
+    id
+    accountId
+    email
+    displayName
+    locale
+    createdAt
+    updatedAt
+  }
+}

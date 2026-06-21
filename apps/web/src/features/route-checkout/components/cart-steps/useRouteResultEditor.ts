@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
 import type { TravelTempo } from "./PlaceCartTempoStep";
+import { isSamePlaceDuplicate } from "@/lib/placeDuplicate";
 import {
   buildRoutePlan,
   getRecommendedStayMinutes,
@@ -25,6 +26,17 @@ type UseRouteResultEditorParams = {
   isScheduleValid: boolean;
   currentLocation: RouteStartLocation | null;
 };
+
+function isSameStartLocation(
+  left: RouteStartLocation | null,
+  right: RouteStartLocation | null
+) {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return left.lat === right.lat && left.lng === right.lng;
+}
 
 function applyManualRouteInsertions(options: {
   routePlan: PlannedRouteDay[];
@@ -60,7 +72,11 @@ function applyManualRouteInsertions(options: {
 
     const nextItems = [...day.items];
     dayInsertions.forEach((insertion, offset) => {
-      if (nextItems.some((item) => item.place.id === insertion.place.id)) {
+      if (
+        nextItems.some((item) =>
+          isSamePlaceDuplicate(item.place, insertion.place)
+        )
+      ) {
         return;
       }
 
@@ -131,6 +147,12 @@ export function useRouteResultEditor({
   const [draftRoutePlanOverride, setDraftRoutePlanOverride] = useState<
     PlannedRouteDay[] | null
   >(null);
+  const [appliedStartLocation, setAppliedStartLocation] =
+    useState<RouteStartLocation | null>(currentLocation);
+  const [draftStartLocation, setDraftStartLocation] =
+    useState<RouteStartLocation | null>(currentLocation);
+  const resolvedAppliedStartLocation = appliedStartLocation ?? currentLocation;
+  const resolvedDraftStartLocation = draftStartLocation ?? currentLocation;
 
   const isRouteEditDirty = useMemo(
     () =>
@@ -141,15 +163,21 @@ export function useRouteResultEditor({
       JSON.stringify([...draftRemovedPlaceIds].sort()) !==
         JSON.stringify([...appliedRemovedPlaceIds].sort()) ||
       JSON.stringify(draftRoutePlanOverride) !==
-        JSON.stringify(appliedRoutePlanOverride),
+        JSON.stringify(appliedRoutePlanOverride) ||
+      !isSameStartLocation(
+        resolvedDraftStartLocation,
+        resolvedAppliedStartLocation
+      ),
     [
       appliedManualInsertions,
       appliedRemovedPlaceIds,
       appliedRoutePlanOverride,
+      resolvedAppliedStartLocation,
       appliedStayOverrides,
       draftManualInsertions,
       draftRemovedPlaceIds,
       draftRoutePlanOverride,
+      resolvedDraftStartLocation,
       draftStayOverrides,
     ]
   );
@@ -170,7 +198,7 @@ export function useRouteResultEditor({
       dailyEndMinutes,
       tempo,
       stayOverrides: draftStayOverrides,
-      currentLocation,
+      currentLocation: resolvedDraftStartLocation,
     });
 
     const routePlanWithInsertions = applyManualRouteInsertions({
@@ -180,7 +208,7 @@ export function useRouteResultEditor({
       dailyEndMinutes,
       tempo,
       stayOverrides: draftStayOverrides,
-      currentLocation,
+      currentLocation: resolvedDraftStartLocation,
     });
 
     if (!draftRoutePlanOverride) {
@@ -193,15 +221,15 @@ export function useRouteResultEditor({
       dailyEndMinutes,
       tempo,
       stayOverrides: draftStayOverrides,
-      currentLocation,
+      currentLocation: resolvedDraftStartLocation,
     });
   }, [
-    currentLocation,
     dailyEndMinutes,
     dailyStartMinutes,
     draftManualInsertions,
     draftRemovedPlaceIds,
     draftRoutePlanOverride,
+    resolvedDraftStartLocation,
     draftStayOverrides,
     isScheduleValid,
     savedPlaces,
@@ -226,7 +254,7 @@ export function useRouteResultEditor({
       dailyEndMinutes,
       tempo,
       stayOverrides: appliedStayOverrides,
-      currentLocation,
+      currentLocation: resolvedAppliedStartLocation,
     });
 
     const routePlanWithInsertions = applyManualRouteInsertions({
@@ -236,7 +264,7 @@ export function useRouteResultEditor({
       dailyEndMinutes,
       tempo,
       stayOverrides: appliedStayOverrides,
-      currentLocation,
+      currentLocation: resolvedAppliedStartLocation,
     });
 
     if (!appliedRoutePlanOverride) {
@@ -249,17 +277,17 @@ export function useRouteResultEditor({
       dailyEndMinutes,
       tempo,
       stayOverrides: appliedStayOverrides,
-      currentLocation,
+      currentLocation: resolvedAppliedStartLocation,
     });
   }, [
     appliedManualInsertions,
     appliedRemovedPlaceIds,
     appliedRoutePlanOverride,
     appliedStayOverrides,
-    currentLocation,
     dailyEndMinutes,
     dailyStartMinutes,
     isScheduleValid,
+    resolvedAppliedStartLocation,
     savedPlaces,
     tempo,
     travelStartDate,
@@ -286,11 +314,15 @@ export function useRouteResultEditor({
       if (day.day !== request.day) {
         return {
           ...day,
-          items: day.items.filter((item) => item.place.id !== place.id),
+          items: day.items.filter(
+            (item) => !isSamePlaceDuplicate(item.place, place)
+          ),
         };
       }
 
-      const nextItems = day.items.filter((item) => item.place.id !== place.id);
+      const nextItems = day.items.filter(
+        (item) => !isSamePlaceDuplicate(item.place, place)
+      );
       nextItems.splice(Math.min(request.insertIndex, nextItems.length), 0, {
         id: place.id,
         place,
@@ -347,11 +379,16 @@ export function useRouteResultEditor({
     setDraftRemovedPlaceIds([]);
   };
 
+  const handleChangeStartLocation = (location: RouteStartLocation) => {
+    setDraftStartLocation(location);
+  };
+
   const handleApplyRouteEdits = () => {
     setAppliedStayOverrides(draftStayOverrides);
     setAppliedManualInsertions(draftManualInsertions);
     setAppliedRemovedPlaceIds(draftRemovedPlaceIds);
     setAppliedRoutePlanOverride(draftRoutePlanOverride);
+    setAppliedStartLocation(draftStartLocation);
   };
 
   const handleCancelRouteEdits = () => {
@@ -359,13 +396,16 @@ export function useRouteResultEditor({
     setDraftManualInsertions(appliedManualInsertions);
     setDraftRemovedPlaceIds(appliedRemovedPlaceIds);
     setDraftRoutePlanOverride(appliedRoutePlanOverride);
+    setDraftStartLocation(appliedStartLocation);
   };
 
   return {
     routePlan,
     appliedRoutePlan,
+    startLocation: resolvedDraftStartLocation,
     isRouteEditDirty,
     handleChangeStayMinutes,
+    handleChangeStartLocation,
     handleInsertPlace,
     handleRemoveRoutePlace,
     handleReorderRoutePlan,

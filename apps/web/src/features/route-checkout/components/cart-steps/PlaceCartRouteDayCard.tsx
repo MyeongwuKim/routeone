@@ -4,6 +4,7 @@ import {
   IoClose,
   IoLocationSharp,
   IoMapOutline,
+  IoRemove,
   IoTimeOutline,
   IoTrashOutline,
 } from "react-icons/io5";
@@ -29,7 +30,7 @@ type PlaceCartRouteDayCardProps = {
   isOrderEditing: boolean;
   comparisonDay?: PlannedRouteDay | null;
   candidatePlaces: MapSheetPlace[];
-  excludedPlaceIds: string[];
+  excludedPlaceKeys: string[];
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
   onInsertPlace: (request: RouteInsertRequest, place: MapSheetPlace) => void;
   onRemovePlace: (placeId: string) => void;
@@ -180,11 +181,11 @@ function buildRouteStations(day: PlannedRouteDay): RouteStation[] {
           id: "current-location",
           type: "start",
           icon: <IoLocationSharp />,
-          title: "내 위치",
+          title: "출발 위치",
           subtitle: "출발",
           location: day.startLocation
             ? {
-                title: "내 위치",
+                title: "출발 위치",
                 subtitle: "출발",
                 lat: day.startLocation.lat,
                 lng: day.startLocation.lng,
@@ -462,7 +463,7 @@ function RouteRowGroup({
   row,
   rowIndex,
   isOrderEditing,
-  onChangeStayMinutes,
+  onRequestStayMinutesEdit,
   onSelectItem,
   onStartDragItem,
   onRequestOrderEditing,
@@ -475,7 +476,7 @@ function RouteRowGroup({
   row: RouteRowEntry[];
   rowIndex: number;
   isOrderEditing: boolean;
-  onChangeStayMinutes: (placeId: string, minutes: number) => void;
+  onRequestStayMinutesEdit: (item: PlannedRouteItem) => void;
   onSelectItem: (item: PlannedRouteItem) => void;
   onStartDragItem: (payload: DragStartPayload) => void;
   onRequestOrderEditing: () => void;
@@ -538,7 +539,7 @@ function RouteRowGroup({
               <StationNode
                 station={cell.station}
                 isOrderEditing={isOrderEditing}
-                onChangeStayMinutes={onChangeStayMinutes}
+                onRequestStayMinutesEdit={onRequestStayMinutesEdit}
                 onSelectItem={onSelectItem}
                 onStartDragItem={onStartDragItem}
                 onRequestOrderEditing={onRequestOrderEditing}
@@ -593,14 +594,14 @@ function RouteRowGroup({
 function StationNode({
   station,
   isOrderEditing,
-  onChangeStayMinutes,
+  onRequestStayMinutesEdit,
   onSelectItem,
   onStartDragItem,
   onRequestOrderEditing,
 }: {
   station: RouteStation;
   isOrderEditing: boolean;
-  onChangeStayMinutes: (placeId: string, minutes: number) => void;
+  onRequestStayMinutesEdit: (item: PlannedRouteItem) => void;
   onSelectItem: (item: PlannedRouteItem) => void;
   onStartDragItem: (payload: DragStartPayload) => void;
   onRequestOrderEditing: () => void;
@@ -766,25 +767,112 @@ function StationNode({
       )}
 
       {station.item && !isOrderEditing ? (
-        <label className="mt-1 flex w-[58px] max-w-full items-center justify-center gap-0.5 rounded-full border border-brand-100 bg-brand-50 px-1.5 py-1">
-          <input
-            aria-label="체류 시간(분)"
-            type="number"
-            min={15}
-            max={360}
-            step={5}
-            value={station.item.stayMinutes}
-            onChange={(event) =>
-              onChangeStayMinutes(
-                station.item.id,
-                clampStayMinutes(Number(event.target.value))
-              )
-            }
-            className="w-6 bg-transparent text-center text-[11px] font-bold text-slate-800 outline-none"
-          />
+        <button
+          type="button"
+          onClick={() => onRequestStayMinutesEdit(station.item as PlannedRouteItem)}
+          className="mt-1 flex w-[62px] max-w-full items-center justify-center gap-0.5 rounded-full border border-brand-100 bg-brand-50 px-1.5 py-1 text-[11px] font-bold text-slate-800 active:scale-95"
+        >
+          <span>{station.item.stayMinutes}</span>
           <span className="text-[9px] text-slate-500">분</span>
-        </label>
+        </button>
       ) : null}
+    </div>
+  );
+}
+
+function StayMinutesPopup({
+  item,
+  onClose,
+  onApply,
+}: {
+  item: PlannedRouteItem;
+  onClose: () => void;
+  onApply: (placeId: string, minutes: number) => void;
+}) {
+  const [draftMinutes, setDraftMinutes] = useState(item.stayMinutes);
+  const updateDraftMinutes = (nextMinutes: number) => {
+    setDraftMinutes(clampStayMinutes(nextMinutes));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[2700] flex items-center justify-center bg-slate-950/35 px-4">
+      <button
+        type="button"
+        aria-label="체류 시간 수정 닫기"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <section className="route-checkout-modal-enter relative w-full max-w-[340px] rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-trip text-sm text-brand-700">STAY TIME</p>
+            <h3 className="mt-1 truncate text-lg font-bold text-slate-900">
+              {item.place.title}
+            </h3>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              장소에서 머무는 시간을 조정해요
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={onClose}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
+          >
+            <IoClose />
+          </button>
+        </div>
+
+        <div className="mt-5 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => updateDraftMinutes(draftMinutes - 5)}
+            className="flex size-11 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700"
+          >
+            <IoRemove />
+          </button>
+          <label className="flex min-w-[132px] items-center justify-center gap-1 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3">
+            <input
+              aria-label="체류 시간(분)"
+              type="number"
+              min={15}
+              max={360}
+              step={5}
+              value={draftMinutes}
+              onChange={(event) => updateDraftMinutes(Number(event.target.value))}
+              className="w-16 bg-transparent text-center text-2xl font-black text-slate-900 outline-none"
+            />
+            <span className="text-sm font-bold text-slate-500">분</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => updateDraftMinutes(draftMinutes + 5)}
+            className="flex size-11 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700"
+          >
+            <IoAdd />
+          </button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onApply(item.id, draftMinutes);
+              onClose();
+            }}
+            className="rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
+          >
+            적용
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -933,7 +1021,7 @@ function PlaceCartRouteDayCard({
   isOrderEditing,
   comparisonDay,
   candidatePlaces,
-  excludedPlaceIds,
+  excludedPlaceKeys,
   onChangeStayMinutes,
   onInsertPlace,
   onRemovePlace,
@@ -958,6 +1046,8 @@ function PlaceCartRouteDayCard({
   const [selectedItem, setSelectedItem] = useState<PlannedRouteItem | null>(
     null
   );
+  const [stayMinutesItem, setStayMinutesItem] =
+    useState<PlannedRouteItem | null>(null);
   const routeStations = buildRouteStations(day);
   const routeRows = splitRouteRows(routeStations);
   const currentDayIndex = routePlan.findIndex(
@@ -1348,7 +1438,7 @@ function PlaceCartRouteDayCard({
                   row={row}
                   rowIndex={rowIndex}
                   isOrderEditing={isOrderEditing}
-                  onChangeStayMinutes={onChangeStayMinutes}
+                  onRequestStayMinutesEdit={setStayMinutesItem}
                   onSelectItem={setSelectedItem}
                   onStartDragItem={handleStartDragItem}
                   onRequestOrderEditing={onRequestOrderEditing}
@@ -1419,7 +1509,7 @@ function PlaceCartRouteDayCard({
         <PlaceCartRouteInsertSheet
           request={insertRequest}
           candidatePlaces={candidatePlaces}
-          excludedPlaceIds={excludedPlaceIds}
+          excludedPlaceKeys={excludedPlaceKeys}
           onClose={() => setInsertRequest(null)}
           onSelectPlace={(place, request) => {
             onInsertPlace(request, place);
@@ -1439,6 +1529,13 @@ function PlaceCartRouteDayCard({
           onClose={() => setSelectedItem(null)}
           onRemove={onRemovePlace}
           onMovePlaceToDay={onMovePlaceToDay}
+        />
+      ) : null}
+      {stayMinutesItem ? (
+        <StayMinutesPopup
+          item={stayMinutesItem}
+          onClose={() => setStayMinutesItem(null)}
+          onApply={onChangeStayMinutes}
         />
       ) : null}
       {draggedItem?.isActive ? (

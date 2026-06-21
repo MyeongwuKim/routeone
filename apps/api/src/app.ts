@@ -31,7 +31,7 @@ export async function buildApp() {
 
   await app.register(fastifyApollo(server), {
     path: "/graphql",
-    context: async () => createContext(),
+    context: async (request) => createContext(request),
   });
 
   return app;

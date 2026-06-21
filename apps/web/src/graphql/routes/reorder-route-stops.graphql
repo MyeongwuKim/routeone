@@ -1,0 +1,5 @@
+mutation ReorderRouteStops($input: ReorderRouteStopsInput!) {
+  reorderRouteStops(input: $input) {
+    ...RouteDetailFields
+  }
+}

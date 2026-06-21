@@ -1,0 +1,5 @@
+mutation AppendRouteDays($input: AppendRouteDaysInput!) {
+  appendRouteDays(input: $input) {
+    ...RouteDetailFields
+  }
+}

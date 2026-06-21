@@ -6,6 +6,7 @@ import {
 import PlaceCartItemsStep from "./cart-steps/PlaceCartItemsStep";
 import PlaceCartRouteResultStep from "./cart-steps/PlaceCartRouteResultStep";
 import PlaceCartScheduleStep from "./cart-steps/PlaceCartScheduleStep";
+import PlaceCartStartLocationStep from "./cart-steps/PlaceCartStartLocationStep";
 import PlaceCartTempoStep from "./cart-steps/PlaceCartTempoStep";
 import type { RouteStartLocation } from "./cart-steps/routePlanTypes";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
@@ -17,6 +18,9 @@ type RouteCheckoutModalProps = {
   savedPlaces: SavedPlaceItem[];
   insertCandidatePlaces: MapSheetPlace[];
   currentLocation: RouteStartLocation | null;
+  appendRouteTitle?: string | null;
+  initialTravelStartDate?: string | null;
+  initialTripDays?: number;
   onClose: () => void;
   onSelectPlace: (place: MapSheetPlace) => void;
   onRemovePlace: (placeId: string) => void;
@@ -26,13 +30,13 @@ type RouteCheckoutModalProps = {
 
 type RouteCheckoutModalContentProps = Omit<
   RouteCheckoutModalProps,
-  "isOpen"
+  "isOpen" | "initialTravelStartDate" | "initialTripDays"
 >;
 
 function RouteCheckoutModalContent({
   savedPlaces,
   insertCandidatePlaces,
-  currentLocation,
+  appendRouteTitle,
   onClose,
   onSelectPlace,
   onRemovePlace,
@@ -43,22 +47,36 @@ function RouteCheckoutModalContent({
     step,
     setStep,
     tempo,
+    startLocation,
     isScheduleValid,
     scheduleValidationMessage,
   } = useRouteCheckout();
   const showToast = useUiToastStore((state) => state.showToast);
 
   const stepIndex =
-    step === "cart" ? 1 : step === "schedule" ? 2 : step === "tempo" ? 3 : 4;
+    step === "cart"
+      ? 1
+      : step === "schedule"
+        ? 2
+        : step === "tempo"
+          ? 3
+          : step === "start-location"
+            ? 4
+            : 5;
 
   const handleBack = () => {
+    if (step === "start-location") {
+      setStep("tempo");
+      return;
+    }
+
     if (step === "tempo") {
       setStep("schedule");
       return;
     }
 
     if (step === "result") {
-      setStep("tempo");
+      setStep("start-location");
       return;
     }
 
@@ -87,6 +105,11 @@ function RouteCheckoutModalContent({
     }
 
     if (step === "tempo") {
+      setStep("start-location");
+      return;
+    }
+
+    if (step === "start-location") {
       setStep("result");
       return;
     }
@@ -96,8 +119,9 @@ function RouteCheckoutModalContent({
 
   const nextDisabled =
     (step === "cart" && savedPlaces.length === 0) ||
-    (step === "tempo" && !tempo);
-  const nextButtonLabel = step === "tempo" ? "루트 짜기" : "다음";
+    (step === "tempo" && !tempo) ||
+    (step === "start-location" && !startLocation);
+  const nextButtonLabel = step === "start-location" ? "루트 짜기" : "다음";
 
   return (
     <section className="route-checkout-modal-enter fixed inset-0 z-[1700] h-dvh overflow-hidden bg-white">
@@ -115,7 +139,7 @@ function RouteCheckoutModalContent({
             <div className="ml-3">
               <p className="font-trip text-sm text-brand-700">ROUTE CHECKOUT</p>
               <p className="text-base font-semibold text-slate-900">
-                {stepIndex} / 4
+                {stepIndex} / 5
               </p>
             </div>
           </div>
@@ -132,12 +156,19 @@ function RouteCheckoutModalContent({
           ) : null}
         </header>
 
+        {appendRouteTitle ? (
+          <div className="shrink-0 border-b border-brand-100 bg-brand-50 px-4 py-2 text-xs font-bold text-brand-700">
+            {appendRouteTitle}에 새 DAY를 추가하는 중
+          </div>
+        ) : null}
+
         {step === "result" && tempo ? (
           <PlaceCartRouteResultStep
             savedPlaces={savedPlaces}
             candidatePlaces={insertCandidatePlaces}
-            currentLocation={currentLocation}
+            currentLocation={startLocation}
             onClose={onClose}
+            onClearPlaces={onClearPlaces}
             onRequestSearchPlace={onRequestSearchPlace}
           />
         ) : (
@@ -155,6 +186,10 @@ function RouteCheckoutModalContent({
                 {step === "schedule" ? <PlaceCartScheduleStep /> : null}
 
                 {step === "tempo" ? <PlaceCartTempoStep /> : null}
+
+                {step === "start-location" ? (
+                  <PlaceCartStartLocationStep savedPlaces={savedPlaces} />
+                ) : null}
               </div>
             </div>
 
@@ -175,13 +210,22 @@ function RouteCheckoutModalContent({
   );
 }
 
-function RouteCheckoutModal({ isOpen, ...contentProps }: RouteCheckoutModalProps) {
+function RouteCheckoutModal({
+  isOpen,
+  initialTravelStartDate,
+  initialTripDays,
+  ...contentProps
+}: RouteCheckoutModalProps) {
   if (!isOpen) {
     return null;
   }
 
   return (
-    <RouteCheckoutProvider>
+    <RouteCheckoutProvider
+      initialTravelStartDate={initialTravelStartDate}
+      initialTripDays={initialTripDays}
+      initialStartLocation={contentProps.currentLocation}
+    >
       <RouteCheckoutModalContent {...contentProps} />
     </RouteCheckoutProvider>
   );

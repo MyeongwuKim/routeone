@@ -6,8 +6,14 @@ import {
   type ReactNode,
 } from "react";
 import type { TravelTempo } from "./cart-steps/PlaceCartTempoStep";
+import type { RouteStartLocation } from "./cart-steps/routePlanTypes";
 
-export type CartFlowStep = "cart" | "schedule" | "tempo" | "result";
+export type CartFlowStep =
+  | "cart"
+  | "schedule"
+  | "tempo"
+  | "start-location"
+  | "result";
 
 type RouteCheckoutContextValue = {
   step: CartFlowStep;
@@ -22,6 +28,8 @@ type RouteCheckoutContextValue = {
   setScheduleEndTime: (value: string) => void;
   tempo: TravelTempo | null;
   setTempo: (value: TravelTempo | null) => void;
+  startLocation: RouteStartLocation | null;
+  setStartLocation: (value: RouteStartLocation | null) => void;
   dailyStartMinutes: number;
   scheduleEndMinutes: number;
   isScheduleValid: boolean;
@@ -35,6 +43,13 @@ const DEFAULT_SCHEDULE_END_TIME = "18:00";
 const RouteCheckoutContext = createContext<RouteCheckoutContextValue | null>(
   null
 );
+
+type RouteCheckoutProviderProps = {
+  children: ReactNode;
+  initialTravelStartDate?: string | null;
+  initialTripDays?: number;
+  initialStartLocation?: RouteStartLocation | null;
+};
 
 function toMinutes(timeValue: string) {
   const [hourText, minuteText] = timeValue.split(":");
@@ -64,15 +79,24 @@ function getTodayDate() {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-export function RouteCheckoutProvider({ children }: { children: ReactNode }) {
+export function RouteCheckoutProvider({
+  children,
+  initialTravelStartDate = "",
+  initialTripDays = DEFAULT_TRIP_DAYS,
+  initialStartLocation = null,
+}: RouteCheckoutProviderProps) {
   const [step, setStep] = useState<CartFlowStep>("cart");
-  const [travelStartDate, setTravelStartDate] = useState("");
-  const [tripDays, setTripDays] = useState(DEFAULT_TRIP_DAYS);
+  const [travelStartDate, setTravelStartDate] = useState(
+    initialTravelStartDate ?? ""
+  );
+  const [tripDays, setTripDays] = useState(initialTripDays);
   const [dailyStartTime, setDailyStartTime] = useState(DEFAULT_DAILY_START_TIME);
   const [scheduleEndTime, setScheduleEndTime] = useState(
     DEFAULT_SCHEDULE_END_TIME
   );
   const [tempo, setTempo] = useState<TravelTempo | null>(null);
+  const [startLocation, setStartLocation] =
+    useState<RouteStartLocation | null>(initialStartLocation);
 
   const startDate = parseDateValue(travelStartDate);
   const hasValidStartDate = Boolean(startDate);
@@ -114,6 +138,8 @@ export function RouteCheckoutProvider({ children }: { children: ReactNode }) {
       setScheduleEndTime,
       tempo,
       setTempo,
+      startLocation,
+      setStartLocation,
       dailyStartMinutes,
       scheduleEndMinutes,
       isScheduleValid,
@@ -126,6 +152,7 @@ export function RouteCheckoutProvider({ children }: { children: ReactNode }) {
       scheduleEndMinutes,
       scheduleEndTime,
       scheduleValidationMessage,
+      startLocation,
       step,
       tempo,
       travelStartDate,

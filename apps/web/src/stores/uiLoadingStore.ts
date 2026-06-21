@@ -6,6 +6,7 @@ export type AppLoadingAnimation =
   | "map-rendering"
   | "searching"
   | "pondering"
+  | "empty"
   | "generic";
 
 export type AppLoadingPayload = {
