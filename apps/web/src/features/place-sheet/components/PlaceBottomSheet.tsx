@@ -34,10 +34,14 @@ import {
   isReadableCategoryName,
   isTouristPlace,
 } from "@/lib/placeCategory";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
+import {
+  applyNaverMapTheme,
+  getNaverMapThemeOptions,
+} from "@/lib/naverMapTheme";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
+import { useUiThemeStore } from "@/stores/uiThemeStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import type { MapSheetPlace } from "@/types/place";
 
@@ -60,24 +64,28 @@ function getTopRankBadgeStyle(rank: number) {
   if (rank === 1) {
     return {
       label: "🥇 집중률 1위",
-      className: "border-amber-300 bg-amber-50 text-amber-700",
+      className:
+        "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-400/60 dark:bg-amber-400/15 dark:text-amber-200",
     };
   }
   if (rank === 2) {
     return {
       label: "🥈 집중률 2위",
-      className: "border-slate-300 bg-slate-50 text-slate-700",
+      className:
+        "border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-500/70 dark:bg-slate-300/10 dark:text-slate-100",
     };
   }
   if (rank === 3) {
     return {
       label: "🥉 집중률 3위",
-      className: "border-orange-300 bg-orange-50 text-orange-700",
+      className:
+        "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-400/60 dark:bg-orange-400/15 dark:text-orange-200",
     };
   }
   return {
     label: `집중률 ${rank}위`,
-    className: "border-rose-200 bg-rose-50 text-rose-700",
+    className:
+      "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/60 dark:bg-rose-400/15 dark:text-rose-200",
   };
 }
 
@@ -148,8 +156,8 @@ function PlaceInfoRow({
   }
 
   return (
-    <div className="flex min-h-16 items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/70 px-3 py-3 text-xs">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-base text-brand-600 shadow-sm">
+    <div className="flex min-h-16 items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/70 px-3 py-3 text-xs dark:border-brand-400/25 dark:bg-slate-950/35">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-base text-brand-600 shadow-sm dark:bg-brand-400/15 dark:text-brand-200">
         {icon === "call" ? (
           <IoCallOutline />
         ) : icon === "calendar" ? (
@@ -159,9 +167,87 @@ function PlaceInfoRow({
         )}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-black text-brand-700">{label}</p>
-        <p className="mt-1 line-clamp-2 leading-5 text-slate-600">{value}</p>
+        <p className="font-black text-brand-700 dark:text-brand-200">{label}</p>
+        <p className="mt-1 line-clamp-2 leading-5 text-slate-600 dark:text-slate-300">
+          {value}
+        </p>
       </div>
+    </div>
+  );
+}
+
+function SkeletonBar({
+  className,
+  rounded = "rounded-full",
+}: {
+  className: string;
+  rounded?: string;
+}) {
+  return (
+    <span
+      className={`skeleton-shimmer block bg-slate-200 dark:bg-slate-700 ${rounded} ${className}`}
+    />
+  );
+}
+
+function ImageStripSkeleton() {
+  return (
+    <>
+      {[0, 1, 2].map((index) => (
+        <div
+          key={index}
+          className="h-44 w-40 shrink-0 snap-start rounded-2xl border border-brand-100 bg-white p-3 dark:border-brand-400/25 dark:bg-slate-900"
+        >
+          <SkeletonBar className="h-full w-full" rounded="rounded-xl" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function OverviewSkeleton() {
+  return (
+    <div className="rounded-2xl border border-brand-100 bg-brand-50/45 px-3 py-4 dark:border-brand-400/25 dark:bg-slate-950/45">
+      <div className="space-y-3">
+        <SkeletonBar className="h-4 w-full" />
+        <SkeletonBar className="h-4 w-[92%]" />
+        <SkeletonBar className="h-4 w-[86%]" />
+        <SkeletonBar className="h-4 w-[94%]" />
+        <SkeletonBar className="h-4 w-[62%]" />
+      </div>
+    </div>
+  );
+}
+
+function RouteInfoSkeleton() {
+  return (
+    <div className="flex items-center gap-3">
+      <SkeletonBar className="h-8 w-8 shrink-0" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <SkeletonBar className="h-3 w-3/4" />
+        <SkeletonBar className="h-3 w-1/2" />
+      </div>
+    </div>
+  );
+}
+
+function NearbyPlacesSkeleton() {
+  return (
+    <div className="space-y-2">
+      {[0, 1, 2].map((index) => (
+        <div
+          key={index}
+          className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-white px-3 py-3 dark:border-brand-400/25 dark:bg-slate-950/40"
+        >
+          <SkeletonBar className="h-16 w-16 shrink-0" rounded="rounded-xl" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <SkeletonBar className="h-4 w-2/3" />
+            <SkeletonBar className="h-3 w-1/3" />
+            <SkeletonBar className="h-3 w-5/6" />
+          </div>
+          <SkeletonBar className="h-4 w-10 shrink-0" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -172,7 +258,7 @@ function CompactHoursBadge({ value }: { value: string }) {
   }
 
   return (
-    <span className="inline-flex max-w-[10rem] items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100">
+    <span className="inline-flex max-w-[10rem] items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100 dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25">
       <IoTimeOutline className="shrink-0 text-sm" />
       <span className="truncate">{value}</span>
     </span>
@@ -226,6 +312,7 @@ function createMapSheetPlaceFromNearbyPlace({
 }
 
 function PlaceBottomSheet() {
+  const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const {
     isOpen,
     sheetMode,
@@ -587,6 +674,7 @@ function PlaceBottomSheet() {
         zoom: 11,
         minZoom: 9,
         mapTypeId: naverMaps.MapTypeId.NORMAL,
+        ...getNaverMapThemeOptions(isDarkMode),
         draggable: false,
         pinchZoom: false,
         scrollWheel: false,
@@ -603,6 +691,7 @@ function PlaceBottomSheet() {
     } else {
       naverMaps.Event.trigger(previewMap, "resize");
     }
+    applyNaverMapTheme(previewMap, isDarkMode);
 
     clearPreviewOverlays();
 
@@ -670,6 +759,7 @@ function PlaceBottomSheet() {
     });
   }, [
     currentLocation,
+    isDarkMode,
     isOpen,
     routePathPoints,
     selectedPlace,
@@ -780,7 +870,9 @@ function PlaceBottomSheet() {
                     </p>
                     {isSelectedPlaceDetailReady ? (
                       <CompactHoursBadge value={detailOperatingHours} />
-                    ) : null}
+                    ) : (
+                      <SkeletonBar className="h-7 w-28" />
+                    )}
                   </div>
                   {shouldShowCategoryName ? (
                     <p className="mt-1 text-sm text-slate-600">
@@ -825,15 +917,7 @@ function PlaceBottomSheet() {
               <div className="mt-5">
                 <div className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
                   {!isSelectedPlaceDetailReady ? (
-                    <div className="flex h-44 w-full min-w-full items-center rounded-2xl border border-brand-200 bg-brand-50 px-3">
-                      <PotatoLoadingCard
-                        title="이미지를 불러오는 중"
-                        description="감자가 데이터에서 이미지를 찾는 중"
-                        animation="searching"
-                        compact
-                        className="border-brand-100 bg-white/90 shadow-none"
-                      />
-                    </div>
+                    <ImageStripSkeleton />
                   ) : activeImageList.length > 0 ? (
                     <>
                       {activeImageList.map((imageUrl, index) => (
@@ -900,31 +984,23 @@ function PlaceBottomSheet() {
               }`}
             >
               <div className="space-y-4">
-                <div className="rounded-3xl border border-brand-200/80 bg-gradient-to-b from-white to-brand-50/70 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                <div className="rounded-3xl border border-brand-200/80 bg-white px-4 py-4 shadow-sm dark:border-brand-400/30 dark:bg-slate-900/70">
                   <div className="mb-3 flex items-center justify-between">
                     <p className="font-trip text-sm text-brand-700">
                       PLACE OVERVIEW
                     </p>
-                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
+                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700 dark:bg-brand-400/15 dark:text-brand-200">
                       상세 정보
                     </span>
                   </div>
                   {!isSelectedPlaceDetailReady ? (
-                    <div className="rounded-2xl border border-brand-100 bg-white/75 p-2">
-                      <PotatoLoadingCard
-                        title="장소 설명을 불러오는 중"
-                        description="감자가 데이터에서 설명을 찾는 중"
-                        animation="searching"
-                        compact
-                        className="border-brand-100 bg-white/95 shadow-none"
-                      />
-                    </div>
+                    <OverviewSkeleton />
                   ) : detailOverview ? (
-                    <p className="whitespace-pre-line rounded-2xl border border-brand-100 bg-white/80 px-3 py-3 text-sm leading-7 text-slate-700">
+                    <p className="whitespace-pre-line rounded-2xl border border-brand-100 bg-brand-50/45 px-3 py-3 text-sm leading-7 text-slate-700 dark:border-brand-400/25 dark:bg-slate-950/45 dark:text-slate-200">
                       {detailOverview}
                     </p>
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-brand-200 bg-white/75 px-3 py-4 text-center text-sm text-slate-500">
+                    <div className="rounded-2xl border border-dashed border-brand-200 bg-white/75 px-3 py-4 text-center text-sm text-slate-500 dark:border-brand-400/30 dark:bg-slate-950/35 dark:text-slate-300">
                       관광공사 오픈 API에서 제공하는 상세 설명이 아직 없습니다.
                     </div>
                   )}
@@ -965,8 +1041,12 @@ function PlaceBottomSheet() {
                         className="pointer-events-none h-48 w-full touch-none select-none"
                       />
                       {isRouteLoading ? (
-                        <div className="absolute inset-0 flex items-center justify-center bg-white/55">
-                          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/55 px-6 backdrop-blur-[1px] dark:bg-slate-950/35">
+                          <div className="w-full max-w-[220px] space-y-3 rounded-2xl border border-brand-100 bg-white/85 p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/80">
+                            <SkeletonBar className="h-3 w-2/3" />
+                            <SkeletonBar className="h-3 w-full" />
+                            <SkeletonBar className="h-3 w-1/2" />
+                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -978,12 +1058,7 @@ function PlaceBottomSheet() {
 
                     <div className="mt-3 rounded-2xl border border-brand-100 bg-white px-3 py-3">
                       {isRouteLoading ? (
-                        <div className="flex items-center text-sm text-brand-700">
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
-                          <span className="ml-2 font-semibold">
-                            내 위치(강릉 중심) 기준 경로 계산 중
-                          </span>
-                        </div>
+                        <RouteInfoSkeleton />
                       ) : routeDurationText && routeDistanceText ? (
                         <div className="flex items-center gap-2 text-sm">
                           <IoCarSportOutline className="text-brand-600" />
@@ -1011,24 +1086,16 @@ function PlaceBottomSheet() {
                   </section>
                 ) : null}
 
-                <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm">
+                <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/30 dark:bg-slate-900/70">
                   <div className="mb-3 flex items-center justify-between">
                     <p className="font-trip text-sm text-brand-700">이런 곳도 좋아요</p>
-                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
+                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700 dark:bg-brand-400/15 dark:text-brand-200">
                       주변 추천
                     </span>
                   </div>
 
                   {nearbyTouristQuery.isFetching ? (
-                    <div className="rounded-2xl border border-brand-100 bg-white/75 p-2">
-                      <PotatoLoadingCard
-                        title="주변 장소를 찾는 중"
-                        description="감자가 근처 관광지를 정리하는 중"
-                        animation="searching"
-                        compact
-                        className="border-brand-100 bg-white/95 shadow-none"
-                      />
-                    </div>
+                    <NearbyPlacesSkeleton />
                   ) : nearbyTouristPlaces.length > 0 ? (
                     <div className="space-y-2">
                       {nearbyTouristPlaces.map((place) => {
@@ -1053,7 +1120,7 @@ function PlaceBottomSheet() {
                       })}
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm text-slate-500">
+                    <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm text-slate-500 dark:border-brand-400/30 dark:bg-slate-950/35 dark:text-slate-300">
                       {nearbyTouristError ?? "주변 추천 데이터가 아직 없습니다."}
                     </div>
                   )}

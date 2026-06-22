@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -63,6 +63,42 @@ function buildTrendChartData(points: TouristConcentrationPoint[]) {
       },
     ],
   };
+}
+
+function SkeletonBar({
+  className,
+  rounded = "rounded-full",
+  style,
+}: {
+  className: string;
+  rounded?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <span
+      className={`skeleton-shimmer block bg-slate-200 dark:bg-slate-700 ${rounded} ${className}`}
+      style={style}
+    />
+  );
+}
+
+function TrendChartSkeleton() {
+  return (
+    <div className="flex min-h-44 flex-col justify-end gap-3 rounded-xl bg-brand-50 px-4 py-4 dark:bg-slate-950/35">
+      <div className="grid h-28 grid-cols-7 items-end gap-2">
+        {[44, 72, 52, 88, 66, 96, 58].map((height, index) => (
+          <SkeletonBar
+            key={index}
+            className="w-full"
+            rounded="rounded-t-lg rounded-b-sm"
+            style={{ height: `${height}%` }}
+          />
+        ))}
+      </div>
+      <SkeletonBar className="h-3 w-3/4" />
+      <SkeletonBar className="h-3 w-1/2" />
+    </div>
+  );
 }
 
 function PlaceTrendChart({
@@ -138,10 +174,10 @@ function PlaceTrendChart({
   );
 
   return (
-    <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm">
+    <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/30 dark:bg-slate-900/70">
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="font-trip text-sm text-brand-700">방문자 추이</p>
-        <div className="inline-flex rounded-full border border-brand-200 bg-brand-50 p-1">
+        <div className="inline-flex rounded-full border border-brand-200 bg-brand-50 p-1 dark:border-brand-400/30 dark:bg-slate-950/45">
           <button
             type="button"
             onClick={() => setTrendTab("weekly")}
@@ -167,20 +203,15 @@ function PlaceTrendChart({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-brand-100 bg-white px-3 py-3">
+      <div className="rounded-2xl border border-brand-100 bg-white px-3 py-3 dark:border-brand-400/25 dark:bg-slate-950/40">
         {isLoading ? (
-          <div className="flex min-h-44 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
-            <div className="h-7 w-7 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
-            <p className="ml-3 text-sm font-semibold">
-              방문자 추이 불러오는 중
-            </p>
-          </div>
+          <TrendChartSkeleton />
         ) : activeTrendPoints.length > 0 ? (
           <div className="h-44 w-full">
             <Line data={trendChartData} options={trendChartOptions} />
           </div>
         ) : (
-          <div className="flex min-h-44 flex-col items-center justify-center rounded-xl border border-dashed border-brand-200 bg-brand-50/70 px-3 text-center text-sm text-slate-500">
+          <div className="flex min-h-44 flex-col items-center justify-center rounded-xl border border-dashed border-brand-200 bg-brand-50/70 px-3 text-center text-sm text-slate-500 dark:border-brand-400/30 dark:bg-slate-950/35 dark:text-slate-300">
             <IoStatsChart className="mb-2 text-lg text-brand-500" />
             <p>
               {errorMessage ??

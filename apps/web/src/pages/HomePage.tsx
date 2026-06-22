@@ -11,7 +11,6 @@ import {
   IoSearch,
   IoTicketOutline,
 } from "react-icons/io5";
-import PlaceBottomSheet from "@/features/place-sheet/components/PlaceBottomSheet";
 import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
 import {
   createBadgeMarkerIconHtml,
@@ -19,6 +18,10 @@ import {
 } from "@/components/map/NaverMapMarkerIcon";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
+import {
+  applyNaverMapTheme,
+  getNaverMapThemeOptions,
+} from "@/lib/naverMapTheme";
 import {
   CAFE_LCLS_CODE,
   getPlaceCategoryIcon,
@@ -44,6 +47,7 @@ import {
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
+import { useUiThemeStore } from "@/stores/uiThemeStore";
 import type { MapSheetPlace } from "@/types/place";
 
 const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
@@ -482,6 +486,7 @@ type OpenPlaceSheetFromAttractionOptions = {
 };
 
 function HomePage() {
+  const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const naverMapsRef = useRef<any>(null);
@@ -1233,10 +1238,12 @@ const attractionsQuery = useQuery({
 
         naverMapsRef.current = naverMaps;
 
+        const shouldUseDarkMap = useUiThemeStore.getState().mode === "dark";
         const mapInstance = new naverMaps.Map(container, {
           center: new naverMaps.LatLng(GANGWON_CENTER.lat, GANGWON_CENTER.lng),
           zoom: 10,
           mapTypeId: naverMaps.MapTypeId.NORMAL,
+          ...getNaverMapThemeOptions(shouldUseDarkMap),
           zoomControl: false,
           mapDataControl: true,
           logoControl: true,
@@ -1244,6 +1251,7 @@ const attractionsQuery = useQuery({
         });
 
         mapInstanceRef.current = mapInstance;
+        applyNaverMapTheme(mapInstance, shouldUseDarkMap);
 
         const gangwonBounds = new naverMaps.LatLngBounds(
           new naverMaps.LatLng(GANGWON_BOUNDS.south, GANGWON_BOUNDS.west),
@@ -1299,6 +1307,10 @@ const attractionsQuery = useQuery({
       container.innerHTML = "";
     };
   }, [closeSheet]);
+
+  useEffect(() => {
+    applyNaverMapTheme(mapInstanceRef.current, isDarkMode);
+  }, [isDarkMode]);
 
   useEffect(() => {
     if (!mapReady || !isBoundaryDataReady) {
@@ -1594,9 +1606,6 @@ const attractionsQuery = useQuery({
           window.setTimeout(() => searchInputRef.current?.focus(), 0);
         }}
       />
-
-      <PlaceBottomSheet />
-
       {isSearchPopupOpen ? (
         <section className="fixed inset-0 z-[2300] bg-gradient-to-b from-brand-50 via-brand-50 to-white">
           <div className="flex h-full flex-col">

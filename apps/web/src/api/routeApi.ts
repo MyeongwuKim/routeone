@@ -5,6 +5,7 @@ import {
   CreateRouteDocument,
   DeleteRouteDayDocument,
   DeleteRouteDocument,
+  LikedSharedRoutesDocument,
   LikeRouteDocument,
   MarkRouteStopVisitedDocument,
   MyRoutesDocument,
@@ -15,12 +16,14 @@ import {
   SharedRoutesDocument,
   UnlikeRouteDocument,
   UnsaveRouteDocument,
+  UpdateRouteStopStayMinutesDocument,
   type AppendRouteDaysInput,
   type CloneRouteInput,
   type CreateRouteInput,
   type MyRoutesQueryVariables,
   type ReorderRouteStopsInput,
   type SharedRoutesQueryVariables,
+  type UpdateRouteStopStayMinutesInput,
 } from "@/generated/graphql";
 import { requestGraphQL } from "@/lib/graphqlClient";
 
@@ -32,6 +35,9 @@ export const routeApi = {
   },
   sharedRoutes(variables?: SharedRoutesQueryVariables) {
     return requestGraphQL(SharedRoutesDocument, variables);
+  },
+  likedSharedRoutes() {
+    return requestGraphQL(LikedSharedRoutesDocument);
   },
   routeById(id: RouteId) {
     return requestGraphQL(RouteByIdDocument, {
@@ -66,6 +72,11 @@ export const routeApi = {
   },
   reorderRouteStops(input: ReorderRouteStopsInput) {
     return requestGraphQL(ReorderRouteStopsDocument, {
+      input,
+    });
+  },
+  updateRouteStopStayMinutes(input: UpdateRouteStopStayMinutesInput) {
+    return requestGraphQL(UpdateRouteStopStayMinutesDocument, {
       input,
     });
   },

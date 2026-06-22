@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @font-face {
   font-family: "Roboto";
   src: url("/fonts/roboto-latin-400-normal.woff2") format("woff2");
@@ -82,6 +84,12 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root.dark {
+  color: #e2e8f0;
+  background: #071718;
+  color-scheme: dark;
+}
+
 .font-trip {
   font-family:
     "Jua",
@@ -110,6 +118,119 @@ body {
   overflow-x: hidden;
 }
 
+.dark body {
+  background: #071718;
+}
+
+.dark .bg-white {
+  background-color: #0f1f1f;
+}
+
+.dark .bg-white\/95 {
+  background-color: rgb(15 31 31 / 0.95);
+}
+
+.dark .bg-white\/80 {
+  background-color: rgb(15 31 31 / 0.8);
+}
+
+.dark .bg-white\/65 {
+  background-color: rgb(15 31 31 / 0.65);
+}
+
+.dark .bg-brand-50 {
+  background-color: #0f2f2c;
+}
+
+.dark .bg-brand-50\/40 {
+  background-color: rgb(15 47 44 / 0.4);
+}
+
+.dark .bg-brand-50\/60 {
+  background-color: rgb(15 47 44 / 0.6);
+}
+
+.dark .bg-slate-50 {
+  background-color: #111827;
+}
+
+.dark .bg-slate-100 {
+  background-color: #1e293b;
+}
+
+.dark .bg-slate-200 {
+  background-color: #334155;
+}
+
+.dark .bg-rose-50 {
+  background-color: #3f121b;
+}
+
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: #f8fafc;
+}
+
+.dark .text-slate-700,
+.dark .text-slate-600 {
+  color: #cbd5e1;
+}
+
+.dark .text-slate-500 {
+  color: #94a3b8;
+}
+
+.dark .text-slate-400 {
+  color: #64748b;
+}
+
+.dark .text-slate-300 {
+  color: #475569;
+}
+
+.dark .text-brand-900,
+.dark .text-brand-800,
+.dark .text-brand-700,
+.dark .text-brand-600 {
+  color: #5eead4;
+}
+
+.dark .text-rose-500,
+.dark .text-rose-600,
+.dark .text-rose-700 {
+  color: #fb7185;
+}
+
+.dark .border-brand-50,
+.dark .border-brand-100,
+.dark .border-brand-200,
+.dark .border-brand-300 {
+  border-color: #164e47;
+}
+
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 {
+  border-color: #334155;
+}
+
+.dark .border-rose-100 {
+  border-color: #7f1d1d;
+}
+
+.dark .ring-brand-100 {
+  --tw-ring-color: #164e47;
+}
+
+.dark .ring-slate-100 {
+  --tw-ring-color: #334155;
+}
+
+.dark .shadow-sm {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -135,6 +256,43 @@ body {
   max-height: none;
 }
 
+@keyframes skeletonShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.55),
+    transparent
+  );
+  animation: skeletonShimmer 1.35s ease-in-out infinite;
+}
+
+.dark .skeleton-shimmer::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.1),
+    transparent
+  );
+}
+
 @keyframes routeCheckoutEnter {
   from {
     transform: translateX(100%);
@@ -155,6 +313,30 @@ body {
   }
 }
 
+@keyframes routePageSlideEnter {
+  from {
+    opacity: 0.85;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes routeDayAccordionEnter {
+  from {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    max-height: 1600px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes routeCheckoutBottomSheetEnter {
   from {
     transform: translateY(100%);
@@ -170,6 +352,15 @@ body {
 
 .route-checkout-step-enter {
   animation: routeCheckoutStepEnter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.route-page-slide-enter {
+  animation: routePageSlideEnter 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.route-day-accordion-enter {
+  animation: routeDayAccordionEnter 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
 }
 
 .route-checkout-bottom-sheet-enter {
@@ -190,6 +381,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .route-checkout-modal-enter,
   .route-checkout-step-enter,
+  .route-page-slide-enter,
+  .route-day-accordion-enter,
   .route-checkout-bottom-sheet-enter {
     animation: none;
   }

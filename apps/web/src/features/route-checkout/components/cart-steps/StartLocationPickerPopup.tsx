@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IoClose, IoLocationSharp } from "react-icons/io5";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
+import {
+  applyNaverMapTheme,
+  getNaverMapThemeOptions,
+} from "@/lib/naverMapTheme";
+import { useUiThemeStore } from "@/stores/uiThemeStore";
 import type { PlannedRouteDay, RouteStartLocation } from "./routePlanTypes";
 
 type StartLocationPickerPopupProps = {
@@ -82,6 +87,7 @@ function StartLocationPickerPopup({
   onClose,
   onApply,
 }: StartLocationPickerPopupProps) {
+  const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const overlayRefs = useRef<Array<{ setMap: (map: null) => void }>>([]);
   const [draftLocation, setDraftLocation] = useState(initialLocation);
@@ -125,7 +131,9 @@ function StartLocationPickerPopup({
           scaleControl: false,
           mapDataControl: false,
           logoControl: false,
+          ...getNaverMapThemeOptions(isDarkMode),
         });
+        applyNaverMapTheme(map, isDarkMode);
         const bounds = new naverMaps.LatLngBounds();
         bounds.extend(center);
 
@@ -195,7 +203,7 @@ function StartLocationPickerPopup({
       overlayRefs.current.forEach((overlay) => overlay.setMap(null));
       overlayRefs.current = [];
     };
-  }, [initialLocation, visiblePlaces]);
+  }, [initialLocation, visiblePlaces, isDarkMode]);
 
   return (
     <div className="fixed inset-0 z-[2800] bg-white">

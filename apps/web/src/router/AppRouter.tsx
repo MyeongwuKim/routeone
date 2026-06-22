@@ -4,7 +4,8 @@ import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/LoginPage";
 import MyAccountPage from "@/pages/MyAccountPage";
 import MyInfoPage from "@/pages/MyInfoPage";
-import MyRouteHistoryPage from "@/pages/MyRouteHistoryPage";
+import MyRouteHistoryPage from "@/features/my-route/pages/MyRouteHistoryPage";
+import LikedSharedRoutePage from "@/features/shared-route/pages/LikedSharedRoutePage";
 import MyRoutePage from "@/pages/MyRoutePage";
 import SharedRoutePage from "@/pages/SharedRoutePage";
 import { getAuthToken } from "@/lib/authToken";
@@ -37,6 +38,7 @@ function AppRouter() {
           <Route path="/shared-route" element={<SharedRoutePage />} />
           <Route path="/me" element={<MyInfoPage />} />
           <Route path="/me/routes" element={<MyRouteHistoryPage />} />
+          <Route path="/me/liked-routes" element={<LikedSharedRoutePage />} />
           <Route path="/me/account" element={<MyAccountPage />} />
         </Route>
       </Routes>

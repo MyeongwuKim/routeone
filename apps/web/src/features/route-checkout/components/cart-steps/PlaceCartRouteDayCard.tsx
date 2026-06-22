@@ -283,7 +283,7 @@ function RouteSegmentControl({
           className={`absolute left-1/2 top-0 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-dashed text-[10px] font-black shadow-sm transition ${
             isActiveDropZone
               ? "scale-125 border-brand-600 bg-brand-600 text-white"
-              : "border-brand-400 bg-white text-brand-700"
+              : "border-brand-400 bg-white text-brand-700 dark:border-brand-300 dark:bg-slate-950 dark:text-brand-200"
           }`}
         >
           ↓
@@ -301,12 +301,12 @@ function RouteSegmentControl({
         type="button"
         aria-label="이 구간에 장소 추가"
         onClick={onRequestInsertPlace}
-        className="absolute left-1/2 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 shadow-sm transition active:scale-95"
+        className="absolute left-1/2 top-0 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-brand-200 bg-white text-brand-700 shadow-sm transition active:scale-95 dark:border-brand-400/50 dark:bg-slate-950 dark:text-brand-200"
       >
         <IoAdd className="text-xs" />
       </button>
       <span
-        className="absolute left-1/2 inline-flex -translate-x-1/2 items-center gap-0.5 whitespace-nowrap rounded-full border border-brand-100 bg-brand-50 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500"
+        className="absolute left-1/2 inline-flex -translate-x-1/2 items-center gap-0.5 whitespace-nowrap rounded-full border border-brand-100 bg-brand-50 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 dark:border-brand-400/40 dark:bg-slate-950 dark:text-slate-200"
         style={{ top: `${badgeOffsetY}px` }}
       >
         <IoCarSportOutline className="shrink-0 text-brand-600" />
@@ -625,7 +625,7 @@ function StationNode({
   const nodeContent = (
     <>
       <div
-        className={`relative flex h-10 w-10 items-center justify-center rounded-full border-[3px] bg-white text-base shadow-sm ${
+        className={`relative flex h-10 w-10 items-center justify-center rounded-full border-[3px] bg-white text-base shadow-sm dark:bg-slate-950 dark:text-slate-100 ${
           station.type === "start"
             ? "border-slate-300 text-brand-700"
             : isOrderEditing
@@ -644,13 +644,15 @@ function StationNode({
       </div>
 
       <p
-        className="mt-3 w-full max-w-[92px] truncate text-center text-[11px] font-bold text-slate-900"
+        className="mt-3 w-full max-w-[92px] truncate text-center text-[11px] font-bold text-slate-900 dark:text-slate-50"
         title={station.title}
       >
         {station.title}
       </p>
       {isOrderEditing ? null : (
-        <p className="mt-0.5 text-[10px] text-slate-500">{station.subtitle}</p>
+        <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-300">
+          {station.subtitle}
+        </p>
       )}
       {station.item && !isOrderEditing ? (
         <p className="mt-0.5 text-[10px] font-semibold text-brand-700">
@@ -770,10 +772,12 @@ function StationNode({
         <button
           type="button"
           onClick={() => onRequestStayMinutesEdit(station.item as PlannedRouteItem)}
-          className="mt-1 flex w-[62px] max-w-full items-center justify-center gap-0.5 rounded-full border border-brand-100 bg-brand-50 px-1.5 py-1 text-[11px] font-bold text-slate-800 active:scale-95"
+          className="mt-1 flex w-[62px] max-w-full items-center justify-center gap-0.5 rounded-full border border-brand-100 bg-brand-50 px-1.5 py-1 text-[11px] font-bold text-slate-800 active:scale-95 dark:border-brand-400/35 dark:bg-slate-950 dark:text-slate-100"
         >
           <span>{station.item.stayMinutes}</span>
-          <span className="text-[9px] text-slate-500">분</span>
+          <span className="text-[9px] text-slate-500 dark:text-slate-300">
+            분
+          </span>
         </button>
       ) : null}
     </div>
@@ -1352,9 +1356,9 @@ function PlaceCartRouteDayCard({
 
   return (
     <section
-      className="overflow-hidden rounded-3xl border border-brand-200 bg-white shadow-sm"
+      className="overflow-hidden rounded-3xl border border-brand-200 bg-white shadow-sm dark:border-brand-400/30 dark:bg-slate-950/40"
     >
-      <div className="flex items-center justify-between gap-3 border-b border-brand-100 bg-brand-50/70 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-brand-100 bg-brand-50/70 px-4 py-3 dark:border-brand-400/25 dark:bg-slate-900/70">
         <div>
           <p className="font-trip text-sm text-brand-700">DAY {day.day}</p>
           {day.date ? (
@@ -1384,14 +1388,14 @@ function PlaceCartRouteDayCard({
               className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm ${
                 hasRouteComparison
                   ? "border-brand-600 bg-brand-600 text-white"
-                  : "border-brand-200 bg-white text-brand-700"
+                  : "border-brand-200 bg-white text-brand-700 dark:border-brand-400/35 dark:bg-slate-950 dark:text-brand-200"
               }`}
             >
               <IoMapOutline className="text-xs" />
               {hasRouteComparison ? "루트비교" : "루트보기"}
             </button>
           ) : null}
-          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-700 shadow-sm">
+          <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-brand-700 shadow-sm dark:bg-slate-950 dark:text-brand-200">
             {day.items.length}곳
           </span>
         </div>
@@ -1411,7 +1415,7 @@ function PlaceCartRouteDayCard({
               className={`mb-3 rounded-2xl border border-dashed px-3 py-3 text-center text-xs font-bold transition ${
                 activeMoveDirection === "previous"
                   ? "border-brand-600 bg-brand-600 text-white"
-                  : "border-brand-300 bg-brand-50/80 text-brand-700"
+                  : "border-brand-300 bg-brand-50/80 text-brand-700 dark:border-brand-400/50 dark:bg-slate-900/90 dark:text-brand-100"
               }`}
             >
               DAY {previousDay.day} 맨 뒤로 이동
@@ -1463,13 +1467,13 @@ function PlaceCartRouteDayCard({
               className={`mt-3 rounded-2xl border border-dashed px-3 py-3 text-center text-xs font-bold transition ${
                 activeDropIndex === day.items.length
                   ? "border-brand-600 bg-brand-600 text-white"
-                  : "border-brand-300 bg-brand-50/80 text-brand-700"
+                  : "border-brand-300 bg-brand-50/80 text-brand-700 dark:border-brand-400/50 dark:bg-slate-900/90 dark:text-brand-100"
               }`}
             >
               맨 뒤로 옮기려면 여기에 놓기
             </div>
           ) : (
-            <div className="mt-3 flex items-center justify-between rounded-2xl border border-brand-100 bg-brand-50/60 px-3 py-2 text-[10px] text-slate-500">
+            <div className="mt-3 flex items-center justify-between rounded-2xl border border-brand-100 bg-brand-50/60 px-3 py-2 text-[10px] text-slate-500 dark:border-brand-400/30 dark:bg-slate-900/80 dark:text-slate-200">
               <span>S자 순서</span>
               <span>차량 이동 추정</span>
             </div>
@@ -1486,7 +1490,7 @@ function PlaceCartRouteDayCard({
               className={`mt-3 rounded-2xl border border-dashed px-3 py-3 text-center text-xs font-bold transition ${
                 activeMoveDirection === "next"
                   ? "border-brand-600 bg-brand-600 text-white"
-                  : "border-brand-300 bg-brand-50/80 text-brand-700"
+                  : "border-brand-300 bg-brand-50/80 text-brand-700 dark:border-brand-400/50 dark:bg-slate-900/90 dark:text-brand-100"
               }`}
             >
               DAY {nextDay.day} 맨 앞으로 이동
@@ -1494,7 +1498,7 @@ function PlaceCartRouteDayCard({
           ) : null}
         </div>
       ) : (
-        <div className="m-4 rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm text-slate-500">
+        <div className="m-4 rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm text-slate-500 dark:border-brand-400/40 dark:bg-slate-900/80 dark:text-slate-200">
           배치된 장소가 없습니다
         </div>
       )}
@@ -1540,7 +1544,7 @@ function PlaceCartRouteDayCard({
       ) : null}
       {draggedItem?.isActive ? (
         <div
-          className="pointer-events-none fixed z-[3000] flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-2xl border border-brand-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 shadow-2xl"
+          className="pointer-events-none fixed z-[3000] flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-2xl border border-brand-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 shadow-2xl dark:border-brand-400/40 dark:bg-slate-950 dark:text-slate-50"
           style={{
             left: draggedItem.x,
             top: draggedItem.y,

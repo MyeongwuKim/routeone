@@ -4,12 +4,14 @@ import type {
   CreateRouteInput,
   PlaceProvider,
 } from "@/generated/graphql";
+import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
 import type { MapSheetPlace } from "@/types/place";
 
 type RouteCheckoutPlanDay = {
   day: number;
   items: Array<{
     stayMinutes: number;
+    travelMinutesFromPrevious?: number | null;
     place: MapSheetPlace;
   }>;
 };
@@ -18,9 +20,18 @@ type SaveRoutePlanInput = {
   routePlan: RouteCheckoutPlanDay[];
   travelStartDate: string;
   tripDays: number;
+  startLocation?: {
+    lat: number;
+    lng: number;
+  } | null;
 };
 
 const ROUTE_PLACE_PROVIDER: PlaceProvider = "TOUR_API";
+
+type RouteTravelPoint = {
+  lat: number;
+  lng: number;
+};
 
 function getPlaceRegionCode(place: MapSheetPlace) {
   return place.signguCode || place.areaCode || null;
@@ -51,7 +62,44 @@ function getMostFrequentValue(values: Array<string | null | undefined>) {
   );
 }
 
-function buildCreateRouteInput(input: SaveRoutePlanInput): CreateRouteInput {
+function hasValidTravelPoint(
+  point: RouteTravelPoint | null | undefined
+): point is RouteTravelPoint {
+  return Boolean(
+    point && Number.isFinite(point.lat) && Number.isFinite(point.lng)
+  );
+}
+
+async function resolveTravelMinutesFromPrevious({
+  from,
+  to,
+  fallbackMinutes,
+}: {
+  from: RouteTravelPoint | null;
+  to: RouteTravelPoint;
+  fallbackMinutes?: number | null;
+}) {
+  if (!hasValidTravelPoint(from) || !hasValidTravelPoint(to)) {
+    return fallbackMinutes ?? null;
+  }
+
+  try {
+    const route = await fetchDrivingRouteFromCurrentLocation({
+      startLat: from.lat,
+      startLng: from.lng,
+      goalLat: to.lat,
+      goalLng: to.lng,
+    });
+
+    return Math.max(1, Math.round(route.durationMs / 60000));
+  } catch {
+    return fallbackMinutes ?? null;
+  }
+}
+
+async function buildCreateRouteInput(
+  input: SaveRoutePlanInput
+): Promise<CreateRouteInput> {
   const routeStops = input.routePlan.flatMap((day) =>
     day.items.map((item) => ({
       day,
@@ -65,40 +113,63 @@ function buildCreateRouteInput(input: SaveRoutePlanInput): CreateRouteInput {
     routeStops.map(({ item }) => getPlaceRegionLabelKey(item.place))
   );
 
-  return {
+  const routeInput: CreateRouteInput = {
     countryCode: "KR",
     primaryRegionCode,
     primaryRegionLabelKey,
     tripDays: input.tripDays,
     travelStartDate: input.travelStartDate,
-    stops: routeStops.map(({ day, item }, index) => ({
-      dayIndex: day.day,
-      order: index + 1,
-      stayMinutes: item.stayMinutes,
-      place: {
-        provider: ROUTE_PLACE_PROVIDER,
-        externalId: item.place.id,
-        contentId: item.place.contentId,
-        contentTypeId: item.place.contentTypeId,
-        title: item.place.title,
-        address: item.place.address,
-        lat: item.place.lat,
-        lng: item.place.lng,
-        categoryLabel: item.place.contentTypeLabel,
-        categoryName: item.place.categoryName,
-        imageUrl: item.place.images[0] ?? null,
-        regionCode: getPlaceRegionCode(item.place),
-        regionLabelKey: getPlaceRegionLabelKey(item.place),
-      },
-    })),
+    startLocation: input.startLocation ?? null,
+    stops: [],
   };
+
+  let order = 1;
+
+  for (const day of input.routePlan) {
+    let previousPoint: RouteTravelPoint | null = input.startLocation ?? null;
+
+    for (const item of day.items) {
+      const travelMinutesFromPrevious = await resolveTravelMinutesFromPrevious({
+        from: previousPoint,
+        to: item.place,
+        fallbackMinutes: item.travelMinutesFromPrevious,
+      });
+
+      routeInput.stops?.push({
+        dayIndex: day.day,
+        order,
+        stayMinutes: item.stayMinutes,
+        travelMinutesFromPrevious,
+        place: {
+          provider: ROUTE_PLACE_PROVIDER,
+          externalId: item.place.id,
+          contentId: item.place.contentId,
+          contentTypeId: item.place.contentTypeId,
+          title: item.place.title,
+          address: item.place.address,
+          lat: item.place.lat,
+          lng: item.place.lng,
+          categoryLabel: item.place.contentTypeLabel,
+          categoryName: item.place.categoryName,
+          imageUrl: item.place.images[0] ?? null,
+          regionCode: getPlaceRegionCode(item.place),
+          regionLabelKey: getPlaceRegionLabelKey(item.place),
+        },
+      });
+
+      previousPoint = item.place;
+      order += 1;
+    }
+  }
+
+  return routeInput;
 }
 
-function buildAppendRouteDaysInput(
+async function buildAppendRouteDaysInput(
   routeId: string,
   input: SaveRoutePlanInput
-): AppendRouteDaysInput {
-  const routeInput = buildCreateRouteInput(input);
+): Promise<AppendRouteDaysInput> {
+  const routeInput = await buildCreateRouteInput(input);
 
   return {
     routeId,
@@ -110,10 +181,12 @@ function buildAppendRouteDaysInput(
 }
 
 export const routeCheckoutApi = {
-  saveRoutePlan(input: SaveRoutePlanInput) {
-    return routeApi.createRoute(buildCreateRouteInput(input));
+  async saveRoutePlan(input: SaveRoutePlanInput) {
+    return routeApi.createRoute(await buildCreateRouteInput(input));
   },
-  appendRouteDays(routeId: string, input: SaveRoutePlanInput) {
-    return routeApi.appendRouteDays(buildAppendRouteDaysInput(routeId, input));
+  async appendRouteDays(routeId: string, input: SaveRoutePlanInput) {
+    return routeApi.appendRouteDays(
+      await buildAppendRouteDaysInput(routeId, input)
+    );
   },
 };

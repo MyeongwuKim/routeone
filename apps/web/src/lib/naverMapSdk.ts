@@ -5,7 +5,7 @@ let sdkLoadPromise: Promise<void> | null = null;
 function createNaverSdkUrl(keyId: string) {
   const url = new URL("https://oapi.map.naver.com/openapi/v3/maps.js");
   url.searchParams.set("ncpKeyId", keyId);
-  url.searchParams.set("submodules", "geocoder");
+  url.searchParams.set("submodules", "geocoder,gl");
 
   return url.toString();
 }

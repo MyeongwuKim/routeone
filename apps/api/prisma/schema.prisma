@@ -68,6 +68,9 @@ model Route {
   startedAt   DateTime?
   completedAt DateTime?
   sharedAt    DateTime?
+  shareTags   String[] @default([])
+
+  startLocation RouteStartLocation?
 
   owner User @relation(fields: [ownerId], references: [id])
   days  RouteDay[]
@@ -110,6 +113,7 @@ model RouteStop {
   place PlaceSnapshot
 
   stayMinutes Int?
+  travelMinutesFromPrevious Int?
   memo        String?
 
   visitStatus VisitStatus @default(PENDING)
@@ -167,6 +171,11 @@ type PlaceSnapshot {
   imageUrl      String?
   regionCode    String?
   regionLabelKey String?
+}
+
+type RouteStartLocation {
+  lat Float
+  lng Float
 }
 
 enum OAuthProvider {

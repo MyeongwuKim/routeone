@@ -10,16 +10,19 @@ import {
   deleteRoute,
   deleteRouteDay,
   getPublicRoutes,
+  getLikedRoutes,
   getSavedRoutes,
   markRouteStopVisited,
   reorderRouteStops,
   setRouteLike,
   setRouteSave,
   shareRoute,
+  updateRouteStopStayMinutes,
   type CloneRouteInput,
   type AppendRouteDaysInput,
   type CreateRouteInput,
   type ReorderRouteStopsInput,
+  type UpdateRouteStopStayMinutesInput,
 } from "./route.service.js";
 
 export const routeTypeDefs = gql`
@@ -62,6 +65,11 @@ export const routeTypeDefs = gql`
     regionLabelKey: String
   }
 
+  type RouteStartLocation {
+    lat: Float!
+    lng: Float!
+  }
+
   type Route {
     id: ID!
     owner: User!
@@ -81,6 +89,10 @@ export const routeTypeDefs = gql`
     startedAt: DateTime
     completedAt: DateTime
     sharedAt: DateTime
+    shareTags: [String!]!
+    isMine: Boolean!
+    likedByMe: Boolean!
+    startLocation: RouteStartLocation
     days: [RouteDay!]!
     stops: [RouteStop!]!
     createdAt: DateTime!
@@ -105,6 +117,7 @@ export const routeTypeDefs = gql`
     order: Int!
     place: PlaceSnapshot!
     stayMinutes: Int
+    travelMinutesFromPrevious: Int
     memo: String
     visitStatus: VisitStatus!
     visitedAt: DateTime
@@ -138,11 +151,17 @@ export const routeTypeDefs = gql`
     regionLabelKey: String
   }
 
+  input RouteStartLocationInput {
+    lat: Float!
+    lng: Float!
+  }
+
   input CreateRouteStopInput {
     dayIndex: Int
     order: Int
     place: PlaceSnapshotInput!
     stayMinutes: Int
+    travelMinutesFromPrevious: Int
     memo: String
   }
 
@@ -153,6 +172,7 @@ export const routeTypeDefs = gql`
     tripDays: Int!
     travelStartDate: DateTime
     travelEndDate: DateTime
+    startLocation: RouteStartLocationInput
     stops: [CreateRouteStopInput!]
   }
 
@@ -166,6 +186,7 @@ export const routeTypeDefs = gql`
     tripDays: Int!
     travelStartDate: DateTime
     travelEndDate: DateTime
+    startLocation: RouteStartLocationInput
     stops: [CreateRouteStopInput!]
   }
 
@@ -175,9 +196,15 @@ export const routeTypeDefs = gql`
     stopIds: [ID!]!
   }
 
+  input UpdateRouteStopStayMinutesInput {
+    stopId: ID!
+    stayMinutes: Int!
+  }
+
   extend type Query {
     myRoutes(status: RouteStatus): [Route!]!
     savedRoutes: [Route!]!
+    likedRoutes: [Route!]!
     sharedRoutes(regionCode: String, limit: Int): [Route!]!
     route(id: ID!): Route
   }
@@ -189,6 +216,7 @@ export const routeTypeDefs = gql`
     deleteRouteDay(dayId: ID!): Route!
     markRouteStopVisited(stopId: ID!, visited: Boolean = true): Route!
     reorderRouteStops(input: ReorderRouteStopsInput!): Route!
+    updateRouteStopStayMinutes(input: UpdateRouteStopStayMinutesInput!): Route!
     clearRoute(routeId: ID!): Route!
     shareRoute(routeId: ID!): Route!
     likeRoute(routeId: ID!): RouteInteractionPayload!
@@ -241,6 +269,10 @@ type ReorderRouteStopsArgs = {
   input: ReorderRouteStopsInput;
 };
 
+type UpdateRouteStopStayMinutesArgs = {
+  input: UpdateRouteStopStayMinutesInput;
+};
+
 export const routeResolvers = {
   Query: {
     myRoutes(
@@ -267,6 +299,10 @@ export const routeResolvers = {
     savedRoutes(_parent: unknown, _args: unknown, context: GraphQLContext) {
       const user = requireUser(context);
       return getSavedRoutes(context.prisma, user);
+    },
+    likedRoutes(_parent: unknown, _args: unknown, context: GraphQLContext) {
+      const user = requireUser(context);
+      return getLikedRoutes(context.prisma, user);
     },
     sharedRoutes(
       _parent: unknown,
@@ -342,6 +378,14 @@ export const routeResolvers = {
       const user = requireUser(context);
       return reorderRouteStops(context.prisma, user, args.input);
     },
+    updateRouteStopStayMinutes(
+      _parent: unknown,
+      args: UpdateRouteStopStayMinutesArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return updateRouteStopStayMinutes(context.prisma, user, args.input);
+    },
     clearRoute(_parent: unknown, args: RouteIdArgs, context: GraphQLContext) {
       const user = requireUser(context);
       return clearRoute(context.prisma, user, args.routeId);
@@ -376,6 +420,28 @@ export const routeResolvers = {
     },
   },
   Route: {
+    isMine(parent: Route, _args: unknown, context: GraphQLContext) {
+      return parent.ownerId === context.user.id;
+    },
+    async likedByMe(parent: Route, _args: unknown, context: GraphQLContext) {
+      if (!context.user) {
+        return false;
+      }
+
+      const like = await context.prisma.routeLike.findUnique({
+        where: {
+          userId_routeId: {
+            userId: context.user.id,
+            routeId: parent.id,
+          },
+        },
+      });
+
+      return Boolean(like);
+    },
+    shareTags(parent: Route) {
+      return parent.shareTags ?? [];
+    },
     owner(parent: Route, _args: unknown, context: GraphQLContext) {
       return context.prisma.user.findUnique({
         where: {

@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IoLocateOutline, IoLocationSharp } from "react-icons/io5";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
+import {
+  applyNaverMapTheme,
+  getNaverMapThemeOptions,
+} from "@/lib/naverMapTheme";
+import { useUiThemeStore } from "@/stores/uiThemeStore";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import { useRouteCheckout } from "../RouteCheckoutContext";
 import type { RouteStartLocation } from "./routePlanTypes";
@@ -124,6 +129,7 @@ function PlaceCartStartLocationStep({
   savedPlaces,
 }: PlaceCartStartLocationStepProps) {
   const { startLocation, setStartLocation } = useRouteCheckout();
+  const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const startMarkerRef = useRef<any>(null);
@@ -266,8 +272,10 @@ function PlaceCartStartLocationStep({
           scaleControl: false,
           mapDataControl: false,
           logoControl: false,
+          ...getNaverMapThemeOptions(isDarkMode),
         });
         mapInstanceRef.current = map;
+        applyNaverMapTheme(map, isDarkMode);
 
         const bounds = new naverMaps.LatLngBounds();
         bounds.extend(center);
@@ -392,7 +400,12 @@ function PlaceCartStartLocationStep({
     mapContainerSize.width,
     savedPlaceCenter,
     savedPlaces,
+    isDarkMode,
   ]);
+
+  useEffect(() => {
+    applyNaverMapTheme(mapInstanceRef.current, isDarkMode);
+  }, [isDarkMode]);
 
   return (
     <div className="space-y-4">

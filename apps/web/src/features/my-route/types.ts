@@ -1,5 +1,5 @@
-import type { MyRoutesQuery } from "@/generated/graphql";
+import type { RouteDetailFieldsFragment } from "@/generated/graphql";
 
-export type MyRoute = MyRoutesQuery["myRoutes"][number];
+export type MyRoute = RouteDetailFieldsFragment;
 export type MyRouteDay = MyRoute["days"][number];
 export type MyRouteStop = MyRoute["stops"][number];

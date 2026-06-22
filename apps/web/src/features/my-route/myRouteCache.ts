@@ -1,4 +1,9 @@
-import type { MyRoutesQuery } from "@/generated/graphql";
+import type {
+  LikedSharedRoutesQuery,
+  MyRoutesQuery,
+  RouteSummaryFieldsFragment,
+  SharedRoutesQuery,
+} from "@/generated/graphql";
 import {
   addDaysToDateKey,
   getRouteDateKey,
@@ -7,6 +12,8 @@ import {
 import type { MyRoute, MyRouteStop } from "./types";
 
 export const MY_ROUTES_QUERY_KEY = ["my-routes"] as const;
+export const SHARED_ROUTES_QUERY_KEY = ["shared-routes"] as const;
+export const LIKED_SHARED_ROUTES_QUERY_KEY = ["liked-shared-routes"] as const;
 
 function getRouteStopCounts(route: MyRoute) {
   const stops = route.days.flatMap((day) => day.stops);
@@ -94,6 +101,144 @@ export function removeMyRouteCache(
   };
 }
 
+export function mergeMyRouteSummaryCache(
+  data: MyRoutesQuery | undefined,
+  nextRoute: RouteSummaryFieldsFragment
+) {
+  if (!data) {
+    return data;
+  }
+
+  return {
+    ...data,
+    myRoutes: data.myRoutes.map((route) =>
+      route.id === nextRoute.id
+        ? {
+            ...route,
+            ...nextRoute,
+          }
+        : route
+    ),
+  };
+}
+
+export function upsertSharedRouteSummaryCache(
+  data: SharedRoutesQuery | undefined,
+  nextRoute: RouteSummaryFieldsFragment
+) {
+  if (!data || nextRoute.visibility !== "PUBLIC") {
+    return data;
+  }
+
+  const hasRoute = data.sharedRoutes.some((route) => route.id === nextRoute.id);
+
+  return {
+    ...data,
+    sharedRoutes: hasRoute
+      ? data.sharedRoutes.map((route) =>
+          route.id === nextRoute.id ? { ...route, ...nextRoute } : route
+        )
+      : [{ ...nextRoute, stops: [] }, ...data.sharedRoutes],
+  };
+}
+
+export function optimisticUpdateSharedRouteLikeCache({
+  data,
+  routeId,
+  liked,
+  likeCount,
+}: {
+  data: SharedRoutesQuery | undefined;
+  routeId: string;
+  liked: boolean;
+  likeCount?: number;
+}) {
+  if (!data) {
+    return data;
+  }
+
+  return {
+    ...data,
+    sharedRoutes: data.sharedRoutes.map((route) =>
+      route.id === routeId
+        ? {
+          ...route,
+          likedByMe: liked,
+          likeCount:
+            likeCount ??
+            Math.max(0, route.likeCount + (liked ? 1 : -1)),
+          }
+        : route
+    ),
+  };
+}
+
+export function upsertLikedSharedRouteSummaryCache(
+  data: LikedSharedRoutesQuery | undefined,
+  nextRoute: RouteSummaryFieldsFragment,
+  liked: boolean
+) {
+  if (!data) {
+    return data;
+  }
+
+  if (!liked || nextRoute.visibility !== "PUBLIC") {
+    return {
+      ...data,
+      likedRoutes: data.likedRoutes.filter((route) => route.id !== nextRoute.id),
+    };
+  }
+
+  const hasRoute = data.likedRoutes.some((route) => route.id === nextRoute.id);
+
+  return {
+    ...data,
+    likedRoutes: hasRoute
+      ? data.likedRoutes.map((route) =>
+          route.id === nextRoute.id
+            ? { ...route, ...nextRoute, likedByMe: true }
+            : route
+        )
+      : [{ ...nextRoute, likedByMe: true, stops: [] }, ...data.likedRoutes],
+  };
+}
+
+export function optimisticUpdateLikedSharedRouteLikeCache({
+  data,
+  route,
+  liked,
+  likeCount,
+}: {
+  data: LikedSharedRoutesQuery | undefined;
+  route: RouteSummaryFieldsFragment;
+  liked: boolean;
+  likeCount?: number;
+}) {
+  if (!data) {
+    return data;
+  }
+
+  if (!liked) {
+    return {
+      ...data,
+      likedRoutes: data.likedRoutes.filter(
+        (likedRoute) => likedRoute.id !== route.id
+      ),
+    };
+  }
+
+  return upsertLikedSharedRouteSummaryCache(
+    data,
+    {
+      ...route,
+      likedByMe: true,
+      likeCount:
+        likeCount ?? Math.max(0, route.likeCount + (route.likedByMe ? 0 : 1)),
+    },
+    true
+  );
+}
+
 export function optimisticReorderRouteStopsCache({
   data,
   routeId,
@@ -170,6 +315,37 @@ export function optimisticVisitRouteStopCache({
       ...route,
       days: nextDays,
     });
+  });
+}
+
+export function optimisticUpdateRouteStopStayMinutesCache({
+  data,
+  routeId,
+  stopId,
+  stayMinutes,
+}: {
+  data: MyRoutesQuery | undefined;
+  routeId: string;
+  stopId: string;
+  stayMinutes: number;
+}) {
+  return updateRoute(data, routeId, (route) => {
+    const updateStop = (stop: MyRouteStop): MyRouteStop =>
+      stop.id === stopId
+        ? {
+            ...stop,
+            stayMinutes,
+          }
+        : stop;
+
+    return {
+      ...route,
+      days: route.days.map((day) => ({
+        ...day,
+        stops: day.stops.map(updateStop),
+      })),
+      stops: route.stops.map(updateStop),
+    };
   });
 }
 

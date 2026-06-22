@@ -6,6 +6,7 @@ import {
   MdOutlineCalendarToday,
   MdOutlinePlace,
   MdRoute,
+  MdShare,
 } from "react-icons/md";
 import {
   MyRouteDayItem,
@@ -33,6 +34,19 @@ type MyRouteCardProps = {
   onRequestAppendDay?: (route: MyRoute) => void;
   onRequestDeleteRoute?: (route: MyRoute) => void;
 };
+
+function isRouteShared(route: MyRoute) {
+  return route.visibility === "PUBLIC" || Boolean(route.sharedAt);
+}
+
+function SharedRouteStatusBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-black text-brand-700 dark:border-brand-400/35 dark:bg-brand-400/15 dark:text-brand-100">
+      <MdShare className="text-xs" />
+      공유됨
+    </span>
+  );
+}
 
 function MyRouteUpcomingCard({
   route,
@@ -146,6 +160,7 @@ function MyRouteCompactCard({
               <span className="text-xs font-bold text-slate-400">
                 {route.totalStopCount}곳
               </span>
+              {isRouteShared(route) ? <SharedRouteStatusBadge /> : null}
             </div>
             <p className="mt-1.5 truncate text-sm font-black text-slate-900">
               {getRouteTitle(route)}
@@ -248,6 +263,7 @@ function MyRouteCard({
             <span className="text-xs font-semibold text-slate-400">
               {route.totalStopCount}곳
             </span>
+            {isRouteShared(route) ? <SharedRouteStatusBadge /> : null}
           </div>
           <h2 className="mt-2 truncate text-base font-bold text-slate-900">
             {getRouteTitle(route)}
@@ -268,13 +284,6 @@ function MyRouteCard({
               <MdDeleteOutline />
             </button>
           ) : null}
-          <span
-            className={`flex size-10 items-center justify-center rounded-full text-xl text-white ${
-              todayRouteDay ? "bg-slate-900" : "bg-brand-600"
-            }`}
-          >
-            <MdRoute />
-          </span>
         </div>
       </div>
 

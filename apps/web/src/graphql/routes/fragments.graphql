@@ -23,6 +23,7 @@ fragment RouteStopFields on RouteStop {
     ...RoutePlaceFields
   }
   stayMinutes
+  travelMinutesFromPrevious
   memo
   visitStatus
   visitedAt
@@ -46,6 +47,13 @@ fragment RouteSummaryFields on Route {
   startedAt
   completedAt
   sharedAt
+  shareTags
+  isMine
+  likedByMe
+  startLocation {
+    lat
+    lng
+  }
   createdAt
   updatedAt
 }

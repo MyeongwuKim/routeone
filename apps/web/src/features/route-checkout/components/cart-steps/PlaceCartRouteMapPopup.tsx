@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { IoClose } from "react-icons/io5";
 import {
   PLACE_BUBBLE_MARKER_SIZE,
@@ -6,6 +7,11 @@ import {
 } from "@/components/map/NaverMapMarkerIcon";
 import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
+import {
+  applyNaverMapTheme,
+  getNaverMapThemeOptions,
+} from "@/lib/naverMapTheme";
+import { useUiThemeStore } from "@/stores/uiThemeStore";
 import type { PlannedRouteDay } from "./routePlanTypes";
 
 type RouteMapPoint = {
@@ -17,6 +23,7 @@ type RouteMapPoint = {
   variant: PlaceBubbleMarkerVariant;
   lat: number;
   lng: number;
+  isCompleted: boolean;
 };
 
 type RoutePathPoint = {
@@ -31,9 +38,21 @@ type RouteMapSegment = {
   path: RoutePathPoint[];
 };
 
+type RouteMapDayOption = {
+  id: string;
+  label: string;
+  summary: string;
+  day: PlannedRouteDay;
+  completedItemIds?: string[];
+  comparisonDay?: PlannedRouteDay | null;
+};
+
 type PlaceCartRouteMapPopupProps = {
   day: PlannedRouteDay;
   comparisonDay?: PlannedRouteDay | null;
+  completedItemIds?: string[];
+  dayOptions?: RouteMapDayOption[];
+  initialDayOptionId?: string;
   onClose: () => void;
 };
 
@@ -66,6 +85,8 @@ const ROUTE_SEGMENT_COLORS = [
 const ROUTE_ORIGINAL_COLOR = "#6366f1";
 const ROUTE_CURRENT_COLOR = "#14b8a6";
 const ROUTE_SEGMENT_FOCUS_ZOOM = 13;
+const EMPTY_COMPLETED_ITEM_IDS: string[] = [];
+const EMPTY_DAY_OPTIONS: RouteMapDayOption[] = [];
 
 function escapeMarkerHtml(text: string) {
   return text
@@ -85,7 +106,10 @@ function formatDateLabel(value: string) {
   return `${year}.${month}.${day}`;
 }
 
-function buildRouteMapPoints(day: PlannedRouteDay): RouteMapPoint[] {
+function buildRouteMapPoints(
+  day: PlannedRouteDay,
+  completedItemIdSet: Set<string>
+): RouteMapPoint[] {
   return [
     ...(day.startLocation
       ? [
@@ -98,19 +122,27 @@ function buildRouteMapPoints(day: PlannedRouteDay): RouteMapPoint[] {
             variant: "start" as const,
             lat: day.startLocation.lat,
             lng: day.startLocation.lng,
+            isCompleted: false,
           },
         ]
       : []),
-    ...day.items.map((item, index) => ({
-      id: item.id,
-      title: item.place.title,
-      subtitle: item.place.contentTypeLabel,
-      icon: item.place.icon,
-      sequenceLabel: `${index + 1}`,
-      variant: "place" as const,
-      lat: item.place.lat,
-      lng: item.place.lng,
-    })),
+    ...day.items.map((item, index) => {
+      const isCompleted = completedItemIdSet.has(item.id);
+
+      return {
+        id: item.id,
+        title: item.place.title,
+        subtitle: isCompleted
+          ? `${item.place.contentTypeLabel} · 완료`
+          : item.place.contentTypeLabel,
+        icon: item.place.icon,
+        sequenceLabel: `${index + 1}`,
+        variant: "place" as const,
+        lat: item.place.lat,
+        lng: item.place.lng,
+        isCompleted,
+      };
+    }),
   ];
 }
 
@@ -206,14 +238,18 @@ function createRoutePointBubbleMarkerIconHtml({
   const toneColor = focusColor ?? (isComparison ? "#94a3b8" : "#14b8a6");
   const toneDarkColor = focusColor ?? (isComparison ? "#475569" : "#0f766e");
   const borderColor = isStart && !focusColor ? "#cbd5e1" : toneColor;
-  const labelBackground = focusColor
+  const labelBackground = point.isCompleted
+    ? "#0f766e"
+    : focusColor
     ? `${focusColor}1f`
     : isStart
       ? "#f1f5f9"
       : isComparison
         ? "#f1f5f9"
         : "#ccfbf1";
-  const labelText = focusColor
+  const labelText = point.isCompleted
+    ? "#ffffff"
+    : focusColor
     ? toneDarkColor
     : isStart
       ? "#334155"
@@ -471,18 +507,47 @@ const RouteSegmentSelectCard = memo(function RouteSegmentSelectCard({
 function PlaceCartRouteMapPopup({
   day,
   comparisonDay,
+  completedItemIds = EMPTY_COMPLETED_ITEM_IDS,
+  dayOptions = EMPTY_DAY_OPTIONS,
+  initialDayOptionId,
   onClose,
 }: PlaceCartRouteMapPopupProps) {
+  const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const overlayRefs = useRef<any[]>([]);
   const [isSdkReady, setIsSdkReady] = useState(false);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
-  const routePoints = useMemo(() => buildRouteMapPoints(day), [day]);
+  const [selectedDayOptionId, setSelectedDayOptionId] = useState<string | null>(
+    () => initialDayOptionId ?? dayOptions[0]?.id ?? null
+  );
+  const selectedDayOption = useMemo(
+    () =>
+      selectedDayOptionId
+        ? dayOptions.find((option) => option.id === selectedDayOptionId) ?? null
+        : null,
+    [dayOptions, selectedDayOptionId]
+  );
+  const displayDay = selectedDayOption?.day ?? day;
+  const displayComparisonDay =
+    selectedDayOption?.comparisonDay ?? comparisonDay;
+  const displayCompletedItemIds =
+    selectedDayOption?.completedItemIds ?? completedItemIds;
+  const completedItemIdSet = useMemo(
+    () => new Set(displayCompletedItemIds),
+    [displayCompletedItemIds]
+  );
+  const routePoints = useMemo(
+    () => buildRouteMapPoints(displayDay, completedItemIdSet),
+    [completedItemIdSet, displayDay]
+  );
   const comparisonRoutePoints = useMemo(
-    () => (comparisonDay ? buildRouteMapPoints(comparisonDay) : []),
-    [comparisonDay]
+    () =>
+      displayComparisonDay
+        ? buildRouteMapPoints(displayComparisonDay, completedItemIdSet)
+        : [],
+    [displayComparisonDay, completedItemIdSet]
   );
   const fallbackSegments = useMemo(
     () => buildFallbackRouteSegments(routePoints),
@@ -499,8 +564,18 @@ function PlaceCartRouteMapPopup({
   const [selectedSegment, setSelectedSegment] =
     useState<RouteSegmentSelection | null>(null);
   const hasComparisonRoute = Boolean(
-    comparisonDay && comparisonRoutePoints.length > 1
+    displayComparisonDay && comparisonRoutePoints.length > 1
   );
+  const hasDaySelector = dayOptions.length > 1;
+  const comparisonControlTopClass = hasDaySelector ? "top-24" : "top-4";
+  const floatingPanelTopClass = hasDaySelector
+    ? hasComparisonRoute
+      ? "top-40"
+      : "top-24"
+    : hasComparisonRoute
+      ? "top-20"
+      : "top-4";
+  const fallbackPanelTopClass = hasDaySelector ? "top-36" : "top-24";
   const [routeViewMode, setRouteViewMode] =
     useState<RouteMapViewMode>("all");
   const shouldShowComparisonRoute =
@@ -617,6 +692,31 @@ function PlaceCartRouteMapPopup({
     },
     []
   );
+
+  useEffect(() => {
+    if (dayOptions.length === 0) {
+      setSelectedDayOptionId(null);
+      return;
+    }
+
+    const hasCurrentDayOption = dayOptions.some(
+      (option) => option.id === selectedDayOptionId
+    );
+    const nextInitialDayOptionId =
+      initialDayOptionId &&
+      dayOptions.some((option) => option.id === initialDayOptionId)
+        ? initialDayOptionId
+        : dayOptions[0].id;
+
+    if (!hasCurrentDayOption) {
+      setSelectedDayOptionId(nextInitialDayOptionId);
+    }
+  }, [dayOptions, initialDayOptionId, selectedDayOptionId]);
+
+  useEffect(() => {
+    setSelectedSegment(null);
+    setRouteViewMode("all");
+  }, [displayComparisonDay, displayDay]);
 
   useEffect(() => {
     if (!hasComparisonRoute && routeViewMode !== "all") {
@@ -744,11 +844,13 @@ function PlaceCartRouteMapPopup({
         mapDataControl: false,
         scaleControl: false,
         logoControl: false,
+        ...getNaverMapThemeOptions(isDarkMode),
       });
       mapInstanceRef.current = routeMap;
     } else {
       naverMaps.Event.trigger(routeMap, "resize");
     }
+    applyNaverMapTheme(routeMap, isDarkMode);
     enableRouteMapWheelZoom(routeMap);
 
     clearOverlays();
@@ -918,7 +1020,7 @@ function PlaceCartRouteMapPopup({
     try {
       if (!selectedSegment) {
         routeMap.fitBounds(bounds, {
-          top: 56,
+          top: hasDaySelector ? 136 : 56,
           right: 92,
           bottom: 184,
           left: 92,
@@ -937,6 +1039,8 @@ function PlaceCartRouteMapPopup({
     comparisonRoutePoints,
     comparisonRouteSegments,
     hasComparisonRoute,
+    hasDaySelector,
+    isDarkMode,
     isSdkReady,
     routePoints,
     routeSegments,
@@ -954,15 +1058,19 @@ function PlaceCartRouteMapPopup({
     };
   }, []);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[2300] bg-white">
       <div className="flex h-full flex-col">
         <header className="flex items-center justify-between border-b border-brand-100 px-4 py-3">
           <div>
-            <p className="font-trip text-sm text-brand-700">DAY {day.day} ROUTE</p>
+            <p className="font-trip text-sm text-brand-700">
+              DAY {displayDay.day} ROUTE
+            </p>
             <p className="mt-0.5 text-xs text-slate-500">
-              {day.date ? formatDateLabel(day.date) : "선택한 일정"} ·{" "}
-              {day.items.length}곳
+              {displayDay.date
+                ? formatDateLabel(displayDay.date)
+                : "선택한 일정"}{" "}
+              · {displayDay.items.length}곳
               {hasComparisonRoute ? " · 원래 순서 비교" : ""}
             </p>
           </div>
@@ -977,9 +1085,57 @@ function PlaceCartRouteMapPopup({
         </header>
 
         <div className="relative min-h-0 flex-1">
-          <div ref={mapRef} className="naver-map-root" />
+          <div
+            ref={mapRef}
+            className="naver-map-root h-full w-full"
+            style={{
+              background: "#e0f2fe",
+              minHeight: "100%",
+              width: "100%",
+            }}
+          />
+          {hasDaySelector ? (
+            <div className="absolute inset-x-4 top-4 z-10 rounded-2xl border border-brand-100 bg-white/95 p-2 shadow-sm backdrop-blur">
+              <div className="scrollbar-hide flex gap-2 overflow-x-auto">
+                {dayOptions.map((option) => {
+                  const isSelected = option.id === selectedDayOptionId;
+
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => {
+                        setSelectedDayOptionId(option.id);
+                        setSelectedSegment(null);
+                        setRouteViewMode("all");
+                      }}
+                      className={`min-w-[116px] rounded-xl border px-3 py-2 text-left transition ${
+                        isSelected
+                          ? "border-brand-500 bg-brand-600 text-white shadow-sm"
+                          : "border-slate-100 bg-white text-slate-600"
+                      }`}
+                    >
+                      <span className="block font-trip text-xs">
+                        {option.label}
+                      </span>
+                      <span
+                        className={`mt-0.5 block truncate text-[10px] font-bold ${
+                          isSelected ? "text-white/80" : "text-slate-400"
+                        }`}
+                      >
+                        {option.summary}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           {hasComparisonRoute ? (
-            <div className="absolute inset-x-4 top-4 rounded-2xl border border-brand-100 bg-white/95 p-1 shadow-sm backdrop-blur">
+            <div
+              className={`absolute inset-x-4 ${comparisonControlTopClass} rounded-2xl border border-brand-100 bg-white/95 p-1 shadow-sm backdrop-blur`}
+            >
               <div className="grid grid-cols-3 gap-1">
                 {ROUTE_VIEW_OPTIONS.map((option) => {
                   const isSelected = routeViewMode === option.id;
@@ -1009,7 +1165,7 @@ function PlaceCartRouteMapPopup({
           {selectedRouteSegmentView ? (
             <div
               className={`absolute left-4 flex max-w-[calc(100%-2rem)] items-center gap-3 rounded-full border bg-white/95 px-3 py-2 shadow-sm backdrop-blur ${
-                hasComparisonRoute ? "top-20" : "top-4"
+                floatingPanelTopClass
               }`}
               style={{
                 borderColor: selectedRouteSegmentView.color,
@@ -1035,21 +1191,34 @@ function PlaceCartRouteMapPopup({
               </button>
             </div>
           ) : null}
-          {!isSdkReady || isRouteLoading ? (
+          {routeError ? (
+            <div
+              className={`absolute inset-x-4 rounded-2xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm font-semibold text-amber-800 shadow-sm backdrop-blur ${
+                floatingPanelTopClass
+              }`}
+            >
+              {routeError}
+            </div>
+          ) : !isSdkReady || isRouteLoading ? (
             <div
               className={`absolute inset-x-4 rounded-2xl border border-brand-100 bg-white/90 px-4 py-3 text-sm font-semibold text-brand-700 shadow-sm backdrop-blur ${
-                hasComparisonRoute ? "top-20" : "top-4"
+                floatingPanelTopClass
               }`}
             >
               {isSdkReady ? "도로 경로를 불러오는 중" : "지도를 불러오는 중"}
             </div>
-          ) : routeError ? (
+          ) : null}
+          {routeError && !isSdkReady ? (
             <div
-              className={`absolute inset-x-4 rounded-2xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm font-semibold text-amber-800 shadow-sm backdrop-blur ${
-                hasComparisonRoute ? "top-20" : "top-4"
-              }`}
+              className={`absolute inset-x-6 ${fallbackPanelTopClass} rounded-2xl border border-brand-100 bg-white/95 p-4 text-sm shadow-sm backdrop-blur`}
             >
-              {routeError}
+              <p className="font-black text-slate-900">
+                지도 대신 장소 순서를 보여드려요
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                지도 SDK를 불러오지 못했지만 아래에서 방문 순서와 완료 장소를
+                확인할 수 있어요.
+              </p>
             </div>
           ) : null}
           {hasComparisonRoute && routeViewMode === "all" ? (
@@ -1150,7 +1319,8 @@ function PlaceCartRouteMapPopup({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -1,5 +1,5 @@
-query SharedRoutes($regionCode: String, $limit: Int) {
-  sharedRoutes(regionCode: $regionCode, limit: $limit) {
+query LikedSharedRoutes {
+  likedRoutes {
     ...RouteSummaryFields
     stops {
       id

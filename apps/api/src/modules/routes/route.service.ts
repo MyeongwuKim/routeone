@@ -2,6 +2,7 @@ import type {
   PlaceProvider,
   PrismaClient,
   Route,
+  RouteStop,
   User,
   VisitStatus,
 } from "@prisma/client";
@@ -22,11 +23,17 @@ type PlaceSnapshotInput = {
   regionLabelKey?: string | null;
 };
 
+type RouteStartLocationInput = {
+  lat: number;
+  lng: number;
+};
+
 type CreateRouteStopInput = {
   dayIndex?: number | null;
   order?: number | null;
   place: PlaceSnapshotInput;
   stayMinutes?: number | null;
+  travelMinutesFromPrevious?: number | null;
   memo?: string | null;
 };
 
@@ -37,6 +44,7 @@ export type CreateRouteInput = {
   tripDays: number;
   travelStartDate?: Date | null;
   travelEndDate?: Date | null;
+  startLocation?: RouteStartLocationInput | null;
   stops?: CreateRouteStopInput[] | null;
 };
 
@@ -45,6 +53,7 @@ export type AppendRouteDaysInput = {
   tripDays: number;
   travelStartDate?: Date | null;
   travelEndDate?: Date | null;
+  startLocation?: RouteStartLocationInput | null;
   stops?: CreateRouteStopInput[] | null;
 };
 
@@ -57,6 +66,11 @@ export type ReorderRouteStopsInput = {
   routeId: string;
   dayId: string;
   stopIds: string[];
+};
+
+export type UpdateRouteStopStayMinutesInput = {
+  stopId: string;
+  stayMinutes: number;
 };
 
 function clampTripDays(value: number) {
@@ -192,6 +206,221 @@ function normalizePlaceSnapshot(place: PlaceSnapshotInput) {
   };
 }
 
+function normalizeRouteStartLocation(
+  startLocation?: RouteStartLocationInput | null
+) {
+  if (!startLocation) {
+    return null;
+  }
+
+  if (
+    !Number.isFinite(startLocation.lat) ||
+    !Number.isFinite(startLocation.lng)
+  ) {
+    throw new Error("출발 위치 좌표가 올바르지 않습니다.");
+  }
+
+  return {
+    lat: startLocation.lat,
+    lng: startLocation.lng,
+  };
+}
+
+function normalizeTravelMinutes(value?: number | null) {
+  if (value == null) {
+    return null;
+  }
+
+  if (!Number.isFinite(value) || value < 0) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(24 * 60, Math.round(value)));
+}
+
+const REGION_TAG_RULES = [
+  { token: "강원", tag: "강원" },
+  { token: "서울", tag: "서울" },
+  { token: "부산", tag: "부산" },
+  { token: "제주", tag: "제주" },
+  { token: "경기", tag: "경기" },
+  { token: "인천", tag: "인천" },
+  { token: "대구", tag: "대구" },
+  { token: "대전", tag: "대전" },
+  { token: "광주", tag: "광주" },
+  { token: "울산", tag: "울산" },
+  { token: "세종", tag: "세종" },
+  { token: "충북", tag: "충북" },
+  { token: "충남", tag: "충남" },
+  { token: "전북", tag: "전북" },
+  { token: "전남", tag: "전남" },
+  { token: "경북", tag: "경북" },
+  { token: "경남", tag: "경남" },
+];
+
+function getRouteRegionTag(route: Route, stops: RouteStop[]) {
+  const sourceText = [
+    route.primaryRegionLabelKey,
+    route.primaryRegionCode,
+    ...stops.flatMap((stop) => [
+      stop.place.address,
+      stop.place.regionCode,
+      stop.place.regionLabelKey,
+    ]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return REGION_TAG_RULES.find((rule) => sourceText.includes(rule.token))?.tag;
+}
+
+function getStopCategoryText(stop: RouteStop) {
+  return [
+    stop.place.title,
+    stop.place.categoryLabel,
+    stop.place.categoryName,
+    stop.place.contentTypeId,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getStopFocusBucket(stop: RouteStop) {
+  const categoryText = getStopCategoryText(stop);
+
+  if (/카페|커피|디저트|베이커리|찻집/.test(categoryText)) {
+    return "카페";
+  }
+
+  if (/해변|해수욕장|바다|항구|항만/.test(categoryText)) {
+    return "해변";
+  }
+
+  if (/공원|수목원|정원/.test(categoryText)) {
+    return "공원";
+  }
+
+  if (/동굴|굴/.test(categoryText)) {
+    return "동굴";
+  }
+
+  if (/시장|전통시장/.test(categoryText)) {
+    return "시장";
+  }
+
+  if (/음식|맛집|식당|한식|일식|중식|양식|분식|주점|술집|39/.test(categoryText)) {
+    return "음식점";
+  }
+
+  if (
+    /관광|여행|명소|박물관|전시|체험|역사|문화|12|14|28/.test(categoryText)
+  ) {
+    return "관광지";
+  }
+
+  return "장소";
+}
+
+function getRouteFocusTag(stops: RouteStop[]) {
+  if (stops.length === 0) {
+    return null;
+  }
+
+  const bucketCounts = new Map<string, number>();
+  const tourBuckets = new Set(["관광지", "해변", "공원", "동굴", "시장"]);
+
+  for (const stop of stops) {
+    const bucket = getStopFocusBucket(stop);
+    bucketCounts.set(bucket, (bucketCounts.get(bucket) ?? 0) + 1);
+  }
+
+  const sortedBuckets = [...bucketCounts.entries()].sort(
+    (left, right) => right[1] - left[1]
+  );
+  const [topBucket, topCount] = sortedBuckets[0] ?? [];
+  const cafeCount = bucketCounts.get("카페") ?? 0;
+  const foodCount = bucketCounts.get("음식점") ?? 0;
+  const tourCount = sortedBuckets.reduce(
+    (total, [bucket, count]) => total + (tourBuckets.has(bucket) ? count : 0),
+    0
+  );
+
+  if (!topBucket || !topCount) {
+    return null;
+  }
+
+  if (cafeCount >= 2 && cafeCount / stops.length >= 0.35 && cafeCount >= foodCount) {
+    return "카페 위주";
+  }
+
+  if (foodCount >= 2 && foodCount / stops.length >= 0.35) {
+    return "음식점 위주";
+  }
+
+  if (tourCount >= 2 && tourCount / stops.length >= 0.4) {
+    const topTourBucket = sortedBuckets.find(([bucket]) =>
+      tourBuckets.has(bucket)
+    );
+
+    if (
+      topTourBucket &&
+      topTourBucket[0] !== "관광지" &&
+      topTourBucket[1] >= 2 &&
+      topTourBucket[1] / stops.length >= 0.35
+    ) {
+      return `${topTourBucket[0]} 위주`;
+    }
+
+    return "관광지 위주";
+  }
+
+  if (topCount >= 2 && topCount / stops.length >= 0.4) {
+    return `${topBucket} 위주`;
+  }
+
+  return "골고루 담은 루트";
+}
+
+function getRoutePaceTag(route: Route, stops: RouteStop[]) {
+  if (stops.length === 0) {
+    return "가볍게 보기";
+  }
+
+  const averageStopsPerDay = stops.length / Math.max(1, route.tripDays);
+  const averageStayMinutes =
+    stops.reduce((total, stop) => total + (stop.stayMinutes ?? 60), 0) /
+    stops.length;
+
+  if (averageStopsPerDay >= 4 || averageStayMinutes <= 55) {
+    return "촘촘한 루트";
+  }
+
+  if (averageStopsPerDay <= 2.5 || averageStayMinutes >= 85) {
+    return "여유로운 루트";
+  }
+
+  return "균형 잡힌 루트";
+}
+
+function getRouteDurationTag(route: Route) {
+  if (route.tripDays <= 1) {
+    return "당일치기";
+  }
+
+  return `${route.tripDays - 1}박 ${route.tripDays}일`;
+}
+
+function buildRouteShareTags(route: Route, stops: RouteStop[]) {
+  return [
+    getRouteRegionTag(route, stops),
+    getRouteDurationTag(route),
+    getRoutePaceTag(route, stops),
+    getRouteFocusTag(stops),
+  ].filter((tag, index, tags): tag is string =>
+    Boolean(tag && tags.indexOf(tag) === index)
+  );
+}
+
 async function assertRouteOwner(
   prisma: PrismaClient,
   routeId: string,
@@ -293,6 +522,7 @@ export async function createRoute(
   const travelStartDate = input.travelStartDate ?? null;
   const travelEndDate =
     input.travelEndDate ?? (travelStartDate ? addDays(travelStartDate, tripDays - 1) : null);
+  const startLocation = normalizeRouteStartLocation(input.startLocation);
   await assertNoRouteDateConflict(
     prisma,
     owner.id,
@@ -308,6 +538,7 @@ export async function createRoute(
       tripDays,
       travelStartDate,
       travelEndDate,
+      startLocation,
       status: stopInputs.length > 0 ? "ACTIVE" : "DRAFT",
       totalStopCount: stopInputs.length,
     },
@@ -325,6 +556,9 @@ export async function createRoute(
         order: stop.order ?? index + 1,
         place: normalizePlaceSnapshot(stop.place),
         stayMinutes: stop.stayMinutes ?? null,
+        travelMinutesFromPrevious: normalizeTravelMinutes(
+          stop.travelMinutesFromPrevious
+        ),
         memo: nullableString(stop.memo),
       },
     });
@@ -353,6 +587,7 @@ export async function appendRouteDays(
   const travelEndDate =
     input.travelEndDate ??
     (travelStartDate ? addDays(travelStartDate, tripDays - 1) : null);
+  const startLocation = normalizeRouteStartLocation(input.startLocation);
 
   if (
     route.travelEndDate &&
@@ -398,6 +633,9 @@ export async function appendRouteDays(
         order: stop.order ?? index + 1,
         place: normalizePlaceSnapshot(stop.place),
         stayMinutes: stop.stayMinutes ?? null,
+        travelMinutesFromPrevious: normalizeTravelMinutes(
+          stop.travelMinutesFromPrevious
+        ),
         memo: nullableString(stop.memo),
       },
     });
@@ -410,6 +648,7 @@ export async function appendRouteDays(
     data: {
       tripDays: baseDayIndex + tripDays,
       travelEndDate: travelEndDate ?? route.travelEndDate,
+      startLocation: route.startLocation ?? startLocation,
       status: "ACTIVE",
     },
   });
@@ -433,7 +672,7 @@ export async function markRouteStopVisited(
     throw new Error("장소를 찾을 수 없습니다.");
   }
 
-  await assertRouteOwner(prisma, stop.routeId, user.id);
+  const route = await assertRouteOwner(prisma, stop.routeId, user.id);
 
   await prisma.routeStop.update({
     where: {
@@ -445,7 +684,82 @@ export async function markRouteStopVisited(
     },
   });
 
-  return refreshRouteProgress(prisma, stop.routeId);
+  const refreshedRoute = await refreshRouteProgress(prisma, stop.routeId);
+
+  if (route.visibility === "PUBLIC") {
+    const routeStops = await prisma.routeStop.findMany({
+      where: {
+        routeId: route.id,
+      },
+      orderBy: {
+        order: "asc",
+      },
+    });
+
+    return prisma.route.update({
+      where: {
+        id: route.id,
+      },
+      data: {
+        shareTags: buildRouteShareTags(refreshedRoute, routeStops),
+      },
+    });
+  }
+
+  return refreshedRoute;
+}
+
+export async function updateRouteStopStayMinutes(
+  prisma: PrismaClient,
+  user: User,
+  input: UpdateRouteStopStayMinutesInput
+) {
+  const stop = await prisma.routeStop.findUnique({
+    where: {
+      id: input.stopId,
+    },
+  });
+
+  if (!stop) {
+    throw new Error("장소를 찾을 수 없습니다.");
+  }
+
+  const route = await assertRouteOwner(prisma, stop.routeId, user.id);
+
+  const stayMinutes = Math.max(10, Math.min(480, Math.round(input.stayMinutes)));
+
+  await prisma.routeStop.update({
+    where: {
+      id: stop.id,
+    },
+    data: {
+      stayMinutes,
+    },
+  });
+
+  const refreshedRoute = await refreshRouteProgress(prisma, stop.routeId);
+
+  if (route.visibility === "PUBLIC") {
+    const routeStops = await prisma.routeStop.findMany({
+      where: {
+        routeId: route.id,
+      },
+      orderBy: {
+        order: "asc",
+      },
+    });
+
+    return prisma.route.update({
+      where: {
+        id: route.id,
+      },
+      data: {
+        shareTags: buildRouteShareTags(refreshedRoute, routeStops),
+      },
+    });
+  }
+
+  return refreshedRoute;
 }
 
 export async function reorderRouteStops(
@@ -652,10 +966,20 @@ export async function shareRoute(
 ) {
   const route = await assertRouteOwner(prisma, routeId, user.id);
   const refreshedRoute = await refreshRouteProgress(prisma, route.id);
+  const routeStops = await prisma.routeStop.findMany({
+    where: {
+      routeId: route.id,
+    },
+    orderBy: {
+      order: "asc",
+    },
+  });
 
   if (refreshedRoute.status !== "COMPLETED") {
     throw new Error("완료한 루트만 공유할 수 있습니다.");
   }
+
+  const shareTags = buildRouteShareTags(refreshedRoute, routeStops);
 
   return prisma.route.update({
     where: {
@@ -664,6 +988,7 @@ export async function shareRoute(
     data: {
       visibility: "PUBLIC",
       sharedAt: refreshedRoute.sharedAt ?? new Date(),
+      shareTags,
     },
   });
 }
@@ -855,6 +1180,7 @@ export async function cloneRoute(
       tripDays: sourceRoute.tripDays,
       travelStartDate: sourceRoute.travelStartDate,
       travelEndDate: sourceRoute.travelEndDate,
+      startLocation: sourceRoute.startLocation,
       status: input.startImmediately ? "ACTIVE" : "DRAFT",
       totalStopCount: sourceRoute.stops.length,
       startedAt: input.startImmediately ? new Date() : null,
@@ -881,6 +1207,7 @@ export async function cloneRoute(
         order: stop.order,
         place: stop.place,
         stayMinutes: stop.stayMinutes,
+        travelMinutesFromPrevious: stop.travelMinutesFromPrevious,
         memo: stop.memo,
         visitStatus: "PENDING",
         visitedAt: null,
@@ -905,6 +1232,29 @@ export async function getSavedRoutes(prisma: PrismaClient, user: User) {
       prisma.route.findUnique({
         where: {
           id: save.routeId,
+        },
+      })
+    )
+  );
+
+  return routes.filter((route): route is Route => Boolean(route));
+}
+
+export async function getLikedRoutes(prisma: PrismaClient, user: User) {
+  const likes = await prisma.routeLike.findMany({
+    where: {
+      userId: user.id,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+  const routes = await Promise.all(
+    likes.map((like) =>
+      prisma.route.findFirst({
+        where: {
+          id: like.routeId,
+          visibility: "PUBLIC",
         },
       })
     )
