@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  IoArrowBack,
   IoBagHandleOutline,
   IoCafeOutline,
   IoClose,
@@ -17,6 +16,7 @@ import {
   type MapMarkerBadge,
 } from "@/components/map/NaverMapMarkerIcon";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
+import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import {
   applyNaverMapTheme,
@@ -109,6 +109,15 @@ const GANGWON_SIGNGU_ADMIN_CODES: Record<string, string> = {
 };
 
 const GANGWON_TATS_AREA_CODE = "51";
+const KOREA_UNIFIED_CS = {
+  semiMajorAxis: 6378137,
+  inverseFlattening: 298.257222101,
+  originLat: (38 * Math.PI) / 180,
+  originLng: (127.5 * Math.PI) / 180,
+  falseEasting: 1_000_000,
+  falseNorthing: 2_000_000,
+  scaleFactor: 0.9996,
+};
 
 type GeoRing = [number, number][];
 type GeoPolygon = GeoRing[];
@@ -281,6 +290,115 @@ function buildBoundaryMapBySigunguCode(
   });
 
   return mapByCode;
+}
+
+function getMeridianArc(radianLat: number) {
+  const { semiMajorAxis, inverseFlattening } = KOREA_UNIFIED_CS;
+  const flattening = 1 / inverseFlattening;
+  const eccentricitySquared = 2 * flattening - flattening * flattening;
+  const eccentricityFourth = eccentricitySquared * eccentricitySquared;
+  const eccentricitySixth = eccentricityFourth * eccentricitySquared;
+
+  return (
+    semiMajorAxis *
+    ((1 -
+      eccentricitySquared / 4 -
+      (3 * eccentricityFourth) / 64 -
+      (5 * eccentricitySixth) / 256) *
+      radianLat -
+      ((3 * eccentricitySquared) / 8 +
+        (3 * eccentricityFourth) / 32 +
+        (45 * eccentricitySixth) / 1024) *
+        Math.sin(2 * radianLat) +
+      ((15 * eccentricityFourth) / 256 + (45 * eccentricitySixth) / 1024) *
+        Math.sin(4 * radianLat) -
+      ((35 * eccentricitySixth) / 3072) * Math.sin(6 * radianLat))
+  );
+}
+
+function convertUtmkToWgs84(x: number, y: number): CurrentLocation | null {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+
+  const {
+    semiMajorAxis,
+    inverseFlattening,
+    originLat,
+    originLng,
+    falseEasting,
+    falseNorthing,
+    scaleFactor,
+  } = KOREA_UNIFIED_CS;
+  const flattening = 1 / inverseFlattening;
+  const eccentricitySquared = 2 * flattening - flattening * flattening;
+  const eccentricityPrimeSquared =
+    eccentricitySquared / (1 - eccentricitySquared);
+  const eccentricityFourth = eccentricitySquared * eccentricitySquared;
+  const eccentricitySixth = eccentricityFourth * eccentricitySquared;
+  const meridian =
+    getMeridianArc(originLat) + (y - falseNorthing) / scaleFactor;
+  const mu =
+    meridian /
+    (semiMajorAxis *
+      (1 -
+        eccentricitySquared / 4 -
+        (3 * eccentricityFourth) / 64 -
+        (5 * eccentricitySixth) / 256));
+  const e1 =
+    (1 - Math.sqrt(1 - eccentricitySquared)) /
+    (1 + Math.sqrt(1 - eccentricitySquared));
+  const footprintLat =
+    mu +
+    ((3 * e1) / 2 - (27 * e1 ** 3) / 32) * Math.sin(2 * mu) +
+    ((21 * e1 ** 2) / 16 - (55 * e1 ** 4) / 32) * Math.sin(4 * mu) +
+    ((151 * e1 ** 3) / 96) * Math.sin(6 * mu) +
+    ((1097 * e1 ** 4) / 512) * Math.sin(8 * mu);
+  const sinFootprint = Math.sin(footprintLat);
+  const cosFootprint = Math.cos(footprintLat);
+  const tanFootprint = Math.tan(footprintLat);
+  const c1 = eccentricityPrimeSquared * cosFootprint ** 2;
+  const t1 = tanFootprint ** 2;
+  const n1 =
+    semiMajorAxis /
+    Math.sqrt(1 - eccentricitySquared * sinFootprint ** 2);
+  const r1 =
+    (semiMajorAxis * (1 - eccentricitySquared)) /
+    (1 - eccentricitySquared * sinFootprint ** 2) ** 1.5;
+  const d = (x - falseEasting) / (n1 * scaleFactor);
+  const lat =
+    footprintLat -
+    ((n1 * tanFootprint) / r1) *
+      (d ** 2 / 2 -
+        ((5 + 3 * t1 + 10 * c1 - 4 * c1 ** 2 - 9 * eccentricityPrimeSquared) *
+          d ** 4) /
+          24 +
+        ((61 +
+          90 * t1 +
+          298 * c1 +
+          45 * t1 ** 2 -
+          252 * eccentricityPrimeSquared -
+          3 * c1 ** 2) *
+          d ** 6) /
+          720);
+  const lng =
+    originLng +
+    (d -
+      ((1 + 2 * t1 + c1) * d ** 3) / 6 +
+      ((5 -
+        2 * c1 +
+        28 * t1 -
+        3 * c1 ** 2 +
+        8 * eccentricityPrimeSquared +
+        24 * t1 ** 2) *
+        d ** 5) /
+        120) /
+      cosFootprint;
+
+  return {
+    lat: (lat * 180) / Math.PI,
+    lng: (lng * 180) / Math.PI,
+  };
 }
 
 function calculateDistanceMeters(
@@ -1083,6 +1201,11 @@ const attractionsQuery = useQuery({
         }
       }
 
+      const converted = convertUtmkToWgs84(x, y);
+      if (converted && isKoreaLatLng(converted.lat, converted.lng)) {
+        return new naverMaps.LatLng(converted.lat, converted.lng);
+      }
+
       return null;
     };
 
@@ -1110,13 +1233,37 @@ const attractionsQuery = useQuery({
         map: mapInstance,
         paths,
         strokeColor: "#0d9488",
-        strokeWeight: 3,
+        strokeWeight: 2,
         strokeOpacity: 0.95,
         fillColor: "#14b8a6",
-        fillOpacity: 0.12,
+        fillOpacity: 0.1,
+        zIndex: 880,
       });
 
       boundaryPolygonRefs.current.push(boundaryPolygon);
+
+      paths.forEach((path) => {
+        const boundaryHaloLine = new naverMaps.Polyline({
+          map: mapInstance,
+          path,
+          strokeColor: "#ffffff",
+          strokeWeight: 8,
+          strokeOpacity: 0.9,
+          zIndex: 900,
+          clickable: false,
+        });
+        const boundaryLine = new naverMaps.Polyline({
+          map: mapInstance,
+          path,
+          strokeColor: "#0d9488",
+          strokeWeight: 4,
+          strokeOpacity: 1,
+          zIndex: 901,
+          clickable: false,
+        });
+
+        boundaryPolygonRefs.current.push(boundaryHaloLine, boundaryLine);
+      });
     });
 
     if (boundaryPolygonRefs.current.length === 0) {
@@ -1244,6 +1391,9 @@ const attractionsQuery = useQuery({
           zoom: 10,
           mapTypeId: naverMaps.MapTypeId.NORMAL,
           ...getNaverMapThemeOptions(shouldUseDarkMap),
+          draggable: true,
+          pinchZoom: true,
+          scrollWheel: true,
           zoomControl: false,
           mapDataControl: true,
           logoControl: true,
@@ -1252,6 +1402,7 @@ const attractionsQuery = useQuery({
 
         mapInstanceRef.current = mapInstance;
         applyNaverMapTheme(mapInstance, shouldUseDarkMap);
+        enableNaverMapPointerInteractions(mapInstance);
 
         const gangwonBounds = new naverMaps.LatLngBounds(
           new naverMaps.LatLng(GANGWON_BOUNDS.south, GANGWON_BOUNDS.west),
@@ -1310,6 +1461,7 @@ const attractionsQuery = useQuery({
 
   useEffect(() => {
     applyNaverMapTheme(mapInstanceRef.current, isDarkMode);
+    enableNaverMapPointerInteractions(mapInstanceRef.current);
   }, [isDarkMode]);
 
   useEffect(() => {
@@ -1607,32 +1759,24 @@ const attractionsQuery = useQuery({
         }}
       />
       {isSearchPopupOpen ? (
-        <section className="fixed inset-0 z-[2300] bg-gradient-to-b from-brand-50 via-brand-50 to-white">
+        <section className="fixed inset-0 z-[2300] bg-[#071f1f] text-slate-100">
           <div className="flex h-full flex-col">
-            <div className="border-b border-brand-100/80 bg-white/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
+            <div className="border-b border-brand-400/20 bg-[#0b2524]/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
               <div className="flex items-center gap-2">
-                <div className="flex h-12 flex-1 items-center rounded-full border border-brand-200 bg-white px-4 shadow-sm">
-                  <button
-                    type="button"
-                    aria-label="검색 닫기"
-                    onClick={() => setIsSearchPopupOpen(false)}
-                    className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full text-brand-700"
-                  >
-                    <IoArrowBack />
-                  </button>
+                <div className="flex h-12 min-w-0 flex-1 items-center rounded-full border border-brand-400/35 bg-[#071718] px-4 shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
                   <input
                     ref={searchInputRef}
                     value={searchKeyword}
                     onChange={(event) => setSearchKeyword(event.target.value)}
                     placeholder="강원도 명소, 카페, 음식점, 축제 검색"
-                    className="ml-2 w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none"
+                    className="w-full bg-transparent text-sm font-semibold text-slate-100 placeholder:text-slate-400 outline-none"
                   />
                   {searchKeyword ? (
                     <button
                       type="button"
                       aria-label="검색어 지우기"
                       onClick={() => setSearchKeyword("")}
-                      className="ml-2 text-slate-400"
+                      className="ml-2 text-slate-400 transition hover:text-slate-100"
                     >
                       <IoClose />
                     </button>
@@ -1642,6 +1786,14 @@ const attractionsQuery = useQuery({
                     </span>
                   )}
                 </div>
+                <button
+                  type="button"
+                  aria-label="검색 닫기"
+                  onClick={() => setIsSearchPopupOpen(false)}
+                  className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-400/30 bg-[#0f3431] text-xl text-brand-200 shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition hover:bg-[#13423e]"
+                >
+                  <IoClose />
+                </button>
               </div>
 
               <div className="scrollbar-hide mt-3 flex items-center gap-2 overflow-x-auto pr-2">
@@ -1660,8 +1812,8 @@ const attractionsQuery = useQuery({
                       onClick={() => setSearchFilter(filter.key as SearchFilter)}
                       className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                         isActive
-                          ? "border-brand-500 bg-brand-600 text-white"
-                          : "border-brand-200 bg-white text-slate-600"
+                          ? "border-brand-400 bg-brand-600 text-white shadow-sm shadow-brand-900/30"
+                          : "border-brand-400/25 bg-[#071718] text-slate-300"
                       }`}
                     >
                       {filter.label}
@@ -1671,7 +1823,7 @@ const attractionsQuery = useQuery({
               </div>
             </div>
 
-            <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+            <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto bg-[#071f1f] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
               {searchKeyword.trim() ? (
                 <div className="space-y-2">
                   {searchResults.length > 0 ? (
@@ -1713,21 +1865,21 @@ const attractionsQuery = useQuery({
                               (count) => count + SEARCH_RESULTS_PAGE_SIZE
                             )
                           }
-                          className="w-full rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm font-semibold text-brand-700 shadow-sm transition hover:bg-brand-50"
+                          className="w-full rounded-2xl border border-brand-400/30 bg-[#0b2524] px-4 py-3 text-sm font-semibold text-brand-200 shadow-sm transition hover:bg-[#10332f]"
                         >
                           더 보기 {visibleSearchResults.length}/{searchResults.length}
                         </button>
                       ) : null}
                     </>
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-4 py-8 text-center text-sm text-slate-500">
+                    <div className="rounded-2xl border border-dashed border-brand-400/35 bg-[#0b2524] px-4 py-8 text-center text-sm font-semibold text-slate-300">
                       검색 결과가 없습니다.
                     </div>
                   )}
                 </div>
               ) : (
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-slate-500">최근 검색</p>
+                  <p className="mb-2 text-xs font-semibold text-slate-400">최근 검색</p>
                   <div className="space-y-2">
                     {recentSearches.map((keyword) => (
                       <button
@@ -1736,9 +1888,9 @@ const attractionsQuery = useQuery({
                         onClick={() => {
                           setSearchKeyword(keyword);
                         }}
-                        className="flex w-full items-center justify-between rounded-2xl border border-brand-100 bg-white px-4 py-3 text-left"
+                        className="flex w-full items-center justify-between rounded-2xl border border-brand-400/25 bg-[#071718] px-4 py-3 text-left shadow-sm transition hover:border-brand-300/45"
                       >
-                        <span className="text-sm text-slate-700">{keyword}</span>
+                        <span className="text-sm font-semibold text-slate-100">{keyword}</span>
                         <IoSearch className="text-slate-400" />
                       </button>
                     ))}

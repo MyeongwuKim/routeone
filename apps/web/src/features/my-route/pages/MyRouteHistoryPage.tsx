@@ -82,7 +82,7 @@ function MyRouteHistoryPage() {
           type="button"
           aria-label="내 정보로 돌아가기"
           onClick={() => navigate("/me")}
-          className="flex size-10 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-white text-xl text-brand-700 shadow-sm"
+          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
         >
           <MdArrowBack />
         </button>

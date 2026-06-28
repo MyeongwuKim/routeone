@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IoClose, IoLocationSharp } from "react-icons/io5";
+import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import {
   applyNaverMapTheme,
@@ -128,12 +129,17 @@ function StartLocationPickerPopup({
           center,
           zoom: 12,
           minZoom: 7,
+          draggable: true,
+          pinchZoom: true,
+          scrollWheel: true,
           scaleControl: false,
           mapDataControl: false,
           logoControl: false,
+          zoomControl: true,
           ...getNaverMapThemeOptions(isDarkMode),
         });
         applyNaverMapTheme(map, isDarkMode);
+        enableNaverMapPointerInteractions(map);
         const bounds = new naverMaps.LatLngBounds();
         bounds.extend(center);
 
@@ -219,7 +225,7 @@ function StartLocationPickerPopup({
             type="button"
             aria-label="출발 위치 선택 닫기"
             onClick={onClose}
-            className="flex size-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
+            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
           >
             <IoClose />
           </button>

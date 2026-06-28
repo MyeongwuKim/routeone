@@ -18,6 +18,7 @@ import type {
 
 type UseRouteResultEditorParams = {
   savedPlaces: SavedPlaceItem[];
+  initialRoutePlan?: PlannedRouteDay[] | null;
   travelStartDate: string;
   tripDays: number;
   dailyStartMinutes: number;
@@ -26,6 +27,64 @@ type UseRouteResultEditorParams = {
   isScheduleValid: boolean;
   currentLocation: RouteStartLocation | null;
 };
+
+function addDays(dateValue: string, days: number) {
+  const [yearText, monthText, dayText] = dateValue.split("-");
+  const date = new Date(Number(yearText), Number(monthText) - 1, Number(dayText));
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  date.setDate(date.getDate() + days);
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function alignRoutePlanWithSchedule(options: {
+  routePlan: PlannedRouteDay[];
+  travelStartDate: string;
+  tripDays: number;
+  currentLocation: RouteStartLocation | null;
+}) {
+  const dayCount = Math.max(1, Math.floor(options.tripDays));
+  const sortedSourceDays = [...options.routePlan].sort((a, b) => a.day - b.day);
+
+  const alignedRoutePlan = Array.from({ length: dayCount }, (_, index) => {
+    const dayNumber = index + 1;
+    const sourceDay = sortedSourceDays[index];
+    const date = options.travelStartDate
+      ? addDays(options.travelStartDate, index)
+      : "";
+
+    if (!sourceDay) {
+      return {
+        day: dayNumber,
+        date,
+        startsFromCurrentLocation: Boolean(options.currentLocation),
+        startLocation: options.currentLocation,
+        items: [],
+      } satisfies PlannedRouteDay;
+    }
+
+    return {
+      ...sourceDay,
+      day: dayNumber,
+      date,
+    };
+  });
+
+  sortedSourceDays.slice(dayCount).forEach((sourceDay) => {
+    const lastDay = alignedRoutePlan[dayCount - 1];
+    lastDay.items = [...lastDay.items, ...sourceDay.items];
+  });
+
+  return alignedRoutePlan;
+}
 
 function isSameStartLocation(
   left: RouteStartLocation | null,
@@ -117,6 +176,7 @@ function applyManualRouteInsertions(options: {
 
 export function useRouteResultEditor({
   savedPlaces,
+  initialRoutePlan = null,
   travelStartDate,
   tripDays,
   dailyStartMinutes,
@@ -143,10 +203,10 @@ export function useRouteResultEditor({
   const [draftRemovedPlaceIds, setDraftRemovedPlaceIds] = useState<string[]>([]);
   const [appliedRoutePlanOverride, setAppliedRoutePlanOverride] = useState<
     PlannedRouteDay[] | null
-  >(null);
+  >(initialRoutePlan);
   const [draftRoutePlanOverride, setDraftRoutePlanOverride] = useState<
     PlannedRouteDay[] | null
-  >(null);
+  >(initialRoutePlan);
   const [appliedStartLocation, setAppliedStartLocation] =
     useState<RouteStartLocation | null>(currentLocation);
   const [draftStartLocation, setDraftStartLocation] =
@@ -216,7 +276,12 @@ export function useRouteResultEditor({
     }
 
     return recalculateRoutePlanDays({
-      routePlan: draftRoutePlanOverride,
+      routePlan: alignRoutePlanWithSchedule({
+        routePlan: draftRoutePlanOverride,
+        travelStartDate,
+        tripDays,
+        currentLocation: resolvedDraftStartLocation,
+      }),
       dailyStartMinutes,
       dailyEndMinutes,
       tempo,
@@ -272,7 +337,12 @@ export function useRouteResultEditor({
     }
 
     return recalculateRoutePlanDays({
-      routePlan: appliedRoutePlanOverride,
+      routePlan: alignRoutePlanWithSchedule({
+        routePlan: appliedRoutePlanOverride,
+        travelStartDate,
+        tripDays,
+        currentLocation: resolvedAppliedStartLocation,
+      }),
       dailyStartMinutes,
       dailyEndMinutes,
       tempo,

@@ -67,8 +67,11 @@ type DayRoutePopupProps = {
   isReadOnly?: boolean;
   headerLabel?: string;
   headerBadge?: string;
+  enableStartPreview?: boolean;
+  onRequestCheckout?: (routePlan: PlannedRouteDay[]) => void;
   readOnlyFooterAction?: {
     label: string;
+    ariaLabel?: string;
     icon?: ReactNode;
     isActive?: boolean;
     disabled?: boolean;
@@ -332,14 +335,14 @@ function RouteStopNode({
   const stayMinutes = stop.stayMinutes ?? 60;
   const statusLabel = isVisited ? "완료됨" : "방문 전";
   const stayTimeClass =
-    "inline-flex items-center justify-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 ring-1 ring-brand-100 disabled:opacity-45";
+    "inline-flex items-center justify-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 ring-1 ring-brand-100 disabled:opacity-45 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25";
 
   return (
     <div className={`relative flex gap-3 ${isDragging ? "opacity-35" : ""}`}>
       {!isLast ? (
         <div
           className={`absolute left-[19px] top-10 h-[calc(100%-1.75rem)] w-0.5 rounded-full ${
-            isVisited ? "bg-brand-500" : "bg-slate-200"
+            isVisited ? "bg-brand-500" : "bg-slate-200 dark:bg-slate-700"
           }`}
         />
       ) : null}
@@ -347,7 +350,7 @@ function RouteStopNode({
         className={`relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-white text-xs font-black shadow-sm ${
           isVisited
             ? "bg-brand-600 text-white shadow-brand-200"
-            : "bg-white text-slate-400 ring-2 ring-slate-200"
+            : "bg-white text-slate-400 ring-2 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700"
         }`}
       >
         {isVisited ? <MdCheckCircle className="text-lg" /> : index + 1}
@@ -374,16 +377,18 @@ function RouteStopNode({
           }}
           className={`rounded-2xl border-2 px-4 py-3 transition ${
             isOrderEditing
-              ? "border-brand-200 bg-white shadow-sm"
+              ? "border-brand-200 bg-white shadow-sm dark:border-brand-400/30 dark:bg-slate-950"
               : isVisited
-                ? "cursor-pointer border-brand-500 bg-brand-50 shadow-sm active:scale-[0.99]"
-                : "cursor-pointer border-slate-200 bg-white active:scale-[0.99]"
+                ? "cursor-pointer border-brand-500 bg-brand-50 shadow-sm active:scale-[0.99] dark:border-brand-400/40 dark:bg-brand-400/10"
+                : "cursor-pointer border-slate-200 bg-white active:scale-[0.99] dark:border-slate-700 dark:bg-slate-950"
           }`}
         >
           <div className="flex items-start gap-3">
             <div
               className={`relative size-12 shrink-0 overflow-hidden rounded-xl ${
-                isVisited ? "ring-2 ring-brand-400" : "bg-slate-50"
+                isVisited
+                  ? "ring-2 ring-brand-400"
+                  : "bg-slate-50 dark:bg-slate-900"
               }`}
             >
               {stop.place.imageUrl ? (
@@ -407,15 +412,15 @@ function RouteStopNode({
               ) : null}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-2">
-                <p className="min-w-0 flex-1 truncate text-sm font-black text-slate-900">
-                  {stop.place.title}
-                </p>
+              <p className="truncate text-sm font-black text-slate-900 dark:text-white">
+                {stop.place.title}
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 <span
                   className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
                     isVisited
                       ? "bg-brand-600 text-white"
-                      : "bg-slate-100 text-slate-500 ring-1 ring-slate-200"
+                      : "bg-slate-100 text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
                   }`}
                 >
                   {isVisited ? (
@@ -425,9 +430,7 @@ function RouteStopNode({
                   )}
                   {statusLabel}
                 </span>
-              </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                <span className="truncate text-xs font-semibold text-slate-500">
+                <span className="min-w-0 truncate text-xs font-semibold text-slate-500 dark:text-slate-300">
                   {stop.place.categoryLabel ?? stop.place.categoryName ?? "장소"}
                 </span>
               </div>
@@ -463,7 +466,9 @@ function RouteStopNode({
               {stop.place.address ? (
                 <p
                   className={`mt-1 line-clamp-2 text-[11px] leading-4 ${
-                    isVisited ? "text-slate-500" : "text-slate-400"
+                    isVisited
+                      ? "text-slate-500 dark:text-slate-300"
+                      : "text-slate-400 dark:text-slate-500"
                   }`}
                 >
                   {stop.place.address}
@@ -496,26 +501,26 @@ function RouteStopNode({
                   onToggleVisited(stop);
                 }}
                 disabled={isVisitSaving}
-                className={`flex min-h-10 shrink-0 items-center gap-1 rounded-full border px-3 text-[11px] font-black disabled:opacity-40 ${
+                title={isVisited ? "완료 취소" : "완료 처리"}
+                className={`flex size-8 shrink-0 items-center justify-center rounded-full border text-base transition active:scale-95 disabled:opacity-40 ${
                   isVisited
-                    ? "border-brand-200 bg-white text-brand-700"
-                    : "border-brand-600 bg-brand-600 text-white shadow-sm"
+                    ? "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                    : "border-brand-500 bg-brand-600 text-white"
                 }`}
               >
                 {isVisitSaving ? (
-                  <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                 ) : isVisited ? (
-                  <MdClose className="text-sm" />
+                  <MdClose />
                 ) : (
-                  <MdCheck className="text-sm" />
+                  <MdCheck />
                 )}
-                {isVisited ? "완료 취소" : "완료하기"}
               </button>
             )}
           </div>
         </div>
         {!isLast ? (
-          <div className="ml-1 mt-2 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700">
+          <div className="ml-1 mt-2 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700 dark:bg-brand-400/10 dark:text-brand-100">
             <MdDirectionsCar className="text-sm" />
             다음 장소까지 {getTravelSegmentLabel(travelSegmentToNext)}
           </div>
@@ -813,60 +818,62 @@ function DayRouteAccordionItem({
           : "border-slate-100 bg-slate-50"
       }`}
     >
-      <button
-        type="button"
-        aria-expanded={isExpanded}
-        onClick={() => onSelect(routeDay)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <div
-            className={`flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-black ${
-              isDayCleared
-                ? "bg-brand-600 text-white"
-                : isExpanded
-                  ? "bg-brand-50 text-brand-700 ring-1 ring-brand-200"
-                  : "bg-white text-slate-500 ring-1 ring-slate-200"
-            }`}
-          >
-            {isDayCleared ? (
-              <MdCheckCircle className="text-xl" />
-            ) : (
-              routeDay.dayIndex
-            )}
+      <div className="flex items-center gap-2 px-4 py-3">
+        <button
+          type="button"
+          aria-expanded={isExpanded}
+          onClick={() => onSelect(routeDay)}
+          className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <div
+              className={`flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-black ${
+                isDayCleared
+                  ? "bg-brand-600 text-white"
+                  : isExpanded
+                    ? "bg-brand-50 text-brand-700 ring-1 ring-brand-200"
+                    : "bg-white text-slate-500 ring-1 ring-slate-200"
+              }`}
+            >
+              {isDayCleared ? (
+                <MdCheckCircle className="text-xl" />
+              ) : (
+                routeDay.dayIndex
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="font-trip text-sm text-slate-900">
+                DAY {routeDay.dayIndex}
+              </p>
+              <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
+                {getDayDateLabel(routeDay)} · {getDaySummary(routeDay)}
+              </p>
+              <p className="mt-1 flex items-center gap-1 truncate text-[11px] font-bold text-brand-700">
+                <MdMyLocation className="shrink-0 text-sm" />
+                <span className="truncate">
+                  {startLabel}: {dayStartTitle}
+                </span>
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="font-trip text-sm text-slate-900">
-              DAY {routeDay.dayIndex}
-            </p>
-            <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
-              {getDayDateLabel(routeDay)} · {getDaySummary(routeDay)}
-            </p>
-            <p className="mt-1 flex items-center gap-1 truncate text-[11px] font-bold text-brand-700">
-              <MdMyLocation className="shrink-0 text-sm" />
-              <span className="truncate">
-                {startLabel}: {dayStartTitle}
-              </span>
-            </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-black ${
+                isDayCleared
+                  ? "bg-brand-600 text-white"
+                  : "bg-white text-brand-700 ring-1 ring-brand-100"
+              }`}
+            >
+              {completedStopCount}/{dayStops.length}
+            </span>
+            <MdExpandMore
+              className={`text-xl text-brand-700 transition-transform ${
+                isExpanded ? "rotate-180" : ""
+              }`}
+            />
           </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span
-            className={`rounded-full px-2.5 py-1 text-[11px] font-black ${
-              isDayCleared
-                ? "bg-brand-600 text-white"
-                : "bg-white text-brand-700 ring-1 ring-brand-100"
-            }`}
-          >
-            {completedStopCount}/{dayStops.length}
-          </span>
-          <MdExpandMore
-            className={`text-xl text-brand-700 transition-transform ${
-              isExpanded ? "rotate-180" : ""
-            }`}
-          />
-        </div>
-      </button>
+        </button>
+      </div>
 
       {isExpanded ? (
         <div className="route-day-accordion-enter border-t border-brand-100 px-4 py-4">
@@ -1008,6 +1015,8 @@ function DayRoutePopup({
   isReadOnly = false,
   headerLabel = "MY ROUTE",
   headerBadge,
+  enableStartPreview = false,
+  onRequestCheckout,
   readOnlyFooterAction,
 }: DayRoutePopupProps) {
   const navigate = useNavigate();
@@ -1025,7 +1034,7 @@ function DayRoutePopup({
   );
   const activeDay =
     sortedDays.find((routeDay) => routeDay.id === activeDayId) ?? day;
-  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [mapTargetDayId, setMapTargetDayId] = useState<string | null>(null);
   const [isOrderEditing, setIsOrderEditing] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [isDeletingDay, setIsDeletingDay] = useState(false);
@@ -1043,12 +1052,10 @@ function DayRoutePopup({
   const [travelSegmentByKey, setTravelSegmentByKey] = useState<
     Record<string, TravelSegmentState>
   >({});
-  const activeDayHasStops = orderedStops.length > 0;
   const routeStopCount = route.days.reduce((total, routeDay) => {
     const stops = routeDay.id === activeDay.id ? orderedStops : routeDay.stops;
     return total + stops.length;
   }, 0);
-  const routeHasStops = routeStopCount > 0;
   const routeCompletedStopCount = route.days.reduce((total, routeDay) => {
     const stops = routeDay.id === activeDay.id ? orderedStops : routeDay.stops;
     return total + stops.filter(isVisitedStop).length;
@@ -1056,6 +1063,7 @@ function DayRoutePopup({
   const isOrderDirty = !isSameStopOrder(orderedStops, baseStopIds);
   const isRouteCompleted = routeStopCount > 0 && routeCompletedStopCount === routeStopCount;
   const isRouteShared = route.visibility === "PUBLIC" || Boolean(route.sharedAt);
+  const shouldShowSharedStatusText = headerLabel === "MY ROUTE";
   const readOnlyActionDisabled =
     readOnlyFooterAction?.disabled ?? (isSharingRoute || !isRouteCompleted);
   const readOnlyActionLabel =
@@ -1070,17 +1078,9 @@ function DayRoutePopup({
   const readOnlyActionIcon = readOnlyFooterAction?.icon ?? (
     <MdShare className="text-lg" />
   );
-  const plannedRouteDay = useMemo(
-    () => createPlannedRouteDay(activeDay, orderedStops, route.startLocation),
-    [activeDay, orderedStops, route.startLocation]
-  );
-  const completedStopIds = useMemo(
-    () =>
-      orderedStops
-        .filter((stop) => isVisitedStop(stop))
-        .map((stop) => stop.id),
-    [orderedStops]
-  );
+  const readOnlyActionDisabledClass = readOnlyFooterAction?.isActive
+    ? "disabled:opacity-100"
+    : "disabled:opacity-60";
   const comparisonRouteDay = useMemo(() => {
     if (!isOrderDirty) {
       return null;
@@ -1092,17 +1092,16 @@ function DayRoutePopup({
       route.startLocation
     );
   }, [activeDay, baseStopIds, isOrderDirty, orderedStops, route.startLocation]);
-  const mapDayOptions = useMemo(
+  const routeMapDayOptions = useMemo(
     () =>
       sortedDays.map((routeDay) => {
         const stops =
           routeDay.id === activeDay.id ? orderedStops : routeDay.stops;
-        const dayCompletedStopCount = stops.filter(isVisitedStop).length;
 
         return {
           id: routeDay.id,
           label: `DAY ${routeDay.dayIndex}`,
-          summary: `${getDayDateLabel(routeDay)} · ${dayCompletedStopCount}/${stops.length} 완료`,
+          summary: `${getDayDateLabel(routeDay)} · ${stops.length}곳`,
           day: createPlannedRouteDay(routeDay, stops, route.startLocation),
           completedItemIds: stops
             .filter((stop) => isVisitedStop(stop))
@@ -1111,8 +1110,20 @@ function DayRoutePopup({
             routeDay.id === activeDay.id ? comparisonRouteDay : null,
         };
       }),
-    [activeDay.id, comparisonRouteDay, orderedStops, route.startLocation, sortedDays]
+    [
+      activeDay.id,
+      comparisonRouteDay,
+      orderedStops,
+      route.startLocation,
+      sortedDays,
+    ]
   );
+  const firstRouteMapDayWithStops =
+    routeMapDayOptions.find((option) => option.day.items.length > 0) ?? null;
+  const mapTargetDayOption = mapTargetDayId
+    ? (routeMapDayOptions.find((option) => option.id === mapTargetDayId) ?? null)
+    : null;
+  const mapTargetRouteDay = mapTargetDayOption?.day ?? null;
   const travelSegmentRequests = useMemo(() => {
     const requests = new Map<string, TravelSegmentRequest>();
     const appendRequest = (request: TravelSegmentRequest | null) => {
@@ -1143,17 +1154,6 @@ function DayRoutePopup({
 
     return [...requests.values()];
   }, [activeDay.id, orderedStops, route.startLocation, sortedDays]);
-  const initialMapDayOptionId = useMemo(() => {
-    if (activeDayHasStops) {
-      return activeDay.id;
-    }
-
-    return (
-      mapDayOptions.find((option) => option.day.items.length > 0)?.id ??
-      activeDay.id
-    );
-  }, [activeDay.id, activeDayHasStops, mapDayOptions]);
-
   const stopCurrentDrag = () => {
     dragCleanupRef.current?.();
     dragCleanupRef.current = null;
@@ -1724,6 +1724,24 @@ function DayRoutePopup({
     }
   };
 
+  const handleOpenMapForDay = (routeDay: MyRouteDay) => {
+    const stops = routeDay.id === activeDay.id ? orderedStops : routeDay.stops;
+
+    if (routeStopCount === 0) {
+      showToast("장소가 있는 루트만 지도로 볼 수 있어요.");
+      return;
+    }
+
+    setMapTargetDayId(
+      stops.length > 0
+        ? routeDay.id
+        : firstRouteMapDayWithStops?.id ?? routeDay.id
+    );
+  };
+  const handleRequestCheckoutFromMap = (routePlan: PlannedRouteDay[]) => {
+    onRequestCheckout?.(routePlan);
+  };
+
   const handleOpenPlaceDetail = (stop: MyRouteStop) => {
     openSheet(createMapSheetPlaceFromRouteStop(stop), {
       mode: "full-popup",
@@ -1743,7 +1761,7 @@ function DayRoutePopup({
     setVisitSavingStopId(null);
     setStaySavingStopId(null);
     setStayMinutesEditTarget(null);
-    setIsMapOpen(false);
+    setMapTargetDayId(null);
     stopCurrentDrag();
   }, [activeDay]);
 
@@ -1842,6 +1860,11 @@ function DayRoutePopup({
                   {headerBadge}
                 </span>
               ) : null}
+              {isRouteShared && shouldShowSharedStatusText ? (
+                <span className="inline-flex items-center rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 dark:border-brand-400/35 dark:bg-slate-950 dark:text-brand-100">
+                  공유됨
+                </span>
+              ) : null}
             </div>
             <h2 className="mt-0.5 truncate text-lg font-bold text-slate-900">
               {getRouteTitle(route)}
@@ -1858,7 +1881,7 @@ function DayRoutePopup({
             type="button"
             aria-label="일차 경로 닫기"
             onClick={onClose}
-            className="rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700"
+            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
           >
             <MdClose />
           </button>
@@ -1928,21 +1951,27 @@ function DayRoutePopup({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
+                aria-label={
+                  readOnlyFooterAction?.ariaLabel ??
+                  (isRouteShared
+                    ? `하트 ${route.likeCount}개 받은 공유 루트`
+                    : readOnlyActionLabel)
+                }
                 onClick={readOnlyFooterAction?.onClick ?? handleShareRoute}
                 disabled={readOnlyActionDisabled}
-                className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-bold disabled:cursor-default disabled:opacity-75 ${
+                className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-bold disabled:cursor-default ${readOnlyActionDisabledClass} ${
                   readOnlyFooterAction?.isActive
                     ? "border-brand-500 bg-brand-600 text-white"
                     : "border-brand-200 bg-brand-50 text-brand-700"
                 }`}
               >
                 {readOnlyActionIcon}
-                {readOnlyActionLabel}
+                {readOnlyActionLabel ? <span>{readOnlyActionLabel}</span> : null}
               </button>
               <button
                 type="button"
-                onClick={() => setIsMapOpen(true)}
-                disabled={!routeHasStops}
+                onClick={() => handleOpenMapForDay(activeDay)}
+                disabled={routeStopCount === 0}
                 className="flex items-center justify-center gap-1.5 rounded-2xl bg-brand-600 px-3 py-3 text-sm font-bold text-white disabled:opacity-40"
               >
                 <MdMap className="text-lg" />
@@ -1962,7 +1991,7 @@ function DayRoutePopup({
               </button>
               <button
                 type="button"
-                onClick={() => setIsMapOpen(true)}
+                onClick={() => handleOpenMapForDay(activeDay)}
                 disabled={!isOrderDirty || orderedStops.length < 2}
                 className="flex items-center justify-center gap-1.5 rounded-2xl border border-brand-200 bg-brand-50 px-2 py-3 text-xs font-bold text-brand-700 disabled:opacity-40"
               >
@@ -2001,8 +2030,8 @@ function DayRoutePopup({
               </button>
               <button
                 type="button"
-                onClick={() => setIsMapOpen(true)}
-                disabled={!routeHasStops}
+                onClick={() => handleOpenMapForDay(activeDay)}
+                disabled={routeStopCount === 0}
                 className="flex items-center justify-center gap-1.5 rounded-2xl bg-brand-600 px-2 py-3 text-xs font-bold text-white disabled:opacity-40"
               >
                 <MdMap className="text-lg" />
@@ -2013,14 +2042,20 @@ function DayRoutePopup({
         </footer>
       </div>
 
-      {isMapOpen ? (
+      {mapTargetRouteDay ? (
         <PlaceCartRouteMapPopup
-          day={plannedRouteDay}
-          comparisonDay={comparisonRouteDay}
-          completedItemIds={completedStopIds}
-          dayOptions={mapDayOptions}
-          initialDayOptionId={initialMapDayOptionId}
-          onClose={() => setIsMapOpen(false)}
+          day={mapTargetRouteDay}
+          comparisonDay={mapTargetDayOption?.comparisonDay ?? null}
+          completedItemIds={mapTargetDayOption?.completedItemIds}
+          dayOptions={routeMapDayOptions}
+          initialDayOptionId={
+            mapTargetDayOption?.id ?? mapTargetDayId ?? undefined
+          }
+          enableStartPreview={enableStartPreview}
+          onRequestCheckout={
+            onRequestCheckout ? handleRequestCheckoutFromMap : undefined
+          }
+          onClose={() => setMapTargetDayId(null)}
         />
       ) : null}
       {draggedStop?.isActive ? (

@@ -46,6 +46,7 @@ const RouteCheckoutContext = createContext<RouteCheckoutContextValue | null>(
 
 type RouteCheckoutProviderProps = {
   children: ReactNode;
+  initialStep?: CartFlowStep;
   initialTravelStartDate?: string | null;
   initialTripDays?: number;
   initialStartLocation?: RouteStartLocation | null;
@@ -81,11 +82,12 @@ function getTodayDate() {
 
 export function RouteCheckoutProvider({
   children,
+  initialStep = "cart",
   initialTravelStartDate = "",
   initialTripDays = DEFAULT_TRIP_DAYS,
   initialStartLocation = null,
 }: RouteCheckoutProviderProps) {
-  const [step, setStep] = useState<CartFlowStep>("cart");
+  const [step, setStep] = useState<CartFlowStep>(initialStep);
   const [travelStartDate, setTravelStartDate] = useState(
     initialTravelStartDate ?? ""
   );

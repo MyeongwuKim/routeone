@@ -176,6 +176,7 @@ async function buildAppendRouteDaysInput(
     tripDays: routeInput.tripDays,
     travelStartDate: routeInput.travelStartDate,
     travelEndDate: routeInput.travelEndDate,
+    startLocation: routeInput.startLocation,
     stops: routeInput.stops,
   };
 }

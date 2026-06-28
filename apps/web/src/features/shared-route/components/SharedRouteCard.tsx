@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import { MdOutlineCalendarToday, MdSell } from "react-icons/md";
 import type {
@@ -6,7 +7,7 @@ import type {
   SharedRoutesQuery,
 } from "@/generated/graphql";
 
-const VISIBLE_SHARE_TAG_COUNT = 4;
+const VISIBLE_SHARE_TAG_COUNT = 3;
 const GANGWON_REGION_LABEL_BY_CODE: Record<string, string> = {
   "1": "강릉",
   "2": "고성",
@@ -196,9 +197,12 @@ function SharedRouteCard({
   onToggleLike,
   onOpen,
 }: SharedRouteCardProps) {
+  const [isTagExpanded, setIsTagExpanded] = useState(false);
   const isMine = route.isMine;
   const shareTags = getDisplayShareTags(route);
-  const visibleTags = shareTags.slice(0, VISIBLE_SHARE_TAG_COUNT);
+  const visibleTags = isTagExpanded
+    ? shareTags
+    : shareTags.slice(0, VISIBLE_SHARE_TAG_COUNT);
   const hiddenTagCount = Math.max(0, shareTags.length - visibleTags.length);
   const progressPercent =
     route.totalStopCount > 0
@@ -226,14 +230,16 @@ function SharedRouteCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-base font-black text-slate-900">
+          <p className="flex min-w-0 items-center gap-1.5 text-base font-black text-slate-900">
+            {isMine ? (
+              <span className="shrink-0 rounded-full border border-brand-200 bg-white px-2 py-0.5 text-[10px] font-black leading-5 text-brand-700 dark:border-brand-400/35 dark:bg-slate-950 dark:text-brand-100">
+                내 공유
+              </span>
+            ) : null}
+            <span className="min-w-0 truncate">
             {getSharedRouteTitle(route)}
-          </p>
-          {isMine ? (
-            <span className="mt-2 inline-flex rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-black text-brand-700 dark:border-brand-400/35 dark:bg-slate-950 dark:text-brand-100">
-              내 공유 루트
             </span>
-          ) : null}
+          </p>
           <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
             <MdOutlineCalendarToday className="text-sm" />
             {getSharedRouteSubtitle(route)}
@@ -242,7 +248,7 @@ function SharedRouteCard({
         {isMine ? (
           <div className="flex shrink-0 items-center gap-1 rounded-full border border-brand-200 bg-white px-3 py-2 text-xs font-bold text-brand-700 dark:border-brand-400/35 dark:bg-slate-950 dark:text-brand-100">
             <FaHeart />
-            좋아요 {route.likeCount}
+            {route.likeCount}
           </div>
         ) : (
           <button
@@ -266,12 +272,12 @@ function SharedRouteCard({
       </div>
 
       {shareTags.length > 0 ? (
-        <div className="mt-4 h-[4.5rem] overflow-hidden">
-          <div className="flex flex-wrap gap-1.5">
+        <div className="mt-4 min-w-0">
+          <div className="scrollbar-hide flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-1">
             {visibleTags.map((tag) => (
               <span
                 key={tag}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
                   isMine
                     ? "bg-white text-brand-700 ring-1 ring-brand-100 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25"
                     : "bg-slate-50 text-slate-600 ring-1 ring-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
@@ -282,15 +288,20 @@ function SharedRouteCard({
               </span>
             ))}
             {hiddenTagCount > 0 ? (
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-black ${
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsTagExpanded(true);
+                }}
+                className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-black ${
                   isMine
                     ? "bg-white text-brand-700 ring-1 ring-brand-100 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25"
                     : "bg-slate-50 text-slate-600 ring-1 ring-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
                 }`}
               >
                 +{hiddenTagCount}
-              </span>
+              </button>
             ) : null}
           </div>
         </div>

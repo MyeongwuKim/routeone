@@ -18,7 +18,7 @@ function SharedRouteDetailSkeleton({ onClose }: SharedRouteDetailSkeletonProps) 
             type="button"
             aria-label="공유 루트 상세 닫기"
             onClick={onClose}
-            className="rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700 dark:border-brand-400/30 dark:bg-slate-900 dark:text-brand-200"
+            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
           >
             <MdClose />
           </button>

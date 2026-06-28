@@ -910,15 +910,17 @@ function PlaceCartRouteItemSheet({
         className="absolute inset-0 cursor-default"
         onClick={onClose}
       />
-      <section className="route-checkout-bottom-sheet-enter relative w-full rounded-t-[28px] border border-brand-100 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl">
-        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200" />
+      <section className="route-checkout-bottom-sheet-enter relative w-full rounded-t-[28px] border border-brand-100 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl dark:border-brand-400/30 dark:bg-slate-950">
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200 dark:bg-slate-700" />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-trip text-sm text-brand-700">장소 편집</p>
-            <h3 className="mt-2 truncate text-lg font-bold text-slate-900">
+            <p className="font-trip text-sm text-brand-700 dark:text-brand-200">
+              장소 편집
+            </p>
+            <h3 className="mt-2 truncate text-lg font-bold text-slate-900 dark:text-white">
               {item.place.title}
             </h3>
-            <p className="mt-1 text-sm font-semibold text-brand-700">
+            <p className="mt-1 text-sm font-semibold text-brand-700 dark:text-brand-100">
               {item.place.icon} {item.place.contentTypeLabel}
               {item.place.categoryName !== item.place.contentTypeLabel
                 ? ` · ${item.place.categoryName}`
@@ -929,32 +931,32 @@ function PlaceCartRouteItemSheet({
             type="button"
             aria-label="닫기"
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
             <IoClose />
           </button>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-brand-100 bg-brand-50/70 px-3 py-3">
-          <p className="line-clamp-2 text-xs leading-5 text-slate-500">
+        <div className="mt-4 rounded-2xl border border-brand-100 bg-brand-50/70 px-3 py-3 dark:border-brand-400/25 dark:bg-slate-900/80">
+          <p className="line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">
             {item.place.address || "주소 정보가 없습니다"}
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="rounded-2xl bg-white px-3 py-3">
-              <p className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
-                <IoTimeOutline className="text-brand-600" />
+            <div className="rounded-2xl bg-white px-3 py-3 dark:bg-slate-950">
+              <p className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-300">
+                <IoTimeOutline className="text-brand-600 dark:text-brand-200" />
                 도착 시간
               </p>
-              <p className="mt-1 text-base font-bold text-slate-900">
+              <p className="mt-1 text-base font-bold text-slate-900 dark:text-white">
                 {formatClock(item.startMinutes)}
               </p>
             </div>
-            <div className="rounded-2xl bg-white px-3 py-3">
-              <p className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
-                <IoCarSportOutline className="text-brand-600" />
+            <div className="rounded-2xl bg-white px-3 py-3 dark:bg-slate-950">
+              <p className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-300">
+                <IoCarSportOutline className="text-brand-600 dark:text-brand-200" />
                 이동 시간
               </p>
-              <p className="mt-1 text-base font-bold text-slate-900">
+              <p className="mt-1 text-base font-bold text-slate-900 dark:text-white">
                 {getDurationText(item.travelMinutesFromPrevious)}
               </p>
             </div>
@@ -962,17 +964,17 @@ function PlaceCartRouteItemSheet({
         </div>
 
         {movableDays.length > 0 ? (
-          <section className="mt-4 rounded-2xl border border-brand-100 bg-white p-3">
-            <p className="text-xs font-bold text-slate-500">
+          <section className="mt-4 rounded-2xl border border-brand-100 bg-white p-3 dark:border-brand-400/25 dark:bg-slate-900/80">
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-300">
               다른 날짜로 이동
             </p>
             <div className="mt-3 space-y-2">
               {movableDays.map((day) => (
                 <div
                   key={day.day}
-                  className="flex items-center justify-between gap-2 rounded-2xl bg-brand-50/70 px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-2xl bg-brand-50/70 px-3 py-2 dark:bg-brand-400/10"
                 >
-                  <span className="font-trip text-sm text-brand-700">
+                  <span className="font-trip text-sm text-brand-700 dark:text-brand-100">
                     DAY {day.day}
                   </span>
                   <div className="flex gap-1.5">
@@ -982,7 +984,7 @@ function PlaceCartRouteItemSheet({
                         onMovePlaceToDay(item.id, day.day, "first");
                         onClose();
                       }}
-                      className="rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700"
+                      className="rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 dark:border-brand-400/30 dark:bg-slate-950 dark:text-brand-100"
                     >
                       맨 앞
                     </button>
@@ -992,7 +994,7 @@ function PlaceCartRouteItemSheet({
                         onMovePlaceToDay(item.id, day.day, "last");
                         onClose();
                       }}
-                      className="rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700"
+                      className="rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 dark:border-brand-400/30 dark:bg-slate-950 dark:text-brand-100"
                     >
                       맨 뒤
                     </button>
@@ -1009,7 +1011,7 @@ function PlaceCartRouteItemSheet({
             onRemove(item.id);
             onClose();
           }}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-200"
         >
           <IoTrashOutline />
           이 루트에서 빼기

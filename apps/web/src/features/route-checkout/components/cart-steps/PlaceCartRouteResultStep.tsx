@@ -26,6 +26,7 @@ import type { PlannedRouteDay, RouteStartLocation } from "./routePlanTypes";
 type PlaceCartRouteResultStepProps = {
   savedPlaces: SavedPlaceItem[];
   candidatePlaces: MapSheetPlace[];
+  initialRoutePlan?: PlannedRouteDay[] | null;
   currentLocation: RouteStartLocation | null;
   onClose: () => void;
   onClearPlaces: () => void;
@@ -80,6 +81,7 @@ function getRouteSaveErrorMessage(error: unknown) {
 function PlaceCartRouteResultStep({
   savedPlaces,
   candidatePlaces,
+  initialRoutePlan,
   currentLocation,
   onClose,
   onClearPlaces,
@@ -116,6 +118,7 @@ function PlaceCartRouteResultStep({
     handleCancelRouteEdits,
   } = useRouteResultEditor({
     savedPlaces,
+    initialRoutePlan,
     travelStartDate,
     tripDays,
     dailyStartMinutes,

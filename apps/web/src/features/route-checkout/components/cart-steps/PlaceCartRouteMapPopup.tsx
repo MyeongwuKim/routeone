@@ -1,18 +1,28 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { IoClose } from "react-icons/io5";
+import { MdAdd } from "react-icons/md";
+import {
+  SegmentedToggle,
+  type SegmentedToggleOption,
+} from "@/components/inputs";
 import {
   PLACE_BUBBLE_MARKER_SIZE,
   type PlaceBubbleMarkerVariant,
 } from "@/components/map/NaverMapMarkerIcon";
 import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
+import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import {
   applyNaverMapTheme,
   getNaverMapThemeOptions,
 } from "@/lib/naverMapTheme";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
-import type { PlannedRouteDay } from "./routePlanTypes";
+import type {
+  PlannedRouteDay,
+  PlannedRouteItem,
+  RouteStartLocation,
+} from "./routePlanTypes";
 
 type RouteMapPoint = {
   id: string;
@@ -36,6 +46,8 @@ type RouteMapSegment = {
   from: RouteMapPoint;
   to: RouteMapPoint;
   path: RoutePathPoint[];
+  durationMs?: number;
+  distanceM?: number;
 };
 
 type RouteMapDayOption = {
@@ -53,6 +65,8 @@ type PlaceCartRouteMapPopupProps = {
   completedItemIds?: string[];
   dayOptions?: RouteMapDayOption[];
   initialDayOptionId?: string;
+  enableStartPreview?: boolean;
+  onRequestCheckout?: (routePlan: PlannedRouteDay[]) => void;
   onClose: () => void;
 };
 
@@ -60,16 +74,17 @@ const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 
 type RouteDisplayVariant = "current" | "comparison";
 type RouteMapViewMode = "all" | "comparison" | "current";
+type StartPreviewMode = "original" | "changed";
 type RouteSegmentSelection = {
   variant: RouteDisplayVariant;
   segmentId: string;
 };
 
-const ROUTE_VIEW_OPTIONS: Array<{ id: RouteMapViewMode; label: string }> = [
-  { id: "all", label: "전체" },
-  { id: "comparison", label: "원래 순서" },
-  { id: "current", label: "현재 순서" },
-];
+const ROUTE_VIEW_OPTIONS = [
+  { value: "all", label: "전체" },
+  { value: "comparison", label: "원래 순서" },
+  { value: "current", label: "현재 순서" },
+] satisfies ReadonlyArray<SegmentedToggleOption<RouteMapViewMode>>;
 
 const ROUTE_SEGMENT_COLORS = [
   "#0f766e",
@@ -87,6 +102,15 @@ const ROUTE_CURRENT_COLOR = "#14b8a6";
 const ROUTE_SEGMENT_FOCUS_ZOOM = 13;
 const EMPTY_COMPLETED_ITEM_IDS: string[] = [];
 const EMPTY_DAY_OPTIONS: RouteMapDayOption[] = [];
+const DEFAULT_START_PREVIEW_OFFSET = {
+  lat: -0.012,
+  lng: -0.012,
+};
+
+const START_PREVIEW_MODE_OPTIONS = [
+  { value: "original", label: "기존" },
+  { value: "changed", label: "재조정" },
+] satisfies ReadonlyArray<SegmentedToggleOption<StartPreviewMode>>;
 
 function escapeMarkerHtml(text: string) {
   return text
@@ -106,6 +130,150 @@ function formatDateLabel(value: string) {
   return `${year}.${month}.${day}`;
 }
 
+function formatDurationMs(value: number) {
+  const minutes = Math.max(1, Math.round(value / 60000));
+
+  if (minutes < 60) {
+    return `${minutes}분`;
+  }
+
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+
+  return minute > 0 ? `${hour}시간 ${minute}분` : `${hour}시간`;
+}
+
+function formatDistanceM(value: number) {
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}km`;
+  }
+
+  return `${Math.max(1, Math.round(value))}m`;
+}
+
+function getRouteDayKey(day: PlannedRouteDay) {
+  return `${day.day}:${day.date}:${day.items.map((item) => item.id).join(",")}`;
+}
+
+function getInitialStartPreviewLocation(
+  day: PlannedRouteDay
+): RouteStartLocation | null {
+  if (day.startLocation) {
+    return day.startLocation;
+  }
+
+  const firstPlace = day.items[0]?.place;
+
+  if (!firstPlace) {
+    return null;
+  }
+
+  return {
+    lat: firstPlace.lat + DEFAULT_START_PREVIEW_OFFSET.lat,
+    lng: firstPlace.lng + DEFAULT_START_PREVIEW_OFFSET.lng,
+  };
+}
+
+function createStartPreviewDay({
+  day,
+  startLocation,
+  shouldReorder = false,
+}: {
+  day: PlannedRouteDay;
+  startLocation: RouteStartLocation;
+  shouldReorder?: boolean;
+}) {
+  return {
+    ...day,
+    startsFromCurrentLocation: false,
+    startLocation,
+    items: shouldReorder
+      ? reorderRouteItemsFromStart(day.items, startLocation)
+      : day.items,
+  } satisfies PlannedRouteDay;
+}
+
+function calculateRouteMapDistanceKm(
+  from: RouteStartLocation,
+  to: RouteStartLocation
+) {
+  const earthRadiusKm = 6371;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRadians(to.lat - from.lat);
+  const dLng = toRadians(to.lng - from.lng);
+  const fromLat = toRadians(from.lat);
+  const toLat = toRadians(to.lat);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusKm * c;
+}
+
+function reorderRouteItemsFromStart(
+  items: PlannedRouteItem[],
+  startLocation: RouteStartLocation
+) {
+  const remainingItems = [...items];
+  const reorderedItems: PlannedRouteItem[] = [];
+  let currentPoint = startLocation;
+
+  while (remainingItems.length > 0) {
+    let nearestIndex = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    remainingItems.forEach((item, index) => {
+      const distance = calculateRouteMapDistanceKm(currentPoint, item.place);
+
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+
+    const [nearestItem] = remainingItems.splice(nearestIndex, 1);
+    reorderedItems.push(nearestItem);
+    currentPoint = nearestItem.place;
+  }
+
+  return reorderedItems;
+}
+
+function readLatLng(value: unknown): RouteStartLocation | null {
+  const point = value as {
+    lat?: number | (() => number);
+    lng?: number | (() => number);
+    x?: number;
+    y?: number;
+  } | null;
+  const lat =
+    typeof point?.lat === "function"
+      ? point.lat()
+      : typeof point?.lat === "number"
+        ? point.lat
+        : typeof point?.y === "number"
+          ? point.y
+          : null;
+  const lng =
+    typeof point?.lng === "function"
+      ? point.lng()
+      : typeof point?.lng === "number"
+        ? point.lng
+        : typeof point?.x === "number"
+          ? point.x
+          : null;
+
+  if (lat == null || lng == null) {
+    return null;
+  }
+
+  return {
+    lat,
+    lng,
+  };
+}
+
 function buildRouteMapPoints(
   day: PlannedRouteDay,
   completedItemIdSet: Set<string>
@@ -115,7 +283,7 @@ function buildRouteMapPoints(
       ? [
           {
             id: "current-location",
-            title: "출발 위치",
+            title: "출발지",
             subtitle: "출발",
             icon: "📍",
             sequenceLabel: "S",
@@ -209,6 +377,8 @@ async function fetchRouteMapSegments(points: RouteMapPoint[]) {
       id: `${start.id}-${goal.id}`,
       from: start,
       to: goal,
+      durationMs: route.durationMs,
+      distanceM: route.distanceM,
       path:
         route.path.length > 0
           ? route.path
@@ -237,13 +407,13 @@ function createRoutePointBubbleMarkerIconHtml({
   const isComparison = variant === "comparison";
   const toneColor = focusColor ?? (isComparison ? "#94a3b8" : "#14b8a6");
   const toneDarkColor = focusColor ?? (isComparison ? "#475569" : "#0f766e");
-  const borderColor = isStart && !focusColor ? "#cbd5e1" : toneColor;
+  const borderColor = isStart && !focusColor ? "#14b8a6" : toneColor;
   const labelBackground = point.isCompleted
     ? "#0f766e"
     : focusColor
     ? `${focusColor}1f`
     : isStart
-      ? "#f1f5f9"
+      ? "#0f766e"
       : isComparison
         ? "#f1f5f9"
         : "#ccfbf1";
@@ -252,14 +422,14 @@ function createRoutePointBubbleMarkerIconHtml({
     : focusColor
     ? toneDarkColor
     : isStart
-      ? "#334155"
+      ? "#ffffff"
       : toneDarkColor;
   const shadowColor = focusColor
     ? `${focusColor}3d`
     : isComparison
       ? "rgba(71,85,105,0.18)"
       : isStart
-        ? "rgba(15,23,42,0.12)"
+        ? "rgba(20,184,166,0.30)"
         : "rgba(15,118,110,0.18)";
   const badgeLabel = isComparison ? "원래" : "현재";
 
@@ -270,12 +440,32 @@ function createRoutePointBubbleMarkerIconHtml({
       height:${PLACE_BUBBLE_MARKER_SIZE.height}px;
       pointer-events:auto;
       user-select:none;
+      cursor:${isStart ? "grab" : "default"};
       font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     ">
+      ${
+        isStart
+          ? `<span style="
+              position:absolute;
+              top:2px;
+              right:10px;
+              z-index:3;
+              border-radius:9999px;
+              background:#0f766e;
+              color:#ffffff;
+              padding:3px 8px;
+              font-size:9px;
+              font-weight:900;
+              line-height:1;
+              box-shadow:0 8px 18px rgba(15,118,110,0.22);
+            ">START</span>`
+          : ""
+      }
       <div style="
         position:absolute;
         top:0;
         left:0;
+        z-index:2;
         width:100%;
         height:52px;
         border:2px solid ${borderColor};
@@ -302,7 +492,7 @@ function createRoutePointBubbleMarkerIconHtml({
                 font-size:9px;
                 font-weight:900;
                 line-height:1;
-              ">${badgeLabel}</span>`
+          ">${badgeLabel}</span>`
             : ""
         }
         <span style="
@@ -345,18 +535,81 @@ function createRoutePointBubbleMarkerIconHtml({
           ">${escapeMarkerHtml(point.subtitle)}</span>
         </span>
       </div>
-      <div style="
-        position:absolute;
-        left:50%;
-        top:49px;
-        width:0;
-        height:0;
-        transform:translateX(-50%);
-        border-left:10px solid transparent;
-        border-right:10px solid transparent;
-        border-top:12px solid ${borderColor};
-        filter:drop-shadow(0 5px 5px ${shadowColor});
-      "></div>
+      ${
+        isStart
+          ? `<div style="
+              position:absolute;
+              left:50%;
+              top:42px;
+              z-index:1;
+              width:24px;
+              height:24px;
+              transform:translateX(-50%);
+              border-radius:9999px;
+              border:3px solid #ffffff;
+              background:#14b8a6;
+              box-shadow:0 12px 24px rgba(20,184,166,0.32), 0 4px 10px rgba(15,23,42,0.18);
+              display:flex;
+              align-items:center;
+              justify-content:center;
+            ">
+              <span style="
+                width:7px;
+                height:7px;
+                border-radius:9999px;
+                background:#ffffff;
+              "></span>
+            </div>
+            <div style="
+              position:absolute;
+              left:50%;
+              top:59px;
+              z-index:0;
+              width:0;
+              height:0;
+              transform:translateX(-50%);
+              border-left:6px solid transparent;
+              border-right:6px solid transparent;
+              border-top:7px solid #0f766e;
+              filter:drop-shadow(0 6px 6px rgba(15,118,110,0.24));
+            "></div>`
+          : `<div style="
+              position:absolute;
+              left:50%;
+              top:42px;
+              z-index:1;
+              width:24px;
+              height:24px;
+              transform:translateX(-50%);
+              border-radius:9999px;
+              border:3px solid #ffffff;
+              background:${borderColor};
+              box-shadow:0 12px 24px ${shadowColor}, 0 4px 10px rgba(15,23,42,0.18);
+              display:flex;
+              align-items:center;
+              justify-content:center;
+            ">
+              <span style="
+                width:7px;
+                height:7px;
+                border-radius:9999px;
+                background:#ffffff;
+              "></span>
+            </div>
+            <div style="
+              position:absolute;
+              left:50%;
+              top:59px;
+              z-index:0;
+              width:0;
+              height:0;
+              transform:translateX(-50%);
+              border-left:6px solid transparent;
+              border-right:6px solid transparent;
+              border-top:7px solid ${borderColor};
+              filter:drop-shadow(0 6px 6px ${shadowColor});
+            "></div>`
+      }
     </div>
   `;
 }
@@ -366,20 +619,6 @@ function getRouteSegmentKey(
   segmentId: string
 ) {
   return `${variant}:${segmentId}`;
-}
-
-function enableRouteMapWheelZoom(routeMap: any) {
-  if (typeof routeMap.setOptions !== "function") {
-    return;
-  }
-
-  try {
-    routeMap.setOptions({
-      scrollWheel: true,
-    });
-  } catch {
-    routeMap.setOptions("scrollWheel", true);
-  }
 }
 
 function getRouteSegmentFocusPoint(path: RoutePathPoint[]) {
@@ -466,7 +705,7 @@ const RouteSegmentSelectCard = memo(function RouteSegmentSelectCard({
     <button
       type="button"
       onClick={() => onSelect(variant, segment, isSelected)}
-      className={`min-w-[180px] rounded-2xl border px-3 py-2 text-left transition ${
+      className={`h-[76px] min-w-[180px] rounded-2xl border px-3 py-2 text-left transition ${
         isSelected
           ? "bg-white shadow-sm"
           : variant === "comparison"
@@ -483,8 +722,8 @@ const RouteSegmentSelectCard = memo(function RouteSegmentSelectCard({
       }
     >
       <span
-        className={`mb-2 block rounded-full ${
-          isSelected ? "h-2 w-14" : "h-1.5 w-10"
+        className={`mb-1.5 block h-1.5 rounded-full ${
+          isSelected ? "w-14" : "w-10"
         }`}
         style={{
           backgroundColor: segmentColor,
@@ -500,6 +739,14 @@ const RouteSegmentSelectCard = memo(function RouteSegmentSelectCard({
       <p className="mt-1 truncate text-xs font-semibold text-slate-900">
         {segment.from.title} → {segment.to.title}
       </p>
+      <p className="mt-1 min-h-4 truncate text-[10px] font-bold text-slate-500">
+        {segment.durationMs && segment.distanceM ? (
+          <>
+            차량 약 {formatDurationMs(segment.durationMs)} ·{" "}
+            {formatDistanceM(segment.distanceM)}
+          </>
+        ) : null}
+      </p>
     </button>
   );
 });
@@ -510,18 +757,33 @@ function PlaceCartRouteMapPopup({
   completedItemIds = EMPTY_COMPLETED_ITEM_IDS,
   dayOptions = EMPTY_DAY_OPTIONS,
   initialDayOptionId,
+  enableStartPreview = false,
+  onRequestCheckout,
   onClose,
 }: PlaceCartRouteMapPopupProps) {
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
+  const renderedDayKeyRef = useRef<string | null>(null);
+  const autoFitKeyRef = useRef<string | null>(null);
   const overlayRefs = useRef<any[]>([]);
+  const overlayCleanupRefs = useRef<Array<() => void>>([]);
   const [isSdkReady, setIsSdkReady] = useState(false);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [startPreviewDraftByDayKey, setStartPreviewDraftByDayKey] = useState<
+    Record<string, RouteStartLocation>
+  >({});
+  const [startPreviewModeByDayKey, setStartPreviewModeByDayKey] = useState<
+    Record<string, StartPreviewMode>
+  >({});
   const [selectedDayOptionId, setSelectedDayOptionId] = useState<string | null>(
     () => initialDayOptionId ?? dayOptions[0]?.id ?? null
   );
+  const [isCheckoutScopeOpen, setIsCheckoutScopeOpen] = useState(false);
+  const [selectedCheckoutDayIds, setSelectedCheckoutDayIds] = useState<
+    string[]
+  >([]);
   const selectedDayOption = useMemo(
     () =>
       selectedDayOptionId
@@ -530,17 +792,148 @@ function PlaceCartRouteMapPopup({
     [dayOptions, selectedDayOptionId]
   );
   const displayDay = selectedDayOption?.day ?? day;
-  const displayComparisonDay =
-    selectedDayOption?.comparisonDay ?? comparisonDay;
   const displayCompletedItemIds =
     selectedDayOption?.completedItemIds ?? completedItemIds;
+  const displayDayKey = useMemo(() => getRouteDayKey(displayDay), [displayDay]);
+  const initialStartPreviewLocation = useMemo(
+    () =>
+      enableStartPreview ? getInitialStartPreviewLocation(displayDay) : null,
+    [displayDay, enableStartPreview]
+  );
+  const changedStartPreviewLocation = enableStartPreview
+    ? (startPreviewDraftByDayKey[displayDayKey] ?? null)
+    : null;
+  const isStartPreviewDirty =
+    enableStartPreview && Boolean(changedStartPreviewLocation);
+  const startPreviewMode = isStartPreviewDirty
+    ? (startPreviewModeByDayKey[displayDayKey] ?? "changed")
+    : "changed";
+  const previewStartLocation =
+    enableStartPreview
+      ? startPreviewMode === "original"
+        ? initialStartPreviewLocation
+        : (changedStartPreviewLocation ?? initialStartPreviewLocation)
+      : initialStartPreviewLocation;
+  const createStartPreviewRouteDay = useCallback(
+    (routeDay: PlannedRouteDay) => {
+      const routeDayKey = getRouteDayKey(routeDay);
+      const initialLocation = getInitialStartPreviewLocation(routeDay);
+      const changedLocation = enableStartPreview
+        ? (startPreviewDraftByDayKey[routeDayKey] ?? null)
+        : null;
+      const isDirty = enableStartPreview && Boolean(changedLocation);
+      const mode = isDirty
+        ? (startPreviewModeByDayKey[routeDayKey] ?? "changed")
+        : "changed";
+      const startLocation =
+        enableStartPreview
+          ? mode === "original"
+            ? initialLocation
+            : (changedLocation ?? initialLocation)
+          : initialLocation;
+
+      return enableStartPreview && startLocation
+        ? createStartPreviewDay({
+            day: routeDay,
+            startLocation,
+            shouldReorder: isDirty && mode === "changed",
+          })
+        : routeDay;
+    },
+    [
+      enableStartPreview,
+      startPreviewDraftByDayKey,
+      startPreviewModeByDayKey,
+    ]
+  );
+  const displayRouteDay = useMemo(
+    () =>
+      enableStartPreview && previewStartLocation
+        ? createStartPreviewRouteDay(displayDay)
+        : displayDay,
+    [
+      createStartPreviewRouteDay,
+      displayDay,
+      enableStartPreview,
+      previewStartLocation,
+    ]
+  );
+  const checkoutDayOptions = useMemo(() => {
+    const routeDayOptions =
+      dayOptions.length > 0
+        ? dayOptions
+        : [
+            {
+              id: displayDayKey,
+              label: `DAY ${displayDay.day}`,
+              summary: displayDay.date
+                ? formatDateLabel(displayDay.date)
+                : `${displayDay.items.length}곳`,
+              day: displayDay,
+            },
+          ];
+
+    return routeDayOptions
+      .map((option) => {
+        const routeDay = createStartPreviewRouteDay(option.day);
+
+        return {
+          id: option.id,
+          label: option.label,
+          summary: option.summary,
+          day: routeDay,
+        };
+      })
+      .filter((option) => option.day.items.length > 0);
+  }, [createStartPreviewRouteDay, dayOptions, displayDay, displayDayKey]);
+  const checkoutRoutePlan = useMemo(
+    () => checkoutDayOptions.map((option) => option.day),
+    [checkoutDayOptions]
+  );
+  const checkoutPlaceCount = useMemo(
+    () =>
+      checkoutRoutePlan.reduce(
+        (totalCount, routeDay) => totalCount + routeDay.items.length,
+        0
+      ),
+    [checkoutRoutePlan]
+  );
+  const selectedCheckoutDayIdSet = useMemo(
+    () => new Set(selectedCheckoutDayIds),
+    [selectedCheckoutDayIds]
+  );
+  const selectedCheckoutDayOptions = useMemo(
+    () =>
+      checkoutDayOptions.filter((option) =>
+        selectedCheckoutDayIdSet.has(option.id)
+      ),
+    [checkoutDayOptions, selectedCheckoutDayIdSet]
+  );
+  const selectedCheckoutRoutePlan = useMemo(
+    () => selectedCheckoutDayOptions.map((option) => option.day),
+    [selectedCheckoutDayOptions]
+  );
+  const selectedCheckoutPlaceCount = useMemo(
+    () =>
+      selectedCheckoutRoutePlan.reduce(
+        (totalCount, routeDay) => totalCount + routeDay.items.length,
+        0
+      ),
+    [selectedCheckoutRoutePlan]
+  );
+  const isAllCheckoutDaysSelected =
+    checkoutDayOptions.length > 0 &&
+    checkoutDayOptions.every((option) =>
+      selectedCheckoutDayIdSet.has(option.id)
+    );
+  const displayComparisonDay = selectedDayOption?.comparisonDay ?? comparisonDay;
   const completedItemIdSet = useMemo(
     () => new Set(displayCompletedItemIds),
     [displayCompletedItemIds]
   );
   const routePoints = useMemo(
-    () => buildRouteMapPoints(displayDay, completedItemIdSet),
-    [completedItemIdSet, displayDay]
+    () => buildRouteMapPoints(displayRouteDay, completedItemIdSet),
+    [completedItemIdSet, displayRouteDay]
   );
   const comparisonRoutePoints = useMemo(
     () =>
@@ -567,15 +960,17 @@ function PlaceCartRouteMapPopup({
     displayComparisonDay && comparisonRoutePoints.length > 1
   );
   const hasDaySelector = dayOptions.length > 1;
-  const comparisonControlTopClass = hasDaySelector ? "top-24" : "top-4";
+  const canResetStartPreview =
+    enableStartPreview && Boolean(initialStartPreviewLocation);
+  const comparisonControlTopClass = hasDaySelector ? "top-16" : "top-4";
   const floatingPanelTopClass = hasDaySelector
     ? hasComparisonRoute
-      ? "top-40"
-      : "top-24"
+      ? "top-28"
+      : "top-16"
     : hasComparisonRoute
       ? "top-20"
       : "top-4";
-  const fallbackPanelTopClass = hasDaySelector ? "top-36" : "top-24";
+  const fallbackPanelTopClass = hasDaySelector ? "top-28" : "top-24";
   const [routeViewMode, setRouteViewMode] =
     useState<RouteMapViewMode>("all");
   const shouldShowComparisonRoute =
@@ -614,6 +1009,26 @@ function PlaceCartRouteMapPopup({
     comparisonRouteSegments,
     routePoints,
     routeSegments,
+    shouldShowComparisonRoute,
+    shouldShowCurrentRoute,
+  ]);
+  const mapAutoFitKey = useMemo(() => {
+    const serializePoint = (point: RouteMapPoint) =>
+      `${point.id}:${point.lat.toFixed(6)},${point.lng.toFixed(6)}`;
+
+    return [
+      displayDayKey,
+      routeViewMode,
+      shouldShowComparisonRoute ? "comparison" : "",
+      shouldShowCurrentRoute ? "current" : "",
+      routePoints.map(serializePoint).join("|"),
+      comparisonRoutePoints.map(serializePoint).join("|"),
+    ].join("::");
+  }, [
+    comparisonRoutePoints,
+    displayDayKey,
+    routePoints,
+    routeViewMode,
     shouldShowComparisonRoute,
     shouldShowCurrentRoute,
   ]);
@@ -657,6 +1072,8 @@ function PlaceCartRouteMapPopup({
   ]);
 
   const clearOverlays = () => {
+    overlayCleanupRefs.current.forEach((cleanup) => cleanup());
+    overlayCleanupRefs.current = [];
     overlayRefs.current.forEach((overlay) => overlay.setMap(null));
     overlayRefs.current = [];
   };
@@ -692,6 +1109,58 @@ function PlaceCartRouteMapPopup({
     },
     []
   );
+
+  const moveStartPreviewTo = useCallback(
+    (location: RouteStartLocation) => {
+      setStartPreviewDraftByDayKey((currentDrafts) => ({
+        ...currentDrafts,
+        [displayDayKey]: location,
+      }));
+      setStartPreviewModeByDayKey((currentModes) => ({
+        ...currentModes,
+        [displayDayKey]: "changed",
+      }));
+      setSelectedSegment(null);
+    },
+    [displayDayKey]
+  );
+  const requestCheckout = useCallback(
+    (routePlan: PlannedRouteDay[]) => {
+      if (routePlan.length === 0) {
+        return;
+      }
+
+      setIsCheckoutScopeOpen(false);
+      onRequestCheckout?.(routePlan);
+    },
+    [onRequestCheckout]
+  );
+  const toggleCheckoutDay = useCallback((dayId: string) => {
+    setSelectedCheckoutDayIds((currentDayIds) =>
+      currentDayIds.includes(dayId)
+        ? currentDayIds.filter((currentDayId) => currentDayId !== dayId)
+        : [...currentDayIds, dayId]
+    );
+  }, []);
+  const toggleAllCheckoutDays = useCallback(() => {
+    setSelectedCheckoutDayIds((currentDayIds) =>
+      checkoutDayOptions.every((option) => currentDayIds.includes(option.id))
+        ? []
+        : checkoutDayOptions.map((option) => option.id)
+    );
+  }, [checkoutDayOptions]);
+  const handleCheckoutButtonClick = useCallback(() => {
+    if (!onRequestCheckout || checkoutRoutePlan.length === 0) {
+      return;
+    }
+
+    setSelectedCheckoutDayIds(checkoutDayOptions.map((option) => option.id));
+    setIsCheckoutScopeOpen(true);
+  }, [
+    checkoutDayOptions,
+    checkoutRoutePlan,
+    onRequestCheckout,
+  ]);
 
   useEffect(() => {
     if (dayOptions.length === 0) {
@@ -732,13 +1201,18 @@ function PlaceCartRouteMapPopup({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (isCheckoutScopeOpen) {
+          setIsCheckoutScopeOpen(false);
+          return;
+        }
+
         onClose();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [isCheckoutScopeOpen, onClose]);
 
   useEffect(() => {
     let isActive = true;
@@ -832,6 +1306,8 @@ function PlaceCartRouteMapPopup({
       return;
     }
 
+    const previousRenderedDayKey = renderedDayKeyRef.current;
+    const previousAutoFitKey = autoFitKeyRef.current;
     let routeMap = mapInstanceRef.current;
     if (!routeMap) {
       routeMap = new naverMaps.Map(container, {
@@ -839,7 +1315,9 @@ function PlaceCartRouteMapPopup({
         zoom: 11,
         minZoom: 7,
         mapTypeId: naverMaps.MapTypeId.NORMAL,
-        zoomControl: true,
+        zoomControl: false,
+        draggable: true,
+        pinchZoom: true,
         scrollWheel: true,
         mapDataControl: false,
         scaleControl: false,
@@ -851,9 +1329,7 @@ function PlaceCartRouteMapPopup({
       naverMaps.Event.trigger(routeMap, "resize");
     }
     applyNaverMapTheme(routeMap, isDarkMode);
-    enableRouteMapWheelZoom(routeMap);
-
-    clearOverlays();
+    enableNaverMapPointerInteractions(routeMap);
 
     const bounds = new naverMaps.LatLngBounds();
     const selectedRouteSegment = selectedRouteSegmentView?.segment ?? null;
@@ -876,11 +1352,21 @@ function PlaceCartRouteMapPopup({
       );
     };
     const createPath = (path: Array<{ lat: number; lng: number }>) =>
-      path.map((point) => {
-        const latLng = new naverMaps.LatLng(point.lat, point.lng);
-        bounds.extend(latLng);
-        return latLng;
+      path.map((point) => new naverMaps.LatLng(point.lat, point.lng));
+
+    const extendBoundsWithPoints = (points: RouteMapPoint[]) => {
+      points.forEach((point) => {
+        bounds.extend(new naverMaps.LatLng(point.lat, point.lng));
       });
+    };
+
+    const extendBoundsWithSegments = (segments: RouteMapSegment[]) => {
+      segments.forEach((segment) => {
+        segment.path.forEach((pathPoint) => {
+          bounds.extend(new naverMaps.LatLng(pathPoint.lat, pathPoint.lng));
+        });
+      });
+    };
 
     const createPlaceMarkers = (
       points: RouteMapPoint[],
@@ -892,19 +1378,23 @@ function PlaceCartRouteMapPopup({
         }
 
         const position = new naverMaps.LatLng(point.lat, point.lng);
-        bounds.extend(position);
+        const isStartPreviewMarker =
+          enableStartPreview &&
+          variant === "current" &&
+          point.variant === "start";
 
         const marker = new naverMaps.Marker({
           map: routeMap,
           position,
           title: point.title,
+          draggable: isStartPreviewMarker,
           zIndex:
             variant === "comparison"
               ? point.variant === "start"
                 ? 1160
                 : 1320 + index
               : point.variant === "start"
-                ? 1220
+                ? 1900
                 : 1520 + index,
           icon: {
             content: createRoutePointBubbleMarkerIconHtml({
@@ -922,6 +1412,27 @@ function PlaceCartRouteMapPopup({
             ),
           },
         });
+
+        if (isStartPreviewMarker) {
+          const dragEndListener = naverMaps.Event.addListener(
+            marker,
+            "dragend",
+            () => {
+              const nextLocation = readLatLng(marker.getPosition?.());
+
+              if (!nextLocation) {
+                return;
+              }
+
+              moveStartPreviewTo(nextLocation);
+            }
+          );
+
+          overlayCleanupRefs.current.push(() => {
+            naverMaps.Event.removeListener?.(dragEndListener);
+          });
+        }
+
         overlayRefs.current.push(marker);
       });
     };
@@ -1004,6 +1515,45 @@ function PlaceCartRouteMapPopup({
     };
 
     if (shouldShowComparisonRoute) {
+      extendBoundsWithSegments(comparisonRouteSegments);
+      extendBoundsWithPoints(comparisonRoutePoints);
+    }
+    if (shouldShowCurrentRoute) {
+      extendBoundsWithSegments(routeSegments);
+      extendBoundsWithPoints(routePoints);
+    }
+
+    const shouldPreserveStartPreviewViewport =
+      enableStartPreview &&
+      isStartPreviewDirty &&
+      previousRenderedDayKey === displayDayKey;
+    const shouldAutoFitBounds =
+      !selectedSegment &&
+      !shouldPreserveStartPreviewViewport &&
+      previousAutoFitKey !== mapAutoFitKey;
+
+    try {
+      if (shouldAutoFitBounds) {
+        routeMap.fitBounds(bounds, {
+          top: hasDaySelector ? 136 : 56,
+          right: 92,
+          bottom: hasComparisonRoute && routeViewMode === "all" ? 104 : 56,
+          left: 92,
+        });
+      }
+    } catch {
+      if (shouldAutoFitBounds) {
+        routeMap.fitBounds(bounds);
+      }
+    }
+
+    if (shouldAutoFitBounds) {
+      autoFitKeyRef.current = mapAutoFitKey;
+    }
+
+    clearOverlays();
+
+    if (shouldShowComparisonRoute) {
       createSegmentLines(comparisonRouteSegments, "comparison");
     }
     if (shouldShowCurrentRoute) {
@@ -1017,20 +1567,7 @@ function PlaceCartRouteMapPopup({
       createPlaceMarkers(routePoints, "current");
     }
 
-    try {
-      if (!selectedSegment) {
-        routeMap.fitBounds(bounds, {
-          top: hasDaySelector ? 136 : 56,
-          right: 92,
-          bottom: 184,
-          left: 92,
-        });
-      }
-    } catch {
-      if (!selectedSegment) {
-        routeMap.fitBounds(bounds);
-      }
-    }
+    renderedDayKeyRef.current = displayDayKey;
 
     requestAnimationFrame(() => {
       naverMaps.Event.trigger(routeMap, "resize");
@@ -1038,10 +1575,15 @@ function PlaceCartRouteMapPopup({
   }, [
     comparisonRoutePoints,
     comparisonRouteSegments,
+    displayDayKey,
+    enableStartPreview,
     hasComparisonRoute,
     hasDaySelector,
     isDarkMode,
     isSdkReady,
+    isStartPreviewDirty,
+    mapAutoFitKey,
+    moveStartPreviewTo,
     routePoints,
     routeSegments,
     routeViewMode,
@@ -1062,32 +1604,47 @@ function PlaceCartRouteMapPopup({
     <div className="fixed inset-0 z-[2300] bg-white">
       <div className="flex h-full flex-col">
         <header className="flex items-center justify-between border-b border-brand-100 px-4 py-3">
-          <div>
+          <div className="min-w-0">
             <p className="font-trip text-sm text-brand-700">
-              DAY {displayDay.day} ROUTE
+              {hasDaySelector ? "ROUTE MAP" : `DAY ${displayDay.day} ROUTE`}
             </p>
             <p className="mt-0.5 text-xs text-slate-500">
-              {displayDay.date
-                ? formatDateLabel(displayDay.date)
-                : "선택한 일정"}{" "}
+              {hasDaySelector
+                ? `${dayOptions.length}일 일정 · DAY ${displayDay.day} 선택`
+                : displayDay.date
+                  ? formatDateLabel(displayDay.date)
+                  : "선택한 일정"}{" "}
               · {displayDay.items.length}곳
               {hasComparisonRoute ? " · 원래 순서 비교" : ""}
             </p>
           </div>
-          <button
-            type="button"
-            aria-label="루트 지도 닫기"
-            onClick={onClose}
-            className="rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700"
-          >
-            <IoClose />
-          </button>
+          <div className="flex items-center gap-2">
+            {onRequestCheckout ? (
+              <button
+                type="button"
+                onClick={handleCheckoutButtonClick}
+                disabled={checkoutRoutePlan.length === 0}
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-brand-600 px-4 text-xs font-black text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-40"
+              >
+                <MdAdd className="text-base" />
+                담기
+              </button>
+            ) : null}
+            <button
+              type="button"
+              aria-label="루트 지도 닫기"
+              onClick={onClose}
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
+            >
+              <IoClose />
+            </button>
+          </div>
         </header>
 
-        <div className="relative min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1 overflow-hidden">
           <div
             ref={mapRef}
-            className="naver-map-root h-full w-full"
+            className="naver-map-root h-full w-full overflow-hidden"
             style={{
               background: "#e0f2fe",
               minHeight: "100%",
@@ -1095,8 +1652,8 @@ function PlaceCartRouteMapPopup({
             }}
           />
           {hasDaySelector ? (
-            <div className="absolute inset-x-4 top-4 z-10 rounded-2xl border border-brand-100 bg-white/95 p-2 shadow-sm backdrop-blur">
-              <div className="scrollbar-hide flex gap-2 overflow-x-auto">
+            <div className="scrollbar-hide absolute inset-x-0 top-4 z-10 overflow-x-auto px-3 pb-1">
+              <div className="flex w-max min-w-full gap-2 pr-3">
                 {dayOptions.map((option) => {
                   const isSelected = option.id === selectedDayOptionId;
 
@@ -1105,26 +1662,20 @@ function PlaceCartRouteMapPopup({
                       key={option.id}
                       type="button"
                       aria-pressed={isSelected}
+                      aria-label={`${option.label} 경로 보기`}
                       onClick={() => {
                         setSelectedDayOptionId(option.id);
                         setSelectedSegment(null);
                         setRouteViewMode("all");
                       }}
-                      className={`min-w-[116px] rounded-xl border px-3 py-2 text-left transition ${
+                      className={`inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-xs font-semibold shadow-sm transition ${
                         isSelected
-                          ? "border-brand-500 bg-brand-600 text-white shadow-sm"
-                          : "border-slate-100 bg-white text-slate-600"
+                          ? "border-brand-500 bg-brand-600 text-white"
+                          : "border-brand-200 bg-white/95 text-slate-600 backdrop-blur"
                       }`}
                     >
-                      <span className="block font-trip text-xs">
+                      <span className="whitespace-nowrap">
                         {option.label}
-                      </span>
-                      <span
-                        className={`mt-0.5 block truncate text-[10px] font-bold ${
-                          isSelected ? "text-white/80" : "text-slate-400"
-                        }`}
-                      >
-                        {option.summary}
                       </span>
                     </button>
                   );
@@ -1136,30 +1687,19 @@ function PlaceCartRouteMapPopup({
             <div
               className={`absolute inset-x-4 ${comparisonControlTopClass} rounded-2xl border border-brand-100 bg-white/95 p-1 shadow-sm backdrop-blur`}
             >
-              <div className="grid grid-cols-3 gap-1">
-                {ROUTE_VIEW_OPTIONS.map((option) => {
-                  const isSelected = routeViewMode === option.id;
-
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      aria-pressed={isSelected}
-                      onClick={() => {
-                        setSelectedSegment(null);
-                        setRouteViewMode(option.id);
-                      }}
-                      className={`rounded-xl px-2 py-2 text-xs font-bold transition ${
-                        isSelected
-                          ? "bg-brand-600 text-white shadow-sm"
-                          : "text-slate-500"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <SegmentedToggle
+                options={ROUTE_VIEW_OPTIONS}
+                value={routeViewMode}
+                onChange={(nextMode) => {
+                  setSelectedSegment(null);
+                  setRouteViewMode(nextMode);
+                }}
+                ariaLabel="경로 표시 방식"
+                fullWidth
+                className="rounded-xl border-0 bg-transparent p-0"
+                itemClassName="rounded-xl px-2 py-2 text-xs font-bold"
+                idleItemClassName="text-slate-500 hover:bg-brand-50"
+              />
             </div>
           ) : null}
           {selectedRouteSegmentView ? (
@@ -1201,11 +1741,14 @@ function PlaceCartRouteMapPopup({
             </div>
           ) : !isSdkReady || isRouteLoading ? (
             <div
-              className={`absolute inset-x-4 rounded-2xl border border-brand-100 bg-white/90 px-4 py-3 text-sm font-semibold text-brand-700 shadow-sm backdrop-blur ${
+              className={`absolute left-3 z-20 inline-flex max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-full border border-brand-400/30 bg-[#071718]/90 px-3 py-2 text-xs font-black text-brand-100 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur ${
                 floatingPanelTopClass
               }`}
             >
-              {isSdkReady ? "도로 경로를 불러오는 중" : "지도를 불러오는 중"}
+              <span className="size-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <span className="truncate">
+                {isSdkReady ? "경로 계산 중" : "지도 준비 중"}
+              </span>
             </div>
           ) : null}
           {routeError && !isSdkReady ? (
@@ -1237,88 +1780,270 @@ function PlaceCartRouteMapPopup({
           ) : null}
         </div>
 
-        <div className="border-t border-brand-100 bg-white px-4 py-3">
-          <div className="space-y-2">
-            {visibleRoutePointGroups.map((group) => {
-              return (
-                <div key={group.key}>
-                  {hasComparisonRoute ? (
-                    <p
-                      className={`mb-1 text-[10px] font-black ${
-                        group.key === "comparison"
-                          ? "text-slate-500"
-                          : "text-brand-700"
-                      }`}
-                    >
-                      {group.label}
-                    </p>
-                  ) : null}
-                  <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-1">
-                    {group.points.map((point) => (
-                      <div
-                        key={`${group.key}-${point.id}`}
-                        className={`min-w-[136px] rounded-2xl border px-3 py-2 ${
+        <div className="max-h-[228px] shrink-0 overflow-hidden border-t border-brand-100 bg-white px-4 py-3">
+          <div className="scrollbar-hide max-h-[204px] overflow-y-auto pr-1">
+            <div className="space-y-2 pb-1">
+              {isStartPreviewDirty ? (
+                <div className="flex items-center justify-between gap-3 pb-1">
+                  <p className="shrink-0 text-[10px] font-black text-brand-700">
+                    START 기준
+                  </p>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <SegmentedToggle
+                      options={START_PREVIEW_MODE_OPTIONS}
+                      value={startPreviewMode}
+                      onChange={(mode) => {
+                        setStartPreviewModeByDayKey((currentModes) => ({
+                          ...currentModes,
+                          [displayDayKey]: mode,
+                        }));
+                        setSelectedSegment(null);
+                      }}
+                      ariaLabel="START 기준 경로 비교"
+                      size="xs"
+                    />
+                    {canResetStartPreview ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStartPreviewDraftByDayKey((currentDrafts) => {
+                            const nextDrafts = { ...currentDrafts };
+                            delete nextDrafts[displayDayKey];
+                            return nextDrafts;
+                          });
+                          setStartPreviewModeByDayKey((currentModes) => {
+                            const nextModes = { ...currentModes };
+                            delete nextModes[displayDayKey];
+                            return nextModes;
+                          });
+                          setSelectedSegment(null);
+                        }}
+                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-500"
+                      >
+                        초기화
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              {visibleRoutePointGroups.map((group) => {
+                return (
+                  <div key={group.key}>
+                    {hasComparisonRoute ? (
+                      <p
+                        className={`mb-1 text-[10px] font-black ${
                           group.key === "comparison"
-                            ? "border-slate-200 bg-slate-50"
-                            : "border-brand-100 bg-brand-50"
+                            ? "text-slate-500"
+                            : "text-brand-700"
                         }`}
                       >
-                        <p
-                          className={`text-[10px] font-bold ${
+                        {group.label}
+                      </p>
+                    ) : null}
+                    <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-1">
+                      {group.points.map((point) => (
+                        <div
+                          key={`${group.key}-${point.id}`}
+                          className={`h-16 min-w-[136px] rounded-2xl border px-3 py-2 ${
                             group.key === "comparison"
-                              ? "text-slate-500"
-                              : "text-brand-700"
+                              ? "border-slate-200 bg-slate-50"
+                              : "border-brand-100 bg-brand-50"
                           }`}
                         >
-                          {point.variant === "start"
-                            ? "START"
-                            : `${point.sequenceLabel}번째`}
-                        </p>
-                        <p className="mt-1 truncate text-xs font-semibold text-slate-900">
-                          {point.title}
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-slate-500">
-                          {point.subtitle}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  {group.segments.length > 0 ? (
-                    <div className="scrollbar-hide mt-1 flex gap-2 overflow-x-auto pb-1">
-                      {group.segments.map((segment, segmentIndex) => {
-                        const isSelectedSegment =
-                          selectedSegment &&
-                          getRouteSegmentKey(
-                            selectedSegment.variant,
-                            selectedSegment.segmentId
-                          ) === getRouteSegmentKey(group.key, segment.id);
-                        const segmentColor =
-                          getRouteSegmentDisplayColor({
-                            index: segmentIndex,
-                            variant: group.key,
-                            hasComparisonRoute,
-                            routeViewMode,
-                          });
-
-                        return (
-                          <RouteSegmentSelectCard
-                            key={`${group.key}-${segment.id}`}
-                            segment={segment}
-                            segmentColor={segmentColor}
-                            variant={group.key}
-                            isSelected={Boolean(isSelectedSegment)}
-                            onSelect={focusRouteSegment}
-                          />
-                        );
-                      })}
+                          <p
+                            className={`text-[10px] font-bold ${
+                              group.key === "comparison"
+                                ? "text-slate-500"
+                                : "text-brand-700"
+                            }`}
+                          >
+                            {point.variant === "start"
+                              ? "START"
+                              : `${point.sequenceLabel}번째`}
+                          </p>
+                          <p className="mt-1 truncate text-xs font-semibold text-slate-900">
+                            {point.title}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-slate-500">
+                            {point.subtitle}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                    {group.segments.length > 0 ? (
+                      <div className="scrollbar-hide mt-1 flex gap-2 overflow-x-auto pb-1">
+                        {group.segments.map((segment, segmentIndex) => {
+                          const isSelectedSegment =
+                            selectedSegment &&
+                            getRouteSegmentKey(
+                              selectedSegment.variant,
+                              selectedSegment.segmentId
+                            ) === getRouteSegmentKey(group.key, segment.id);
+                          const segmentColor =
+                            getRouteSegmentDisplayColor({
+                              index: segmentIndex,
+                              variant: group.key,
+                              hasComparisonRoute,
+                              routeViewMode,
+                            });
+
+                          return (
+                            <RouteSegmentSelectCard
+                              key={`${group.key}-${segment.id}`}
+                              segment={segment}
+                              segmentColor={segmentColor}
+                              variant={group.key}
+                              isSelected={Boolean(isSelectedSegment)}
+                              onSelect={focusRouteSegment}
+                            />
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
+      {isCheckoutScopeOpen ? (
+        <div
+          className="absolute inset-0 z-[2147483600] flex items-end bg-slate-950/50 px-4 pb-4 backdrop-blur-[2px]"
+          onMouseDown={() => setIsCheckoutScopeOpen(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="담기 범위 선택"
+            className="flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-[28px] border border-brand-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.28)]"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-black text-brand-700">
+                  담기 범위
+                </p>
+                <h2 className="mt-1 text-lg font-black text-slate-950">
+                  담을 DAY를 선택해주세요
+                </h2>
+              </div>
+              <button
+                type="button"
+                aria-label="담기 범위 닫기"
+                onClick={() => setIsCheckoutScopeOpen(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg text-slate-500 transition hover:bg-slate-200"
+              >
+                <IoClose />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              aria-pressed={isAllCheckoutDaysSelected}
+              onClick={toggleAllCheckoutDays}
+              className="mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-left transition hover:border-brand-400 hover:bg-brand-100"
+            >
+              <span className="inline-flex min-w-0 items-center gap-3">
+                <span
+                  className={`inline-flex size-7 shrink-0 items-center justify-center rounded-full border text-sm font-black ${
+                    isAllCheckoutDaysSelected
+                      ? "border-brand-600 bg-brand-600 text-white"
+                      : "border-brand-200 bg-white text-transparent"
+                  }`}
+                >
+                  ✓
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-slate-950">
+                    전체 선택
+                  </span>
+                  <span className="mt-0.5 block text-xs font-bold text-slate-500">
+                    {checkoutRoutePlan.length}일 · {checkoutPlaceCount}곳
+                  </span>
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-black text-brand-700">
+                {isAllCheckoutDaysSelected ? "선택됨" : "선택"}
+              </span>
+            </button>
+
+            <div className="scrollbar-hide mt-3 grid max-h-[40dvh] gap-2 overflow-y-auto pr-1">
+              {checkoutDayOptions.map((option) => {
+                const isCurrentRouteDay = option.id === selectedDayOptionId;
+                const isSelected = selectedCheckoutDayIdSet.has(option.id);
+                const daySummary =
+                  option.summary || `${option.day.items.length}곳`;
+
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => toggleCheckoutDay(option.id)}
+                    className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                      isSelected
+                        ? "border-brand-500 bg-white shadow-[0_10px_26px_rgba(20,184,166,0.16)]"
+                        : "border-slate-200 bg-white hover:border-brand-200 hover:bg-brand-50"
+                    }`}
+                  >
+                    <span
+                      className={`inline-flex h-10 min-w-16 shrink-0 items-center justify-center rounded-full px-3 text-xs font-black ${
+                        isSelected
+                          ? "bg-brand-600 text-white"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {option.label}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-black text-slate-950">
+                        {option.day.date
+                          ? formatDateLabel(option.day.date)
+                          : `DAY ${option.day.day}`}
+                      </span>
+                      <span className="mt-0.5 block text-xs font-bold text-slate-500">
+                        {daySummary}
+                      </span>
+                    </span>
+                    <span
+                      className={`ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-full border text-sm font-black ${
+                        isSelected
+                          ? "border-brand-600 bg-brand-600 text-white"
+                          : "border-slate-200 bg-white text-transparent"
+                      }`}
+                    >
+                      ✓
+                    </span>
+                    {isCurrentRouteDay ? (
+                      <span className="sr-only">현재 보고 있는 DAY</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex items-center gap-3 border-t border-slate-100 pt-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-black text-brand-700">
+                  {selectedCheckoutRoutePlan.length}일 선택
+                </p>
+                <p className="mt-0.5 text-xs font-bold text-slate-500">
+                  총 {selectedCheckoutPlaceCount}곳 담기
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => requestCheckout(selectedCheckoutRoutePlan)}
+                disabled={selectedCheckoutRoutePlan.length === 0}
+                className="inline-flex h-12 min-w-28 shrink-0 items-center justify-center rounded-full bg-brand-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400"
+              >
+                확인
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>,
     document.body
   );

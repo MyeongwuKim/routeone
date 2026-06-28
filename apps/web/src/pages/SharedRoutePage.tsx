@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
-import { MdOutlineHub } from "react-icons/md";
+import { MdArrowBack, MdOutlineHub } from "react-icons/md";
 import { routeApi } from "@/api/routeApi";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
+import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
+import type {
+  PlannedRouteDay,
+  RouteStartLocation,
+} from "@/features/route-checkout/components/cart-steps/routePlanTypes";
 import SharedRouteCard from "@/features/shared-route/components/SharedRouteCard";
 import SharedRouteDetailSkeleton from "@/features/shared-route/components/SharedRouteDetailSkeleton";
 import {
@@ -22,6 +28,7 @@ import type {
   RouteSummaryFieldsFragment,
   SharedRoutesQuery,
 } from "@/generated/graphql";
+import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 const getRouteDetailQueryKey = (routeId: string) =>
@@ -77,11 +84,48 @@ function getSharedRouteList(
     : (data as SharedRoutesQuery).sharedRoutes;
 }
 
+function createSavedPlacesFromRoutePlan(routePlan: PlannedRouteDay[]) {
+  const seenPlaceIds = new Set<string>();
+  const savedPlaces: SavedPlaceItem[] = [];
+
+  routePlan.forEach((day) => {
+    day.items.forEach((item) => {
+      if (seenPlaceIds.has(item.place.id)) {
+        return;
+      }
+
+      seenPlaceIds.add(item.place.id);
+      savedPlaces.push({
+        id: item.place.id,
+        place: item.place,
+        thumbnailUrl: item.place.images[0] ?? "",
+        savedAt: Date.now() - savedPlaces.length,
+      });
+    });
+  });
+
+  return savedPlaces;
+}
+
+function getRoutePlanStartLocation(
+  routePlan: PlannedRouteDay[]
+): RouteStartLocation | null {
+  return routePlan.find((day) => day.startLocation)?.startLocation ?? null;
+}
+
+function getRoutePlanTripDays(routePlan: PlannedRouteDay[]) {
+  return Math.max(1, routePlan.length);
+}
+
 function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
   const [likedRouteIds, setLikedRouteIds] = useState<Set<string>>(new Set());
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [checkoutRoutePlan, setCheckoutRoutePlan] = useState<
+    PlannedRouteDay[] | null
+  >(null);
   const pendingLikeRouteIdsRef = useRef<Set<string>>(new Set());
   const [pendingLikeRouteIds, setPendingLikeRouteIds] = useState<Set<string>>(
     new Set()
@@ -121,6 +165,22 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const selectedRouteDay = selectedRoute
     ? (getSortedRouteDays(selectedRoute)[0] ?? null)
     : null;
+  const checkoutSavedPlaces = useMemo(
+    () => (checkoutRoutePlan ? createSavedPlacesFromRoutePlan(checkoutRoutePlan) : []),
+    [checkoutRoutePlan]
+  );
+  const checkoutCandidatePlaces = useMemo(
+    () => checkoutSavedPlaces.map((item) => item.place),
+    [checkoutSavedPlaces]
+  );
+  const checkoutStartLocation = useMemo(
+    () => (checkoutRoutePlan ? getRoutePlanStartLocation(checkoutRoutePlan) : null),
+    [checkoutRoutePlan]
+  );
+  const checkoutTripDays = useMemo(
+    () => (checkoutRoutePlan ? getRoutePlanTripDays(checkoutRoutePlan) : 1),
+    [checkoutRoutePlan]
+  );
 
   useEffect(() => {
     if (!routeListQuery.data) {
@@ -325,9 +385,36 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       setLikePending(route.id, false);
     }
   };
+  const handleRequestCheckoutFromSharedRoute = (
+    routePlan: PlannedRouteDay[]
+  ) => {
+    setCheckoutRoutePlan(routePlan);
+  };
+  const handleCloseCheckout = () => {
+    setCheckoutRoutePlan(null);
+  };
 
   return (
     <section className="space-y-3 pb-4">
+      {mode === "liked" ? (
+        <header className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-label="내 정보로 돌아가기"
+            onClick={() => navigate("/me")}
+            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
+          >
+            <MdArrowBack />
+          </button>
+          <div className="min-w-0">
+            <p className="text-xs font-black text-brand-700">내 정보</p>
+            <h1 className="truncate text-lg font-bold text-slate-900">
+              좋아요한 공유 루트
+            </h1>
+          </div>
+        </header>
+      ) : null}
+
       <div className="rounded-2xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40">
         <div className="flex items-center gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
@@ -404,20 +491,25 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           isReadOnly
           headerLabel="SHARED ROUTE"
           headerBadge={selectedRoute.isMine ? "내 공유 루트" : undefined}
+          enableStartPreview
+          onRequestCheckout={handleRequestCheckoutFromSharedRoute}
           readOnlyFooterAction={
             selectedRoute.isMine
               ? {
-                  label: `내 공유 루트 · 좋아요 ${selectedRoute.likeCount}`,
+                  label: String(selectedRoute.likeCount),
+                  ariaLabel: `내가 공유한 루트, 하트 ${selectedRoute.likeCount}개`,
                   icon: <FaHeart className="text-lg" />,
+                  isActive: true,
                   disabled: true,
                   onClick: () => undefined,
                 }
               : {
-                  label:
+                  label: String(selectedRoute.likeCount),
+                  ariaLabel:
                     likedRouteIds.has(selectedRoute.id) ||
                     selectedRoute.likedByMe
-                      ? "좋아요됨"
-                      : "좋아요",
+                      ? `좋아요 취소, 하트 ${selectedRoute.likeCount}개`
+                      : `좋아요, 하트 ${selectedRoute.likeCount}개`,
                   icon:
                     likedRouteIds.has(selectedRoute.id) ||
                     selectedRoute.likedByMe ? (
@@ -435,6 +527,23 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           onClose={() => setSelectedRouteId(null)}
         />
       ) : null}
+      <RouteCheckoutModal
+        isOpen={Boolean(checkoutRoutePlan)}
+        savedPlaces={checkoutSavedPlaces}
+        insertCandidatePlaces={checkoutCandidatePlaces}
+        currentLocation={checkoutStartLocation}
+        initialStep="schedule"
+        initialTripDays={checkoutTripDays}
+        initialRoutePlan={checkoutRoutePlan}
+        onClose={handleCloseCheckout}
+        onSelectPlace={() => undefined}
+        onRemovePlace={() => undefined}
+        onClearPlaces={handleCloseCheckout}
+        onRequestSearchPlace={() => {
+          handleCloseCheckout();
+          navigate("/");
+        }}
+      />
     </section>
   );
 }

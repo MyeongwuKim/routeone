@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IoLocateOutline, IoLocationSharp } from "react-icons/io5";
+import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import {
   applyNaverMapTheme,
@@ -268,6 +269,9 @@ function PlaceCartStartLocationStep({
           zoom: 12,
           minZoom: 7,
           mapTypeId: naverMaps.MapTypeId.NORMAL,
+          draggable: true,
+          pinchZoom: true,
+          scrollWheel: true,
           zoomControl: false,
           scaleControl: false,
           mapDataControl: false,
@@ -276,6 +280,7 @@ function PlaceCartStartLocationStep({
         });
         mapInstanceRef.current = map;
         applyNaverMapTheme(map, isDarkMode);
+        enableNaverMapPointerInteractions(map);
 
         const bounds = new naverMaps.LatLngBounds();
         bounds.extend(center);

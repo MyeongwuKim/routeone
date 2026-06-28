@@ -7,7 +7,6 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  IoArrowBack,
   IoBagAdd,
   IoBagAddOutline,
   IoCarSportOutline,
@@ -35,6 +34,7 @@ import {
   isTouristPlace,
 } from "@/lib/placeCategory";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
+import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import {
   applyNaverMapTheme,
   getNaverMapThemeOptions,
@@ -46,6 +46,7 @@ import { useUiToastStore } from "@/stores/uiToastStore";
 import type { MapSheetPlace } from "@/types/place";
 
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
+const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 const NAVER_MAP_SCHEME_APP_NAME = "routeone.web";
 const GANGNEUNG_CENTER_LOCATION = {
   lat: 37.7519,
@@ -325,6 +326,8 @@ function PlaceBottomSheet() {
   const showToast = useUiToastStore((state) => state.showToast);
   const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null);
+  const [isPreviewMapSdkReady, setIsPreviewMapSdkReady] = useState(false);
+  const [previewMapError, setPreviewMapError] = useState<string | null>(null);
   const imageSwipeStartXRef = useRef<number | null>(null);
 
   const previewMapRef = useRef<HTMLDivElement | null>(null);
@@ -653,6 +656,42 @@ function PlaceBottomSheet() {
   }, [selectedPlaceKey]);
 
   useEffect(() => {
+    let isActive = true;
+    const resetPreviewMapState = () => {
+      if (!isActive) {
+        return;
+      }
+
+      setIsPreviewMapSdkReady(false);
+      setPreviewMapError(null);
+    };
+
+    queueMicrotask(resetPreviewMapState);
+
+    if (!isOpen || !selectedPlace || !shouldShowExpandedSection) {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    loadNaverMapSdk(NCP_KEY_ID)
+      .then(() => {
+        if (isActive) {
+          setIsPreviewMapSdkReady(true);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setPreviewMapError("지도를 불러오지 못했습니다.");
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [isOpen, selectedPlace, selectedPlaceKey, shouldShowExpandedSection]);
+
+  useEffect(() => {
     if (!isOpen || !selectedPlace) {
       return;
     }
@@ -660,7 +699,12 @@ function PlaceBottomSheet() {
     const naverMaps = window.naver?.maps;
     const container = previewMapRef.current;
 
-    if (!shouldShowExpandedSection || !container || !naverMaps) {
+    if (
+      !shouldShowExpandedSection ||
+      !isPreviewMapSdkReady ||
+      !container ||
+      !naverMaps
+    ) {
       return;
     }
 
@@ -744,6 +788,7 @@ function PlaceBottomSheet() {
     }
 
     try {
+      naverMaps.Event.trigger(previewMap, "resize");
       previewMap.fitBounds(bounds, {
         top: 24,
         right: 24,
@@ -761,6 +806,7 @@ function PlaceBottomSheet() {
     currentLocation,
     isDarkMode,
     isOpen,
+    isPreviewMapSdkReady,
     routePathPoints,
     selectedPlace,
     shouldShowExpandedSection,
@@ -825,7 +871,7 @@ function PlaceBottomSheet() {
             <div
               className={`flex items-center px-4 ${
                 isSheetExpanded || isFullPopupMode
-                  ? "h-full justify-start"
+                  ? "h-full justify-end"
                   : "h-full justify-center"
               }`}
             >
@@ -835,9 +881,9 @@ function PlaceBottomSheet() {
                   aria-label="시트 닫기"
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={resetSheet}
-                  className="rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700"
+                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
                 >
-                  <IoArrowBack />
+                  <IoClose />
                 </button>
               ) : (
                 <div className="flex cursor-grab justify-center active:cursor-grabbing">
@@ -1040,7 +1086,20 @@ function PlaceBottomSheet() {
                         ref={previewMapRef}
                         className="pointer-events-none h-48 w-full touch-none select-none"
                       />
-                      {isRouteLoading ? (
+                      {!isPreviewMapSdkReady && !previewMapError ? (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/70 px-6 backdrop-blur-[1px] dark:bg-slate-950/45">
+                          <div className="flex items-center gap-2 rounded-2xl border border-brand-100 bg-white/90 px-4 py-3 text-xs font-bold text-brand-700 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/80 dark:text-brand-100">
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" />
+                            지도 불러오는 중
+                          </div>
+                        </div>
+                      ) : previewMapError ? (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/75 px-6 text-center backdrop-blur-[1px] dark:bg-slate-950/45">
+                          <p className="rounded-2xl border border-rose-100 bg-white/90 px-4 py-3 text-xs font-bold text-rose-600 shadow-sm dark:border-rose-400/30 dark:bg-slate-950/80 dark:text-rose-200">
+                            {previewMapError}
+                          </p>
+                        </div>
+                      ) : isRouteLoading ? (
                         <div className="absolute inset-0 flex items-center justify-center bg-white/55 px-6 backdrop-blur-[1px] dark:bg-slate-950/35">
                           <div className="w-full max-w-[220px] space-y-3 rounded-2xl border border-brand-100 bg-white/85 p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/80">
                             <SkeletonBar className="h-3 w-2/3" />
