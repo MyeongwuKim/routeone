@@ -1,6 +1,8 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import * as Location from "expo-location";
 import {
   ActivityIndicator,
+  Alert,
   SafeAreaView,
   StatusBar,
   StyleSheet,
@@ -18,6 +20,45 @@ export default function App() {
   const webViewRef = useRef<WebView>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const prepareLocationPermission = async () => {
+      const permission = await Location.getForegroundPermissionsAsync();
+
+      if (
+        !isMounted ||
+        permission.status === "granted" ||
+        !permission.canAskAgain
+      ) {
+        return;
+      }
+
+      Alert.alert(
+        "위치 권한을 허용할까요?",
+        "장소 근처에 도착했는지 확인하고 방문 인증을 도와드릴게요.",
+        [
+          {
+            text: "나중에",
+            style: "cancel"
+          },
+          {
+            text: "허용",
+            onPress: () => {
+              void Location.requestForegroundPermissionsAsync();
+            }
+          }
+        ]
+      );
+    };
+
+    void prepareLocationPermission();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
     void handleNativeFetchMessage(event, webViewRef);

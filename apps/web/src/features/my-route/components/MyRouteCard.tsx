@@ -1,10 +1,10 @@
 import {
   MdAdd,
-  MdArrowForward,
   MdDeleteOutline,
   MdEventAvailable,
   MdOutlineCalendarToday,
   MdOutlinePlace,
+  MdPlayArrow,
   MdRoute,
   MdShare,
 } from "react-icons/md";
@@ -31,12 +31,17 @@ type MyRouteCardProps = {
   variant?: "featured" | "compact" | "upcoming";
   hideTimelineBadge?: boolean;
   onSelectDay: (route: MyRoute, day: MyRouteDay) => void;
+  onRequestStartRoute?: (route: MyRoute) => void;
   onRequestAppendDay?: (route: MyRoute) => void;
   onRequestDeleteRoute?: (route: MyRoute) => void;
 };
 
 function isRouteShared(route: MyRoute) {
   return route.visibility === "PUBLIC" || Boolean(route.sharedAt);
+}
+
+function canRequestRouteStart(route: MyRoute) {
+  return route.status !== "COMPLETED" && !route.startedAt;
 }
 
 function SharedRouteStatusBadge() {
@@ -52,15 +57,19 @@ function MyRouteUpcomingCard({
   route,
   todayKey,
   onSelectDay,
+  onRequestStartRoute,
   onRequestDeleteRoute,
 }: {
   route: MyRoute;
   todayKey: string;
   onSelectDay: (route: MyRoute, day: MyRouteDay) => void;
+  onRequestStartRoute?: (route: MyRoute) => void;
   onRequestDeleteRoute?: (route: MyRoute) => void;
 }) {
   const selectableDay = getSelectableRouteDay(route, todayKey);
   const startDateLabel = formatRouteDate(route.travelStartDate) ?? "미정";
+  const shouldShowStartAction =
+    onRequestStartRoute && canRequestRouteStart(route);
 
   return (
     <article className="w-full overflow-hidden rounded-2xl border border-brand-100 bg-white text-left shadow-sm transition hover:border-brand-200">
@@ -82,7 +91,7 @@ function MyRouteUpcomingCard({
             </span>
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black text-slate-900">
+            <p className="text-sm font-black text-slate-900">
               {getRouteTitle(route)}
             </p>
             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
@@ -90,9 +99,6 @@ function MyRouteUpcomingCard({
               {getRouteTimelineLabel(route, todayKey)}
             </p>
           </div>
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-lg text-white shadow-sm">
-            <MdArrowForward />
-          </span>
         </button>
         {onRequestDeleteRoute ? (
           <button
@@ -106,10 +112,22 @@ function MyRouteUpcomingCard({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-2 border-t border-brand-50 bg-brand-50/60 px-4 py-2 text-[11px] font-bold text-slate-500">
-        <span>{getRouteSubtitle(route)}</span>
-        <span className="h-1 w-1 rounded-full bg-slate-300" />
-        <span>DAY {route.tripDays}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-brand-50 bg-brand-50/60 px-4 py-2 text-[11px] font-bold text-slate-500">
+        <div className="flex min-w-0 items-center gap-2">
+          <span>{getRouteSubtitle(route)}</span>
+          <span className="h-1 w-1 rounded-full bg-slate-300" />
+          <span>DAY {route.tripDays}</span>
+        </div>
+        {shouldShowStartAction ? (
+          <button
+            type="button"
+            onClick={() => onRequestStartRoute?.(route)}
+            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-brand-600 px-3 text-[11px] font-black text-white shadow-sm transition active:scale-95"
+          >
+            <MdPlayArrow className="text-sm" />
+            여행 시작
+          </button>
+        ) : null}
       </div>
     </article>
   );
@@ -120,15 +138,19 @@ function MyRouteCompactCard({
   todayKey,
   hideTimelineBadge,
   onSelectDay,
+  onRequestStartRoute,
   onRequestDeleteRoute,
 }: {
   route: MyRoute;
   todayKey: string;
   hideTimelineBadge?: boolean;
   onSelectDay: (route: MyRoute, day: MyRouteDay) => void;
+  onRequestStartRoute?: (route: MyRoute) => void;
   onRequestDeleteRoute?: (route: MyRoute) => void;
 }) {
   const selectableDay = getSelectableRouteDay(route, todayKey);
+  const shouldShowStartAction =
+    onRequestStartRoute && canRequestRouteStart(route);
   const progressPercent =
     route.totalStopCount > 0
       ? Math.round((route.completedStopCount / route.totalStopCount) * 100)
@@ -162,7 +184,7 @@ function MyRouteCompactCard({
               </span>
               {isRouteShared(route) ? <SharedRouteStatusBadge /> : null}
             </div>
-            <p className="mt-1.5 truncate text-sm font-black text-slate-900">
+            <p className="mt-1.5 text-sm font-black text-slate-900">
               {getRouteTitle(route)}
             </p>
             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
@@ -170,10 +192,17 @@ function MyRouteCompactCard({
               {getRouteSubtitle(route)}
             </p>
           </div>
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-lg text-white shadow-sm">
-            <MdArrowForward />
-          </span>
         </button>
+        {shouldShowStartAction ? (
+          <button
+            type="button"
+            onClick={() => onRequestStartRoute?.(route)}
+            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-brand-600 px-3 text-xs font-black text-white shadow-sm transition active:scale-95"
+          >
+            <MdPlayArrow className="text-base" />
+            시작
+          </button>
+        ) : null}
         {onRequestDeleteRoute ? (
           <button
             type="button"
@@ -201,6 +230,7 @@ function MyRouteCard({
   variant = "featured",
   hideTimelineBadge = false,
   onSelectDay,
+  onRequestStartRoute,
   onRequestAppendDay,
   onRequestDeleteRoute,
 }: MyRouteCardProps) {
@@ -212,6 +242,7 @@ function MyRouteCard({
         route={route}
         todayKey={todayKey}
         onSelectDay={onSelectDay}
+        onRequestStartRoute={onRequestStartRoute}
         onRequestDeleteRoute={onRequestDeleteRoute}
       />
     );
@@ -224,6 +255,7 @@ function MyRouteCard({
         todayKey={todayKey}
         hideTimelineBadge={hideTimelineBadge}
         onSelectDay={onSelectDay}
+        onRequestStartRoute={onRequestStartRoute}
         onRequestDeleteRoute={onRequestDeleteRoute}
       />
     );
@@ -237,6 +269,8 @@ function MyRouteCard({
   const visibleDayCount = visibleDays.length + (todayRouteDay ? 1 : 0);
   const extraDayCount = Math.max(0, route.tripDays - visibleDayCount);
   const statusLabel = getRouteTimelineLabel(route, todayKey);
+  const shouldShowStartAction =
+    onRequestStartRoute && canRequestRouteStart(route);
 
   return (
     <article
@@ -274,6 +308,16 @@ function MyRouteCard({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {shouldShowStartAction ? (
+            <button
+              type="button"
+              onClick={() => onRequestStartRoute?.(route)}
+              className="inline-flex h-9 items-center gap-1 rounded-full bg-brand-600 px-3 text-xs font-black text-white shadow-sm transition active:scale-95"
+            >
+              <MdPlayArrow className="text-base" />
+              여행 시작
+            </button>
+          ) : null}
           {onRequestDeleteRoute ? (
             <button
               type="button"

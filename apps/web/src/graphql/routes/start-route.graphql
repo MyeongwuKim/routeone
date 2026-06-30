@@ -1,0 +1,5 @@
+mutation StartRoute($input: StartRouteInput!) {
+  startRoute(input: $input) {
+    ...RouteDetailFields
+  }
+}

@@ -20,6 +20,8 @@ type SaveRoutePlanInput = {
   routePlan: RouteCheckoutPlanDay[];
   travelStartDate: string;
   tripDays: number;
+  dailyStartMinutes: number;
+  scheduleEndMinutes: number;
   startLocation?: {
     lat: number;
     lng: number;
@@ -119,6 +121,8 @@ async function buildCreateRouteInput(
     primaryRegionLabelKey,
     tripDays: input.tripDays,
     travelStartDate: input.travelStartDate,
+    dailyStartMinutes: input.dailyStartMinutes,
+    scheduleEndMinutes: input.scheduleEndMinutes,
     startLocation: input.startLocation ?? null,
     stops: [],
   };

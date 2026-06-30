@@ -3,6 +3,7 @@ import type {
   PrismaClient,
   Route,
   RouteStop,
+  RouteStopVerificationStatus,
   User,
   VisitStatus,
 } from "@prisma/client";
@@ -44,6 +45,8 @@ export type CreateRouteInput = {
   tripDays: number;
   travelStartDate?: Date | null;
   travelEndDate?: Date | null;
+  dailyStartMinutes?: number | null;
+  scheduleEndMinutes?: number | null;
   startLocation?: RouteStartLocationInput | null;
   stops?: CreateRouteStopInput[] | null;
 };
@@ -53,8 +56,15 @@ export type AppendRouteDaysInput = {
   tripDays: number;
   travelStartDate?: Date | null;
   travelEndDate?: Date | null;
+  dailyStartMinutes?: number | null;
+  scheduleEndMinutes?: number | null;
   startLocation?: RouteStartLocationInput | null;
   stops?: CreateRouteStopInput[] | null;
+};
+
+export type StartRouteInput = {
+  routeId: string;
+  startedAt: Date;
 };
 
 export type CloneRouteInput = {
@@ -73,6 +83,19 @@ export type UpdateRouteStopStayMinutesInput = {
   stayMinutes: number;
 };
 
+export type RouteStopVisitVerificationInput = {
+  status?: RouteStopVerificationStatus | null;
+  lat?: number | null;
+  lng?: number | null;
+  accuracyMeters?: number | null;
+  photoUrl?: string | null;
+};
+
+const VERIFIED_ROUTE_STOP_STATUSES = new Set<RouteStopVerificationStatus>([
+  "GPS",
+  "GPS_PHOTO",
+]);
+
 function clampTripDays(value: number) {
   return Math.max(1, Math.min(30, Math.round(value || 1)));
 }
@@ -81,6 +104,12 @@ function addDays(date: Date, days: number) {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + days);
   return nextDate;
+}
+
+function assertValidDate(value: Date) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    throw new Error("시작 날짜가 올바르지 않습니다.");
+  }
 }
 
 async function assertNoRouteDateConflict(
@@ -126,6 +155,15 @@ async function assertNoRouteDateConflict(
 function nullableString(value?: string | null) {
   const trimmed = value?.trim();
   return trimmed || null;
+}
+
+function normalizeDayMinutes(value?: number | null) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  const minutes = Math.round(value ?? 0);
+  return minutes >= 0 && minutes < 24 * 60 ? minutes : null;
 }
 
 function normalizeDuplicateText(value?: string | null) {
@@ -381,9 +419,9 @@ function getRouteFocusTag(stops: RouteStop[]) {
   return "골고루 담은 루트";
 }
 
-function getRoutePaceTag(route: Route, stops: RouteStop[]) {
+function getRoutePlanPaceTag(route: Route, stops: RouteStop[]) {
   if (stops.length === 0) {
-    return "가볍게 보기";
+    return "가벼운 플랜";
   }
 
   const averageStopsPerDay = stops.length / Math.max(1, route.tripDays);
@@ -392,14 +430,30 @@ function getRoutePaceTag(route: Route, stops: RouteStop[]) {
     stops.length;
 
   if (averageStopsPerDay >= 4 || averageStayMinutes <= 55) {
-    return "촘촘한 루트";
+    return "촘촘 플랜";
   }
 
   if (averageStopsPerDay <= 2.5 || averageStayMinutes >= 85) {
-    return "여유로운 루트";
+    return "여유 플랜";
   }
 
-  return "균형 잡힌 루트";
+  return "균형 플랜";
+}
+
+function isVerifiedRouteStop(stop: RouteStop) {
+  return VERIFIED_ROUTE_STOP_STATUSES.has(stop.verificationStatus ?? "NONE");
+}
+
+function getRouteVerificationTag(stops: RouteStop[]) {
+  if (stops.length === 0) {
+    return null;
+  }
+
+  const verifiedStopCount = stops.filter(isVerifiedRouteStop).length;
+
+  return verifiedStopCount > 0
+    ? `인증 ${verifiedStopCount}/${stops.length}곳`
+    : "미인증 루트";
 }
 
 function getRouteDurationTag(route: Route) {
@@ -414,7 +468,8 @@ function buildRouteShareTags(route: Route, stops: RouteStop[]) {
   return [
     getRouteRegionTag(route, stops),
     getRouteDurationTag(route),
-    getRoutePaceTag(route, stops),
+    getRoutePlanPaceTag(route, stops),
+    getRouteVerificationTag(stops),
     getRouteFocusTag(stops),
   ].filter((tag, index, tags): tag is string =>
     Boolean(tag && tags.indexOf(tag) === index)
@@ -538,6 +593,8 @@ export async function createRoute(
       tripDays,
       travelStartDate,
       travelEndDate,
+      dailyStartMinutes: normalizeDayMinutes(input.dailyStartMinutes),
+      scheduleEndMinutes: normalizeDayMinutes(input.scheduleEndMinutes),
       startLocation,
       status: stopInputs.length > 0 ? "ACTIVE" : "DRAFT",
       totalStopCount: stopInputs.length,
@@ -648,6 +705,10 @@ export async function appendRouteDays(
     data: {
       tripDays: baseDayIndex + tripDays,
       travelEndDate: travelEndDate ?? route.travelEndDate,
+      dailyStartMinutes:
+        normalizeDayMinutes(input.dailyStartMinutes) ?? route.dailyStartMinutes,
+      scheduleEndMinutes:
+        normalizeDayMinutes(input.scheduleEndMinutes) ?? route.scheduleEndMinutes,
       startLocation: route.startLocation ?? startLocation,
       status: "ACTIVE",
     },
@@ -656,11 +717,150 @@ export async function appendRouteDays(
   return refreshRouteProgress(prisma, route.id);
 }
 
+export async function startRoute(
+  prisma: PrismaClient,
+  user: User,
+  input: StartRouteInput
+) {
+  const route = await assertRouteOwner(prisma, input.routeId, user.id);
+  assertValidDate(input.startedAt);
+
+  if (route.status === "COMPLETED") {
+    throw new Error("이미 완료된 일정은 다시 시작할 수 없어요.");
+  }
+
+  const routeDays = await prisma.routeDay.findMany({
+    where: {
+      routeId: route.id,
+    },
+    orderBy: {
+      dayIndex: "asc",
+    },
+  });
+  const tripDays = Math.max(1, routeDays.length || route.tripDays);
+  const travelStartDate = input.startedAt;
+  const travelEndDate = addDays(travelStartDate, tripDays - 1);
+
+  await assertNoRouteDateConflict(
+    prisma,
+    user.id,
+    travelStartDate,
+    travelEndDate,
+    route.id
+  );
+
+  await Promise.all(
+    routeDays.map((day, index) =>
+      prisma.routeDay.update({
+        where: {
+          id: day.id,
+        },
+        data: {
+          date: addDays(travelStartDate, index),
+        },
+      })
+    )
+  );
+
+  await prisma.route.update({
+    where: {
+      id: route.id,
+    },
+    data: {
+      tripDays,
+      travelStartDate,
+      travelEndDate,
+      status: "ACTIVE",
+      startedAt: travelStartDate,
+      completedAt: null,
+    },
+  });
+
+  return refreshRouteProgress(prisma, route.id);
+}
+
+function getVisitVerificationStatus(
+  verification?: RouteStopVisitVerificationInput | null
+) {
+  const status = verification?.status ?? "MANUAL";
+
+  return status === "NONE" ? "MANUAL" : status;
+}
+
+function assertRouteStopGpsVerification(
+  _stop: RouteStop,
+  verification: RouteStopVisitVerificationInput | null | undefined,
+  verificationStatus: RouteStopVerificationStatus
+) {
+  void _stop;
+  void verification;
+  void verificationStatus;
+}
+
+function getActualStayMinutes(checkedInAt: Date | null, checkedOutAt: Date | null) {
+  if (!checkedInAt || !checkedOutAt) {
+    return null;
+  }
+
+  return Math.max(
+    1,
+    Math.round((checkedOutAt.getTime() - checkedInAt.getTime()) / 60000)
+  );
+}
+
+function buildRouteStopVisitData(
+  stop: RouteStop,
+  visited: boolean,
+  verification?: RouteStopVisitVerificationInput | null
+) {
+  if (!visited) {
+    return {
+      visitStatus: "PENDING" as VisitStatus,
+      visitedAt: null,
+      verificationStatus: "NONE" as RouteStopVerificationStatus,
+      verifiedAt: null,
+      verificationPhotoUrl: null,
+      verificationLat: null,
+      verificationLng: null,
+      verificationAccuracyMeters: null,
+      checkedInAt: null,
+      checkedOutAt: null,
+      actualStayMinutes: null,
+    };
+  }
+
+  const visitedAt = new Date();
+  const verificationStatus = getVisitVerificationStatus(verification);
+  const isVerified = VERIFIED_ROUTE_STOP_STATUSES.has(verificationStatus);
+
+  assertRouteStopGpsVerification(stop, verification, verificationStatus);
+
+  const checkedInAt = stop.checkedInAt ?? (isVerified ? visitedAt : null);
+  const checkedOutAt = stop.checkedInAt ? visitedAt : null;
+
+  return {
+    visitStatus: "VISITED" as VisitStatus,
+    visitedAt,
+    verificationStatus,
+    verifiedAt: isVerified ? visitedAt : null,
+    verificationPhotoUrl: isVerified ? (verification?.photoUrl?.trim() ?? null) : null,
+    verificationLat: isVerified ? (verification?.lat ?? null) : null,
+    verificationLng: isVerified ? (verification?.lng ?? null) : null,
+    verificationAccuracyMeters: isVerified
+      ? (verification?.accuracyMeters ?? null)
+      : null,
+    checkedInAt,
+    checkedOutAt,
+    actualStayMinutes: getActualStayMinutes(checkedInAt, checkedOutAt),
+  };
+}
+
 export async function markRouteStopVisited(
   prisma: PrismaClient,
   user: User,
   stopId: string,
-  visited: boolean
+  visited: boolean,
+  verification?: RouteStopVisitVerificationInput | null
 ) {
   const stop = await prisma.routeStop.findUnique({
     where: {
@@ -678,10 +878,7 @@ export async function markRouteStopVisited(
     where: {
       id: stopId,
     },
-    data: {
-      visitStatus: visited ? "VISITED" : "PENDING",
-      visitedAt: visited ? new Date() : null,
-    },
+    data: buildRouteStopVisitData(stop, visited, verification),
   });
 
   const refreshedRoute = await refreshRouteProgress(prisma, stop.routeId);
@@ -1180,6 +1377,8 @@ export async function cloneRoute(
       tripDays: sourceRoute.tripDays,
       travelStartDate: sourceRoute.travelStartDate,
       travelEndDate: sourceRoute.travelEndDate,
+      dailyStartMinutes: sourceRoute.dailyStartMinutes,
+      scheduleEndMinutes: sourceRoute.scheduleEndMinutes,
       startLocation: sourceRoute.startLocation,
       status: input.startImmediately ? "ACTIVE" : "DRAFT",
       totalStopCount: sourceRoute.stops.length,

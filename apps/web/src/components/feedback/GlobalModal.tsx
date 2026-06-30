@@ -28,12 +28,16 @@ function GlobalModal() {
   }
 
   return (
-    <div className="fixed inset-0 z-[2800] flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pb-4">
+    <div
+      className="global-modal-backdrop-enter fixed inset-0 z-[2800] flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pb-4"
+      onClick={closeModal}
+    >
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="global-modal-title"
-        className="w-full max-w-sm rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl"
+        className="global-modal-panel-enter w-full max-w-sm rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">

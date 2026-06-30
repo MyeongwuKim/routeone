@@ -10,6 +10,7 @@ import {
 } from "react-icons/io5";
 import {
   useEffect,
+  useReducer,
   useRef,
   useState,
   type ReactNode,
@@ -69,6 +70,52 @@ type DragStartPayload = {
   captureTarget: HTMLElement;
   pointerId?: number;
 };
+
+type RouteDragState = {
+  draggedItem: DraggedDayItem | null;
+  activeDropIndex: number | null;
+  activeMoveDirection: AdjacentMoveDirection | null;
+};
+
+type RouteDragAction =
+  | { type: "reset" }
+  | { type: "start"; draggedItem: DraggedDayItem }
+  | {
+      type: "move";
+      draggedItem: DraggedDayItem;
+      activeDropIndex: number | null;
+      activeMoveDirection: AdjacentMoveDirection | null;
+    };
+
+const INITIAL_ROUTE_DRAG_STATE: RouteDragState = {
+  draggedItem: null,
+  activeDropIndex: null,
+  activeMoveDirection: null,
+};
+
+function routeDragReducer(
+  state: RouteDragState,
+  action: RouteDragAction
+): RouteDragState {
+  switch (action.type) {
+    case "reset":
+      return INITIAL_ROUTE_DRAG_STATE;
+    case "start":
+      return {
+        draggedItem: action.draggedItem,
+        activeDropIndex: null,
+        activeMoveDirection: null,
+      };
+    case "move":
+      return {
+        draggedItem: action.draggedItem,
+        activeDropIndex: action.activeDropIndex,
+        activeMoveDirection: action.activeMoveDirection,
+      };
+    default:
+      return state;
+  }
+}
 
 type LongPressPointer = {
   startX: number;
@@ -1038,10 +1085,11 @@ function PlaceCartRouteDayCard({
   onRequestSearchPlace,
 }: PlaceCartRouteDayCardProps) {
   const [isRouteMapOpen, setIsRouteMapOpen] = useState(false);
-  const [draggedItem, setDraggedItem] = useState<DraggedDayItem | null>(null);
-  const [activeDropIndex, setActiveDropIndex] = useState<number | null>(null);
-  const [activeMoveDirection, setActiveMoveDirection] =
-    useState<AdjacentMoveDirection | null>(null);
+  const [dragState, dispatchDrag] = useReducer(
+    routeDragReducer,
+    INITIAL_ROUTE_DRAG_STATE
+  );
+  const { draggedItem, activeDropIndex, activeMoveDirection } = dragState;
   const dropZoneRefs = useRef(new Map<number, HTMLDivElement>());
   const previousDayDropZoneRef = useRef<HTMLDivElement | null>(null);
   const nextDayDropZoneRef = useRef<HTMLDivElement | null>(null);
@@ -1069,9 +1117,7 @@ function PlaceCartRouteDayCard({
     dragCleanupRef.current?.();
     dragCleanupRef.current = null;
     draggedItemRef.current = null;
-    setDraggedItem(null);
-    setActiveDropIndex(null);
-    setActiveMoveDirection(null);
+    dispatchDrag({ type: "reset" });
   };
   const registerDropZone = (
     targetIndex: number,
@@ -1216,9 +1262,7 @@ function PlaceCartRouteDayCard({
       isActive: false,
     };
     draggedItemRef.current = initialDraggedItem;
-    setDraggedItem(initialDraggedItem);
-    setActiveDropIndex(null);
-    setActiveMoveDirection(null);
+    dispatchDrag({ type: "start", draggedItem: initialDraggedItem });
 
     const isCurrentDragPointer = (event: PointerEvent) =>
       pointerId == null || event.pointerId === pointerId;
@@ -1251,17 +1295,18 @@ function PlaceCartRouteDayCard({
         isActive: true,
       };
       draggedItemRef.current = nextDraggedItem;
-      setDraggedItem(nextDraggedItem);
       const moveDirection = getAdjacentMoveDirectionAtPoint(
         moveEvent.clientX,
         moveEvent.clientY
       );
-      setActiveMoveDirection(moveDirection);
-      setActiveDropIndex(
-        moveDirection
+      dispatchDrag({
+        type: "move",
+        draggedItem: nextDraggedItem,
+        activeMoveDirection: moveDirection,
+        activeDropIndex: moveDirection
           ? null
-          : getDropIndexAtPoint(moveEvent.clientX, moveEvent.clientY)
-      );
+          : getDropIndexAtPoint(moveEvent.clientX, moveEvent.clientY),
+      });
     };
 
     const handleDragEnd = (upEvent: PointerEvent) => {

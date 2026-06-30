@@ -117,7 +117,7 @@ export function RouteCheckoutProvider({
   const scheduleValidationMessage = !hasValidStartDate
     ? "여행 시작일을 선택해야 해요."
     : !isFutureStartDate
-      ? "여행 시작일은 오늘 이후로 선택해야 해요."
+      ? "여행 시작일은 오늘 또는 이후로 선택해야 해요."
     : !hasValidTripDays
       ? "여행 일수는 1일 이상이어야 해요."
       : !hasValidTimes

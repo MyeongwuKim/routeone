@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useReducer } from "react";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
 import type { TravelTempo } from "./PlaceCartTempoStep";
@@ -27,6 +27,151 @@ type UseRouteResultEditorParams = {
   isScheduleValid: boolean;
   currentLocation: RouteStartLocation | null;
 };
+
+type RouteEditSnapshot = {
+  stayOverrides: Record<string, number>;
+  manualInsertions: ManualRouteInsertion[];
+  removedPlaceIds: string[];
+  routePlanOverride: PlannedRouteDay[] | null;
+  startLocation: RouteStartLocation | null;
+};
+
+type RouteEditorState = {
+  applied: RouteEditSnapshot;
+  draft: RouteEditSnapshot;
+};
+
+type RouteEditorAction =
+  | { type: "change-stay-minutes"; placeId: string; minutes: number }
+  | {
+      type: "insert-place";
+      placeId: string;
+      routePlanOverride: PlannedRouteDay[];
+    }
+  | {
+      type: "remove-place-from-plan";
+      placeId: string;
+      routePlanOverride: PlannedRouteDay[];
+    }
+  | { type: "remove-place-from-empty-plan"; placeId: string }
+  | { type: "reorder-route-plan"; routePlanOverride: PlannedRouteDay[] }
+  | { type: "change-start-location"; location: RouteStartLocation }
+  | { type: "apply-draft" }
+  | { type: "cancel-draft" };
+
+function createInitialRouteEditSnapshot(
+  initialRoutePlan: PlannedRouteDay[] | null,
+  currentLocation: RouteStartLocation | null
+): RouteEditSnapshot {
+  return {
+    stayOverrides: {},
+    manualInsertions: [],
+    removedPlaceIds: [],
+    routePlanOverride: initialRoutePlan,
+    startLocation: currentLocation,
+  };
+}
+
+function removeStayOverride(
+  stayOverrides: Record<string, number>,
+  placeId: string
+) {
+  const nextStayOverrides = { ...stayOverrides };
+  delete nextStayOverrides[placeId];
+  return nextStayOverrides;
+}
+
+function routeEditorReducer(
+  state: RouteEditorState,
+  action: RouteEditorAction
+): RouteEditorState {
+  switch (action.type) {
+    case "change-stay-minutes":
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          stayOverrides: {
+            ...state.draft.stayOverrides,
+            [action.placeId]: action.minutes,
+          },
+        },
+      };
+    case "insert-place":
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          routePlanOverride: action.routePlanOverride,
+          manualInsertions: [],
+          removedPlaceIds: state.draft.removedPlaceIds.filter(
+            (placeId) => placeId !== action.placeId
+          ),
+        },
+      };
+    case "remove-place-from-plan":
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          stayOverrides: removeStayOverride(
+            state.draft.stayOverrides,
+            action.placeId
+          ),
+          routePlanOverride: action.routePlanOverride,
+          manualInsertions: [],
+          removedPlaceIds: [],
+        },
+      };
+    case "remove-place-from-empty-plan":
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          stayOverrides: removeStayOverride(
+            state.draft.stayOverrides,
+            action.placeId
+          ),
+          manualInsertions: state.draft.manualInsertions.filter(
+            (insertion) => insertion.place.id !== action.placeId
+          ),
+          removedPlaceIds: state.draft.removedPlaceIds.includes(action.placeId)
+            ? state.draft.removedPlaceIds
+            : [...state.draft.removedPlaceIds, action.placeId],
+        },
+      };
+    case "reorder-route-plan":
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          routePlanOverride: action.routePlanOverride,
+          manualInsertions: [],
+          removedPlaceIds: [],
+        },
+      };
+    case "change-start-location":
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          startLocation: action.location,
+        },
+      };
+    case "apply-draft":
+      return {
+        applied: state.draft,
+        draft: state.draft,
+      };
+    case "cancel-draft":
+      return {
+        applied: state.applied,
+        draft: state.applied,
+      };
+    default:
+      return state;
+  }
+}
 
 function addDays(dateValue: string, days: number) {
   const [yearText, monthText, dayText] = dateValue.split("-");
@@ -185,60 +330,47 @@ export function useRouteResultEditor({
   isScheduleValid,
   currentLocation,
 }: UseRouteResultEditorParams) {
-  const [appliedStayOverrides, setAppliedStayOverrides] = useState<
-    Record<string, number>
-  >({});
-  const [draftStayOverrides, setDraftStayOverrides] = useState<
-    Record<string, number>
-  >({});
-  const [appliedManualInsertions, setAppliedManualInsertions] = useState<
-    ManualRouteInsertion[]
-  >([]);
-  const [draftManualInsertions, setDraftManualInsertions] = useState<
-    ManualRouteInsertion[]
-  >([]);
-  const [appliedRemovedPlaceIds, setAppliedRemovedPlaceIds] = useState<string[]>(
-    []
-  );
-  const [draftRemovedPlaceIds, setDraftRemovedPlaceIds] = useState<string[]>([]);
-  const [appliedRoutePlanOverride, setAppliedRoutePlanOverride] = useState<
-    PlannedRouteDay[] | null
-  >(initialRoutePlan);
-  const [draftRoutePlanOverride, setDraftRoutePlanOverride] = useState<
-    PlannedRouteDay[] | null
-  >(initialRoutePlan);
-  const [appliedStartLocation, setAppliedStartLocation] =
-    useState<RouteStartLocation | null>(currentLocation);
-  const [draftStartLocation, setDraftStartLocation] =
-    useState<RouteStartLocation | null>(currentLocation);
-  const resolvedAppliedStartLocation = appliedStartLocation ?? currentLocation;
-  const resolvedDraftStartLocation = draftStartLocation ?? currentLocation;
+  const [editorState, dispatchEditor] = useReducer(routeEditorReducer, null, () => {
+    const initialSnapshot = createInitialRouteEditSnapshot(
+      initialRoutePlan,
+      currentLocation
+    );
+
+    return {
+      applied: initialSnapshot,
+      draft: initialSnapshot,
+    };
+  });
+  const { applied, draft } = editorState;
+  const resolvedAppliedStartLocation =
+    applied.startLocation ?? currentLocation;
+  const resolvedDraftStartLocation = draft.startLocation ?? currentLocation;
 
   const isRouteEditDirty = useMemo(
     () =>
-      JSON.stringify(draftStayOverrides) !==
-        JSON.stringify(appliedStayOverrides) ||
-      JSON.stringify(draftManualInsertions) !==
-        JSON.stringify(appliedManualInsertions) ||
-      JSON.stringify([...draftRemovedPlaceIds].sort()) !==
-        JSON.stringify([...appliedRemovedPlaceIds].sort()) ||
-      JSON.stringify(draftRoutePlanOverride) !==
-        JSON.stringify(appliedRoutePlanOverride) ||
+      JSON.stringify(draft.stayOverrides) !==
+        JSON.stringify(applied.stayOverrides) ||
+      JSON.stringify(draft.manualInsertions) !==
+        JSON.stringify(applied.manualInsertions) ||
+      JSON.stringify([...draft.removedPlaceIds].sort()) !==
+        JSON.stringify([...applied.removedPlaceIds].sort()) ||
+      JSON.stringify(draft.routePlanOverride) !==
+        JSON.stringify(applied.routePlanOverride) ||
       !isSameStartLocation(
         resolvedDraftStartLocation,
         resolvedAppliedStartLocation
       ),
     [
-      appliedManualInsertions,
-      appliedRemovedPlaceIds,
-      appliedRoutePlanOverride,
+      applied.manualInsertions,
+      applied.removedPlaceIds,
+      applied.routePlanOverride,
       resolvedAppliedStartLocation,
-      appliedStayOverrides,
-      draftManualInsertions,
-      draftRemovedPlaceIds,
-      draftRoutePlanOverride,
+      applied.stayOverrides,
+      draft.manualInsertions,
+      draft.removedPlaceIds,
+      draft.routePlanOverride,
       resolvedDraftStartLocation,
-      draftStayOverrides,
+      draft.stayOverrides,
     ]
   );
 
@@ -247,7 +379,7 @@ export function useRouteResultEditor({
       return [];
     }
 
-    const removedPlaceIdSet = new Set(draftRemovedPlaceIds);
+    const removedPlaceIdSet = new Set(draft.removedPlaceIds);
     const baseRoutePlan = buildRoutePlan({
       savedPlaces: savedPlaces.filter(
         (item) => !removedPlaceIdSet.has(item.place.id)
@@ -257,27 +389,27 @@ export function useRouteResultEditor({
       dailyStartMinutes,
       dailyEndMinutes,
       tempo,
-      stayOverrides: draftStayOverrides,
+      stayOverrides: draft.stayOverrides,
       currentLocation: resolvedDraftStartLocation,
     });
 
     const routePlanWithInsertions = applyManualRouteInsertions({
       routePlan: baseRoutePlan,
-      insertions: draftManualInsertions,
+      insertions: draft.manualInsertions,
       dailyStartMinutes,
       dailyEndMinutes,
       tempo,
-      stayOverrides: draftStayOverrides,
+      stayOverrides: draft.stayOverrides,
       currentLocation: resolvedDraftStartLocation,
     });
 
-    if (!draftRoutePlanOverride) {
+    if (!draft.routePlanOverride) {
       return routePlanWithInsertions;
     }
 
     return recalculateRoutePlanDays({
       routePlan: alignRoutePlanWithSchedule({
-        routePlan: draftRoutePlanOverride,
+        routePlan: draft.routePlanOverride,
         travelStartDate,
         tripDays,
         currentLocation: resolvedDraftStartLocation,
@@ -285,17 +417,17 @@ export function useRouteResultEditor({
       dailyStartMinutes,
       dailyEndMinutes,
       tempo,
-      stayOverrides: draftStayOverrides,
+      stayOverrides: draft.stayOverrides,
       currentLocation: resolvedDraftStartLocation,
     });
   }, [
     dailyEndMinutes,
     dailyStartMinutes,
-    draftManualInsertions,
-    draftRemovedPlaceIds,
-    draftRoutePlanOverride,
+    draft.manualInsertions,
+    draft.removedPlaceIds,
+    draft.routePlanOverride,
     resolvedDraftStartLocation,
-    draftStayOverrides,
+    draft.stayOverrides,
     isScheduleValid,
     savedPlaces,
     tempo,
@@ -308,7 +440,7 @@ export function useRouteResultEditor({
       return [];
     }
 
-    const removedPlaceIdSet = new Set(appliedRemovedPlaceIds);
+    const removedPlaceIdSet = new Set(applied.removedPlaceIds);
     const baseRoutePlan = buildRoutePlan({
       savedPlaces: savedPlaces.filter(
         (item) => !removedPlaceIdSet.has(item.place.id)
@@ -318,27 +450,27 @@ export function useRouteResultEditor({
       dailyStartMinutes,
       dailyEndMinutes,
       tempo,
-      stayOverrides: appliedStayOverrides,
+      stayOverrides: applied.stayOverrides,
       currentLocation: resolvedAppliedStartLocation,
     });
 
     const routePlanWithInsertions = applyManualRouteInsertions({
       routePlan: baseRoutePlan,
-      insertions: appliedManualInsertions,
+      insertions: applied.manualInsertions,
       dailyStartMinutes,
       dailyEndMinutes,
       tempo,
-      stayOverrides: appliedStayOverrides,
+      stayOverrides: applied.stayOverrides,
       currentLocation: resolvedAppliedStartLocation,
     });
 
-    if (!appliedRoutePlanOverride) {
+    if (!applied.routePlanOverride) {
       return routePlanWithInsertions;
     }
 
     return recalculateRoutePlanDays({
       routePlan: alignRoutePlanWithSchedule({
-        routePlan: appliedRoutePlanOverride,
+        routePlan: applied.routePlanOverride,
         travelStartDate,
         tripDays,
         currentLocation: resolvedAppliedStartLocation,
@@ -346,14 +478,14 @@ export function useRouteResultEditor({
       dailyStartMinutes,
       dailyEndMinutes,
       tempo,
-      stayOverrides: appliedStayOverrides,
+      stayOverrides: applied.stayOverrides,
       currentLocation: resolvedAppliedStartLocation,
     });
   }, [
-    appliedManualInsertions,
-    appliedRemovedPlaceIds,
-    appliedRoutePlanOverride,
-    appliedStayOverrides,
+    applied.manualInsertions,
+    applied.removedPlaceIds,
+    applied.routePlanOverride,
+    applied.stayOverrides,
     dailyEndMinutes,
     dailyStartMinutes,
     isScheduleValid,
@@ -365,10 +497,7 @@ export function useRouteResultEditor({
   ]);
 
   const handleChangeStayMinutes = (placeId: string, minutes: number) => {
-    setDraftStayOverrides((previous) => ({
-      ...previous,
-      [placeId]: minutes,
-    }));
+    dispatchEditor({ type: "change-stay-minutes", placeId, minutes });
   };
 
   const handleInsertPlace = (
@@ -396,7 +525,7 @@ export function useRouteResultEditor({
       nextItems.splice(Math.min(request.insertIndex, nextItems.length), 0, {
         id: place.id,
         place,
-        stayMinutes: draftStayOverrides[place.id] ?? recommendedStayMinutes,
+        stayMinutes: draft.stayOverrides[place.id] ?? recommendedStayMinutes,
         recommendedStayMinutes,
         startMinutes: 0,
         endMinutes: 0,
@@ -410,63 +539,45 @@ export function useRouteResultEditor({
       };
     });
 
-    setDraftRoutePlanOverride(nextRoutePlan);
-    setDraftManualInsertions([]);
-    setDraftRemovedPlaceIds((previous) =>
-      previous.filter((placeId) => placeId !== place.id)
-    );
+    dispatchEditor({
+      type: "insert-place",
+      placeId: place.id,
+      routePlanOverride: nextRoutePlan,
+    });
   };
 
   const handleRemoveRoutePlace = (placeId: string) => {
     if (routePlan.length > 0) {
-      setDraftRoutePlanOverride(
-        routePlan.map((day) => ({
+      dispatchEditor({
+        type: "remove-place-from-plan",
+        placeId,
+        routePlanOverride: routePlan.map((day) => ({
           ...day,
           items: day.items.filter((item) => item.place.id !== placeId),
-        }))
-      );
-      setDraftManualInsertions([]);
-      setDraftRemovedPlaceIds([]);
+        })),
+      });
     } else {
-      setDraftRemovedPlaceIds((previous) =>
-        previous.includes(placeId) ? previous : [...previous, placeId]
-      );
+      dispatchEditor({ type: "remove-place-from-empty-plan", placeId });
     }
-
-    setDraftManualInsertions((previous) =>
-      previous.filter((insertion) => insertion.place.id !== placeId)
-    );
-    setDraftStayOverrides((previous) => {
-      const nextOverrides = { ...previous };
-      delete nextOverrides[placeId];
-      return nextOverrides;
-    });
   };
 
   const handleReorderRoutePlan = (nextRoutePlan: PlannedRouteDay[]) => {
-    setDraftRoutePlanOverride(nextRoutePlan);
-    setDraftManualInsertions([]);
-    setDraftRemovedPlaceIds([]);
+    dispatchEditor({
+      type: "reorder-route-plan",
+      routePlanOverride: nextRoutePlan,
+    });
   };
 
   const handleChangeStartLocation = (location: RouteStartLocation) => {
-    setDraftStartLocation(location);
+    dispatchEditor({ type: "change-start-location", location });
   };
 
   const handleApplyRouteEdits = () => {
-    setAppliedStayOverrides(draftStayOverrides);
-    setAppliedManualInsertions(draftManualInsertions);
-    setAppliedRemovedPlaceIds(draftRemovedPlaceIds);
-    setAppliedRoutePlanOverride(draftRoutePlanOverride);
-    setAppliedStartLocation(draftStartLocation);
+    dispatchEditor({ type: "apply-draft" });
   };
 
   const handleCancelRouteEdits = () => {
-    setDraftStayOverrides(appliedStayOverrides);
-    setDraftManualInsertions(appliedManualInsertions);
-    setDraftRemovedPlaceIds(appliedRemovedPlaceIds);
-    setDraftRoutePlanOverride(appliedRoutePlanOverride);
-    setDraftStartLocation(appliedStartLocation);
+    dispatchEditor({ type: "cancel-draft" });
   };
 
   return {

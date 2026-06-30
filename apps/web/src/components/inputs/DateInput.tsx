@@ -120,8 +120,14 @@ function DateInput({ value, placeholder = "날짜 선택", onChange }: DateInput
       </button>
 
       {isOpen ? (
-        <div className="fixed inset-0 z-[1800] flex items-center justify-center bg-slate-900/55 px-4">
-          <div className="w-full max-w-sm rounded-3xl border border-brand-200 bg-white p-4 shadow-2xl">
+        <div
+          className="fixed inset-0 z-[1800] flex items-center justify-center bg-slate-900/55 px-4"
+          onClick={() => setIsOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl border border-brand-200 bg-white p-4 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between">
               <button
                 type="button"

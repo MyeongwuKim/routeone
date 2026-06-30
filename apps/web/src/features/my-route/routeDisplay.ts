@@ -1,7 +1,12 @@
 import type { MyRoute, MyRouteDay } from "./types";
 
 export type RouteDayState = "past" | "today" | "upcoming" | "undated";
-export type RouteTimelineState = "current" | "upcoming" | "past" | "undated";
+export type RouteTimelineState =
+  | "current"
+  | "upcoming"
+  | "past"
+  | "needsReview"
+  | "undated";
 
 export const ROUTE_STATUS_LABEL: Record<MyRoute["status"], string> = {
   ACTIVE: "진행 중",
@@ -77,16 +82,24 @@ export function getRouteTimelineState(
   const startDateKey = getRouteStartDateKey(route);
   const endDateKey = getRouteEndDateKey(route);
 
+  if (route.status === "COMPLETED") {
+    return "past";
+  }
+
   if (!startDateKey || !endDateKey) {
     return "undated";
+  }
+
+  if (route.startedAt) {
+    return "current";
   }
 
   if (todayKey < startDateKey) {
     return "upcoming";
   }
 
-  if (todayKey > endDateKey || route.status === "COMPLETED") {
-    return "past";
+  if (todayKey > endDateKey) {
+    return "needsReview";
   }
 
   return "current";
@@ -99,6 +112,10 @@ export function getRouteTimelineLabel(
   const state = getRouteTimelineState(route, todayKey);
 
   if (state === "current") {
+    if (!route.startedAt) {
+      return getTodayRouteDay(route, todayKey) ? "오늘 시작" : "시작 필요";
+    }
+
     return getTodayRouteDay(route, todayKey) ? "오늘 진행 중" : "진행 중";
   }
 
@@ -120,6 +137,10 @@ export function getRouteTimelineLabel(
 
   if (state === "past") {
     return "지난 루트";
+  }
+
+  if (state === "needsReview") {
+    return "시작 확인 필요";
   }
 
   return "날짜 미정";

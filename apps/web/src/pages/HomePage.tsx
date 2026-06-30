@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   IoBagHandleOutline,
@@ -16,6 +16,7 @@ import {
   type MapMarkerBadge,
 } from "@/components/map/NaverMapMarkerIcon";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
+import RecentSearchItem from "@/components/search/RecentSearchItem";
 import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import {
@@ -670,7 +671,7 @@ function HomePage() {
     gcTime: Infinity,
   });
 
-const attractionsQuery = useQuery({
+  const attractionsQuery = useQuery({
     queryKey: ["gangwon-attractions", selectedSigunguCode],
     enabled: mapReady && Boolean(TOUR_API_SERVICE_KEY),
     queryFn: async () => {
@@ -956,6 +957,16 @@ const attractionsQuery = useQuery({
       ...previous.filter((item) => item !== trimmedKeyword),
     ].slice(0, 8));
   };
+  const removeRecentSearch = (keyword: string) => {
+    setRecentSearches((previous) => previous.filter((item) => item !== keyword));
+  };
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+  };
+  const closeSearchPopup = useCallback(() => {
+    setIsSearchPopupOpen(false);
+    setSearchKeyword("");
+  }, []);
 
   const openPlaceSheetFromAttraction = ({
     attraction,
@@ -1027,7 +1038,9 @@ const attractionsQuery = useQuery({
 
     if (
       attractionLoadingStage === "fetching-places" ||
-      (attractionsQuery.isFetching && !attractionsQuery.data)
+      (attractionLoadingStage === "idle" &&
+        attractionsQuery.isFetching &&
+        !attractionsQuery.data)
     ) {
       showLoading({
         title: "장소 데이터를 찾고 있어요",
@@ -1078,7 +1091,7 @@ const attractionsQuery = useQuery({
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setIsSearchPopupOpen(false);
+        closeSearchPopup();
       }
     };
 
@@ -1086,7 +1099,7 @@ const attractionsQuery = useQuery({
     return () => {
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [isSearchPopupOpen]);
+  }, [closeSearchPopup, isSearchPopupOpen]);
 
   useEffect(() => {
     if (!("geolocation" in navigator)) {
@@ -1594,20 +1607,15 @@ const attractionsQuery = useQuery({
       <div className="pointer-events-none absolute inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center justify-between">
         <button
           type="button"
+          aria-label="장소 검색 열기"
           onClick={() => setIsSearchPopupOpen(true)}
           className="pointer-events-auto flex h-12 flex-1 items-center rounded-full border border-brand-200 bg-white/95 px-4 text-left shadow-md backdrop-blur"
         >
           <span className="text-base text-brand-500">
-            <IoLocationSharp />
+            <IoSearch />
           </span>
-          <span
-            className={`ml-2 w-full truncate text-sm ${
-              searchKeyword
-                ? "text-slate-700"
-                : "text-slate-400"
-            }`}
-          >
-            {searchKeyword || "강원도 명소 검색"}
+          <span className="ml-2 w-full truncate text-sm font-semibold text-slate-400">
+            강원도 명소 검색
           </span>
         </button>
         <button
@@ -1789,7 +1797,7 @@ const attractionsQuery = useQuery({
                 <button
                   type="button"
                   aria-label="검색 닫기"
-                  onClick={() => setIsSearchPopupOpen(false)}
+                  onClick={closeSearchPopup}
                   className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-400/30 bg-[#0f3431] text-xl text-brand-200 shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition hover:bg-[#13423e]"
                 >
                   <IoClose />
@@ -1846,7 +1854,6 @@ const attractionsQuery = useQuery({
                           }
                           onClick={() => {
                             appendRecentSearch(searchKeyword);
-                            setSearchKeyword(item.attraction.title);
                             openPlaceSheetFromAttraction({
                               attraction: item.attraction,
                               markerType: item.markerType,
@@ -1879,22 +1886,34 @@ const attractionsQuery = useQuery({
                 </div>
               ) : (
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-slate-400">최근 검색</p>
-                  <div className="space-y-2">
-                    {recentSearches.map((keyword) => (
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-400">최근 검색</p>
+                    {recentSearches.length > 0 ? (
                       <button
-                        key={keyword}
                         type="button"
-                        onClick={() => {
-                          setSearchKeyword(keyword);
-                        }}
-                        className="flex w-full items-center justify-between rounded-2xl border border-brand-400/25 bg-[#071718] px-4 py-3 text-left shadow-sm transition hover:border-brand-300/45"
+                        onClick={clearRecentSearches}
+                        className="text-xs font-semibold text-slate-400 transition hover:text-slate-100"
                       >
-                        <span className="text-sm font-semibold text-slate-100">{keyword}</span>
-                        <IoSearch className="text-slate-400" />
+                        전체 삭제
                       </button>
-                    ))}
+                    ) : null}
                   </div>
+                  {recentSearches.length > 0 ? (
+                    <div className="space-y-2">
+                      {recentSearches.map((keyword) => (
+                        <RecentSearchItem
+                          key={keyword}
+                          keyword={keyword}
+                          onSelect={setSearchKeyword}
+                          onDelete={removeRecentSearch}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-brand-400/35 bg-[#0b2524] px-4 py-8 text-center text-sm font-semibold text-slate-300">
+                      최근 검색어가 없습니다.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

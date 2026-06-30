@@ -290,6 +290,8 @@ function PlaceCartRouteResultStep({
           routePlan,
           travelStartDate,
           tripDays,
+          dailyStartMinutes,
+          scheduleEndMinutes,
           startLocation,
         });
         queryClient.setQueryData<MyRoutesQuery>(
@@ -301,6 +303,8 @@ function PlaceCartRouteResultStep({
           routePlan,
           travelStartDate,
           tripDays,
+          dailyStartMinutes,
+          scheduleEndMinutes,
           startLocation,
         });
         queryClient.setQueryData<MyRoutesQuery>(

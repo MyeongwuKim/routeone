@@ -1,4 +1,10 @@
-import type { Route, RouteDay, RouteStatus, RouteStop } from "@prisma/client";
+import type {
+  Route,
+  RouteDay,
+  RouteStatus,
+  RouteStop,
+  RouteStopVerificationStatus,
+} from "@prisma/client";
 import { gql } from "graphql-tag";
 import type { GraphQLContext } from "../../context.js";
 import { requireUser } from "../../lib/auth.js";
@@ -17,11 +23,14 @@ import {
   setRouteLike,
   setRouteSave,
   shareRoute,
+  startRoute,
   updateRouteStopStayMinutes,
   type CloneRouteInput,
   type AppendRouteDaysInput,
   type CreateRouteInput,
   type ReorderRouteStopsInput,
+  type RouteStopVisitVerificationInput,
+  type StartRouteInput,
   type UpdateRouteStopStayMinutesInput,
 } from "./route.service.js";
 
@@ -41,6 +50,13 @@ export const routeTypeDefs = gql`
     PENDING
     VISITED
     SKIPPED
+  }
+
+  enum RouteStopVerificationStatus {
+    NONE
+    MANUAL
+    GPS
+    GPS_PHOTO
   }
 
   enum PlaceProvider {
@@ -80,6 +96,8 @@ export const routeTypeDefs = gql`
     tripDays: Int!
     travelStartDate: DateTime
     travelEndDate: DateTime
+    dailyStartMinutes: Int
+    scheduleEndMinutes: Int
     status: RouteStatus!
     visibility: RouteVisibility!
     totalStopCount: Int!
@@ -121,6 +139,15 @@ export const routeTypeDefs = gql`
     memo: String
     visitStatus: VisitStatus!
     visitedAt: DateTime
+    verificationStatus: RouteStopVerificationStatus!
+    verifiedAt: DateTime
+    verificationPhotoUrl: String
+    verificationLat: Float
+    verificationLng: Float
+    verificationAccuracyMeters: Float
+    checkedInAt: DateTime
+    checkedOutAt: DateTime
+    actualStayMinutes: Int
     createdAt: DateTime!
     updatedAt: DateTime!
   }
@@ -172,6 +199,8 @@ export const routeTypeDefs = gql`
     tripDays: Int!
     travelStartDate: DateTime
     travelEndDate: DateTime
+    dailyStartMinutes: Int
+    scheduleEndMinutes: Int
     startLocation: RouteStartLocationInput
     stops: [CreateRouteStopInput!]
   }
@@ -186,8 +215,15 @@ export const routeTypeDefs = gql`
     tripDays: Int!
     travelStartDate: DateTime
     travelEndDate: DateTime
+    dailyStartMinutes: Int
+    scheduleEndMinutes: Int
     startLocation: RouteStartLocationInput
     stops: [CreateRouteStopInput!]
+  }
+
+  input StartRouteInput {
+    routeId: ID!
+    startedAt: DateTime!
   }
 
   input ReorderRouteStopsInput {
@@ -201,6 +237,14 @@ export const routeTypeDefs = gql`
     stayMinutes: Int!
   }
 
+  input RouteStopVisitVerificationInput {
+    status: RouteStopVerificationStatus
+    lat: Float
+    lng: Float
+    accuracyMeters: Float
+    photoUrl: String
+  }
+
   extend type Query {
     myRoutes(status: RouteStatus): [Route!]!
     savedRoutes: [Route!]!
@@ -212,9 +256,14 @@ export const routeTypeDefs = gql`
   extend type Mutation {
     createRoute(input: CreateRouteInput!): Route!
     appendRouteDays(input: AppendRouteDaysInput!): Route!
+    startRoute(input: StartRouteInput!): Route!
     deleteRoute(routeId: ID!): DeletedRoutePayload!
     deleteRouteDay(dayId: ID!): Route!
-    markRouteStopVisited(stopId: ID!, visited: Boolean = true): Route!
+    markRouteStopVisited(
+      stopId: ID!
+      visited: Boolean = true
+      verification: RouteStopVisitVerificationInput
+    ): Route!
     reorderRouteStops(input: ReorderRouteStopsInput!): Route!
     updateRouteStopStayMinutes(input: UpdateRouteStopStayMinutesInput!): Route!
     clearRoute(routeId: ID!): Route!
@@ -248,9 +297,14 @@ type AppendRouteDaysArgs = {
   input: AppendRouteDaysInput;
 };
 
+type StartRouteArgs = {
+  input: StartRouteInput;
+};
+
 type MarkRouteStopVisitedArgs = {
   stopId: string;
   visited?: boolean | null;
+  verification?: RouteStopVisitVerificationInput | null;
 };
 
 type RouteIdArgs = {
@@ -349,6 +403,14 @@ export const routeResolvers = {
       const user = requireUser(context);
       return appendRouteDays(context.prisma, user, args.input);
     },
+    startRoute(
+      _parent: unknown,
+      args: StartRouteArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return startRoute(context.prisma, user, args.input);
+    },
     deleteRoute(_parent: unknown, args: RouteIdArgs, context: GraphQLContext) {
       const user = requireUser(context);
       return deleteRoute(context.prisma, user, args.routeId);
@@ -367,7 +429,8 @@ export const routeResolvers = {
         context.prisma,
         user,
         args.stopId,
-        args.visited ?? true
+        args.visited ?? true,
+        args.verification
       );
     },
     reorderRouteStops(
@@ -483,6 +546,9 @@ export const routeResolvers = {
     },
   },
   RouteStop: {
+    verificationStatus(parent: RouteStop) {
+      return (parent.verificationStatus ?? "NONE") as RouteStopVerificationStatus;
+    },
     day(parent: RouteStop, _args: unknown, context: GraphQLContext) {
       if (!parent.dayId) {
         return null;

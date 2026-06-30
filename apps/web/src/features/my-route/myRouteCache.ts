@@ -2,6 +2,7 @@ import type {
   LikedSharedRoutesQuery,
   MyRoutesQuery,
   RouteSummaryFieldsFragment,
+  RouteStopVerificationStatus,
   SharedRoutesQuery,
 } from "@/generated/graphql";
 import {
@@ -162,11 +163,10 @@ export function optimisticUpdateSharedRouteLikeCache({
     sharedRoutes: data.sharedRoutes.map((route) =>
       route.id === routeId
         ? {
-          ...route,
-          likedByMe: liked,
-          likeCount:
-            likeCount ??
-            Math.max(0, route.likeCount + (liked ? 1 : -1)),
+            ...route,
+            likedByMe: liked,
+            likeCount:
+              likeCount ?? Math.max(0, route.likeCount + (liked ? 1 : -1)),
           }
         : route
     ),
@@ -176,13 +176,17 @@ export function optimisticUpdateSharedRouteLikeCache({
 export function upsertLikedSharedRouteSummaryCache(
   data: LikedSharedRoutesQuery | undefined,
   nextRoute: RouteSummaryFieldsFragment,
-  liked: boolean
+  liked: boolean,
+  options: {
+    keepUnlikedRoute?: boolean;
+    likeCount?: number;
+  } = {}
 ) {
   if (!data) {
     return data;
   }
 
-  if (!liked || nextRoute.visibility !== "PUBLIC") {
+  if (nextRoute.visibility !== "PUBLIC") {
     return {
       ...data,
       likedRoutes: data.likedRoutes.filter((route) => route.id !== nextRoute.id),
@@ -190,16 +194,28 @@ export function upsertLikedSharedRouteSummaryCache(
   }
 
   const hasRoute = data.likedRoutes.some((route) => route.id === nextRoute.id);
+  const routeForCache = {
+    ...nextRoute,
+    likedByMe: liked,
+    likeCount: options.likeCount ?? nextRoute.likeCount,
+  };
+
+  if (!liked && !options.keepUnlikedRoute) {
+    return {
+      ...data,
+      likedRoutes: data.likedRoutes.filter((route) => route.id !== nextRoute.id),
+    };
+  }
 
   return {
     ...data,
     likedRoutes: hasRoute
       ? data.likedRoutes.map((route) =>
           route.id === nextRoute.id
-            ? { ...route, ...nextRoute, likedByMe: true }
+            ? { ...route, ...routeForCache }
             : route
         )
-      : [{ ...nextRoute, likedByMe: true, stops: [] }, ...data.likedRoutes],
+      : [{ ...routeForCache, stops: [] }, ...data.likedRoutes],
   };
 }
 
@@ -208,17 +224,19 @@ export function optimisticUpdateLikedSharedRouteLikeCache({
   route,
   liked,
   likeCount,
+  keepUnlikedRoute = false,
 }: {
   data: LikedSharedRoutesQuery | undefined;
   route: RouteSummaryFieldsFragment;
   liked: boolean;
   likeCount?: number;
+  keepUnlikedRoute?: boolean;
 }) {
   if (!data) {
     return data;
   }
 
-  if (!liked) {
+  if (!liked && !keepUnlikedRoute) {
     return {
       ...data,
       likedRoutes: data.likedRoutes.filter(
@@ -227,15 +245,22 @@ export function optimisticUpdateLikedSharedRouteLikeCache({
     };
   }
 
+  const nextLikeCount =
+    likeCount ??
+    Math.max(0, route.likeCount + (liked ? (route.likedByMe ? 0 : 1) : -1));
+
   return upsertLikedSharedRouteSummaryCache(
     data,
     {
       ...route,
-      likedByMe: true,
-      likeCount:
-        likeCount ?? Math.max(0, route.likeCount + (route.likedByMe ? 0 : 1)),
+      likedByMe: liked,
+      likeCount: nextLikeCount,
     },
-    true
+    liked,
+    {
+      keepUnlikedRoute,
+      likeCount: nextLikeCount,
+    }
   );
 }
 
@@ -287,17 +312,33 @@ export function optimisticVisitRouteStopCache({
   stopId,
   visited,
   visitedAt,
+  verificationStatus,
+  verificationLat,
+  verificationLng,
+  verificationAccuracyMeters,
+  verificationPhotoUrl,
 }: {
   data: MyRoutesQuery | undefined;
   routeId: string;
   stopId: string;
   visited: boolean;
   visitedAt: string;
+  verificationStatus?: RouteStopVerificationStatus;
+  verificationLat?: number | null;
+  verificationLng?: number | null;
+  verificationAccuracyMeters?: number | null;
+  verificationPhotoUrl?: string | null;
 }) {
   return updateRoute(data, routeId, (route) => {
     const nextVisitStatus: MyRouteStop["visitStatus"] = visited
       ? "VISITED"
       : "PENDING";
+    const nextVerificationStatus: RouteStopVerificationStatus = visited
+      ? (verificationStatus ?? "MANUAL")
+      : "NONE";
+    const isVerified =
+      nextVerificationStatus === "GPS" ||
+      nextVerificationStatus === "GPS_PHOTO";
     const nextDays = route.days.map((day) => ({
       ...day,
       stops: day.stops.map((stop): MyRouteStop =>
@@ -306,6 +347,19 @@ export function optimisticVisitRouteStopCache({
               ...stop,
               visitStatus: nextVisitStatus,
               visitedAt: visited ? visitedAt : null,
+              verificationStatus: nextVerificationStatus,
+              verifiedAt: isVerified ? visitedAt : null,
+              verificationPhotoUrl: isVerified
+                ? (verificationPhotoUrl ?? null)
+                : null,
+              verificationLat: isVerified ? (verificationLat ?? null) : null,
+              verificationLng: isVerified ? (verificationLng ?? null) : null,
+              verificationAccuracyMeters: isVerified
+                ? (verificationAccuracyMeters ?? null)
+                : null,
+              checkedInAt: isVerified ? (stop.checkedInAt ?? visitedAt) : null,
+              checkedOutAt: null,
+              actualStayMinutes: null,
             }
           : stop
       ),

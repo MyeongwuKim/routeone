@@ -14,6 +14,7 @@ import {
   SaveRouteDocument,
   ShareRouteDocument,
   SharedRoutesDocument,
+  StartRouteDocument,
   UnlikeRouteDocument,
   UnsaveRouteDocument,
   UpdateRouteStopStayMinutesDocument,
@@ -22,7 +23,9 @@ import {
   type CreateRouteInput,
   type MyRoutesQueryVariables,
   type ReorderRouteStopsInput,
+  type RouteStopVisitVerificationInput,
   type SharedRoutesQueryVariables,
+  type StartRouteInput,
   type UpdateRouteStopStayMinutesInput,
 } from "@/generated/graphql";
 import { requestGraphQL } from "@/lib/graphqlClient";
@@ -54,6 +57,11 @@ export const routeApi = {
       input,
     });
   },
+  startRoute(input: StartRouteInput) {
+    return requestGraphQL(StartRouteDocument, {
+      input,
+    });
+  },
   deleteRoute(routeId: RouteId) {
     return requestGraphQL(DeleteRouteDocument, {
       routeId,
@@ -64,10 +72,15 @@ export const routeApi = {
       dayId,
     });
   },
-  markRouteStopVisited(stopId: RouteId, visited = true) {
+  markRouteStopVisited(
+    stopId: RouteId,
+    visited = true,
+    verification?: RouteStopVisitVerificationInput | null
+  ) {
     return requestGraphQL(MarkRouteStopVisitedDocument, {
       stopId,
       visited,
+      verification,
     });
   },
   reorderRouteStops(input: ReorderRouteStopsInput) {

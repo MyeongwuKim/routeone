@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
-import { MdOutlineCalendarToday, MdSell } from "react-icons/md";
+import {
+  MdAdd,
+  MdOutlineCalendarToday,
+  MdOutlinePlace,
+  MdSell,
+} from "react-icons/md";
 import type {
   LikedSharedRoutesQuery,
   RouteSummaryFieldsFragment,
@@ -8,6 +13,28 @@ import type {
 } from "@/generated/graphql";
 
 const VISIBLE_SHARE_TAG_COUNT = 3;
+const VISIBLE_PLACE_CHIP_COUNT = 3;
+export const GANGWON_REGION_LABELS = [
+  "강릉",
+  "고성",
+  "동해",
+  "삼척",
+  "속초",
+  "양구",
+  "양양",
+  "영월",
+  "원주",
+  "인제",
+  "정선",
+  "철원",
+  "춘천",
+  "태백",
+  "평창",
+  "홍천",
+  "화천",
+  "횡성",
+] as const;
+
 const GANGWON_REGION_LABEL_BY_CODE: Record<string, string> = {
   "1": "강릉",
   "2": "고성",
@@ -48,12 +75,35 @@ const GANGWON_REGION_LABEL_BY_CODE: Record<string, string> = {
 };
 const REGION_SHARE_TAGS = new Set([
   "강원",
-  ...Object.values(GANGWON_REGION_LABEL_BY_CODE),
+  ...GANGWON_REGION_LABELS,
 ]);
+const LEGACY_SHARE_TAG_LABELS: Record<string, string> = {
+  "가볍게 보기": "가벼운 플랜",
+  "촘촘한 루트": "촘촘 플랜",
+  "여유로운 루트": "여유 플랜",
+  "균형 잡힌 루트": "균형 플랜",
+};
 
-type SharedRoute =
+export type SharedRoute =
   | SharedRoutesQuery["sharedRoutes"][number]
   | LikedSharedRoutesQuery["likedRoutes"][number];
+
+export type SharedRouteFilterCandidate =
+  | {
+      type: "tag";
+      value: string;
+    }
+  | {
+      type: "place";
+      value: string;
+      region: string;
+    };
+
+export type SharedRoutePlaceFilterOption = {
+  name: string;
+  region: string;
+  category: string;
+};
 
 type SharedRouteCardProps = {
   route: SharedRoute;
@@ -61,6 +111,7 @@ type SharedRouteCardProps = {
   isLikePending?: boolean;
   onToggleLike: (route: RouteSummaryFieldsFragment) => void | Promise<void>;
   onOpen?: (route: SharedRoute) => void;
+  onRequestFilter?: (filter: SharedRouteFilterCandidate) => void;
 };
 
 function formatRouteDate(value: string | null) {
@@ -114,7 +165,7 @@ function getRegionName(
   return code ? GANGWON_REGION_LABEL_BY_CODE[code] : null;
 }
 
-function getRouteRegionTitle(route: SharedRoute) {
+export function getDisplayRegionNames(route: SharedRoute) {
   const regionNames: string[] = [];
   const appendRegionName = (regionName: string | null) => {
     if (regionName && !regionNames.includes(regionName)) {
@@ -133,6 +184,49 @@ function getRouteRegionTitle(route: SharedRoute) {
       getRegionName(route.primaryRegionLabelKey, route.primaryRegionCode)
     );
   }
+
+  return regionNames;
+}
+
+export function getDisplayPlaceOptions(route: SharedRoute) {
+  const placeOptions: SharedRoutePlaceFilterOption[] = [];
+  const fallbackRegionName =
+    getRegionName(route.primaryRegionLabelKey, route.primaryRegionCode) ??
+    "지역 미정";
+
+  (route.stops ?? []).forEach((stop) => {
+    const name = stop.place.title?.trim();
+    const region =
+      getRegionName(stop.place.regionLabelKey, stop.place.regionCode) ??
+      fallbackRegionName;
+    const category =
+      stop.place.categoryLabel?.trim() ||
+      stop.place.categoryName?.trim() ||
+      "기타";
+
+    if (!name) {
+      return;
+    }
+
+    const hasPlace = placeOptions.some(
+      (placeOption) =>
+        placeOption.name === name && placeOption.region === region
+    );
+
+    if (!hasPlace) {
+      placeOptions.push({
+        name,
+        region,
+        category,
+      });
+    }
+  });
+
+  return placeOptions;
+}
+
+function getRouteRegionTitle(route: SharedRoute) {
+  const regionNames = getDisplayRegionNames(route);
 
   if (regionNames.length === 0) {
     return "공유";
@@ -171,19 +265,28 @@ function getFallbackShareTags(route: RouteSummaryFieldsFragment) {
   if (route.totalStopCount > 0) {
     tags.push(
       route.totalStopCount / Math.max(1, route.tripDays) >= 4
-        ? "촘촘한 루트"
-        : "여유로운 루트"
+        ? "촘촘 플랜"
+        : "여유 플랜"
     );
   }
 
   return tags;
 }
 
-function getDisplayShareTags(route: RouteSummaryFieldsFragment) {
+function normalizeShareTag(tag: string) {
+  return LEGACY_SHARE_TAG_LABELS[tag] ?? tag;
+}
+
+export function getDisplayShareTags(route: RouteSummaryFieldsFragment) {
   const sourceTags = route.shareTags.length
     ? route.shareTags
     : getFallbackShareTags(route);
-  const displayTags = sourceTags.filter((tag) => !REGION_SHARE_TAGS.has(tag));
+  const displayTags = sourceTags
+    .map(normalizeShareTag)
+    .filter(
+      (tag, index, tags) =>
+        !REGION_SHARE_TAGS.has(tag) && tags.indexOf(tag) === index
+    );
 
   return displayTags.length
     ? displayTags
@@ -196,14 +299,24 @@ function SharedRouteCard({
   isLikePending = false,
   onToggleLike,
   onOpen,
+  onRequestFilter,
 }: SharedRouteCardProps) {
   const [isTagExpanded, setIsTagExpanded] = useState(false);
+  const [isPlaceExpanded, setIsPlaceExpanded] = useState(false);
   const isMine = route.isMine;
   const shareTags = getDisplayShareTags(route);
+  const placeOptions = getDisplayPlaceOptions(route);
   const visibleTags = isTagExpanded
     ? shareTags
     : shareTags.slice(0, VISIBLE_SHARE_TAG_COUNT);
   const hiddenTagCount = Math.max(0, shareTags.length - visibleTags.length);
+  const visiblePlaceOptions = isPlaceExpanded
+    ? placeOptions
+    : placeOptions.slice(0, VISIBLE_PLACE_CHIP_COUNT);
+  const hiddenPlaceCount = Math.max(
+    0,
+    placeOptions.length - visiblePlaceOptions.length
+  );
   const progressPercent =
     route.totalStopCount > 0
       ? Math.round((route.completedStopCount / route.totalStopCount) * 100)
@@ -222,7 +335,7 @@ function SharedRouteCard({
         event.preventDefault();
         onOpen(route);
       }}
-      className={`min-h-[204px] rounded-2xl border p-4 shadow-sm ${
+      className={`min-h-[156px] rounded-2xl border p-4 shadow-sm ${
         isMine
           ? "border-brand-300 bg-brand-50 dark:border-brand-400/40 dark:bg-slate-900/70"
           : "border-brand-100 bg-white dark:border-brand-400/25 dark:bg-slate-950/40"
@@ -236,9 +349,7 @@ function SharedRouteCard({
                 내 공유
               </span>
             ) : null}
-            <span className="min-w-0 truncate">
-            {getSharedRouteTitle(route)}
-            </span>
+            <span className="min-w-0 truncate">{getSharedRouteTitle(route)}</span>
           </p>
           <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
             <MdOutlineCalendarToday className="text-sm" />
@@ -272,20 +383,28 @@ function SharedRouteCard({
       </div>
 
       {shareTags.length > 0 ? (
-        <div className="mt-4 min-w-0">
+        <div className="mt-3 min-w-0">
           <div className="scrollbar-hide flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-1">
             {visibleTags.map((tag) => (
-              <span
+              <button
                 key={tag}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRequestFilter?.({
+                    type: "tag",
+                    value: tag,
+                  });
+                }}
                 className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
                   isMine
                     ? "bg-white text-brand-700 ring-1 ring-brand-100 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25"
                     : "bg-slate-50 text-slate-600 ring-1 ring-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
-                }`}
+                } transition hover:border-brand-300 hover:text-brand-700 dark:hover:text-brand-100`}
               >
                 <MdSell className="text-xs" />
                 {tag}
-              </span>
+              </button>
             ))}
             {hiddenTagCount > 0 ? (
               <button
@@ -307,7 +426,53 @@ function SharedRouteCard({
         </div>
       ) : null}
 
-      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+      {placeOptions.length > 0 ? (
+        <div className="mt-2 min-w-0">
+          <div className="scrollbar-hide flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-1">
+            {visiblePlaceOptions.map((placeOption) => (
+              <button
+                key={`${placeOption.region}:${placeOption.name}`}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRequestFilter?.({
+                    type: "place",
+                    value: placeOption.name,
+                    region: placeOption.region,
+                  });
+                }}
+                className={`inline-flex max-w-[150px] shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                  isMine
+                    ? "bg-brand-100 text-brand-800 ring-1 ring-brand-200 dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
+                } transition hover:border-brand-300 hover:text-brand-700 dark:hover:text-brand-100`}
+              >
+                <MdOutlinePlace className="shrink-0 text-xs" />
+                <span className="min-w-0 truncate">{placeOption.name}</span>
+              </button>
+            ))}
+            {hiddenPlaceCount > 0 ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsPlaceExpanded(true);
+                }}
+                className={`inline-flex shrink-0 items-center gap-0.5 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                  isMine
+                    ? "bg-brand-100 text-brand-800 ring-1 ring-brand-200 dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
+                  }`}
+              >
+                <MdAdd className="text-xs" />
+                {hiddenPlaceCount}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
         <div
           className="h-full rounded-full bg-brand-500"
           style={{ width: `${progressPercent}%` }}

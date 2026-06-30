@@ -1,4 +1,6 @@
 import type { MutableRefObject } from "react";
+import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import type { WebViewMessageEvent } from "react-native-webview";
 
 type WebViewRef = MutableRefObject<{
@@ -16,6 +18,16 @@ type NativeFetchRequest = {
   };
 };
 
+type NativeLocationRequest = {
+  type: "routeone:native-location-current";
+  id: string;
+};
+
+type NativePhotoRequest = {
+  type: "routeone:native-visit-photo";
+  id: string;
+};
+
 type NativeFetchResponse =
   | {
       ok: true;
@@ -24,6 +36,31 @@ type NativeFetchResponse =
       headers: Record<string, string>;
       body: string;
       url: string;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type NativeLocationResponse =
+  | {
+      ok: true;
+      lat: number;
+      lng: number;
+      accuracyMeters: number | null;
+      timestamp: number;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+type NativePhotoResponse =
+  | {
+      ok: true;
+      uri: string | null;
+      width: number | null;
+      height: number | null;
     }
   | {
       ok: false;
@@ -58,6 +95,8 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 
   var originalFetch = window.fetch.bind(window);
   var pendingRequests = Object.create(null);
+  var pendingLocationRequests = Object.create(null);
+  var pendingPhotoRequests = Object.create(null);
   var requestSeq = 0;
 
   function getUrl(input) {
@@ -137,6 +176,88 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     );
   };
 
+  window.__ROUTEONE_NATIVE_LOCATION_RESPONSE__ = function handleNativeLocationResponse(id, payload) {
+    var handlers = pendingLocationRequests[id];
+
+    if (!handlers) {
+      return;
+    }
+
+    delete pendingLocationRequests[id];
+
+    if (!payload || !payload.ok) {
+      handlers.reject(new Error((payload && payload.error) || "Native location failed"));
+      return;
+    }
+
+    handlers.resolve({
+      lat: payload.lat,
+      lng: payload.lng,
+      accuracyMeters: payload.accuracyMeters,
+      timestamp: payload.timestamp
+    });
+  };
+
+  window.__ROUTEONE_NATIVE_PHOTO_RESPONSE__ = function handleNativePhotoResponse(id, payload) {
+    var handlers = pendingPhotoRequests[id];
+
+    if (!handlers) {
+      return;
+    }
+
+    delete pendingPhotoRequests[id];
+
+    if (!payload || !payload.ok) {
+      handlers.reject(new Error((payload && payload.error) || "Native photo failed"));
+      return;
+    }
+
+    handlers.resolve({
+      uri: payload.uri,
+      width: payload.width,
+      height: payload.height
+    });
+  };
+
+  window.RouteOneNative = Object.assign({}, window.RouteOneNative, {
+    getCurrentPosition: function getCurrentPosition() {
+      if (!window.ReactNativeWebView) {
+        return Promise.reject(new Error("Native bridge is not available"));
+      }
+
+      var requestId = "native-location-" + Date.now() + "-" + requestSeq++;
+
+      return new Promise(function routeOneNativeLocation(resolve, reject) {
+        pendingLocationRequests[requestId] = { resolve: resolve, reject: reject };
+
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: "routeone:native-location-current",
+            id: requestId
+          })
+        );
+      });
+    },
+    takeVisitPhoto: function takeVisitPhoto() {
+      if (!window.ReactNativeWebView) {
+        return Promise.reject(new Error("Native bridge is not available"));
+      }
+
+      var requestId = "native-photo-" + Date.now() + "-" + requestSeq++;
+
+      return new Promise(function routeOneNativePhoto(resolve, reject) {
+        pendingPhotoRequests[requestId] = { resolve: resolve, reject: reject };
+
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: "routeone:native-visit-photo",
+            id: requestId
+          })
+        );
+      });
+    }
+  });
+
   window.fetch = function routeOneFetch(input, init) {
     var inputUrl = getUrl(input);
 
@@ -183,6 +304,34 @@ function isNativeFetchRequest(value: unknown): value is NativeFetchRequest {
   );
 }
 
+function isNativeLocationRequest(
+  value: unknown
+): value is NativeLocationRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeRequest = value as Partial<NativeLocationRequest>;
+
+  return (
+    maybeRequest.type === "routeone:native-location-current" &&
+    typeof maybeRequest.id === "string"
+  );
+}
+
+function isNativePhotoRequest(value: unknown): value is NativePhotoRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeRequest = value as Partial<NativePhotoRequest>;
+
+  return (
+    maybeRequest.type === "routeone:native-visit-photo" &&
+    typeof maybeRequest.id === "string"
+  );
+}
+
 function resolveNativeFetchTarget(urlValue: string): NativeFetchTarget | null {
   const url = new URL(urlValue, WEBVIEW_BASE_URL);
 
@@ -220,6 +369,85 @@ function postNativeFetchResponse(
   );
 }
 
+function postNativeLocationResponse(
+  webViewRef: WebViewRef,
+  id: string,
+  payload: NativeLocationResponse
+) {
+  webViewRef.current?.injectJavaScript(
+    `window.__ROUTEONE_NATIVE_LOCATION_RESPONSE__(${JSON.stringify(
+      id
+    )}, ${JSON.stringify(payload)}); true;`
+  );
+}
+
+function postNativePhotoResponse(
+  webViewRef: WebViewRef,
+  id: string,
+  payload: NativePhotoResponse
+) {
+  webViewRef.current?.injectJavaScript(
+    `window.__ROUTEONE_NATIVE_PHOTO_RESPONSE__(${JSON.stringify(
+      id
+    )}, ${JSON.stringify(payload)}); true;`
+  );
+}
+
+async function getNativeCurrentPosition(): Promise<NativeLocationResponse> {
+  const permission = await Location.getForegroundPermissionsAsync();
+  const nextPermission =
+    permission.status === "granted"
+      ? permission
+      : await Location.requestForegroundPermissionsAsync();
+
+  if (nextPermission.status !== "granted") {
+    throw new Error("위치 권한을 허용해야 장소 인증을 할 수 있어요.");
+  }
+
+  const position = await Location.getCurrentPositionAsync({
+    accuracy: Location.Accuracy.Highest
+  });
+
+  return {
+    ok: true,
+    lat: position.coords.latitude,
+    lng: position.coords.longitude,
+    accuracyMeters: position.coords.accuracy,
+    timestamp: position.timestamp
+  };
+}
+
+async function takeNativeVisitPhoto(): Promise<NativePhotoResponse> {
+  const permission = await ImagePicker.getCameraPermissionsAsync();
+  const nextPermission =
+    permission.status === "granted"
+      ? permission
+      : await ImagePicker.requestCameraPermissionsAsync();
+
+  if (nextPermission.status !== "granted") {
+    throw new Error("카메라 권한을 허용해야 사진 인증을 할 수 있어요.");
+  }
+
+  const result = await ImagePicker.launchCameraAsync({
+    allowsEditing: false,
+    quality: 0.72,
+    exif: false
+  });
+
+  if (result.canceled) {
+    throw new Error("사진 인증을 취소했어요.");
+  }
+
+  const asset = result.assets[0];
+
+  return {
+    ok: true,
+    uri: asset?.uri ?? null,
+    width: asset?.width ?? null,
+    height: asset?.height ?? null
+  };
+}
+
 export async function handleNativeFetchMessage(
   event: WebViewMessageEvent,
   webViewRef: WebViewRef
@@ -229,6 +457,41 @@ export async function handleNativeFetchMessage(
   try {
     message = JSON.parse(event.nativeEvent.data);
   } catch {
+    return;
+  }
+
+  if (isNativeLocationRequest(message)) {
+    try {
+      postNativeLocationResponse(
+        webViewRef,
+        message.id,
+        await getNativeCurrentPosition()
+      );
+    } catch (error) {
+      postNativeLocationResponse(webViewRef, message.id, {
+        ok: false,
+        error:
+          error instanceof Error ? error.message : "Native location failed"
+      });
+    }
+
+    return;
+  }
+
+  if (isNativePhotoRequest(message)) {
+    try {
+      postNativePhotoResponse(
+        webViewRef,
+        message.id,
+        await takeNativeVisitPhoto()
+      );
+    } catch (error) {
+      postNativePhotoResponse(webViewRef, message.id, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Native photo failed"
+      });
+    }
+
     return;
   }
 

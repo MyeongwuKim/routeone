@@ -9,6 +9,28 @@ function toDateValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function getTodayDateValue() {
+  const now = new Date();
+  return toDateValue(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+}
+
+function toMinutes(timeValue: string) {
+  const [hourText, minuteText] = timeValue.split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return -1;
+  }
+
+  return hour * 60 + minute;
+}
+
+function getCurrentMinutes() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
 function parseDateValue(value: string) {
   const [yearText, monthText, dayText] = value.split("-");
   const year = Number(yearText);
@@ -68,6 +90,11 @@ function PlaceCartScheduleStep() {
 
   const customTripDaysValue = Number(customTripDaysInput);
   const canSaveCustomTripDays = Number.isFinite(customTripDaysValue) && customTripDaysValue >= 1;
+  const isTodayStartTrip = travelStartDate === getTodayDateValue();
+  const isOneDayTrip = tripDays === 1;
+  const startMinutes = toMinutes(dailyStartTime);
+  const isPastTodayStartTime =
+    isTodayStartTrip && startMinutes >= 0 && startMinutes < getCurrentMinutes();
 
   return (
     <>
@@ -115,6 +142,15 @@ function PlaceCartScheduleStep() {
             <p className="mt-2 text-xs text-slate-500">
               일정 범위: {formatDateLabel(travelStartDate)} ~ {formatDateLabel(endDate)}
             </p>
+          ) : null}
+          {isTodayStartTrip ? (
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+              {isPastTodayStartTime
+                ? "선택한 출발시간이 이미 지난 시간이에요. 오늘 일정이라면 출발시간을 한 번 더 확인해주세요."
+                : isOneDayTrip
+                  ? "오늘 시작해서 오늘 끝나는 당일 일정이에요. 다음 단계로 가기 전에 한 번 더 확인해주세요."
+                  : `오늘 바로 시작하는 ${tripDays}일 일정이에요. 다음 단계로 가기 전에 한 번 더 확인해주세요.`}
+            </div>
           ) : null}
         </div>
 

@@ -4,6 +4,9 @@ query LikedSharedRoutes {
     stops {
       id
       place {
+        title
+        categoryLabel
+        categoryName
         regionCode
         regionLabelKey
       }

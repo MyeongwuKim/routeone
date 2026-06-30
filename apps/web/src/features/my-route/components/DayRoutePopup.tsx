@@ -49,12 +49,20 @@ import {
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
-import type { MyRoutesQuery, SharedRoutesQuery } from "@/generated/graphql";
+import type {
+  MyRoutesQuery,
+  RouteStopVisitVerificationInput,
+  SharedRoutesQuery,
+} from "@/generated/graphql";
 import type { MapSheetPlace } from "@/types/place";
 import {
+  addDaysToDateKey,
+  getDateKeyDiffInDays,
   getDayDateLabel,
   getDaySummary,
+  getRouteDateKey,
   getRouteTitle,
+  getTodayDateKey,
   getSortedRouteDays,
   isVisitedStop,
 } from "../routeDisplay";
@@ -94,6 +102,15 @@ type StayMinutesEditTarget = {
   stop: MyRouteStop;
 };
 
+type VisitCompletionTarget = {
+  routeDay: MyRouteDay;
+  stop: MyRouteStop;
+};
+
+type EarlyRouteCompletionTarget = VisitCompletionTarget & {
+  startedAt: string;
+};
+
 type RouteLatLng = {
   lat: number;
   lng: number;
@@ -116,6 +133,46 @@ type TravelSegmentRequest = {
   from: RouteLatLng;
   to: RouteLatLng;
 };
+
+type RouteOneNativePosition = {
+  lat: number;
+  lng: number;
+  accuracyMeters: number | null;
+  timestamp: number;
+};
+
+type RouteOneNativePhoto = {
+  uri: string | null;
+  width: number | null;
+  height: number | null;
+};
+
+type RouteOneNativeBridge = {
+  getCurrentPosition?: () => Promise<RouteOneNativePosition>;
+  takeVisitPhoto?: () => Promise<RouteOneNativePhoto>;
+};
+
+type RouteStopSchedule = {
+  startMinutes: number;
+  endMinutes: number;
+};
+
+const DEFAULT_ROUTE_DAY_START_MINUTES = 9 * 60;
+
+function formatClock(totalMinutes: number) {
+  const normalizedMinutes = Math.max(0, Math.round(totalMinutes));
+  const dayOffset = Math.floor(normalizedMinutes / (24 * 60));
+  const minutesInDay = normalizedMinutes % (24 * 60);
+  const hour = Math.floor(minutesInDay / 60);
+  const minute = minutesInDay % 60;
+  const clockText = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+
+  if (dayOffset === 0) {
+    return clockText;
+  }
+
+  return dayOffset === 1 ? `다음날 ${clockText}` : `+${dayOffset}일 ${clockText}`;
+}
 
 function formatStayMinutes(value: number | null) {
   if (!value || value <= 0) {
@@ -141,6 +198,43 @@ function formatTravelMinutes(value: number) {
   const minute = value % 60;
 
   return minute > 0 ? `${hour}시간 ${minute}분` : `${hour}시간`;
+}
+
+function getRouteStopVerificationLabel(stop: MyRouteStop) {
+  if (stop.verificationStatus === "GPS_PHOTO") {
+    return "사진 인증";
+  }
+
+  if (stop.verificationStatus === "GPS") {
+    return "위치 인증";
+  }
+
+  return null;
+}
+
+function getRouteOneNativeBridge() {
+  return (window as Window & { RouteOneNative?: RouteOneNativeBridge })
+    .RouteOneNative;
+}
+
+async function requestCurrentPosition() {
+  const nativeBridge = getRouteOneNativeBridge();
+
+  if (!nativeBridge?.getCurrentPosition) {
+    throw new Error("앱에서만 위치 인증을 사용할 수 있어요.");
+  }
+
+  return nativeBridge.getCurrentPosition();
+}
+
+async function requestVisitPhoto() {
+  const nativeBridge = getRouteOneNativeBridge();
+
+  if (!nativeBridge?.takeVisitPhoto) {
+    throw new Error("앱에서만 사진 인증을 사용할 수 있어요.");
+  }
+
+  return nativeBridge.takeVisitPhoto();
 }
 
 function hasValidCoordinate(
@@ -236,6 +330,50 @@ function getStoredTravelSegment(stop: MyRouteStop | null | undefined) {
     : null;
 }
 
+function getStopStayMinutes(stop: MyRouteStop) {
+  return stop.stayMinutes ?? 60;
+}
+
+function getStopTravelMinutes(
+  stop: MyRouteStop,
+  index: number,
+  startLocation: MyRoute["startLocation"]
+) {
+  if (index === 0 && !startLocation) {
+    return 0;
+  }
+
+  return Math.max(0, stop.travelMinutesFromPrevious ?? 0);
+}
+
+function buildRouteStopSchedules(
+  stops: MyRouteStop[],
+  startLocation: MyRoute["startLocation"]
+) {
+  let currentMinutes = DEFAULT_ROUTE_DAY_START_MINUTES;
+
+  return stops.map((stop, index): RouteStopSchedule => {
+    currentMinutes += getStopTravelMinutes(stop, index, startLocation);
+
+    const startMinutes = currentMinutes;
+    const endMinutes = startMinutes + getStopStayMinutes(stop);
+    currentMinutes = endMinutes;
+
+    return {
+      startMinutes,
+      endMinutes,
+    };
+  });
+}
+
+function formatRouteStopSchedule(schedule: RouteStopSchedule) {
+  return `${formatClock(schedule.startMinutes)}-${formatClock(schedule.endMinutes)}`;
+}
+
+function formatScheduleDuration(totalMinutes: number) {
+  return formatTravelMinutes(Math.max(0, totalMinutes));
+}
+
 function clampStayMinutes(value: number) {
   return Math.max(10, Math.min(480, Math.round(value / 10) * 10));
 }
@@ -312,6 +450,7 @@ function RouteStopNode({
   isStaySaving,
   isReadOnly,
   travelSegmentToNext,
+  scheduleLabel,
   onStartDrag,
   onRequestStayMinutesEdit,
   onToggleVisited,
@@ -326,6 +465,7 @@ function RouteStopNode({
   isStaySaving: boolean;
   isReadOnly: boolean;
   travelSegmentToNext: TravelSegmentState | null;
+  scheduleLabel: string | null;
   onStartDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onRequestStayMinutesEdit: (stop: MyRouteStop) => void;
   onToggleVisited: (stop: MyRouteStop) => void;
@@ -334,6 +474,9 @@ function RouteStopNode({
   const isVisited = isVisitedStop(stop);
   const stayMinutes = stop.stayMinutes ?? 60;
   const statusLabel = isVisited ? "완료됨" : "방문 전";
+  const verificationLabel = isVisited
+    ? getRouteStopVerificationLabel(stop)
+    : null;
   const stayTimeClass =
     "inline-flex items-center justify-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 ring-1 ring-brand-100 disabled:opacity-45 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25";
 
@@ -430,11 +573,23 @@ function RouteStopNode({
                   )}
                   {statusLabel}
                 </span>
+                {verificationLabel ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-100 dark:ring-emerald-400/25">
+                    <MdMyLocation className="text-sm" />
+                    {verificationLabel}
+                  </span>
+                ) : null}
                 <span className="min-w-0 truncate text-xs font-semibold text-slate-500 dark:text-slate-300">
                   {stop.place.categoryLabel ?? stop.place.categoryName ?? "장소"}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                {scheduleLabel ? (
+                  <span className={stayTimeClass}>
+                    <MdAccessTime className="text-sm" />
+                    <span className="whitespace-nowrap">{scheduleLabel}</span>
+                  </span>
+                ) : null}
                 {isReadOnly ? (
                   <span className={stayTimeClass}>
                     <MdAccessTime className="text-sm" />
@@ -639,6 +794,214 @@ function StayMinutesPopup({
   );
 }
 
+function VisitCompletionPopup({
+  target,
+  isSaving,
+  onClose,
+  onCompleteWithLocation,
+  onCompleteWithPhoto,
+  onCompleteManually,
+}: {
+  target: VisitCompletionTarget;
+  isSaving: boolean;
+  onClose: () => void;
+  onCompleteWithLocation: (target: VisitCompletionTarget) => void;
+  onCompleteWithPhoto: (target: VisitCompletionTarget) => void;
+  onCompleteManually: (target: VisitCompletionTarget) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[3100] flex items-center justify-center bg-slate-950/35 px-4">
+      <button
+        type="button"
+        aria-label="완료 방식 선택 닫기"
+        className="absolute inset-0 cursor-default"
+        onClick={isSaving ? undefined : onClose}
+      />
+      <section className="route-checkout-modal-enter relative w-full max-w-[350px] rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-trip text-sm text-brand-700">VISIT CHECK</p>
+            <h3 className="mt-1 truncate text-lg font-bold text-slate-900">
+              {target.stop.place.title}
+            </h3>
+            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+              위치 인증을 하면 공유 루트에 인증 태그로 반영돼요.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="닫기"
+            disabled={isSaving}
+            onClick={onClose}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 disabled:opacity-40"
+          >
+            <MdClose />
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-2">
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() => onCompleteWithLocation(target)}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-black text-white disabled:opacity-60"
+          >
+            {isSaving ? (
+              <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              <MdMyLocation className="text-lg" />
+            )}
+            위치 인증 후 완료
+          </button>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() => onCompleteWithPhoto(target)}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-black text-brand-700 disabled:opacity-60"
+          >
+            {isSaving ? (
+              <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              <MdCheckCircle className="text-lg" />
+            )}
+            사진 인증 후 완료
+          </button>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() => onCompleteManually(target)}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
+          >
+            인증 없이 완료
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function formatDateKeyLabel(dateKey: string | null) {
+  if (!dateKey) {
+    return "미정";
+  }
+
+  const [year, month, day] = dateKey.split("-");
+
+  return `${year}.${Number(month)}.${Number(day)}`;
+}
+
+function formatRouteDurationDays(days: number) {
+  return days <= 1 ? "당일 여행" : `${days - 1}박 ${days}일`;
+}
+
+function EarlyRouteCompletionPopup({
+  target,
+  plannedDays,
+  actualDays,
+  expectedEndDateKey,
+  isSaving,
+  onChangeStartedAt,
+  onCompleteAsIs,
+  onCompleteWithStartDate,
+  onClose,
+}: {
+  target: EarlyRouteCompletionTarget;
+  plannedDays: number;
+  actualDays: number;
+  expectedEndDateKey: string | null;
+  isSaving: boolean;
+  onChangeStartedAt: (value: string) => void;
+  onCompleteAsIs: () => void;
+  onCompleteWithStartDate: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[3100] flex items-center justify-center bg-slate-950/35 px-4">
+      <button
+        type="button"
+        aria-label="예정 기간 확인 닫기"
+        className="absolute inset-0 cursor-default"
+        onClick={isSaving ? undefined : onClose}
+      />
+      <section className="route-checkout-modal-enter relative w-full max-w-[350px] rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-trip text-sm text-brand-700">CHECK OUT</p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">
+              예정보다 일찍 종료돼요
+            </h3>
+            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+              지금 완료하면 실제 여행 기간이 계획보다 짧게 저장돼요.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="닫기"
+            disabled={isSaving}
+            onClick={onClose}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 disabled:opacity-40"
+          >
+            <MdClose />
+          </button>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
+          계획: {formatRouteDurationDays(plannedDays)}
+          <br />
+          실제: {formatRouteDurationDays(actualDays)}
+          {expectedEndDateKey ? (
+            <>
+              <br />
+              예상 종료일: {formatDateKeyLabel(expectedEndDateKey)}
+            </>
+          ) : null}
+        </div>
+
+        <label className="mt-4 block text-xs font-black text-slate-500">
+          실제 시작일
+          <input
+            type="date"
+            value={target.startedAt}
+            disabled={isSaving}
+            onChange={(event) => onChangeStartedAt(event.target.value)}
+            className="mt-2 h-12 w-full rounded-2xl border border-brand-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-brand-500 disabled:opacity-60"
+          />
+        </label>
+
+        <div className="mt-5 grid gap-2">
+          <button
+            type="button"
+            disabled={isSaving || !target.startedAt}
+            onClick={onCompleteWithStartDate}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-black text-white disabled:opacity-60"
+          >
+            {isSaving ? (
+              <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : null}
+            시작일 수정 후 완료
+          </button>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onCompleteAsIs}
+            className="rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-700 disabled:opacity-60"
+          >
+            이대로 완료
+          </button>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onClose}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
+          >
+            취소
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function normalizeRouteDayDate(value: string | null) {
   return value ? value.slice(0, 10) : "";
 }
@@ -784,6 +1147,15 @@ function DayRouteAccordionItem({
 }) {
   const dayStops = orderedStops;
   const hasDayStops = dayStops.length > 0;
+  const stopSchedules = useMemo(
+    () => buildRouteStopSchedules(dayStops, startLocation),
+    [dayStops, startLocation]
+  );
+  const firstStopSchedule = stopSchedules[0] ?? null;
+  const lastStopSchedule = stopSchedules.at(-1) ?? null;
+  const totalScheduleMinutes = lastStopSchedule
+    ? lastStopSchedule.endMinutes - DEFAULT_ROUTE_DAY_START_MINUTES
+    : 0;
   const dayStartTitle = getDayStartTitle(dayStops, startLocation);
   const dayStartDescription = getDayStartDescription(
     routeDay,
@@ -951,6 +1323,34 @@ function DayRouteAccordionItem({
                   오른쪽 핸들을 잡고 원하는 위치로 옮겨 주세요.
                 </div>
               ) : null}
+              {firstStopSchedule && lastStopSchedule ? (
+                <div className="mb-4 grid grid-cols-3 gap-2">
+                  <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400">
+                      예상 출발
+                    </p>
+                    <p className="mt-0.5 text-sm font-black text-slate-900">
+                      {formatClock(DEFAULT_ROUTE_DAY_START_MINUTES)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400">
+                      예상 종료
+                    </p>
+                    <p className="mt-0.5 text-sm font-black text-slate-900">
+                      {formatClock(lastStopSchedule.endMinutes)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400">
+                      총 소요
+                    </p>
+                    <p className="mt-0.5 text-sm font-black text-slate-900">
+                      {formatScheduleDuration(totalScheduleMinutes)}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
               {dayStops.map((stop, index) => (
                 <div
                   key={stop.id}
@@ -979,6 +1379,11 @@ function DayRouteAccordionItem({
                             dayStops[index + 1].place
                           )
                         : null)
+                    }
+                    scheduleLabel={
+                      stopSchedules[index]
+                        ? formatRouteStopSchedule(stopSchedules[index])
+                        : null
                     }
                     onStartDrag={(event) => onStartDrag(stop, index, event)}
                     onRequestStayMinutesEdit={onRequestStayMinutesEdit}
@@ -1042,6 +1447,12 @@ function DayRoutePopup({
   const [staySavingStopId, setStaySavingStopId] = useState<string | null>(null);
   const [stayMinutesEditTarget, setStayMinutesEditTarget] =
     useState<StayMinutesEditTarget | null>(null);
+  const [visitCompletionTarget, setVisitCompletionTarget] =
+    useState<VisitCompletionTarget | null>(null);
+  const [earlyRouteCompletionTarget, setEarlyRouteCompletionTarget] =
+    useState<EarlyRouteCompletionTarget | null>(null);
+  const [isUpdatingRouteStartDate, setIsUpdatingRouteStartDate] =
+    useState(false);
   const [isSharingRoute, setIsSharingRoute] = useState(false);
   const [orderedStops, setOrderedStops] = useState(activeDay.stops);
   const [baseStopIds, setBaseStopIds] = useState(
@@ -1060,12 +1471,24 @@ function DayRoutePopup({
     const stops = routeDay.id === activeDay.id ? orderedStops : routeDay.stops;
     return total + stops.filter(isVisitedStop).length;
   }, 0);
+  const todayKey = getTodayDateKey();
   const isOrderDirty = !isSameStopOrder(orderedStops, baseStopIds);
   const isRouteCompleted = routeStopCount > 0 && routeCompletedStopCount === routeStopCount;
+  const routeActualStartDateKey =
+    getRouteDateKey(route.startedAt) ?? todayKey;
+  const earlyCompletionStartedAt =
+    earlyRouteCompletionTarget?.startedAt || routeActualStartDateKey || todayKey;
+  const earlyCompletionActualDays = Math.max(
+    1,
+    getDateKeyDiffInDays(todayKey, earlyCompletionStartedAt) + 1
+  );
+  const earlyCompletionExpectedEndDateKey = earlyCompletionStartedAt
+    ? addDaysToDateKey(earlyCompletionStartedAt, route.tripDays - 1)
+    : null;
   const isRouteShared = route.visibility === "PUBLIC" || Boolean(route.sharedAt);
   const shouldShowSharedStatusText = headerLabel === "MY ROUTE";
   const readOnlyActionDisabled =
-    readOnlyFooterAction?.disabled ?? (isSharingRoute || !isRouteCompleted);
+    readOnlyFooterAction?.disabled ?? isSharingRoute;
   const readOnlyActionLabel =
     readOnlyFooterAction?.label ??
     (isSharingRoute
@@ -1376,38 +1799,60 @@ function DayRoutePopup({
     }
   };
 
-  const handleToggleStopVisited = async (
+  const persistStopVisit = async (
     routeDay: MyRouteDay,
-    stop: MyRouteStop
+    stop: MyRouteStop,
+    nextVisited: boolean,
+    verification?: RouteStopVisitVerificationInput | null
   ) => {
-    if (isReadOnly || visitSavingStopId || isOrderEditing) {
-      return;
-    }
-
     const isActiveRouteDay = routeDay.id === activeDay.id;
     const sourceStops = isActiveRouteDay ? orderedStops : routeDay.stops;
-    const nextVisited = !isVisitedStop(stop);
     const wasDayCompleted =
       sourceStops.length > 0 &&
       sourceStops.filter(isVisitedStop).length === sourceStops.length;
     const previousStops = orderedStops;
     const visitedAt = new Date().toISOString();
+    const nextVerificationStatus = nextVisited
+      ? (verification?.status ?? "MANUAL")
+      : "NONE";
+    const isVerified =
+      nextVerificationStatus === "GPS" ||
+      nextVerificationStatus === "GPS_PHOTO";
     const optimisticStops: MyRouteStop[] = sourceStops.map((currentStop) =>
       currentStop.id === stop.id
         ? {
             ...currentStop,
             visitStatus: nextVisited ? "VISITED" : "PENDING",
             visitedAt: nextVisited ? visitedAt : null,
+            verificationStatus: nextVerificationStatus,
+            verifiedAt: isVerified ? visitedAt : null,
+            verificationPhotoUrl: isVerified
+              ? (verification?.photoUrl ?? null)
+              : null,
+            verificationLat: isVerified ? (verification?.lat ?? null) : null,
+            verificationLng: isVerified ? (verification?.lng ?? null) : null,
+            verificationAccuracyMeters: isVerified
+              ? (verification?.accuracyMeters ?? null)
+              : null,
+            checkedInAt: isVerified
+              ? (currentStop.checkedInAt ?? visitedAt)
+              : null,
+            checkedOutAt: null,
+            actualStayMinutes: null,
           }
         : currentStop
     );
+
     setVisitSavingStopId(stop.id);
+
     if (isActiveRouteDay) {
       setOrderedStops(optimisticStops);
     }
+
     await queryClient.cancelQueries({
       queryKey: MY_ROUTES_QUERY_KEY,
     });
+
     const previousRoutes =
       queryClient.getQueryData<MyRoutesQuery>(MY_ROUTES_QUERY_KEY);
     queryClient.setQueryData<MyRoutesQuery>(MY_ROUTES_QUERY_KEY, (currentData) =>
@@ -1417,11 +1862,20 @@ function DayRoutePopup({
         stopId: stop.id,
         visited: nextVisited,
         visitedAt,
+        verificationStatus: nextVerificationStatus,
+        verificationLat: verification?.lat ?? null,
+        verificationLng: verification?.lng ?? null,
+        verificationAccuracyMeters: verification?.accuracyMeters ?? null,
+        verificationPhotoUrl: verification?.photoUrl ?? null,
       })
     );
 
     try {
-      const result = await routeApi.markRouteStopVisited(stop.id, nextVisited);
+      const result = await routeApi.markRouteStopVisited(
+        stop.id,
+        nextVisited,
+        nextVisited ? verification : null
+      );
       const nextDay = result.markRouteStopVisited.days.find(
         (candidateDay) => candidateDay.id === routeDay.id
       );
@@ -1438,7 +1892,13 @@ function DayRoutePopup({
       if (!wasDayCompleted && nextIsDayCompleted) {
         showToast(`DAY ${routeDay.dayIndex} 클리어`);
       } else {
-        showToast(nextVisited ? "장소를 완료 처리했어요." : "완료를 취소했어요.");
+        showToast(
+          nextVisited
+            ? isVerified
+              ? "위치 인증 완료 처리했어요."
+              : "장소를 완료 처리했어요."
+            : "완료를 취소했어요."
+        );
       }
 
       queryClient.setQueryData<MyRoutesQuery>(
@@ -1446,6 +1906,8 @@ function DayRoutePopup({
         (currentData) =>
           upsertMyRouteCache(currentData, result.markRouteStopVisited)
       );
+
+      return true;
     } catch (error) {
       if (previousRoutes) {
         queryClient.setQueryData<MyRoutesQuery>(
@@ -1460,9 +1922,186 @@ function DayRoutePopup({
         error instanceof Error ? error.message : "완료 상태를 바꾸지 못했어요.",
         2600
       );
+
+      return false;
     } finally {
       setVisitSavingStopId(null);
     }
+  };
+
+  const handleCompleteStopVisitManually = async (
+    target: VisitCompletionTarget
+  ) => {
+    if (visitSavingStopId) {
+      return;
+    }
+
+    const isSaved = await persistStopVisit(target.routeDay, target.stop, true, {
+      status: "MANUAL",
+    });
+
+    if (isSaved) {
+      setVisitCompletionTarget(null);
+    }
+  };
+
+  const handleCompleteStopVisitWithLocation = async (
+    target: VisitCompletionTarget
+  ) => {
+    if (visitSavingStopId) {
+      return;
+    }
+
+    setVisitSavingStopId(target.stop.id);
+    let position: RouteOneNativePosition | null = null;
+
+    try {
+      position = await requestCurrentPosition();
+    } catch (error) {
+      void error;
+    } finally {
+      setVisitSavingStopId(null);
+    }
+
+    const isSaved = await persistStopVisit(target.routeDay, target.stop, true, {
+      status: "GPS",
+      lat: position?.lat ?? null,
+      lng: position?.lng ?? null,
+      accuracyMeters: position?.accuracyMeters ?? null,
+    });
+
+    if (isSaved) {
+      setVisitCompletionTarget(null);
+    }
+  };
+
+  const handleCompleteStopVisitWithPhoto = async (
+    target: VisitCompletionTarget
+  ) => {
+    if (visitSavingStopId) {
+      return;
+    }
+
+    setVisitSavingStopId(target.stop.id);
+    let position: RouteOneNativePosition | null = null;
+    let photo: RouteOneNativePhoto | null = null;
+
+    try {
+      [position, photo] = await Promise.all([
+        requestCurrentPosition().catch((error) => {
+          void error;
+          return null;
+        }),
+        requestVisitPhoto().catch((error) => {
+          void error;
+          return null;
+        }),
+      ]);
+    } finally {
+      setVisitSavingStopId(null);
+    }
+
+    const isSaved = await persistStopVisit(target.routeDay, target.stop, true, {
+      status: "GPS_PHOTO",
+      lat: position?.lat ?? null,
+      lng: position?.lng ?? null,
+      accuracyMeters: position?.accuracyMeters ?? null,
+      photoUrl: photo?.uri ?? "routeone://dev-pass/photo",
+    });
+
+    if (isSaved) {
+      setVisitCompletionTarget(null);
+    }
+  };
+
+  const shouldConfirmEarlyRouteCompletion = (stop: MyRouteStop) => {
+    const isLastRouteStopToComplete =
+      routeStopCount > 0 &&
+      !isVisitedStop(stop) &&
+      routeCompletedStopCount + 1 === routeStopCount;
+
+    return (
+      route.tripDays > 1 &&
+      isLastRouteStopToComplete &&
+      earlyCompletionActualDays < route.tripDays
+    );
+  };
+
+  const openVisitCompletionTarget = (target: VisitCompletionTarget) => {
+    setEarlyRouteCompletionTarget(null);
+    setVisitCompletionTarget(target);
+  };
+
+  const handleCompleteEarlyRouteAsIs = () => {
+    if (!earlyRouteCompletionTarget) {
+      return;
+    }
+
+    openVisitCompletionTarget(earlyRouteCompletionTarget);
+  };
+
+  const handleCompleteEarlyRouteWithStartDate = async () => {
+    if (
+      !earlyRouteCompletionTarget ||
+      !earlyRouteCompletionTarget.startedAt ||
+      isUpdatingRouteStartDate
+    ) {
+      return;
+    }
+
+    setIsUpdatingRouteStartDate(true);
+
+    try {
+      const result = await routeApi.startRoute({
+        routeId: route.id,
+        startedAt: earlyRouteCompletionTarget.startedAt,
+      });
+
+      queryClient.setQueryData<MyRoutesQuery>(
+        MY_ROUTES_QUERY_KEY,
+        (currentData) => upsertMyRouteCache(currentData, result.startRoute)
+      );
+      showToast("실제 시작일을 수정했어요.");
+      openVisitCompletionTarget(earlyRouteCompletionTarget);
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "시작일을 수정하지 못했어요.",
+        2600
+      );
+    } finally {
+      setIsUpdatingRouteStartDate(false);
+    }
+  };
+
+  const handleToggleStopVisited = (
+    routeDay: MyRouteDay,
+    stop: MyRouteStop
+  ) => {
+    if (isReadOnly || visitSavingStopId || isOrderEditing) {
+      return;
+    }
+
+    if (!isVisitedStop(stop)) {
+      const nextVisitCompletionTarget = {
+        routeDay,
+        stop,
+      };
+
+      if (shouldConfirmEarlyRouteCompletion(stop)) {
+        setEarlyRouteCompletionTarget({
+          ...nextVisitCompletionTarget,
+          startedAt: routeActualStartDateKey,
+        });
+        return;
+      }
+
+      setVisitCompletionTarget(nextVisitCompletionTarget);
+      return;
+    }
+
+    void persistStopVisit(routeDay, stop, false);
   };
 
   const handleChangeStayMinutes = async (
@@ -2084,6 +2723,54 @@ function DayRoutePopup({
               target.stop,
               stayMinutes
             );
+          }}
+        />
+      ) : null}
+      {earlyRouteCompletionTarget ? (
+        <EarlyRouteCompletionPopup
+          target={earlyRouteCompletionTarget}
+          plannedDays={route.tripDays}
+          actualDays={earlyCompletionActualDays}
+          expectedEndDateKey={earlyCompletionExpectedEndDateKey}
+          isSaving={isUpdatingRouteStartDate}
+          onChangeStartedAt={(startedAt) =>
+            setEarlyRouteCompletionTarget((currentTarget) =>
+              currentTarget
+                ? {
+                    ...currentTarget,
+                    startedAt,
+                  }
+                : currentTarget
+            )
+          }
+          onCompleteAsIs={handleCompleteEarlyRouteAsIs}
+          onCompleteWithStartDate={() => {
+            void handleCompleteEarlyRouteWithStartDate();
+          }}
+          onClose={() => {
+            if (!isUpdatingRouteStartDate) {
+              setEarlyRouteCompletionTarget(null);
+            }
+          }}
+        />
+      ) : null}
+      {visitCompletionTarget ? (
+        <VisitCompletionPopup
+          target={visitCompletionTarget}
+          isSaving={visitSavingStopId === visitCompletionTarget.stop.id}
+          onClose={() => {
+            if (!visitSavingStopId) {
+              setVisitCompletionTarget(null);
+            }
+          }}
+          onCompleteWithLocation={(target) => {
+            void handleCompleteStopVisitWithLocation(target);
+          }}
+          onCompleteWithPhoto={(target) => {
+            void handleCompleteStopVisitWithPhoto(target);
+          }}
+          onCompleteManually={(target) => {
+            void handleCompleteStopVisitManually(target);
           }}
         />
       ) : null}

@@ -27,6 +27,15 @@ fragment RouteStopFields on RouteStop {
   memo
   visitStatus
   visitedAt
+  verificationStatus
+  verifiedAt
+  verificationPhotoUrl
+  verificationLat
+  verificationLng
+  verificationAccuracyMeters
+  checkedInAt
+  checkedOutAt
+  actualStayMinutes
 }
 
 fragment RouteSummaryFields on Route {
@@ -38,6 +47,8 @@ fragment RouteSummaryFields on Route {
   tripDays
   travelStartDate
   travelEndDate
+  dailyStartMinutes
+  scheduleEndMinutes
   status
   visibility
   totalStopCount

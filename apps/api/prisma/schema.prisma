@@ -56,6 +56,8 @@ model Route {
   tripDays        Int       @default(1)
   travelStartDate DateTime?
   travelEndDate   DateTime?
+  dailyStartMinutes Int?
+  scheduleEndMinutes Int?
 
   status     RouteStatus     @default(DRAFT)
   visibility RouteVisibility @default(PRIVATE)
@@ -118,6 +120,16 @@ model RouteStop {
 
   visitStatus VisitStatus @default(PENDING)
   visitedAt   DateTime?
+
+  verificationStatus         RouteStopVerificationStatus @default(NONE)
+  verifiedAt                 DateTime?
+  verificationPhotoUrl       String?
+  verificationLat            Float?
+  verificationLng            Float?
+  verificationAccuracyMeters Float?
+  checkedInAt                DateTime?
+  checkedOutAt               DateTime?
+  actualStayMinutes          Int?
 
   route Route     @relation(fields: [routeId], references: [id])
   day   RouteDay? @relation(fields: [dayId], references: [id])
@@ -198,6 +210,13 @@ enum VisitStatus {
   PENDING
   VISITED
   SKIPPED
+}
+
+enum RouteStopVerificationStatus {
+  NONE
+  MANUAL
+  GPS
+  GPS_PHOTO
 }
 
 enum PlaceProvider {

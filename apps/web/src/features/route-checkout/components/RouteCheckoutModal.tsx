@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { IoArrowBack } from "react-icons/io5";
 import {
   RouteCheckoutProvider,
@@ -70,6 +71,171 @@ function getPreviousCheckoutStep(
   return currentIndex > 0 ? visibleSteps[currentIndex - 1] : null;
 }
 
+function toDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayDateValue() {
+  const now = new Date();
+  return toDateValue(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+}
+
+function isTodayStartSchedule(travelStartDate: string) {
+  return travelStartDate === getTodayDateValue();
+}
+
+function toMinutes(timeValue: string) {
+  const [hourText, minuteText] = timeValue.split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return -1;
+  }
+
+  return hour * 60 + minute;
+}
+
+function getCurrentTimeValue() {
+  const now = new Date();
+  const hour = String(now.getHours()).padStart(2, "0");
+  const minute = String(now.getMinutes()).padStart(2, "0");
+  return `${hour}:${minute}`;
+}
+
+function isPastTodayStartTime(travelStartDate: string, dailyStartTime: string) {
+  if (!isTodayStartSchedule(travelStartDate)) {
+    return false;
+  }
+
+  const startMinutes = toMinutes(dailyStartTime);
+  const currentMinutes = toMinutes(getCurrentTimeValue());
+  return startMinutes >= 0 && currentMinutes >= 0 && startMinutes < currentMinutes;
+}
+
+function getTodayStartScheduleKey(
+  travelStartDate: string,
+  tripDays: number,
+  dailyStartTime: string
+) {
+  return `${travelStartDate}:${tripDays}:${dailyStartTime}`;
+}
+
+type TodayStartScheduleConfirmDialogProps = {
+  tripDays: number;
+  hasPastStartTime: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  onUseCurrentTime: () => void;
+  onChangeToTwoDays: () => void;
+};
+
+function TodayStartScheduleConfirmDialog({
+  tripDays,
+  hasPastStartTime,
+  onClose,
+  onConfirm,
+  onUseCurrentTime,
+  onChangeToTwoDays,
+}: TodayStartScheduleConfirmDialogProps) {
+  const isOneDayTrip = tripDays === 1;
+
+  return (
+    <div className="fixed inset-0 z-[2700] flex items-center justify-center bg-slate-950/60 px-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="today-start-schedule-title"
+        className="w-full max-w-[360px] rounded-[1.5rem] border border-brand-200 bg-white p-5 shadow-2xl dark:border-brand-400/30 dark:bg-[#102a27]"
+      >
+        <p className="font-trip text-sm text-brand-700 dark:text-brand-200">
+          SCHEDULE CHECK
+        </p>
+        <h2
+          id="today-start-schedule-title"
+          className="mt-2 text-xl font-bold text-slate-900 dark:text-white"
+        >
+          {hasPastStartTime
+            ? "출발시간이 이미 지난 시간이에요"
+            : isOneDayTrip
+              ? "오늘 당일 일정이 맞나요?"
+              : "오늘 바로 시작하는 일정인가요?"}
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+          {hasPastStartTime
+            ? "선택한 출발시간이 현재 시간보다 이전이에요. 오늘 일정으로 진행하려면 출발시간을 한 번 더 확인해주세요."
+            : isOneDayTrip
+              ? "오늘 시작해서 오늘 끝나는 1일 일정으로 저장돼요. 실제로 당일 여행이 맞는지 한 번 더 확인해주세요."
+              : `${tripDays}일 일정이지만 시작일이 오늘이에요. 실제로 오늘부터 시작하는 여행이 맞는지 한 번 더 확인해주세요.`}
+        </p>
+
+        <div className="mt-5 flex flex-col gap-2">
+          {hasPastStartTime ? (
+            <>
+              <button
+                type="button"
+                onClick={onUseCurrentTime}
+                className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
+              >
+                현재 시간으로 변경
+              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={onConfirm}
+                  className="rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700 dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-100"
+                >
+                  그대로 계속
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-200"
+                >
+                  다시 선택
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onConfirm}
+                className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
+              >
+                오늘 시작으로 계속
+              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className={`rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 ${
+                    isOneDayTrip ? "" : "col-span-2"
+                  } dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-200`}
+                >
+                  다시 선택
+                </button>
+                {isOneDayTrip ? (
+                  <button
+                    type="button"
+                    onClick={onChangeToTwoDays}
+                    className="rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700 dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-100"
+                  >
+                    2일로 변경
+                  </button>
+                ) : null}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RouteCheckoutModalContent({
   savedPlaces,
   insertCandidatePlaces,
@@ -87,18 +253,45 @@ function RouteCheckoutModalContent({
     setStep,
     tempo,
     startLocation,
+    travelStartDate,
+    tripDays,
+    setTripDays,
+    dailyStartTime,
+    setDailyStartTime,
     isScheduleValid,
     scheduleValidationMessage,
   } = useRouteCheckout();
   const showToast = useUiToastStore((state) => state.showToast);
+  const [isTodayStartConfirmOpen, setIsTodayStartConfirmOpen] = useState(false);
+  const [confirmedTodayStartScheduleKey, setConfirmedTodayStartScheduleKey] =
+    useState<string | null>(null);
   const visibleSteps = getVisibleCheckoutSteps(initialStep);
   const stepIndex = Math.max(visibleSteps.indexOf(step), 0) + 1;
   const totalStepCount = visibleSteps.length;
+  const todayStartScheduleKey = getTodayStartScheduleKey(
+    travelStartDate,
+    tripDays,
+    dailyStartTime
+  );
+  const hasPastTodayStartTime = isPastTodayStartTime(
+    travelStartDate,
+    dailyStartTime
+  );
 
   const handleBack = () => {
     const previousStep = getPreviousCheckoutStep(step, visibleSteps);
     if (previousStep) {
       setStep(previousStep);
+      return;
+    }
+
+    onClose();
+  };
+
+  const moveToNextStep = () => {
+    const nextStep = getNextCheckoutStep(step, visibleSteps);
+    if (nextStep) {
+      setStep(nextStep);
       return;
     }
 
@@ -111,15 +304,37 @@ function RouteCheckoutModalContent({
         showToast(scheduleValidationMessage);
         return;
       }
+
+      if (
+        isTodayStartSchedule(travelStartDate) &&
+        confirmedTodayStartScheduleKey !== todayStartScheduleKey
+      ) {
+        setIsTodayStartConfirmOpen(true);
+        return;
+      }
     }
 
-    const nextStep = getNextCheckoutStep(step, visibleSteps);
-    if (nextStep) {
-      setStep(nextStep);
-      return;
-    }
+    moveToNextStep();
+  };
 
-    onClose();
+  const handleConfirmTodayStartSchedule = () => {
+    setConfirmedTodayStartScheduleKey(todayStartScheduleKey);
+    setIsTodayStartConfirmOpen(false);
+    moveToNextStep();
+  };
+
+  const handleChangeToTwoDays = () => {
+    setTripDays(2);
+    setConfirmedTodayStartScheduleKey(
+      getTodayStartScheduleKey(travelStartDate, 2, dailyStartTime)
+    );
+    setIsTodayStartConfirmOpen(false);
+  };
+
+  const handleUseCurrentTime = () => {
+    setDailyStartTime(getCurrentTimeValue());
+    setConfirmedTodayStartScheduleKey(null);
+    setIsTodayStartConfirmOpen(false);
   };
 
   const nextDisabled =
@@ -212,6 +427,17 @@ function RouteCheckoutModalContent({
           </>
         )}
       </div>
+
+      {isTodayStartConfirmOpen ? (
+        <TodayStartScheduleConfirmDialog
+          tripDays={tripDays}
+          hasPastStartTime={hasPastTodayStartTime}
+          onClose={() => setIsTodayStartConfirmOpen(false)}
+          onConfirm={handleConfirmTodayStartSchedule}
+          onUseCurrentTime={handleUseCurrentTime}
+          onChangeToTwoDays={handleChangeToTwoDays}
+        />
+      ) : null}
     </section>
   );
 }

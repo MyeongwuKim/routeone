@@ -1,4 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { IoClose } from "react-icons/io5";
 import { MdAdd } from "react-icons/md";
@@ -80,6 +88,89 @@ type RouteSegmentSelection = {
   segmentId: string;
 };
 
+type RouteMapViewState = {
+  selectedDayOptionId: string | null;
+  selectedSegment: RouteSegmentSelection | null;
+  routeViewMode: RouteMapViewMode;
+};
+
+type RouteMapViewAction =
+  | { type: "sync-day-option"; dayOptionId: string | null }
+  | { type: "select-day-option"; dayOptionId: string }
+  | { type: "select-segment"; segment: RouteSegmentSelection }
+  | { type: "clear-selected-segment" }
+  | { type: "set-route-view-mode"; routeViewMode: RouteMapViewMode }
+  | { type: "reset-route-view" }
+  | { type: "ensure-all-route-view" };
+
+type RouteMapViewInitializer = {
+  initialDayOptionId?: string;
+  dayOptions: RouteMapDayOption[];
+};
+
+function createInitialRouteMapViewState({
+  initialDayOptionId,
+  dayOptions,
+}: RouteMapViewInitializer): RouteMapViewState {
+  return {
+    selectedDayOptionId: initialDayOptionId ?? dayOptions[0]?.id ?? null,
+    selectedSegment: null,
+    routeViewMode: "all",
+  };
+}
+
+function routeMapViewReducer(
+  state: RouteMapViewState,
+  action: RouteMapViewAction
+): RouteMapViewState {
+  switch (action.type) {
+    case "sync-day-option":
+      return {
+        ...state,
+        selectedDayOptionId: action.dayOptionId,
+        selectedSegment: null,
+        routeViewMode: "all",
+      };
+    case "select-day-option":
+      return {
+        selectedDayOptionId: action.dayOptionId,
+        selectedSegment: null,
+        routeViewMode: "all",
+      };
+    case "select-segment":
+      return {
+        ...state,
+        selectedSegment: action.segment,
+      };
+    case "clear-selected-segment":
+      return {
+        ...state,
+        selectedSegment: null,
+      };
+    case "set-route-view-mode":
+      return {
+        ...state,
+        selectedSegment: null,
+        routeViewMode: action.routeViewMode,
+      };
+    case "reset-route-view":
+      return {
+        ...state,
+        selectedSegment: null,
+        routeViewMode: "all",
+      };
+    case "ensure-all-route-view":
+      return state.routeViewMode === "all"
+        ? state
+        : {
+            ...state,
+            routeViewMode: "all",
+          };
+    default:
+      return state;
+  }
+}
+
 const ROUTE_VIEW_OPTIONS = [
   { value: "all", label: "전체" },
   { value: "comparison", label: "원래 순서" },
@@ -99,7 +190,6 @@ const ROUTE_SEGMENT_COLORS = [
 
 const ROUTE_ORIGINAL_COLOR = "#6366f1";
 const ROUTE_CURRENT_COLOR = "#14b8a6";
-const ROUTE_SEGMENT_FOCUS_ZOOM = 13;
 const EMPTY_COMPLETED_ITEM_IDS: string[] = [];
 const EMPTY_DAY_OPTIONS: RouteMapDayOption[] = [];
 const DEFAULT_START_PREVIEW_OFFSET = {
@@ -621,67 +711,6 @@ function getRouteSegmentKey(
   return `${variant}:${segmentId}`;
 }
 
-function getRouteSegmentFocusPoint(path: RoutePathPoint[]) {
-  if (path.length === 0) {
-    return null;
-  }
-
-  if (path.length === 1) {
-    return path[0];
-  }
-
-  if (path.length === 2) {
-    const [start, end] = path;
-
-    return {
-      lat: (start.lat + end.lat) / 2,
-      lng: (start.lng + end.lng) / 2,
-    };
-  }
-
-  return path[Math.floor(path.length / 2)];
-}
-
-function moveMapToRouteSegment({
-  routeMap,
-  naverMaps,
-  segment,
-}: {
-  routeMap: any;
-  naverMaps: any;
-  segment: RouteMapSegment;
-}) {
-  const focusPoint = getRouteSegmentFocusPoint(segment.path);
-
-  if (!focusPoint) {
-    return;
-  }
-
-  const center = new naverMaps.LatLng(focusPoint.lat, focusPoint.lng);
-
-  try {
-    if (typeof routeMap.morph === "function") {
-      routeMap.morph(center, ROUTE_SEGMENT_FOCUS_ZOOM);
-      return;
-    }
-  } catch {
-    // 일부 환경에서 morph가 실패하면 아래 기본 이동 방식으로 보정해요.
-  }
-
-  if (typeof routeMap.setZoom === "function") {
-    routeMap.setZoom(ROUTE_SEGMENT_FOCUS_ZOOM);
-  }
-
-  if (typeof routeMap.panTo === "function") {
-    routeMap.panTo(center);
-    return;
-  }
-
-  if (typeof routeMap.setCenter === "function") {
-    routeMap.setCenter(center);
-  }
-}
-
 type RouteSegmentSelectCardProps = {
   segment: RouteMapSegment;
   segmentColor: string;
@@ -777,9 +806,13 @@ function PlaceCartRouteMapPopup({
   const [startPreviewModeByDayKey, setStartPreviewModeByDayKey] = useState<
     Record<string, StartPreviewMode>
   >({});
-  const [selectedDayOptionId, setSelectedDayOptionId] = useState<string | null>(
-    () => initialDayOptionId ?? dayOptions[0]?.id ?? null
+  const [routeMapViewState, dispatchRouteMapView] = useReducer(
+    routeMapViewReducer,
+    { initialDayOptionId, dayOptions },
+    createInitialRouteMapViewState
   );
+  const { selectedDayOptionId, selectedSegment, routeViewMode } =
+    routeMapViewState;
   const [isCheckoutScopeOpen, setIsCheckoutScopeOpen] = useState(false);
   const [selectedCheckoutDayIds, setSelectedCheckoutDayIds] = useState<
     string[]
@@ -954,8 +987,6 @@ function PlaceCartRouteMapPopup({
   const [comparisonRouteSegments, setComparisonRouteSegments] = useState(
     comparisonFallbackSegments
   );
-  const [selectedSegment, setSelectedSegment] =
-    useState<RouteSegmentSelection | null>(null);
   const hasComparisonRoute = Boolean(
     displayComparisonDay && comparisonRoutePoints.length > 1
   );
@@ -971,8 +1002,6 @@ function PlaceCartRouteMapPopup({
       ? "top-20"
       : "top-4";
   const fallbackPanelTopClass = hasDaySelector ? "top-28" : "top-24";
-  const [routeViewMode, setRouteViewMode] =
-    useState<RouteMapViewMode>("all");
   const shouldShowComparisonRoute =
     hasComparisonRoute && routeViewMode !== "current";
   const shouldShowCurrentRoute =
@@ -1084,27 +1113,17 @@ function PlaceCartRouteMapPopup({
       segment: RouteMapSegment,
       isAlreadySelected: boolean
     ) => {
-      const naverMaps = window.naver?.maps;
-      const routeMap = mapInstanceRef.current;
-
       if (isAlreadySelected) {
-        setSelectedSegment(null);
+        dispatchRouteMapView({ type: "clear-selected-segment" });
         return;
       }
 
-      setSelectedSegment({
-        variant,
-        segmentId: segment.id,
-      });
-
-      if (!naverMaps || !routeMap || segment.path.length === 0) {
-        return;
-      }
-
-      moveMapToRouteSegment({
-        routeMap,
-        naverMaps,
-        segment,
+      dispatchRouteMapView({
+        type: "select-segment",
+        segment: {
+          variant,
+          segmentId: segment.id,
+        },
       });
     },
     []
@@ -1120,7 +1139,7 @@ function PlaceCartRouteMapPopup({
         ...currentModes,
         [displayDayKey]: "changed",
       }));
-      setSelectedSegment(null);
+      dispatchRouteMapView({ type: "clear-selected-segment" });
     },
     [displayDayKey]
   );
@@ -1164,7 +1183,10 @@ function PlaceCartRouteMapPopup({
 
   useEffect(() => {
     if (dayOptions.length === 0) {
-      setSelectedDayOptionId(null);
+      dispatchRouteMapView({
+        type: "sync-day-option",
+        dayOptionId: null,
+      });
       return;
     }
 
@@ -1178,18 +1200,20 @@ function PlaceCartRouteMapPopup({
         : dayOptions[0].id;
 
     if (!hasCurrentDayOption) {
-      setSelectedDayOptionId(nextInitialDayOptionId);
+      dispatchRouteMapView({
+        type: "sync-day-option",
+        dayOptionId: nextInitialDayOptionId,
+      });
     }
   }, [dayOptions, initialDayOptionId, selectedDayOptionId]);
 
   useEffect(() => {
-    setSelectedSegment(null);
-    setRouteViewMode("all");
+    dispatchRouteMapView({ type: "reset-route-view" });
   }, [displayComparisonDay, displayDay]);
 
   useEffect(() => {
     if (!hasComparisonRoute && routeViewMode !== "all") {
-      setRouteViewMode("all");
+      dispatchRouteMapView({ type: "ensure-all-route-view" });
     }
   }, [hasComparisonRoute, routeViewMode]);
 
@@ -1459,6 +1483,31 @@ function PlaceCartRouteMapPopup({
             selectedSegment.segmentId
           ) === segmentKey;
         const hasSelectedSegment = Boolean(selectedSegment);
+        const strokeWeight = isSelectedSegment
+          ? 11
+          : isAllComparisonView && isComparisonLine
+            ? 7
+            : isAllComparisonView
+              ? 6
+              : 5;
+        const strokeOpacity = isSelectedSegment
+          ? 1
+          : hasSelectedSegment
+            ? 0.12
+          : isAllComparisonView && isComparisonLine
+            ? 0.7
+            : isAllComparisonView
+              ? 0.68
+              : 0.9;
+        const strokeStyle =
+          isAllComparisonView && isComparisonLine
+            ? "shortdash"
+            : "solid";
+        const lineZIndex = isSelectedSegment
+          ? 1000
+          : variant === "comparison"
+            ? 380 + index
+            : 430 + index;
 
         if (isSelectedSegment) {
           const highlightLine = new naverMaps.Polyline({
@@ -1475,42 +1524,30 @@ function PlaceCartRouteMapPopup({
           overlayRefs.current.push(highlightLine);
         }
 
+        const routeCasingLine = new naverMaps.Polyline({
+          map: routeMap,
+          path,
+          strokeColor: "#ffffff",
+          strokeWeight: strokeWeight + (isAllComparisonView ? 7 : 6),
+          strokeOpacity: hasSelectedSegment ? 0.4 : 0.86,
+          strokeStyle,
+          strokeLineCap: "round",
+          strokeLineJoin: "round",
+          zIndex: lineZIndex - 1,
+        });
         const routeLine = new naverMaps.Polyline({
           map: routeMap,
           path,
           strokeColor: segmentColor,
-          strokeWeight:
-            isSelectedSegment
-              ? 11
-              : isAllComparisonView && isComparisonLine
-              ? 7
-              : isAllComparisonView
-                ? 6
-                : 5,
-          strokeOpacity:
-            isSelectedSegment
-              ? 1
-              : hasSelectedSegment
-                ? 0.12
-              : isAllComparisonView && isComparisonLine
-              ? 0.7
-              : isAllComparisonView
-                ? 0.56
-                : 0.9,
-          strokeStyle:
-            isAllComparisonView && isComparisonLine
-              ? "shortdash"
-              : "solid",
+          strokeWeight,
+          strokeOpacity,
+          strokeStyle,
           strokeLineCap: "round",
           strokeLineJoin: "round",
-          zIndex: isSelectedSegment
-            ? 1000
-            : variant === "comparison"
-              ? 380 + index
-              : 430 + index,
+          zIndex: lineZIndex,
         });
 
-        overlayRefs.current.push(routeLine);
+        overlayRefs.current.push(routeCasingLine, routeLine);
       });
     };
 
@@ -1601,7 +1638,7 @@ function PlaceCartRouteMapPopup({
   }, []);
 
   return createPortal(
-    <div className="fixed inset-0 z-[2300] bg-white">
+    <div className="fixed inset-0 z-[2750] bg-white">
       <div className="flex h-full flex-col">
         <header className="flex items-center justify-between border-b border-brand-100 px-4 py-3">
           <div className="min-w-0">
@@ -1664,9 +1701,10 @@ function PlaceCartRouteMapPopup({
                       aria-pressed={isSelected}
                       aria-label={`${option.label} 경로 보기`}
                       onClick={() => {
-                        setSelectedDayOptionId(option.id);
-                        setSelectedSegment(null);
-                        setRouteViewMode("all");
+                        dispatchRouteMapView({
+                          type: "select-day-option",
+                          dayOptionId: option.id,
+                        });
                       }}
                       className={`inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-xs font-semibold shadow-sm transition ${
                         isSelected
@@ -1691,8 +1729,10 @@ function PlaceCartRouteMapPopup({
                 options={ROUTE_VIEW_OPTIONS}
                 value={routeViewMode}
                 onChange={(nextMode) => {
-                  setSelectedSegment(null);
-                  setRouteViewMode(nextMode);
+                  dispatchRouteMapView({
+                    type: "set-route-view-mode",
+                    routeViewMode: nextMode,
+                  });
                 }}
                 ariaLabel="경로 표시 방식"
                 fullWidth
@@ -1724,7 +1764,9 @@ function PlaceCartRouteMapPopup({
               </span>
               <button
                 type="button"
-                onClick={() => setSelectedSegment(null)}
+                onClick={() =>
+                  dispatchRouteMapView({ type: "clear-selected-segment" })
+                }
                 className="shrink-0 rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-black text-slate-600"
               >
                 전체 보기
@@ -1797,7 +1839,9 @@ function PlaceCartRouteMapPopup({
                           ...currentModes,
                           [displayDayKey]: mode,
                         }));
-                        setSelectedSegment(null);
+                        dispatchRouteMapView({
+                          type: "clear-selected-segment",
+                        });
                       }}
                       ariaLabel="START 기준 경로 비교"
                       size="xs"
@@ -1816,7 +1860,9 @@ function PlaceCartRouteMapPopup({
                             delete nextModes[displayDayKey];
                             return nextModes;
                           });
-                          setSelectedSegment(null);
+                          dispatchRouteMapView({
+                            type: "clear-selected-segment",
+                          });
                         }}
                         className="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-500"
                       >
