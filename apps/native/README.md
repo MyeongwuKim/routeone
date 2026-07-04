@@ -39,11 +39,14 @@ pnpm native:build:webview
 
 ## 환경변수
 
-`/map-direction` 요청은 기존 Vite dev proxy 대신 native bridge에서 직접 호출해요.
+WebView 안의 `/graphql`, `/tour-api`, `/map-direction` 요청은 기존 Vite dev proxy 대신 native bridge에서 직접 호출해요.
 
 ```bash
+EXPO_PUBLIC_GRAPHQL_ENDPOINT=http://192.168.0.144:4000/graphql
 EXPO_PUBLIC_NCP_MAPS_KEY_ID=...
 EXPO_PUBLIC_NCP_MAPS_KEY=...
 ```
+
+`EXPO_PUBLIC_GRAPHQL_ENDPOINT`는 현재 Mac의 LAN IP로 맞춰야 실기기에서도 로컬 API에 붙을 수 있어요. iOS 시뮬레이터만 쓸 때는 `http://127.0.0.1:4000/graphql`도 사용할 수 있어요.
 
 클라이언트 앱에 API secret이 들어가는 구조라, 실제 배포에서는 별도 백엔드 프록시로 옮기는 게 좋아요.

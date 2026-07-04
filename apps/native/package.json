@@ -13,12 +13,14 @@
     "start:go": "pnpm run build:webview -- --skip-build && expo start",
     "start:bundle": "pnpm run build:webview && expo start --dev-client",
     "start:bundle:go": "pnpm run build:webview && expo start",
-    "preios": "pnpm run patch:expo-modules-jsi",
+    "preios": "pnpm run patch:expo-modules-jsi && pnpm run sync:ios-permissions",
+    "sync:ios-permissions": "node scripts/sync-ios-permissions.mjs",
     "android": "pnpm run build:webview && expo run:android",
     "ios": "pnpm run build:webview && expo run:ios",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^3.1.1",
     "expo": "^56.0.0",
     "expo-image-picker": "^56.0.18",
     "expo-location": "^56.0.18",

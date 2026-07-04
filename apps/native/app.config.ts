@@ -28,6 +28,10 @@ export default {
       bundleIdentifier: "com.routeone.app",
       supportsTablet: false,
       infoPlist: {
+        NSAppTransportSecurity: {
+          NSAllowsArbitraryLoads: false,
+          NSAllowsLocalNetworking: true
+        },
         NSLocationWhenInUseUsageDescription:
           "RouteOne이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
         NSCameraUsageDescription:

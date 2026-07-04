@@ -6,6 +6,7 @@ import {
   IoRestaurantOutline,
   IoSearch,
 } from "react-icons/io5";
+import SelectablePillButton from "@/components/inputs/SelectablePillButton";
 import {
   getRoutePlaceCategory,
   type RoutePlaceCategory,
@@ -176,19 +177,15 @@ function PlaceCartRouteInsertSheet({
             const isActive = activeFilter === filter.key;
 
             return (
-              <button
+              <SelectablePillButton
                 key={filter.key}
-                type="button"
+                selected={isActive}
+                icon={getFilterIcon(filter.key)}
+                idleClassName="border-brand-100 bg-white text-slate-600"
                 onClick={() => setActiveFilter(filter.key)}
-                className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-bold ${
-                  isActive
-                    ? "border-brand-500 bg-brand-600 text-white"
-                    : "border-brand-100 bg-white text-slate-600"
-                }`}
               >
-                {getFilterIcon(filter.key)}
                 {filter.label}
-              </button>
+              </SelectablePillButton>
             );
           })}
         </div>

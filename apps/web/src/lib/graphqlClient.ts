@@ -2,8 +2,6 @@ import { print } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 import { getAuthToken } from "./authToken";
 
-const GRAPHQL_ENDPOINT =
-  import.meta.env.VITE_GRAPHQL_ENDPOINT ?? "/graphql";
 const GRAPHQL_REQUEST_TIMEOUT_MS = getPositiveNumberEnv(
   import.meta.env.VITE_GRAPHQL_REQUEST_TIMEOUT_MS,
   45_000
@@ -41,6 +39,14 @@ function getPositiveNumberEnv(value: string | undefined, fallback: number) {
   return Number.isFinite(parsedValue) && parsedValue > 0
     ? parsedValue
     : fallback;
+}
+
+function getGraphQLEndpoint() {
+  return (
+    window.RouteOneRuntimeConfig?.graphqlEndpoint?.trim() ||
+    import.meta.env.VITE_GRAPHQL_ENDPOINT ||
+    "/graphql"
+  );
 }
 
 function sleep(ms: number) {
@@ -103,7 +109,7 @@ async function executeGraphQLRequest<TResult>({
   }, GRAPHQL_REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(GRAPHQL_ENDPOINT, {
+    const response = await fetch(getGraphQLEndpoint(), {
       method: "POST",
       headers,
       body,

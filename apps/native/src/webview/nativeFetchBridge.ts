@@ -1,4 +1,5 @@
 import type { MutableRefObject } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import type { WebViewMessageEvent } from "react-native-webview";
@@ -16,6 +17,11 @@ type NativeFetchRequest = {
     headers?: Record<string, string>;
     body?: string;
   };
+};
+
+type NativeBridgeReadyMessage = {
+  type: "routeone:native-bridge-ready";
+  graphqlEndpoint?: string;
 };
 
 type NativeLocationRequest = {
@@ -41,6 +47,8 @@ type NativeFetchResponse =
       ok: false;
       error: string;
     };
+
+type NativeFetchSuccessResponse = Extract<NativeFetchResponse, { ok: true }>;
 
 type NativeLocationResponse =
   | {
@@ -70,11 +78,27 @@ type NativePhotoResponse =
 type NativeFetchTarget = {
   url: string;
   headers: Record<string, string>;
+  cacheTtlMs?: number;
+};
+
+type NativeFetchCacheEntry = NativeFetchSuccessResponse & {
+  savedAt: number;
+  expiresAt: number;
 };
 
 const WEBVIEW_BASE_URL = "https://routeone.native";
 const TOUR_API_ORIGIN = "https://apis.data.go.kr";
 const NAVER_DIRECTIONS_ORIGIN = "https://maps.apigw.ntruss.com";
+const DEFAULT_GRAPHQL_ENDPOINT = "http://127.0.0.1:4000/graphql";
+const HOUR_MS = 1000 * 60 * 60;
+const DAY_MS = HOUR_MS * 24;
+const TOUR_API_CACHE_STORAGE_PREFIX = "routeone:native-fetch-cache:v1:";
+
+const nativeFetchMemoryCache = new Map<string, NativeFetchCacheEntry>();
+const nativeFetchInFlightRequests = new Map<
+  string,
+  Promise<NativeFetchSuccessResponse>
+>();
 
 const NAVER_MAP_KEY_ID =
   process.env.EXPO_PUBLIC_NCP_MAPS_KEY_ID ??
@@ -84,6 +108,21 @@ const NAVER_MAP_KEY =
   process.env.EXPO_PUBLIC_NCP_MAPS_KEY ??
   process.env.EXPO_PUBLIC_NAVER_MAP_API_KEY ??
   "";
+const NATIVE_FETCH_TIMEOUT_MS = 30_000;
+
+function resolveNativeGraphqlEndpoint() {
+  const endpoint =
+    process.env.EXPO_PUBLIC_GRAPHQL_ENDPOINT?.trim() ||
+    process.env.EXPO_PUBLIC_API_URL?.trim();
+
+  if (!endpoint || endpoint.includes("<") || endpoint.includes(">")) {
+    return DEFAULT_GRAPHQL_ENDPOINT;
+  }
+
+  return endpoint;
+}
+
+const NATIVE_GRAPHQL_ENDPOINT = resolveNativeGraphqlEndpoint();
 
 export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 (function installRouteOneNativeFetchBridge() {
@@ -92,6 +131,88 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   }
 
   window.__ROUTEONE_NATIVE_FETCH_BRIDGE_INSTALLED__ = true;
+  window.RouteOneRuntimeConfig = Object.assign({}, window.RouteOneRuntimeConfig, ${JSON.stringify(
+    {
+      graphqlEndpoint: "/graphql"
+    }
+  )});
+
+  var didPostBridgeReady = false;
+
+  function postBridgeReady() {
+    if (didPostBridgeReady || !window.ReactNativeWebView) {
+      return;
+    }
+
+    didPostBridgeReady = true;
+    window.ReactNativeWebView.postMessage(
+      JSON.stringify({
+        type: "routeone:native-bridge-ready",
+        graphqlEndpoint: window.RouteOneRuntimeConfig.graphqlEndpoint
+      })
+    );
+  }
+
+  function lockViewportZoom() {
+    var viewport = document.querySelector("meta[name='viewport']");
+
+    if (!viewport) {
+      viewport = document.createElement("meta");
+      viewport.setAttribute("name", "viewport");
+
+      if (document.head) {
+        document.head.appendChild(viewport);
+      }
+    }
+
+    viewport.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover"
+    );
+
+    if (document.documentElement) {
+      document.documentElement.style.touchAction = "manipulation";
+    }
+
+    if (document.body) {
+      document.body.style.touchAction = "manipulation";
+    }
+  }
+
+  var lastTouchEndAt = 0;
+
+  lockViewportZoom();
+
+  document.addEventListener("DOMContentLoaded", lockViewportZoom, { once: true });
+  document.addEventListener(
+    "dblclick",
+    function preventDoubleClickZoom(event) {
+      event.preventDefault();
+    },
+    { capture: true, passive: false }
+  );
+  document.addEventListener(
+    "gesturestart",
+    function preventGestureZoom(event) {
+      event.preventDefault();
+    },
+    { capture: true, passive: false }
+  );
+  document.addEventListener(
+    "touchend",
+    function preventDoubleTapZoom(event) {
+      var now = Date.now();
+
+      if (now - lastTouchEndAt <= 320) {
+        event.preventDefault();
+      }
+
+      lastTouchEndAt = now;
+    },
+    { capture: true, passive: false }
+  );
+  postBridgeReady();
+  window.setTimeout(postBridgeReady, 250);
 
   var originalFetch = window.fetch.bind(window);
   var pendingRequests = Object.create(null);
@@ -111,10 +232,31 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     return "";
   }
 
+  function getMethod(input, init) {
+    if (init && init.method) {
+      return init.method;
+    }
+
+    if (input && typeof input.method === "string") {
+      return input.method;
+    }
+
+    return "GET";
+  }
+
+  function getBody(init) {
+    if (init && typeof init.body === "string") {
+      return init.body;
+    }
+
+    return undefined;
+  }
+
   function shouldUseNativeFetch(inputUrl) {
     try {
       var url = new URL(inputUrl, window.location.href);
       return (
+        url.pathname === "/graphql" ||
         url.pathname.indexOf("/tour-api/") === 0 ||
         url.pathname.indexOf("/map-direction/") === 0
       );
@@ -277,9 +419,9 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
           id: requestId,
           url: inputUrl,
           init: {
-            method: requestInit.method || "GET",
+            method: getMethod(input, requestInit),
             headers: normalizeHeaders(requestInit.headers),
-            body: typeof requestInit.body === "string" ? requestInit.body : undefined
+            body: getBody(requestInit)
           }
         })
       );
@@ -302,6 +444,18 @@ function isNativeFetchRequest(value: unknown): value is NativeFetchRequest {
     typeof maybeRequest.id === "string" &&
     typeof maybeRequest.url === "string"
   );
+}
+
+function isNativeBridgeReadyMessage(
+  value: unknown
+): value is NativeBridgeReadyMessage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeMessage = value as Partial<NativeBridgeReadyMessage>;
+
+  return maybeMessage.type === "routeone:native-bridge-ready";
 }
 
 function isNativeLocationRequest(
@@ -332,15 +486,55 @@ function isNativePhotoRequest(value: unknown): value is NativePhotoRequest {
   );
 }
 
+function getTourApiCacheTtlMs(pathname: string) {
+  if (pathname.endsWith("/lclsSystmCode2")) {
+    return DAY_MS * 30;
+  }
+
+  if (pathname.endsWith("/tatsCnctrRatedList")) {
+    return HOUR_MS * 6;
+  }
+
+  if (pathname.endsWith("/searchFestival2")) {
+    return HOUR_MS * 12;
+  }
+
+  if (
+    pathname.endsWith("/detailCommon2") ||
+    pathname.endsWith("/detailIntro2") ||
+    pathname.endsWith("/detailImage2")
+  ) {
+    return DAY_MS * 7;
+  }
+
+  if (
+    pathname.endsWith("/areaBasedList2") ||
+    pathname.endsWith("/locationBasedList2") ||
+    pathname.endsWith("/searchKeyword1")
+  ) {
+    return DAY_MS;
+  }
+
+  return HOUR_MS * 12;
+}
+
 function resolveNativeFetchTarget(urlValue: string): NativeFetchTarget | null {
   const url = new URL(urlValue, WEBVIEW_BASE_URL);
 
-  if (url.pathname.startsWith("/tour-api/")) {
+  if (url.pathname === "/graphql") {
     return {
-      url: `${TOUR_API_ORIGIN}${url.pathname.replace(/^\/tour-api/, "")}${
-        url.search
-      }`,
+      url: NATIVE_GRAPHQL_ENDPOINT,
       headers: {}
+    };
+  }
+
+  if (url.pathname.startsWith("/tour-api/")) {
+    const targetPathname = url.pathname.replace(/^\/tour-api/, "");
+
+    return {
+      url: `${TOUR_API_ORIGIN}${targetPathname}${url.search}`,
+      headers: {},
+      cacheTtlMs: getTourApiCacheTtlMs(targetPathname)
     };
   }
 
@@ -355,6 +549,172 @@ function resolveNativeFetchTarget(urlValue: string): NativeFetchTarget | null {
   }
 
   return null;
+}
+
+function buildNativeFetchCacheKey(url: string) {
+  let hash = 5381;
+
+  for (let index = 0; index < url.length; index += 1) {
+    hash = (hash * 33) ^ url.charCodeAt(index);
+  }
+
+  return `${TOUR_API_CACHE_STORAGE_PREFIX}${(hash >>> 0).toString(36)}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function isValidNativeFetchCacheEntry(
+  value: unknown
+): value is NativeFetchCacheEntry {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    value.ok === true &&
+    typeof value.status === "number" &&
+    typeof value.statusText === "string" &&
+    isRecord(value.headers) &&
+    typeof value.body === "string" &&
+    typeof value.url === "string" &&
+    typeof value.savedAt === "number" &&
+    typeof value.expiresAt === "number"
+  );
+}
+
+async function readNativeFetchCache(cacheKey: string) {
+  const memoryEntry = nativeFetchMemoryCache.get(cacheKey);
+
+  if (memoryEntry) {
+    return memoryEntry;
+  }
+
+  const rawEntry = await AsyncStorage.getItem(cacheKey);
+
+  if (!rawEntry) {
+    return null;
+  }
+
+  try {
+    const parsedEntry: unknown = JSON.parse(rawEntry);
+
+    if (!isValidNativeFetchCacheEntry(parsedEntry)) {
+      void AsyncStorage.removeItem(cacheKey);
+      return null;
+    }
+
+    nativeFetchMemoryCache.set(cacheKey, parsedEntry);
+    return parsedEntry;
+  } catch {
+    void AsyncStorage.removeItem(cacheKey);
+    return null;
+  }
+}
+
+async function writeNativeFetchCache(
+  cacheKey: string,
+  response: NativeFetchSuccessResponse,
+  ttlMs: number
+) {
+  const savedAt = Date.now();
+  const entry: NativeFetchCacheEntry = {
+    ...response,
+    savedAt,
+    expiresAt: savedAt + ttlMs
+  };
+
+  nativeFetchMemoryCache.set(cacheKey, entry);
+
+  try {
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(entry));
+  } catch {
+    nativeFetchMemoryCache.delete(cacheKey);
+  }
+}
+
+function withNativeCacheHeader(
+  response: NativeFetchSuccessResponse,
+  cacheState: "hit" | "stale"
+): NativeFetchSuccessResponse {
+  const { status, statusText, headers, body, url } = response;
+
+  return {
+    ok: true,
+    status,
+    statusText,
+    headers: {
+      ...headers,
+      "x-routeone-native-cache": cacheState
+    },
+    body,
+    url
+  };
+}
+
+function isCacheableNativeFetchRequest(
+  message: NativeFetchRequest,
+  target: NativeFetchTarget
+) {
+  return (
+    Boolean(target.cacheTtlMs) &&
+    (message.init?.method ?? "GET").toUpperCase() === "GET" &&
+    !message.init?.body
+  );
+}
+
+function shouldStoreNativeFetchResponse(response: NativeFetchSuccessResponse) {
+  if (response.status < 200 || response.status >= 300) {
+    return false;
+  }
+
+  const hasTourApiResultCode = /"resultCode"\s*:/.test(response.body);
+
+  if (!hasTourApiResultCode) {
+    return true;
+  }
+
+  return /"resultCode"\s*:\s*"0000"/.test(response.body);
+}
+
+async function fetchNativeTarget(
+  message: NativeFetchRequest,
+  target: NativeFetchTarget
+): Promise<NativeFetchSuccessResponse> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, NATIVE_FETCH_TIMEOUT_MS);
+  const headers = {
+    ...(message.init?.headers ?? {}),
+    ...target.headers
+  };
+
+  try {
+    const response = await fetch(target.url, {
+      method: message.init?.method ?? "GET",
+      headers,
+      body: message.init?.body,
+      signal: controller.signal
+    });
+    const responseHeaders: Record<string, string> = {};
+
+    response.headers.forEach((value, key) => {
+      responseHeaders[key] = value;
+    });
+
+    return {
+      ok: true,
+      status: response.status,
+      statusText: response.statusText,
+      headers: responseHeaders,
+      body: await response.text(),
+      url: response.url
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function postNativeFetchResponse(
@@ -460,6 +820,13 @@ export async function handleNativeFetchMessage(
     return;
   }
 
+  if (isNativeBridgeReadyMessage(message)) {
+    console.log(
+      `[routeone-native-bridge] ready graphql=${message.graphqlEndpoint ?? "/graphql"} target=${NATIVE_GRAPHQL_ENDPOINT}`
+    );
+    return;
+  }
+
   if (isNativeLocationRequest(message)) {
     try {
       postNativeLocationResponse(
@@ -506,30 +873,84 @@ export async function handleNativeFetchMessage(
       throw new Error(`Unsupported native fetch url: ${message.url}`);
     }
 
-    const headers = {
-      ...(message.init?.headers ?? {}),
-      ...target.headers
-    };
-    const response = await fetch(target.url, {
-      method: message.init?.method ?? "GET",
-      headers,
-      body: message.init?.body
-    });
-    const responseHeaders: Record<string, string> = {};
+    console.log(
+      `[routeone-native-fetch] ${message.init?.method ?? "GET"} ${message.url} -> ${target.url}`
+    );
 
-    response.headers.forEach((value, key) => {
-      responseHeaders[key] = value;
-    });
+    const shouldUseCache = isCacheableNativeFetchRequest(message, target);
+    const cacheKey = shouldUseCache
+      ? buildNativeFetchCacheKey(target.url)
+      : null;
+    const cachedResponse = cacheKey
+      ? await readNativeFetchCache(cacheKey)
+      : null;
 
-    postNativeFetchResponse(webViewRef, message.id, {
-      ok: true,
-      status: response.status,
-      statusText: response.statusText,
-      headers: responseHeaders,
-      body: await response.text(),
-      url: response.url
-    });
+    if (cachedResponse && cachedResponse.expiresAt > Date.now()) {
+      postNativeFetchResponse(
+        webViewRef,
+        message.id,
+        withNativeCacheHeader(cachedResponse, "hit")
+      );
+      return;
+    }
+
+    if (cacheKey && target.cacheTtlMs) {
+      const inFlightRequest =
+        nativeFetchInFlightRequests.get(cacheKey) ??
+        fetchNativeTarget(message, target).then(async (response) => {
+          if (shouldStoreNativeFetchResponse(response)) {
+            await writeNativeFetchCache(cacheKey, response, target.cacheTtlMs!);
+          }
+
+          return response;
+        });
+
+      nativeFetchInFlightRequests.set(cacheKey, inFlightRequest);
+
+      try {
+        const response = await inFlightRequest;
+        console.log(
+          `[routeone-native-fetch] ${response.status} ${target.url}`
+        );
+        postNativeFetchResponse(webViewRef, message.id, response);
+      } finally {
+        nativeFetchInFlightRequests.delete(cacheKey);
+      }
+
+      return;
+    }
+
+    const response = await fetchNativeTarget(message, target);
+    console.log(`[routeone-native-fetch] ${response.status} ${target.url}`);
+    postNativeFetchResponse(webViewRef, message.id, response);
   } catch (error) {
+    console.warn(
+      `[routeone-native-fetch] failed ${message.url}`,
+      error instanceof Error ? error.message : error
+    );
+
+    try {
+      const target = resolveNativeFetchTarget(message.url);
+      const cacheKey =
+        target && isCacheableNativeFetchRequest(message, target)
+          ? buildNativeFetchCacheKey(target.url)
+          : null;
+      const cachedResponse = cacheKey
+        ? await readNativeFetchCache(cacheKey)
+        : null;
+
+      if (cachedResponse) {
+        postNativeFetchResponse(
+          webViewRef,
+          message.id,
+          withNativeCacheHeader(cachedResponse, "stale")
+        );
+        return;
+      }
+    } catch {
+      // Ignore cache fallback errors and report the original network failure.
+    }
+
     postNativeFetchResponse(webViewRef, message.id, {
       ok: false,
       error: error instanceof Error ? error.message : "Native fetch failed"

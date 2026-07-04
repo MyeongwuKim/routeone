@@ -184,6 +184,11 @@ type FetchNearbyTouristPlacesOptions = {
   excludeContentId?: string;
 };
 
+type TourApiListPage = {
+  items: TourApiItem[];
+  totalCount: number;
+};
+
 function normalizeServiceKey(serviceKey: string) {
   try {
     return decodeURIComponent(serviceKey);
@@ -191,6 +196,11 @@ function normalizeServiceKey(serviceKey: string) {
     return serviceKey;
   }
 }
+
+const lclsSystemNameMapPromiseByServiceKey = new Map<
+  string,
+  Promise<Record<string, string>>
+>();
 
 function toArray<T>(value: T | T[] | undefined) {
   if (!value) {
@@ -664,6 +674,59 @@ async function requestRelatedTouristPlaces(
   return toArray(data.response?.body?.items?.item) as Record<string, unknown>[];
 }
 
+async function requestTourApiListPage(
+  endpoint: string,
+  params: URLSearchParams,
+  errorPrefix: string
+): Promise<TourApiListPage> {
+  const response = await fetch(`${endpoint}?${params.toString()}`);
+
+  if (!response.ok) {
+    const errorText = (await response.text()).trim();
+    throw new Error(
+      `${errorPrefix} request failed: ${response.status}${
+        errorText ? ` (${errorText})` : ""
+      }`
+    );
+  }
+
+  const data = (await response.json()) as TourApiResponse;
+  const resultCode = data.response?.header?.resultCode;
+
+  if (resultCode && resultCode !== "0000") {
+    const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
+    throw new Error(`${errorPrefix} API error: ${resultCode} ${resultMsg}`);
+  }
+
+  return {
+    items: toArray(data.response?.body?.items?.item),
+    totalCount: Number(data.response?.body?.totalCount ?? 0),
+  };
+}
+
+function resolveKnownTotalPages(
+  totalCount: number,
+  pageSize: number,
+  maxPagesSafetyLimit: number
+) {
+  if (!Number.isFinite(totalCount) || totalCount <= 0) {
+    return null;
+  }
+
+  return Math.min(maxPagesSafetyLimit, Math.ceil(totalCount / pageSize));
+}
+
+function getPageNumbers(startPage: number, endPage: number) {
+  if (endPage < startPage) {
+    return [];
+  }
+
+  return Array.from(
+    { length: endPage - startPage + 1 },
+    (_, index) => startPage + index
+  );
+}
+
 export async function fetchGangwonAttractions(
   serviceKey: string,
   options: FetchGangwonAttractionsOptions = {}
@@ -696,58 +759,60 @@ export async function fetchGangwonAttractions(
 
   const results = await Promise.all(
     contentTypeIds.map(async (contentTypeId) => {
-      const aggregatedItems: TourApiItem[] = [];
-      let totalPages = Number.POSITIVE_INFINITY;
-
-      for (let pageNo = 1; pageNo <= totalPages; pageNo += 1) {
-        if (pageNo > maxPagesSafetyLimit) {
-          break;
-        }
-
-        const query = new URLSearchParams({
+      const createQuery = (pageNo: number) =>
+        new URLSearchParams({
           ...queryBase,
           pageNo: `${pageNo}`,
           contentTypeId,
         });
 
-        const response = await fetch(
-          `${TOUR_API_BASE_URL}?${query.toString()}`
+      const firstPage = await requestTourApiListPage(
+        TOUR_API_BASE_URL,
+        createQuery(1),
+        "Tour API"
+      );
+
+      if (firstPage.items.length === 0) {
+        return [] as GangwonAttraction[];
+      }
+
+      const knownTotalPages = resolveKnownTotalPages(
+        firstPage.totalCount,
+        pageSize,
+        maxPagesSafetyLimit
+      );
+
+      let remainingPages: TourApiListPage[] = [];
+
+      if (knownTotalPages) {
+        remainingPages = await Promise.all(
+          getPageNumbers(2, knownTotalPages).map((pageNo) =>
+            requestTourApiListPage(
+              TOUR_API_BASE_URL,
+              createQuery(pageNo),
+              "Tour API"
+            )
+          )
         );
-
-        if (!response.ok) {
-          const errorText = (await response.text()).trim();
-          throw new Error(
-            `Tour API request failed: ${response.status}${
-              errorText ? ` (${errorText})` : ""
-            }`
+      } else {
+        for (let pageNo = 2; pageNo <= maxPagesSafetyLimit; pageNo += 1) {
+          const page = await requestTourApiListPage(
+            TOUR_API_BASE_URL,
+            createQuery(pageNo),
+            "Tour API"
           );
-        }
-
-        const data = (await response.json()) as TourApiResponse;
-        const resultCode = data.response?.header?.resultCode;
-
-        if (resultCode && resultCode !== "0000") {
-          const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
-          throw new Error(`Tour API error: ${resultCode} ${resultMsg}`);
-        }
-
-        const items = toArray(data.response?.body?.items?.item);
-        if (items.length === 0) {
-          break;
-        }
-        aggregatedItems.push(...items);
-
-        const totalCount = Number(data.response?.body?.totalCount ?? 0);
-        if (Number.isFinite(totalCount) && totalCount > 0) {
-          totalPages = Math.ceil(totalCount / pageSize);
-        }
-
-        if (items.length < pageSize) {
-          break;
+          if (page.items.length === 0) {
+            break;
+          }
+          remainingPages.push(page);
+          if (page.items.length < pageSize) {
+            break;
+          }
         }
       }
 
-      return aggregatedItems
+      return [firstPage, ...remainingPages]
+        .flatMap((page) => page.items)
         .map((item, index): GangwonAttraction | null => {
           return parseGangwonAttraction(item, contentTypeId, index);
         })
@@ -781,15 +846,8 @@ export async function fetchGangwonFestivals(
   const searchStartYmd = formatTourApiYmd(addDateDays(today, -366));
   const pageSize = 200;
   const maxPagesSafetyLimit = 20;
-  const aggregatedItems: TourApiItem[] = [];
-  let totalPages = Number.POSITIVE_INFINITY;
-
-  for (let pageNo = 1; pageNo <= totalPages; pageNo += 1) {
-    if (pageNo > maxPagesSafetyLimit) {
-      break;
-    }
-
-    const query = new URLSearchParams({
+  const createQuery = (pageNo: number) =>
+    new URLSearchParams({
       serviceKey: normalizeServiceKey(serviceKey),
       MobileOS: "ETC",
       MobileApp: "RouteOne",
@@ -800,45 +858,50 @@ export async function fetchGangwonFestivals(
       eventStartDate: searchStartYmd,
     });
 
-    const response = await fetch(
-      `${TOUR_FESTIVAL_BASE_URL}?${query.toString()}`
-    );
+  const firstPage = await requestTourApiListPage(
+    TOUR_FESTIVAL_BASE_URL,
+    createQuery(1),
+    "Tour festival"
+  );
+  const knownTotalPages = resolveKnownTotalPages(
+    firstPage.totalCount,
+    pageSize,
+    maxPagesSafetyLimit
+  );
+  let remainingPages: TourApiListPage[] = [];
 
-    if (!response.ok) {
-      const errorText = (await response.text()).trim();
-      throw new Error(
-        `Tour festival request failed: ${response.status}${
-          errorText ? ` (${errorText})` : ""
-        }`
+  if (firstPage.items.length > 0) {
+    if (knownTotalPages) {
+      remainingPages = await Promise.all(
+        getPageNumbers(2, knownTotalPages).map((pageNo) =>
+          requestTourApiListPage(
+            TOUR_FESTIVAL_BASE_URL,
+            createQuery(pageNo),
+            "Tour festival"
+          )
+        )
       );
-    }
-
-    const data = (await response.json()) as TourApiResponse;
-    const resultCode = data.response?.header?.resultCode;
-
-    if (resultCode && resultCode !== "0000") {
-      const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
-      throw new Error(`Tour festival API error: ${resultCode} ${resultMsg}`);
-    }
-
-    const items = toArray(data.response?.body?.items?.item);
-    if (items.length === 0) {
-      break;
-    }
-    aggregatedItems.push(...items);
-
-    const totalCount = Number(data.response?.body?.totalCount ?? 0);
-    if (Number.isFinite(totalCount) && totalCount > 0) {
-      totalPages = Math.ceil(totalCount / pageSize);
-    }
-
-    if (items.length < pageSize) {
-      break;
+    } else {
+      for (let pageNo = 2; pageNo <= maxPagesSafetyLimit; pageNo += 1) {
+        const page = await requestTourApiListPage(
+          TOUR_FESTIVAL_BASE_URL,
+          createQuery(pageNo),
+          "Tour festival"
+        );
+        if (page.items.length === 0) {
+          break;
+        }
+        remainingPages.push(page);
+        if (page.items.length < pageSize) {
+          break;
+        }
+      }
     }
   }
 
   const unique = new Map<string, GangwonAttraction>();
-  aggregatedItems
+  [firstPage, ...remainingPages]
+    .flatMap((page) => page.items)
     .filter(isGangwonTourApiItem)
     .map((item, index) =>
       parseGangwonAttraction(item, "15", index, {
@@ -882,53 +945,73 @@ export async function fetchLclsSystemNameMap(serviceKey: string) {
     throw new Error("VisitKorea service key is missing.");
   }
 
-  const query = new URLSearchParams({
-    serviceKey: normalizeServiceKey(serviceKey),
-    MobileOS: "ETC",
-    MobileApp: "RouteOne",
-    _type: "json",
-    numOfRows: "1000",
-    pageNo: "1",
-    lclsSystmListYn: "Y",
+  const normalizedServiceKey = normalizeServiceKey(serviceKey);
+  const cachedPromise =
+    lclsSystemNameMapPromiseByServiceKey.get(normalizedServiceKey);
+
+  if (cachedPromise) {
+    return cachedPromise;
+  }
+
+  const requestPromise = (async () => {
+    const query = new URLSearchParams({
+      serviceKey: normalizedServiceKey,
+      MobileOS: "ETC",
+      MobileApp: "RouteOne",
+      _type: "json",
+      numOfRows: "1000",
+      pageNo: "1",
+      lclsSystmListYn: "Y",
+    });
+
+    const response = await fetch(
+      `${TOUR_LCLS_CODE_BASE_URL}?${query.toString()}`
+    );
+
+    if (!response.ok) {
+      const errorText = (await response.text()).trim();
+      throw new Error(
+        `Lcls code request failed: ${response.status}${
+          errorText ? ` (${errorText})` : ""
+        }`
+      );
+    }
+
+    const data = (await response.json()) as LclsSystemResponse;
+    const resultCode = data.response?.header?.resultCode;
+
+    if (resultCode && resultCode !== "0000") {
+      const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
+      throw new Error(`Lcls code API error: ${resultCode} ${resultMsg}`);
+    }
+
+    const items = toArray(data.response?.body?.items?.item);
+    const codeNameMap: Record<string, string> = {};
+
+    items.forEach((item) => {
+      if (item.lclsSystm1Cd && item.lclsSystm1Nm) {
+        codeNameMap[item.lclsSystm1Cd] = item.lclsSystm1Nm;
+      }
+      if (item.lclsSystm2Cd && item.lclsSystm2Nm) {
+        codeNameMap[item.lclsSystm2Cd] = item.lclsSystm2Nm;
+      }
+      if (item.lclsSystm3Cd && item.lclsSystm3Nm) {
+        codeNameMap[item.lclsSystm3Cd] = item.lclsSystm3Nm;
+      }
+    });
+
+    return codeNameMap;
+  })().catch((error) => {
+    lclsSystemNameMapPromiseByServiceKey.delete(normalizedServiceKey);
+    throw error;
   });
 
-  const response = await fetch(
-    `${TOUR_LCLS_CODE_BASE_URL}?${query.toString()}`
+  lclsSystemNameMapPromiseByServiceKey.set(
+    normalizedServiceKey,
+    requestPromise
   );
 
-  if (!response.ok) {
-    const errorText = (await response.text()).trim();
-    throw new Error(
-      `Lcls code request failed: ${response.status}${
-        errorText ? ` (${errorText})` : ""
-      }`
-    );
-  }
-
-  const data = (await response.json()) as LclsSystemResponse;
-  const resultCode = data.response?.header?.resultCode;
-
-  if (resultCode && resultCode !== "0000") {
-    const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
-    throw new Error(`Lcls code API error: ${resultCode} ${resultMsg}`);
-  }
-
-  const items = toArray(data.response?.body?.items?.item);
-  const codeNameMap: Record<string, string> = {};
-
-  items.forEach((item) => {
-    if (item.lclsSystm1Cd && item.lclsSystm1Nm) {
-      codeNameMap[item.lclsSystm1Cd] = item.lclsSystm1Nm;
-    }
-    if (item.lclsSystm2Cd && item.lclsSystm2Nm) {
-      codeNameMap[item.lclsSystm2Cd] = item.lclsSystm2Nm;
-    }
-    if (item.lclsSystm3Cd && item.lclsSystm3Nm) {
-      codeNameMap[item.lclsSystm3Cd] = item.lclsSystm3Nm;
-    }
-  });
-
-  return codeNameMap;
+  return requestPromise;
 }
 
 export async function fetchTourPlaceDetail(
