@@ -1,6 +1,10 @@
 import "dotenv/config";
 import os from "node:os";
 import { buildApp } from "./app.js";
+import {
+  DEV_VERIFICATION_BYPASS_ENV,
+  isDevVerificationBypassEnabled,
+} from "./lib/devVerification.js";
 
 const port = Number(process.env.API_PORT ?? 4000);
 const app = await buildApp();
@@ -23,6 +27,13 @@ await app.listen({
 });
 
 console.log(`RouteOne API ready at http://localhost:${port}/graphql`);
+
+if (isDevVerificationBypassEnabled()) {
+  console.warn(
+    `RouteOne API verification bypass enabled by ${DEV_VERIFICATION_BYPASS_ENV}=1`
+  );
+}
+
 const lanGraphqlUrls = getLanGraphqlUrls(port);
 
 if (lanGraphqlUrls.length) {

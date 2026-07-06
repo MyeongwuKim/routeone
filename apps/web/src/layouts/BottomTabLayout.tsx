@@ -24,10 +24,12 @@ function BottomTabLayout() {
   const { pathname } = useLocation();
   const isHome = pathname === "/home";
   const shouldSlideInPage = pathname.startsWith("/me/");
+  const bottomTabOffsetClass =
+    "bottom-[calc(4.5rem+max(0.7rem,env(safe-area-inset-bottom)))]";
 
   return (
     <div className="relative h-dvh overflow-hidden bg-brand-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <main className="absolute inset-x-0 bottom-[92px] top-0">
+      <main className={`absolute inset-x-0 top-0 ${bottomTabOffsetClass}`}>
         <div
           className={isHome ? "h-full" : "h-full overflow-x-hidden overflow-y-auto"}
         >
@@ -36,7 +38,7 @@ function BottomTabLayout() {
             className={
               isHome
                 ? "h-full"
-                : `mx-auto w-full max-w-md px-5 py-3 ${
+                : `mx-auto h-full min-h-0 w-full max-w-md px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] ${
                     shouldSlideInPage ? "route-page-slide-enter" : ""
                   }`
             }

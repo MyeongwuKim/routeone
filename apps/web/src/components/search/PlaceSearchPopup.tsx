@@ -133,7 +133,7 @@ function PlaceSearchPopup({
                         item.attraction.isTodayFestival
                           ? "오늘 진행 중"
                           : item.rank
-                            ? `집중률 ${item.rank}위`
+                            ? `예측 집중률 ${item.rank}위`
                             : null
                       }
                       onClick={() => onResultClick(item)}

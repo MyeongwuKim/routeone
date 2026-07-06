@@ -6,6 +6,11 @@ import {
   normalizeAccountId,
   verifyPassword,
 } from "../../lib/auth.js";
+import {
+  verifyNativeOAuthIdentity,
+  type NativeOAuthLoginInput,
+  type VerifiedOAuthIdentity,
+} from "../../lib/oauth.js";
 
 export const userTypeDefs = gql`
   type User {
@@ -30,12 +35,26 @@ export const userTypeDefs = gql`
     displayName: String
   }
 
+  enum NativeOAuthProvider {
+    GOOGLE
+    APPLE
+  }
+
+  input NativeOAuthLoginInput {
+    provider: NativeOAuthProvider!
+    identityToken: String!
+    displayName: String
+    email: String
+    avatarUrl: String
+  }
+
   extend type Query {
     me: User
   }
 
   extend type Mutation {
     loginWithPassword(input: PasswordLoginInput!): AuthPayload!
+    loginWithNativeOAuth(input: NativeOAuthLoginInput!): AuthPayload!
   }
 `;
 
@@ -47,9 +66,102 @@ type LoginWithPasswordArgs = {
   };
 };
 
+type LoginWithNativeOAuthArgs = {
+  input: NativeOAuthLoginInput;
+};
+
 function normalizeDisplayName(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed || null;
+}
+
+function getOAuthFallbackDisplayName(identity: VerifiedOAuthIdentity) {
+  if (identity.displayName) {
+    return identity.displayName;
+  }
+
+  if (identity.email) {
+    return identity.email.split("@")[0] || identity.email;
+  }
+
+  return identity.provider === "GOOGLE" ? "Google 사용자" : "Apple 사용자";
+}
+
+async function findOrCreateOAuthUser(
+  context: GraphQLContext,
+  identity: VerifiedOAuthIdentity
+) {
+  const existingAccount = await context.prisma.authAccount.findFirst({
+    where: {
+      provider: identity.provider,
+      providerAccountId: identity.providerAccountId,
+    },
+    include: {
+      user: true,
+    },
+  });
+
+  if (existingAccount) {
+    const user = existingAccount.user;
+
+    if (identity.avatarUrl && user.avatarUrl !== identity.avatarUrl) {
+      return context.prisma.user.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          avatarUrl: identity.avatarUrl,
+        },
+      });
+    }
+
+    return user;
+  }
+
+  const existingUser = identity.email
+    ? await context.prisma.user.findUnique({
+        where: {
+          email: identity.email,
+        },
+      })
+    : null;
+  const user =
+    existingUser ??
+    (await context.prisma.user.create({
+      data: {
+        email: identity.email,
+        displayName: getOAuthFallbackDisplayName(identity),
+        avatarUrl: identity.avatarUrl,
+        locale: "ko",
+      },
+    }));
+
+  await context.prisma.authAccount.create({
+    data: {
+      provider: identity.provider,
+      providerAccountId: identity.providerAccountId,
+      email: identity.email,
+      userId: user.id,
+    },
+  });
+
+  if (
+    existingUser &&
+    ((identity.displayName && !existingUser.displayName) ||
+      (identity.avatarUrl && existingUser.avatarUrl !== identity.avatarUrl))
+  ) {
+    return context.prisma.user.update({
+      where: {
+        id: existingUser.id,
+      },
+      data: {
+        displayName: existingUser.displayName ?? identity.displayName,
+        avatarUrl: identity.avatarUrl ?? existingUser.avatarUrl,
+      },
+    });
+  }
+
+  return user;
 }
 
 export const userResolvers = {
@@ -103,6 +215,19 @@ export const userResolvers = {
           locale: "ko",
         },
       });
+
+      return {
+        token: createAuthToken(user.id),
+        user,
+      };
+    },
+    async loginWithNativeOAuth(
+      _parent: unknown,
+      args: LoginWithNativeOAuthArgs,
+      context: GraphQLContext
+    ) {
+      const identity = await verifyNativeOAuthIdentity(args.input);
+      const user = await findOrCreateOAuthUser(context, identity);
 
       return {
         token: createAuthToken(user.id),

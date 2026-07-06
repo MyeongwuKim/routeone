@@ -144,12 +144,12 @@ function TodayStartScheduleConfirmDialog({
   const isOneDayTrip = tripDays === 1;
 
   return (
-    <div className="fixed inset-0 z-[2700] flex items-center justify-center bg-slate-950/60 px-4">
+    <div className="center-modal-backdrop-enter fixed inset-0 z-[2700] flex items-center justify-center bg-slate-950/60 px-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="today-start-schedule-title"
-        className="w-full max-w-[360px] rounded-[1.5rem] border border-brand-200 bg-white p-5 shadow-2xl dark:border-brand-400/30 dark:bg-[#102a27]"
+        className="center-modal-panel-enter w-full max-w-[360px] rounded-[1.5rem] border border-brand-200 bg-white p-5 shadow-2xl dark:border-brand-400/30 dark:bg-[#102a27]"
       >
         <p className="font-trip text-sm text-brand-700 dark:text-brand-200">
           SCHEDULE CHECK
@@ -346,7 +346,7 @@ function RouteCheckoutModalContent({
   return (
     <section className="route-checkout-modal-enter fixed inset-0 z-[2600] h-dvh overflow-hidden bg-white">
       <div className="flex h-full min-h-0 flex-col">
-        <header className="flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3">
+        <header className="app-safe-area-header flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3">
           <div className="flex items-center">
             <button
               type="button"
@@ -414,7 +414,7 @@ function RouteCheckoutModalContent({
               </div>
             </div>
 
-            <footer className="shrink-0 border-t border-brand-100 px-4 py-4">
+            <footer className="app-safe-area-footer shrink-0 border-t border-brand-100 px-4 py-4">
               <button
                 type="button"
                 onClick={handleNext}

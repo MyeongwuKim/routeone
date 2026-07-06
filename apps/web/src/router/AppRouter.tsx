@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import BottomTabLayout from "@/layouts/BottomTabLayout";
 import HomePage from "@/pages/HomePage";
+import AppInfoPage from "@/pages/AppInfoPage";
 import LoginPage from "@/pages/LoginPage";
 import MyAccountPage from "@/pages/MyAccountPage";
 import MyInfoPage from "@/pages/MyInfoPage";
@@ -40,6 +41,7 @@ function AppRouter() {
           <Route path="/me/routes" element={<MyRouteHistoryPage />} />
           <Route path="/me/liked-routes" element={<LikedSharedRoutePage />} />
           <Route path="/me/account" element={<MyAccountPage />} />
+          <Route path="/me/app-info" element={<AppInfoPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

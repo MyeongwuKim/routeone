@@ -7,6 +7,7 @@ import type {
   User,
   VisitStatus,
 } from "@prisma/client";
+import { isDevVerificationBypassEnabled } from "../../lib/devVerification.js";
 
 type PlaceSnapshotInput = {
   provider: PlaceProvider;
@@ -92,9 +93,10 @@ export type RouteStopVisitVerificationInput = {
 };
 
 const VERIFIED_ROUTE_STOP_STATUSES = new Set<RouteStopVerificationStatus>([
-  "GPS",
   "GPS_PHOTO",
 ]);
+const GPS_VERIFICATION_MAX_DISTANCE_METERS = 100;
+const EARTH_RADIUS_METERS = 6_371_000;
 
 function clampTripDays(value: number) {
   return Math.max(1, Math.min(30, Math.round(value || 1)));
@@ -274,6 +276,47 @@ function normalizeTravelMinutes(value?: number | null) {
   }
 
   return Math.max(0, Math.min(24 * 60, Math.round(value)));
+}
+
+function toFiniteCoordinate(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getRouteStopPlaceCoordinates(stop: RouteStop) {
+  const place =
+    stop.place && typeof stop.place === "object" && !Array.isArray(stop.place)
+      ? (stop.place as Record<string, unknown>)
+      : null;
+
+  if (!place) {
+    return null;
+  }
+
+  const lat = toFiniteCoordinate(place.lat);
+  const lng = toFiniteCoordinate(place.lng);
+
+  return lat != null && lng != null ? { lat, lng } : null;
+}
+
+function toRadians(degree: number) {
+  return (degree * Math.PI) / 180;
+}
+
+function calculateDistanceMeters(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number }
+) {
+  const latDelta = toRadians(to.lat - from.lat);
+  const lngDelta = toRadians(to.lng - from.lng);
+  const fromLat = toRadians(from.lat);
+  const toLat = toRadians(to.lat);
+  const a =
+    Math.sin(latDelta / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(lngDelta / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return EARTH_RADIUS_METERS * c;
 }
 
 const REGION_TAG_RULES = [
@@ -784,17 +827,54 @@ function getVisitVerificationStatus(
 ) {
   const status = verification?.status ?? "MANUAL";
 
+  if (status === "GPS") {
+    throw new Error("방문 인증은 위치와 사진을 함께 확인해야 해요.");
+  }
+
   return status === "NONE" ? "MANUAL" : status;
 }
 
 function assertRouteStopGpsVerification(
-  _stop: RouteStop,
+  stop: RouteStop,
   verification: RouteStopVisitVerificationInput | null | undefined,
   verificationStatus: RouteStopVerificationStatus
 ) {
-  void _stop;
-  void verification;
-  void verificationStatus;
+  if (verificationStatus !== "GPS_PHOTO") {
+    return;
+  }
+
+  if (isDevVerificationBypassEnabled()) {
+    return;
+  }
+
+  const currentLat = toFiniteCoordinate(verification?.lat);
+  const currentLng = toFiniteCoordinate(verification?.lng);
+
+  if (currentLat == null || currentLng == null) {
+    throw new Error("현재 위치를 확인하지 못했어요. 위치 권한과 GPS 상태를 확인해 주세요.");
+  }
+
+  const placeCoordinates = getRouteStopPlaceCoordinates(stop);
+
+  if (!placeCoordinates) {
+    throw new Error("장소 좌표가 없어 위치 인증을 진행할 수 없어요.");
+  }
+
+  const distanceMeters = calculateDistanceMeters(
+    {
+      lat: currentLat,
+      lng: currentLng,
+    },
+    placeCoordinates
+  );
+
+  if (distanceMeters > GPS_VERIFICATION_MAX_DISTANCE_METERS) {
+    throw new Error(
+      `장소 근처에서만 인증할 수 있어요. 현재 위치가 약 ${Math.round(
+        distanceMeters
+      )}m 떨어져 있어요.`
+    );
+  }
 }
 
 function getActualStayMinutes(checkedInAt: Date | null, checkedOutAt: Date | null) {

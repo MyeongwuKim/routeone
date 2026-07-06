@@ -6,7 +6,11 @@ React Native WebView로 `apps/web` 빌드 산출물을 감싸는 하이브리드
 
 - `src/App.tsx`: WebView 컨테이너
 - `src/generated/webBundle.ts`: `apps/web/dist`를 단일 HTML 문자열로 인라인한 결과
-- `src/webview/nativeFetchBridge.ts`: WebView 안의 `/tour-api`, `/map-direction` 요청을 네이티브 fetch로 프록시
+- `src/webview/bridge`: WebView와 네이티브 기능을 연결하는 목적별 브릿지
+  - `fetchBridge.ts`: `/graphql`, `/tour-api`, `/map-direction` 요청 프록시
+  - `locationBridge.ts`: 현재 위치 요청 처리
+  - `visitPhotoBridge.ts`: 방문 사진 촬영 및 업로드 처리
+  - `injectedScript.ts`: WebView에 주입되는 브릿지 스크립트
 - `scripts/sync-web-build.mjs`: 웹 빌드 후 native 번들 생성
 
 ## 실행
@@ -42,11 +46,16 @@ pnpm native:build:webview
 WebView 안의 `/graphql`, `/tour-api`, `/map-direction` 요청은 기존 Vite dev proxy 대신 native bridge에서 직접 호출해요.
 
 ```bash
+APP_VARIANT=dev
 EXPO_PUBLIC_GRAPHQL_ENDPOINT=http://192.168.0.144:4000/graphql
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=...
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=...
 EXPO_PUBLIC_NCP_MAPS_KEY_ID=...
 EXPO_PUBLIC_NCP_MAPS_KEY=...
 ```
 
 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`는 현재 Mac의 LAN IP로 맞춰야 실기기에서도 로컬 API에 붙을 수 있어요. iOS 시뮬레이터만 쓸 때는 `http://127.0.0.1:4000/graphql`도 사용할 수 있어요.
+
+`APP_VARIANT=dev`는 iOS/Android 앱 식별자를 `com.routeone.app.dev`로 만들고, `APP_VARIANT=prod`는 `com.routeone.app`을 사용해요. Google OAuth iOS 클라이언트의 번들 ID도 이 값과 정확히 맞아야 해요.
 
 클라이언트 앱에 API secret이 들어가는 구조라, 실제 배포에서는 별도 백엔드 프록시로 옮기는 게 좋아요.

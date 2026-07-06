@@ -12,6 +12,7 @@ import {
   GANGWON_TATS_AREA_CODE,
 } from "@/data/gangwonRegions";
 import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
+import { getCurrentPosition } from "@/lib/currentPosition";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import {
   applyNaverMapTheme,
@@ -520,7 +521,7 @@ function HomePage() {
     if (attractionLoadingStage === "ranking" || attractionsQuery.isFetching) {
       showLoading({
         title: "순위를 매기고 있어요",
-        description: "방문자 집중률 데이터를 정리하는 중",
+        description: "방문자 집중률 예측 데이터를 정리하는 중",
         footerText: "감자 분석 모드 진행 중",
         animation: "ranking",
       });
@@ -568,26 +569,30 @@ function HomePage() {
   }, [closeSearchPopup, isSearchPopupOpen]);
 
   useEffect(() => {
-    if (!("geolocation" in navigator)) {
-      return;
-    }
+    let isMounted = true;
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
+    getCurrentPosition()
+      .then((position) => {
+        if (!isMounted) {
+          return;
+        }
+
         setCurrentLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
+          lat: position.lat,
+          lng: position.lng,
         });
-      },
-      () => {
+      })
+      .catch(() => {
+        if (!isMounted) {
+          return;
+        }
+
         setCurrentLocation(null);
-      },
-      {
-        enableHighAccuracy: false,
-        maximumAge: 1000 * 60 * 5,
-        timeout: 4000,
-      }
-    );
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const clearMarkers = () => {

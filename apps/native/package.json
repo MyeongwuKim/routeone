@@ -21,7 +21,11 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^3.1.1",
+    "@react-native-google-signin/google-signin": "^16.1.2",
     "expo": "^56.0.0",
+    "expo-apple-authentication": "~56.0.4",
+    "expo-dev-client": "~56.0.22",
+    "expo-image-manipulator": "^56.0.20",
     "expo-image-picker": "^56.0.18",
     "expo-location": "^56.0.18",
     "react": "19.2.3",

@@ -14,9 +14,11 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
+    "mutation AnalyzeRouteStopVisitPhoto($input: AnalyzeRouteStopVisitPhotoInput!) {\n  analyzeRouteStopVisitPhoto(input: $input) {\n    decision\n    confidence\n    referenceImageUrls\n    visualEvidence\n    textEvidence\n    mismatchReasons\n    needsReview\n    skippedReason\n  }\n}": typeof types.AnalyzeRouteStopVisitPhotoDocument,
     "mutation AppendRouteDays($input: AppendRouteDaysInput!) {\n  appendRouteDays(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.AppendRouteDaysDocument,
     "mutation ClearRoute($routeId: ID!) {\n  clearRoute(routeId: $routeId) {\n    ...RouteDetailFields\n  }\n}": typeof types.ClearRouteDocument,
     "mutation CloneRoute($input: CloneRouteInput!) {\n  cloneRoute(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.CloneRouteDocument,
+    "mutation CreateRouteStopVisitPhotoUpload($stopId: ID!) {\n  createRouteStopVisitPhotoUpload(stopId: $stopId) {\n    imageId\n    uploadUrl\n    imageUrl\n    expiresAt\n  }\n}": typeof types.CreateRouteStopVisitPhotoUploadDocument,
     "mutation CreateRoute($input: CreateRouteInput!) {\n  createRoute(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.CreateRouteDocument,
     "mutation DeleteRouteDay($dayId: ID!) {\n  deleteRouteDay(dayId: $dayId) {\n    ...RouteDetailFields\n  }\n}": typeof types.DeleteRouteDayDocument,
     "mutation DeleteRoute($routeId: ID!) {\n  deleteRoute(routeId: $routeId) {\n    id\n  }\n}": typeof types.DeleteRouteDocument,
@@ -38,9 +40,11 @@ type Documents = {
     "query Me {\n  me {\n    id\n    accountId\n    email\n    displayName\n    locale\n    createdAt\n    updatedAt\n  }\n}": typeof types.MeDocument,
 };
 const documents: Documents = {
+    "mutation AnalyzeRouteStopVisitPhoto($input: AnalyzeRouteStopVisitPhotoInput!) {\n  analyzeRouteStopVisitPhoto(input: $input) {\n    decision\n    confidence\n    referenceImageUrls\n    visualEvidence\n    textEvidence\n    mismatchReasons\n    needsReview\n    skippedReason\n  }\n}": types.AnalyzeRouteStopVisitPhotoDocument,
     "mutation AppendRouteDays($input: AppendRouteDaysInput!) {\n  appendRouteDays(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.AppendRouteDaysDocument,
     "mutation ClearRoute($routeId: ID!) {\n  clearRoute(routeId: $routeId) {\n    ...RouteDetailFields\n  }\n}": types.ClearRouteDocument,
     "mutation CloneRoute($input: CloneRouteInput!) {\n  cloneRoute(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.CloneRouteDocument,
+    "mutation CreateRouteStopVisitPhotoUpload($stopId: ID!) {\n  createRouteStopVisitPhotoUpload(stopId: $stopId) {\n    imageId\n    uploadUrl\n    imageUrl\n    expiresAt\n  }\n}": types.CreateRouteStopVisitPhotoUploadDocument,
     "mutation CreateRoute($input: CreateRouteInput!) {\n  createRoute(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.CreateRouteDocument,
     "mutation DeleteRouteDay($dayId: ID!) {\n  deleteRouteDay(dayId: $dayId) {\n    ...RouteDetailFields\n  }\n}": types.DeleteRouteDayDocument,
     "mutation DeleteRoute($routeId: ID!) {\n  deleteRoute(routeId: $routeId) {\n    id\n  }\n}": types.DeleteRouteDocument,
@@ -79,6 +83,10 @@ export function graphql(source: string): unknown;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
+export function graphql(source: "mutation AnalyzeRouteStopVisitPhoto($input: AnalyzeRouteStopVisitPhotoInput!) {\n  analyzeRouteStopVisitPhoto(input: $input) {\n    decision\n    confidence\n    referenceImageUrls\n    visualEvidence\n    textEvidence\n    mismatchReasons\n    needsReview\n    skippedReason\n  }\n}"): (typeof documents)["mutation AnalyzeRouteStopVisitPhoto($input: AnalyzeRouteStopVisitPhotoInput!) {\n  analyzeRouteStopVisitPhoto(input: $input) {\n    decision\n    confidence\n    referenceImageUrls\n    visualEvidence\n    textEvidence\n    mismatchReasons\n    needsReview\n    skippedReason\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
 export function graphql(source: "mutation AppendRouteDays($input: AppendRouteDaysInput!) {\n  appendRouteDays(input: $input) {\n    ...RouteDetailFields\n  }\n}"): (typeof documents)["mutation AppendRouteDays($input: AppendRouteDaysInput!) {\n  appendRouteDays(input: $input) {\n    ...RouteDetailFields\n  }\n}"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
@@ -88,6 +96,10 @@ export function graphql(source: "mutation ClearRoute($routeId: ID!) {\n  clearRo
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "mutation CloneRoute($input: CloneRouteInput!) {\n  cloneRoute(input: $input) {\n    ...RouteDetailFields\n  }\n}"): (typeof documents)["mutation CloneRoute($input: CloneRouteInput!) {\n  cloneRoute(input: $input) {\n    ...RouteDetailFields\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation CreateRouteStopVisitPhotoUpload($stopId: ID!) {\n  createRouteStopVisitPhotoUpload(stopId: $stopId) {\n    imageId\n    uploadUrl\n    imageUrl\n    expiresAt\n  }\n}"): (typeof documents)["mutation CreateRouteStopVisitPhotoUpload($stopId: ID!) {\n  createRouteStopVisitPhotoUpload(stopId: $stopId) {\n    imageId\n    uploadUrl\n    imageUrl\n    expiresAt\n  }\n}"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

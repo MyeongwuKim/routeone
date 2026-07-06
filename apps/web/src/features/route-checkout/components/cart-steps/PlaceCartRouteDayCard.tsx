@@ -846,14 +846,14 @@ function StayMinutesPopup({
   };
 
   return (
-    <div className="fixed inset-0 z-[2700] flex items-center justify-center bg-slate-950/35 px-4">
+    <div className="center-modal-backdrop-enter fixed inset-0 z-[2700] flex items-center justify-center bg-slate-950/35 px-4">
       <button
         type="button"
         aria-label="체류 시간 수정 닫기"
         className="absolute inset-0 cursor-default"
         onClick={onClose}
       />
-      <section className="route-checkout-modal-enter relative w-full max-w-[340px] rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
+      <section className="center-modal-panel-enter relative w-full max-w-[340px] rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="font-trip text-sm text-brand-700">STAY TIME</p>

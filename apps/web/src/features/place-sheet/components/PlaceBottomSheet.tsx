@@ -64,27 +64,27 @@ type CurrentLocation = {
 function getTopRankBadgeStyle(rank: number) {
   if (rank === 1) {
     return {
-      label: "🥇 집중률 1위",
+      label: "🥇 예측 집중률 1위",
       className:
         "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-400/60 dark:bg-amber-400/15 dark:text-amber-200",
     };
   }
   if (rank === 2) {
     return {
-      label: "🥈 집중률 2위",
+      label: "🥈 예측 집중률 2위",
       className:
         "border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-500/70 dark:bg-slate-300/10 dark:text-slate-100",
     };
   }
   if (rank === 3) {
     return {
-      label: "🥉 집중률 3위",
+      label: "🥉 예측 집중률 3위",
       className:
         "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-400/60 dark:bg-orange-400/15 dark:text-orange-200",
     };
   }
   return {
-    label: `집중률 ${rank}위`,
+    label: `예측 집중률 ${rank}위`,
     className:
       "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/60 dark:bg-rose-400/15 dark:text-rose-200",
   };
@@ -828,6 +828,16 @@ function PlaceBottomSheet() {
     return null;
   }
 
+  const shouldOffsetSheetHeader = isSheetExpanded || isFullPopupMode;
+  const sheetHeaderStyle = {
+    minHeight: shouldOffsetSheetHeader
+      ? `calc(${SHEET_HEADER_HEIGHT_PX}px + env(safe-area-inset-top))`
+      : `${SHEET_HEADER_HEIGHT_PX}px`,
+    paddingTop: shouldOffsetSheetHeader
+      ? "env(safe-area-inset-top)"
+      : undefined,
+  };
+
   return (
     <>
       <button
@@ -862,7 +872,7 @@ function PlaceBottomSheet() {
                 ? "rounded-none"
                 : "rounded-t-3xl"
             }`}
-            style={{ minHeight: `${SHEET_HEADER_HEIGHT_PX}px` }}
+            style={sheetHeaderStyle}
             onPointerDown={isFullPopupMode ? undefined : handleSheetPointerDown}
             onPointerMove={isFullPopupMode ? undefined : handleSheetPointerMove}
             onPointerUp={isFullPopupMode ? undefined : handleSheetPointerUp}
@@ -933,7 +943,7 @@ function PlaceBottomSheet() {
                       onClick={() => setIsTopRankInfoOpen(true)}
                       className={`inline-flex h-10 items-center gap-1 rounded-full border px-3 text-xs font-bold ${topRankBadge.className}`}
                     >
-                      TOP {selectedPlace.topRank}
+                      예측 TOP {selectedPlace.topRank}
                       <IoInformationCircleOutline className="text-sm" />
                     </button>
                   ) : null}
@@ -1197,21 +1207,21 @@ function PlaceBottomSheet() {
         <div className="fixed inset-0 z-[2600] flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button
             type="button"
-            aria-label="집중률 안내 닫기"
+            aria-label="예측 집중률 안내 닫기"
             onClick={() => setIsTopRankInfoOpen(false)}
             className="absolute inset-0"
           />
           <section className="relative w-full max-w-md rounded-3xl border border-brand-200 bg-white px-5 py-5 shadow-[0_20px_60px_rgba(15,23,42,0.25)]">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-trip text-sm text-brand-700">TOP RANK</p>
+                <p className="font-trip text-sm text-brand-700">예측 순위</p>
                 <p className="mt-1 text-xl font-semibold text-slate-900">
                   {topRankBadge.label}
                 </p>
               </div>
               <button
                 type="button"
-                aria-label="집중률 안내 닫기"
+                aria-label="예측 집중률 안내 닫기"
                 onClick={() => setIsTopRankInfoOpen(false)}
                 className="rounded-full border border-slate-200 bg-white p-2 text-slate-600"
               >
@@ -1219,8 +1229,9 @@ function PlaceBottomSheet() {
               </button>
             </div>
             <p className="mt-4 text-sm leading-6 text-slate-600">
-              한국관광공사 방문자 집중률 예측 데이터를 기준으로 같은 지역의
-              관광지 중 상대적으로 관심도가 높은 장소를 표시한 순위입니다.
+              한국관광공사 이동통신 기반 방문자 집계 데이터를 바탕으로 산출한
+              집중률 예측값 기준 순위입니다. 같은 지역의 관광지 중 상대적으로
+              관심도가 높은 장소를 표시합니다.
             </p>
             <p className="mt-3 text-xs leading-5 text-slate-500">
               실제 혼잡도나 실시간 방문자 수와는 다를 수 있어요.

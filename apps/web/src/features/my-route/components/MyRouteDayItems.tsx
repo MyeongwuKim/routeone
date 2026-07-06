@@ -163,7 +163,7 @@ function TodayRoutePreview({ day }: { day: MyRouteDay }) {
       <div className="flex w-max items-center gap-1.5">
         {previewStops.map((stop, index) => (
           <Fragment key={stop.id}>
-            <span className="max-w-[8rem] truncate rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-800">
+            <span className="max-w-[8rem] truncate rounded-full bg-slate-950/45 px-2.5 py-1 text-[11px] font-bold text-brand-100 shadow-sm ring-1 ring-white/10">
               {index + 1}. {stop.place.title}
             </span>
             {index < previewStops.length - 1 ? (
@@ -186,12 +186,12 @@ function TodayNextStopCard({ day }: { day: MyRouteDay }) {
 
   if (!nextStop) {
     return (
-      <div className="mt-3 flex items-center gap-3 rounded-2xl bg-white px-3 py-2.5 text-slate-900">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700">
+      <div className="mt-3 flex items-center gap-3 rounded-2xl bg-slate-950/35 px-3 py-2.5 text-white shadow-sm ring-1 ring-white/10">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-400/15 text-xl text-brand-100">
           <MdCheckCircle />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold text-brand-700">완료</p>
+          <p className="text-[11px] font-bold text-brand-100">완료</p>
           <p className="truncate text-sm font-black">오늘 루트 완료</p>
         </div>
       </div>
@@ -199,8 +199,8 @@ function TodayNextStopCard({ day }: { day: MyRouteDay }) {
   }
 
   return (
-    <div className="mt-3 flex items-center gap-3 rounded-2xl bg-white px-3 py-2.5 text-slate-900">
-      <div className="size-10 shrink-0 overflow-hidden rounded-2xl bg-brand-50">
+    <div className="mt-3 flex items-center gap-3 rounded-2xl bg-slate-950/35 px-3 py-2.5 text-white shadow-sm ring-1 ring-white/10">
+      <div className="size-10 shrink-0 overflow-hidden rounded-2xl bg-brand-400/15">
         {nextStop.place.imageUrl ? (
           <img
             src={nextStop.place.imageUrl}
@@ -219,10 +219,10 @@ function TodayNextStopCard({ day }: { day: MyRouteDay }) {
           <MdFlag className="text-sm" />
           다음 장소
         </p>
-        <p className="truncate text-sm font-black text-slate-950">
+        <p className="truncate text-sm font-black text-white">
           {nextStop.place.title}
         </p>
-        <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+        <p className="mt-0.5 truncate text-[11px] font-semibold text-white/70">
           {nextStop.place.categoryLabel ?? nextStop.place.categoryName ?? "장소"}
         </p>
       </div>
@@ -251,7 +251,7 @@ export function TodayRouteDayCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex size-12 shrink-0 flex-col items-center justify-center rounded-2xl bg-white text-brand-700 shadow-sm">
+          <span className="flex size-12 shrink-0 flex-col items-center justify-center rounded-2xl bg-slate-950/45 text-brand-100 shadow-sm ring-1 ring-white/10">
             <span className="font-trip text-xs leading-none">DAY</span>
             <span className="text-lg font-black leading-none">
               {day.dayIndex}
@@ -259,7 +259,7 @@ export function TodayRouteDayCard({
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-brand-700">
+              <span className="rounded-full bg-slate-950/45 px-2.5 py-1 text-[11px] font-black text-brand-100 shadow-sm ring-1 ring-white/10">
                 오늘
               </span>
               <span className="text-xs font-bold text-white/80">
@@ -272,7 +272,7 @@ export function TodayRouteDayCard({
           </div>
         </div>
         <span className="shrink-0 whitespace-nowrap rounded-full bg-slate-950/20 px-2.5 py-1 text-[11px] font-black text-white">
-          활성화 중
+          오늘 일정
         </span>
       </div>
 
@@ -285,7 +285,7 @@ export function TodayRouteDayCard({
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/25">
           <div
-            className="h-full rounded-full bg-white"
+            className="h-full rounded-full bg-brand-100/85"
             style={{ width: `${progressPercent}%` }}
           />
         </div>

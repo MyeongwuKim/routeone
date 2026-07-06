@@ -178,8 +178,8 @@ function PlaceCartScheduleStep() {
       </div>
 
       {isCustomTripDaysOpen ? (
-        <div className="fixed inset-0 z-[1800] flex items-center justify-center bg-slate-900/45 px-4">
-          <div className="w-full max-w-[340px] rounded-3xl border border-brand-200 bg-white p-4 shadow-2xl">
+        <div className="center-modal-backdrop-enter fixed inset-0 z-[1800] flex items-center justify-center bg-slate-900/45 px-4">
+          <div className="center-modal-panel-enter w-full max-w-[340px] rounded-3xl border border-brand-200 bg-white p-4 shadow-2xl">
             <p className="text-lg font-bold text-slate-900">여행 일수 입력</p>
             <p className="mt-1 text-sm text-slate-500">1일 이상 숫자를 입력해 주세요.</p>
 

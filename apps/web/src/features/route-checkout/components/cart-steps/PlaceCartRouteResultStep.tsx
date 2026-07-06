@@ -408,7 +408,7 @@ function PlaceCartRouteResultStep({
         </div>
       </div>
 
-      <footer className="shrink-0 border-t border-brand-100 px-4 py-4">
+      <footer className="app-safe-area-footer shrink-0 border-t border-brand-100 px-4 py-4">
         {isRouteOrderEditing ? (
           <button
             type="button"

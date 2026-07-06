@@ -1,7 +1,9 @@
 import {
+  AnalyzeRouteStopVisitPhotoDocument,
   AppendRouteDaysDocument,
   ClearRouteDocument,
   CloneRouteDocument,
+  CreateRouteStopVisitPhotoUploadDocument,
   CreateRouteDocument,
   DeleteRouteDayDocument,
   DeleteRouteDocument,
@@ -18,6 +20,7 @@ import {
   UnlikeRouteDocument,
   UnsaveRouteDocument,
   UpdateRouteStopStayMinutesDocument,
+  type AnalyzeRouteStopVisitPhotoInput,
   type AppendRouteDaysInput,
   type CloneRouteInput,
   type CreateRouteInput,
@@ -70,6 +73,16 @@ export const routeApi = {
   deleteRouteDay(dayId: RouteId) {
     return requestGraphQL(DeleteRouteDayDocument, {
       dayId,
+    });
+  },
+  createRouteStopVisitPhotoUpload(stopId: RouteId) {
+    return requestGraphQL(CreateRouteStopVisitPhotoUploadDocument, {
+      stopId,
+    });
+  },
+  analyzeRouteStopVisitPhoto(input: AnalyzeRouteStopVisitPhotoInput) {
+    return requestGraphQL(AnalyzeRouteStopVisitPhotoDocument, {
+      input,
     });
   },
   markRouteStopVisited(

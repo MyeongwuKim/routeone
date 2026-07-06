@@ -44,6 +44,7 @@ import {
   CAFE_LCLS_CODE,
   getPlaceCategoryLabel,
 } from "@/lib/placeCategory";
+import { getCurrentPosition } from "@/lib/currentPosition";
 import {
   fetchGangwonAttractions,
   fetchGangwonFestivals,
@@ -992,37 +993,26 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   );
 
   useEffect(() => {
-    if (!("geolocation" in navigator)) {
-      setDefaultFilterRegion(DEFAULT_FILTER_REGION);
-      return;
-    }
-
     let isMounted = true;
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
+    getCurrentPosition()
+      .then((position) => {
         if (!isMounted) {
           return;
         }
 
         setDefaultFilterRegion(
           getNearestGangwonRegion({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
+            lat: position.lat,
+            lng: position.lng,
           })
         );
-      },
-      () => {
+      })
+      .catch(() => {
         if (isMounted) {
           setDefaultFilterRegion(DEFAULT_FILTER_REGION);
         }
-      },
-      {
-        enableHighAccuracy: false,
-        maximumAge: 300000,
-        timeout: 5000,
-      }
-    );
+      });
 
     return () => {
       isMounted = false;
@@ -1277,7 +1267,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   };
 
   return (
-    <section className="space-y-3 pb-4">
+    <section className="flex h-full min-h-0 flex-col gap-3">
       {mode === "liked" ? (
         <header className="flex items-center gap-3">
           <button
@@ -1393,50 +1383,52 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         ) : null}
       </div>
 
-      {routeListQuery.isLoading ? (
-        <PotatoLoadingCard
-          title={pageCopy.loadingTitle}
-          description={pageCopy.loadingDescription}
-          animation="map-thinking"
-          compact
-          className="shadow-sm"
-        />
-      ) : null}
+      <div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto pb-4">
+        {routeListQuery.isLoading ? (
+          <PotatoLoadingCard
+            title={pageCopy.loadingTitle}
+            description={pageCopy.loadingDescription}
+            animation="map-thinking"
+            compact
+            className="shadow-sm"
+          />
+        ) : null}
 
-      {routeListQuery.isError ? (
-        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
-          {pageCopy.error}
-        </div>
-      ) : null}
+        {routeListQuery.isError ? (
+          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
+            {pageCopy.error}
+          </div>
+        ) : null}
 
-      {!routeListQuery.isLoading &&
-      !routeListQuery.isError &&
-      routes.length === 0 ? (
-        <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40 dark:text-slate-300">
-          {pageCopy.empty}
-        </div>
-      ) : null}
+        {!routeListQuery.isLoading &&
+        !routeListQuery.isError &&
+        routes.length === 0 ? (
+          <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40 dark:text-slate-300">
+            {pageCopy.empty}
+          </div>
+        ) : null}
 
-      {!routeListQuery.isLoading &&
-      !routeListQuery.isError &&
-      routes.length > 0 &&
-      filteredRoutes.length === 0 ? (
-        <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40 dark:text-slate-300">
-          조건에 맞는 공유 루트가 없어요.
-        </div>
-      ) : null}
+        {!routeListQuery.isLoading &&
+        !routeListQuery.isError &&
+        routes.length > 0 &&
+        filteredRoutes.length === 0 ? (
+          <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40 dark:text-slate-300">
+            조건에 맞는 공유 루트가 없어요.
+          </div>
+        ) : null}
 
-      {filteredRoutes.map((route) => (
-        <SharedRouteCard
-          key={route.id}
-          route={route}
-          isLiked={likedRouteIds.has(route.id) || route.likedByMe}
-          isLikePending={pendingLikeRouteIds.has(route.id)}
-          onToggleLike={handleToggleLike}
-          onOpen={(route) => setSelectedRouteId(route.id)}
-          onRequestFilter={openFilterDialogWithCandidate}
-        />
-      ))}
+        {filteredRoutes.map((route) => (
+          <SharedRouteCard
+            key={route.id}
+            route={route}
+            isLiked={likedRouteIds.has(route.id) || route.likedByMe}
+            isLikePending={pendingLikeRouteIds.has(route.id)}
+            onToggleLike={handleToggleLike}
+            onOpen={(route) => setSelectedRouteId(route.id)}
+            onRequestFilter={openFilterDialogWithCandidate}
+          />
+        ))}
+      </div>
       {isFilterDialogOpen ? (
         <SharedRouteFilterDialog
           filters={draftFilters}

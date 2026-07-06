@@ -8,7 +8,7 @@ function SharedRouteDetailSkeleton({ onClose }: SharedRouteDetailSkeletonProps) 
   return (
     <div className="fixed inset-0 z-[2300] bg-white dark:bg-[#071718]">
       <div className="flex h-full flex-col">
-        <header className="flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3 dark:border-brand-400/25">
+        <header className="app-safe-area-header flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3 dark:border-brand-400/25">
           <div className="min-w-0">
             <p className="font-trip text-sm text-brand-700">SHARED ROUTE</p>
             <div className="skeleton-shimmer mt-2 h-6 w-44 rounded-full bg-slate-200 dark:bg-slate-700" />

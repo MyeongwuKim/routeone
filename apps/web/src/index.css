@@ -74,6 +74,8 @@
 :root {
   color: #0f172a;
   background: #f8fafc;
+  --app-safe-area-top: env(safe-area-inset-top, 0px);
+  --app-safe-area-bottom: env(safe-area-inset-bottom, 0px);
   font-family:
     "Roboto",
     "Noto Sans KR",
@@ -105,10 +107,12 @@ html,
 body,
 #root {
   height: 100%;
+  overscroll-behavior: none;
 }
 
 * {
   box-sizing: border-box;
+  overscroll-behavior: none;
 }
 
 body {
@@ -116,6 +120,15 @@ body {
   min-height: 100dvh;
   background: #f8fafc;
   overflow-x: hidden;
+  overscroll-behavior: none;
+}
+
+.app-safe-area-header {
+  padding-top: calc(var(--app-safe-area-top) + 0.75rem);
+}
+
+.app-safe-area-footer {
+  padding-bottom: calc(var(--app-safe-area-bottom) + 1rem);
 }
 
 .dark body {
@@ -386,6 +399,26 @@ body {
   }
 }
 
+@keyframes centerModalBackdropEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes centerModalPanelEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .route-checkout-modal-enter {
   animation: routeCheckoutEnter 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -425,6 +458,15 @@ body {
   animation: globalModalPanelEnter 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.center-modal-backdrop-enter {
+  animation: centerModalBackdropEnter 160ms ease-out;
+}
+
+.center-modal-panel-enter {
+  transform-origin: center;
+  animation: centerModalPanelEnter 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .route-order-drag-node {
   touch-action: pan-y;
   user-select: none;
@@ -445,7 +487,9 @@ body {
   .shared-route-filter-backdrop-enter,
   .shared-route-filter-panel-enter,
   .global-modal-backdrop-enter,
-  .global-modal-panel-enter {
+  .global-modal-panel-enter,
+  .center-modal-backdrop-enter,
+  .center-modal-panel-enter {
     animation: none;
   }
 }

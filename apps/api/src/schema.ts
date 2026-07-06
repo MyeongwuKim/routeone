@@ -6,6 +6,10 @@ import {
   routeResolvers,
   routeTypeDefs,
 } from "./modules/routes/route.resolver.js";
+import {
+  routeVisitPhotoResolvers,
+  routeVisitPhotoTypeDefs,
+} from "./modules/routes/routeVisitPhoto.resolver.js";
 import { userResolvers, userTypeDefs } from "./modules/user/user.resolver.js";
 
 type ResolverRecord = Record<string, unknown>;
@@ -59,6 +63,7 @@ export const typeDefs = [
   `,
   userTypeDefs,
   routeTypeDefs,
+  routeVisitPhotoTypeDefs,
 ];
 
 export const resolvers = mergeResolvers(
@@ -66,5 +71,6 @@ export const resolvers = mergeResolvers(
     DateTime: dateTimeScalar,
   },
   userResolvers,
-  routeResolvers
+  routeResolvers,
+  routeVisitPhotoResolvers
 );

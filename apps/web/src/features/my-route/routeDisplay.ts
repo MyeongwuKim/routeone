@@ -9,7 +9,7 @@ export type RouteTimelineState =
   | "undated";
 
 export const ROUTE_STATUS_LABEL: Record<MyRoute["status"], string> = {
-  ACTIVE: "진행 중",
+  ACTIVE: "여행 중",
   COMPLETED: "완료",
   DRAFT: "임시",
 };
@@ -116,7 +116,7 @@ export function getRouteTimelineLabel(
       return getTodayRouteDay(route, todayKey) ? "오늘 시작" : "시작 필요";
     }
 
-    return getTodayRouteDay(route, todayKey) ? "오늘 진행 중" : "진행 중";
+    return getTodayRouteDay(route, todayKey) ? "오늘 여행 중" : "여행 중";
   }
 
   if (state === "upcoming") {

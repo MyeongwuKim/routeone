@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "pnpm --filter web dev",
     "dev:api": "pnpm --filter api dev",
+    "dev:api:test": "pnpm --filter api dev:test",
     "dev:web": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "build:api": "pnpm --filter api build",

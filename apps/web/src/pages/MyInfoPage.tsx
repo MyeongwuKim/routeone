@@ -6,6 +6,7 @@ import {
   MdChevronRight,
   MdDarkMode,
   MdHistory,
+  MdInfoOutline,
   MdLightMode,
   MdLogout,
   MdOutlineAccountCircle,
@@ -205,6 +206,15 @@ function MyInfoPage() {
           description={isDarkMode ? "어두운 화면으로 보기" : "밝은 화면으로 보기"}
           checked={isDarkMode}
           onToggle={toggleDarkMode}
+        />
+
+        <div className="border-b border-brand-50" />
+
+        <MyInfoMenuRow
+          icon={<MdInfoOutline />}
+          title="버전 정보"
+          description="iOS, Android 앱 버전 확인"
+          onClick={() => navigate("/me/app-info")}
         />
 
         <div className="border-b border-brand-50" />

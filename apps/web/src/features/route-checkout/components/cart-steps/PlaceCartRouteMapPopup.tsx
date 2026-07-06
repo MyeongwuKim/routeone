@@ -1640,7 +1640,7 @@ function PlaceCartRouteMapPopup({
   return createPortal(
     <div className="fixed inset-0 z-[2750] bg-white">
       <div className="flex h-full flex-col">
-        <header className="flex items-center justify-between border-b border-brand-100 px-4 py-3">
+        <header className="app-safe-area-header flex items-center justify-between border-b border-brand-100 px-4 py-3">
           <div className="min-w-0">
             <p className="font-trip text-sm text-brand-700">
               {hasDaySelector ? "ROUTE MAP" : `DAY ${displayDay.day} ROUTE`}
@@ -1822,7 +1822,7 @@ function PlaceCartRouteMapPopup({
           ) : null}
         </div>
 
-        <div className="max-h-[228px] shrink-0 overflow-hidden border-t border-brand-100 bg-white px-4 py-3">
+        <div className="app-safe-area-footer max-h-[228px] shrink-0 overflow-hidden border-t border-brand-100 bg-white px-4 py-3">
           <div className="scrollbar-hide max-h-[204px] overflow-y-auto pr-1">
             <div className="space-y-2 pb-1">
               {isStartPreviewDirty ? (

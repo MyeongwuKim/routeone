@@ -214,7 +214,7 @@ function StartLocationPickerPopup({
   return (
     <div className="fixed inset-0 z-[2800] bg-white">
       <div className="flex h-full flex-col">
-        <header className="flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3">
+        <header className="app-safe-area-header flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3">
           <div className="min-w-0">
             <p className="font-trip text-sm text-brand-700">START POINT</p>
             <h2 className="mt-0.5 text-lg font-bold text-slate-900">
@@ -243,7 +243,7 @@ function StartLocationPickerPopup({
           </div>
         </div>
 
-        <footer className="shrink-0 border-t border-brand-100 bg-white px-4 py-3">
+        <footer className="app-safe-area-footer shrink-0 border-t border-brand-100 bg-white px-4 py-3">
           <div className="mb-3 flex items-center gap-2 rounded-2xl bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700">
             <IoLocationSharp className="text-base" />
             <span>

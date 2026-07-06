@@ -1,0 +1,8 @@
+mutation CreateRouteStopVisitPhotoUpload($stopId: ID!) {
+  createRouteStopVisitPhotoUpload(stopId: $stopId) {
+    imageId
+    uploadUrl
+    imageUrl
+    expiresAt
+  }
+}

@@ -336,9 +336,7 @@ export function optimisticVisitRouteStopCache({
     const nextVerificationStatus: RouteStopVerificationStatus = visited
       ? (verificationStatus ?? "MANUAL")
       : "NONE";
-    const isVerified =
-      nextVerificationStatus === "GPS" ||
-      nextVerificationStatus === "GPS_PHOTO";
+    const isVerified = nextVerificationStatus === "GPS_PHOTO";
     const nextDays = route.days.map((day) => ({
       ...day,
       stops: day.stops.map((stop): MyRouteStop =>
