@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -255,16 +255,31 @@ function MyRouteHistoryPage() {
     ? posterPreview.cards[posterPreview.currentIndex] ?? null
     : null;
 
-  const handleDownloadPoster = () => {
+  const handleDownloadPoster = async () => {
     if (!posterPreview || !selectedPosterCard) {
       return;
     }
 
-    downloadRouteCompletionPoster(
-      selectedPosterCard.dataUrl,
-      selectedPosterCard.fileName
-    );
-    showToast(`${selectedPosterCard.label} PNG를 저장했어요.`);
+    try {
+      const saveResult = await downloadRouteCompletionPoster(
+        selectedPosterCard.dataUrl,
+        selectedPosterCard.fileName,
+        `${getRouteTitle(posterPreview.route)} ${selectedPosterCard.label}`
+      );
+
+      if (saveResult.mode === "native" && !saveResult.completed) {
+        return;
+      }
+
+      showToast(
+        saveResult.mode === "native"
+          ? "포토카드 저장/공유를 완료했어요."
+          : `${selectedPosterCard.label} PNG 다운로드를 시작했어요.`
+      );
+    } catch (error) {
+      console.error(error);
+      showToast("포토카드를 저장하지 못했어요.");
+    }
   };
 
   const handleSharePoster = async () => {
@@ -280,11 +295,21 @@ function MyRouteHistoryPage() {
       );
 
       if (!didShare) {
-        downloadRouteCompletionPoster(
+        const saveResult = await downloadRouteCompletionPoster(
           selectedPosterCard.dataUrl,
-          selectedPosterCard.fileName
+          selectedPosterCard.fileName,
+          `${getRouteTitle(posterPreview.route)} ${selectedPosterCard.label}`
         );
-        showToast("공유를 지원하지 않아 PNG로 저장했어요.");
+
+        if (saveResult.mode === "native" && !saveResult.completed) {
+          return;
+        }
+
+        showToast(
+          saveResult.mode === "native"
+            ? "포토카드 저장/공유를 완료했어요."
+            : "공유를 지원하지 않아 PNG 다운로드를 시작했어요."
+        );
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -296,14 +321,8 @@ function MyRouteHistoryPage() {
     }
   };
 
-  useEffect(() => {
-    if (selectedHistoryRoute && myRoutesQuery.data && !selectedRouteDay) {
-      setSelectedHistoryRoute(null);
-    }
-  }, [myRoutesQuery.data, selectedHistoryRoute, selectedRouteDay]);
-
   return (
-    <section className="space-y-4 pb-4 text-slate-900">
+    <section className="space-y-4 pb-4 text-slate-900 dark:text-slate-100">
       <header className="flex items-center gap-3">
         <button
           type="button"
@@ -314,23 +333,25 @@ function MyRouteHistoryPage() {
           <MdArrowBack />
         </button>
         <div className="min-w-0">
-          <p className="text-xs font-black text-brand-700">내 정보</p>
-          <h1 className="truncate text-lg font-bold text-slate-900">
+          <p className="text-xs font-black text-brand-700 dark:text-brand-200">
+            내 정보
+          </p>
+          <h1 className="truncate text-lg font-bold text-slate-900 dark:text-white">
             다녀온 루트
           </h1>
         </div>
       </header>
 
-      <div className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d] dark:shadow-[0_16px_34px_rgba(0,0,0,0.28)]">
         <div className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
             <MdHistory />
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-bold text-slate-900">
+            <p className="text-sm font-bold text-slate-900 dark:text-white">
               완료했거나 지난 일정
             </p>
-            <p className="mt-0.5 text-xs font-semibold text-slate-500">
+            <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-200/75">
               {historyRoutes.length}개 루트
             </p>
           </div>
@@ -348,7 +369,7 @@ function MyRouteHistoryPage() {
       ) : null}
 
       {myRoutesQuery.isError ? (
-        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
           다녀온 루트를 불러오지 못했어요.
         </div>
       ) : null}
@@ -356,18 +377,18 @@ function MyRouteHistoryPage() {
       {!myRoutesQuery.isLoading &&
       !myRoutesQuery.isError &&
       historyRoutes.length === 0 ? (
-        <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm">
+        <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d] dark:text-slate-200">
           아직 다녀온 루트가 없어요.
         </div>
       ) : null}
 
       {historyRoutes.length > 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-3 px-px pb-1 pt-1">
           {historyRoutes.map((route) => (
             <MyRouteCard
               key={route.id}
               route={route}
-              variant="compact"
+              variant="history"
               hideTimelineBadge
               onSelectDay={handleSelectHistoryDay}
             />
@@ -381,6 +402,7 @@ function MyRouteHistoryPage() {
           day={selectedRouteDay.day}
           onClose={() => setSelectedHistoryRoute(null)}
           isReadOnly
+          enableVerificationPhotoPreview
           readOnlyPosterAction={
             getRouteCompletionPosterStats(selectedRouteDay.route).canCreate
               ? {

@@ -18,6 +18,9 @@ const appScheme = isDevVariant ? "routeone-dev" : "routeone";
 const appBundleIdentifier = isDevVariant
   ? "com.routeone.app.dev"
   : "com.routeone.app";
+const enableAppleSignIn =
+  process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim().toLowerCase() ===
+    "true" || process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim() === "1";
 const googleIosClientId =
   process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim() ??
   process.env.GOOGLE_IOS_CLIENT_ID?.trim() ??
@@ -43,12 +46,17 @@ const plugins: unknown[] = [
     "expo-image-picker",
     {
       cameraPermission:
-        "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다."
+        "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
+      photosPermission:
+        "RouteOne이 지난 방문 사진 인증을 위해 선택한 사진을 사용합니다."
     }
   ],
-  "expo-apple-authentication",
   "./plugins/withGoogleModularHeaders"
 ];
+
+if (enableAppleSignIn) {
+  plugins.push("expo-apple-authentication");
+}
 
 if (googleIosUrlScheme) {
   plugins.push([
@@ -73,7 +81,7 @@ export default {
     ios: {
       bundleIdentifier: appBundleIdentifier,
       supportsTablet: false,
-      usesAppleSignIn: true,
+      usesAppleSignIn: enableAppleSignIn,
       infoPlist: {
         NSAppTransportSecurity: {
           NSAllowsArbitraryLoads: false,
@@ -82,7 +90,9 @@ export default {
         NSLocationWhenInUseUsageDescription:
           "RouteOne이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
         NSCameraUsageDescription:
-          "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다."
+          "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
+        NSPhotoLibraryUsageDescription:
+          "RouteOne이 지난 방문 사진 인증을 위해 선택한 사진을 사용합니다."
       }
     },
     android: {

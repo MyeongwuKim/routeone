@@ -3,6 +3,8 @@ mutation CreateRouteStopVisitPhotoUpload($stopId: ID!) {
     imageId
     uploadUrl
     imageUrl
+    fileName
+    environment
     expiresAt
   }
 }

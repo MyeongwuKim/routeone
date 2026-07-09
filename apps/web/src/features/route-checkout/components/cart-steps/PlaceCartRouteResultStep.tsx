@@ -1,8 +1,11 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { IoLocationSharp } from "react-icons/io5";
-import { routeCheckoutApi } from "@/api/routeCheckoutApi";
+import {
+  getEffectiveRoutePlanTripDays,
+  routeCheckoutApi,
+} from "@/api/routeCheckoutApi";
 import { routeApi } from "@/api/routeApi";
 import {
   MY_ROUTES_QUERY_KEY,
@@ -12,6 +15,12 @@ import { useUiToastStore } from "@/stores/uiToastStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { createPlaceDuplicateKeySet } from "@/lib/placeDuplicate";
+import {
+  getMapSheetPlaceStaySummaryKey,
+  mapSheetPlaceToPlaceSnapshotInput,
+  resolvePlaceStaySummaryForDisplay,
+  type PlaceStaySummaryPreview,
+} from "@/lib/routePlaceSnapshot";
 import { useRouteCheckout } from "../RouteCheckoutContext";
 import PlaceCartRouteDayCard from "./PlaceCartRouteDayCard";
 import StartLocationPickerPopup from "./StartLocationPickerPopup";
@@ -139,6 +148,53 @@ function PlaceCartRouteResultStep({
     routePlan.find((day) => day.items.length > 0)?.items[0] ?? null;
   const firstTravelMinutes = firstRouteItem?.travelMinutesFromPrevious ?? null;
   const isRouteOrderEditing = isOrderEditing && hasEditableRoute;
+  const routePlanPlaces = useMemo(() => {
+    const usedKeys = new Set<string>();
+
+    return routePlan
+      .flatMap((day) => day.items.map((item) => item.place))
+      .filter((place) => {
+        const key = getMapSheetPlaceStaySummaryKey(place);
+
+        if (usedKeys.has(key)) {
+          return false;
+        }
+
+        usedKeys.add(key);
+        return true;
+      });
+  }, [routePlan]);
+  const routePlanPlaceSummaryKey = routePlanPlaces
+    .map(getMapSheetPlaceStaySummaryKey)
+    .join("::");
+  const placeStaySummariesQuery = useQuery({
+    queryKey: ["checkout-place-stay-summaries", routePlanPlaceSummaryKey],
+    enabled: routePlanPlaces.length > 0,
+    queryFn: async () => {
+      const result = await routeApi.placeStaySummaries(
+        routePlanPlaces.map(mapSheetPlaceToPlaceSnapshotInput)
+      );
+      return result.placeStaySummaries;
+    },
+    staleTime: 1000 * 60 * 30,
+    gcTime: 1000 * 60 * 60,
+  });
+  const placeStaySummaryByPlaceId = useMemo(() => {
+    const summaryMap = new Map<string, PlaceStaySummaryPreview>();
+
+    routePlanPlaces.forEach((place, index) => {
+      const summary = resolvePlaceStaySummaryForDisplay(
+        place,
+        placeStaySummariesQuery.data?.[index]
+      );
+
+      if (summary) {
+        summaryMap.set(place.id, summary);
+      }
+    });
+
+    return summaryMap;
+  }, [placeStaySummariesQuery.data, routePlanPlaces]);
   const excludedPlaceKeys = [
     ...createPlaceDuplicateKeySet(
       routePlan.flatMap((day) => day.items.map((item) => item.place))
@@ -251,10 +307,11 @@ function PlaceCartRouteResultStep({
           queryKey: MY_ROUTES_QUERY_KEY,
           queryFn: () => routeApi.myRoutes(),
         }));
+      const effectiveTripDays = getEffectiveRoutePlanTripDays(routePlan);
       const conflict = findRouteDateConflict({
         routes: routesData.myRoutes,
         travelStartDate,
-        tripDays,
+        tripDays: effectiveTripDays,
         excludeRouteId: appendTarget?.routeId,
       });
 
@@ -370,8 +427,8 @@ function PlaceCartRouteResultStep({
                     </p>
                     <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">
                       {firstTravelMinutes != null && firstTravelMinutes >= 60
-                        ? `첫 장소까지 약 ${formatDurationText(firstTravelMinutes)} 걸려요. 실제 출발지가 다르면 시작 마커를 옮겨요.`
-                        : "현재 위치와 여행 지역이 다르면 시작 마커를 옮겨 다시 계산해요."}
+                        ? `첫 장소까지 약 ${formatDurationText(firstTravelMinutes)} 걸려요. 실제 출발지가 다르면 지도에서 위치를 바꿔요.`
+                        : "현재 위치와 여행 지역이 다르면 지도에서 출발 위치를 바꿔 다시 계산해요."}
                     </p>
                   </div>
                   <button
@@ -379,7 +436,7 @@ function PlaceCartRouteResultStep({
                     onClick={() => setIsStartLocationPickerOpen(true)}
                     className="shrink-0 rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700"
                   >
-                    마커 이동
+                    지도에서 변경
                   </button>
                 </div>
               </section>
@@ -394,6 +451,7 @@ function PlaceCartRouteResultStep({
                 comparisonDay={getComparisonDay(day)}
                 candidatePlaces={candidatePlaces}
                 excludedPlaceKeys={excludedPlaceKeys}
+                placeStaySummaryByPlaceId={placeStaySummaryByPlaceId}
                 onChangeStayMinutes={handleChangeStayMinutes}
                 onInsertPlace={handleInsertPlace}
                 onRemovePlace={handleRemoveRoutePlace}

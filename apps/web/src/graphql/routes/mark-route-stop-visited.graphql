@@ -2,11 +2,13 @@ mutation MarkRouteStopVisited(
   $stopId: ID!
   $visited: Boolean = true
   $verification: RouteStopVisitVerificationInput
+  $actualStayMinutes: Int
 ) {
   markRouteStopVisited(
     stopId: $stopId
     visited: $visited
     verification: $verification
+    actualStayMinutes: $actualStayMinutes
   ) {
     ...RouteDetailFields
   }

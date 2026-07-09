@@ -1,13 +1,14 @@
 import { routeApi } from "./routeApi";
-import type {
-  AppendRouteDaysInput,
-  CreateRouteInput,
-  PlaceProvider,
-} from "@/generated/graphql";
+import type { AppendRouteDaysInput, CreateRouteInput } from "@/generated/graphql";
 import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
+import {
+  getMapSheetPlaceRegionCode,
+  getMapSheetPlaceRegionLabelKey,
+  mapSheetPlaceToPlaceSnapshotInput,
+} from "@/lib/routePlaceSnapshot";
 import type { MapSheetPlace } from "@/types/place";
 
-type RouteCheckoutPlanDay = {
+export type RouteCheckoutPlanDay = {
   day: number;
   items: Array<{
     stayMinutes: number;
@@ -28,23 +29,36 @@ type SaveRoutePlanInput = {
   } | null;
 };
 
-const ROUTE_PLACE_PROVIDER: PlaceProvider = "TOUR_API";
-
 type RouteTravelPoint = {
   lat: number;
   lng: number;
 };
 
-function getPlaceRegionCode(place: MapSheetPlace) {
-  return place.signguCode || place.areaCode || null;
-}
+function normalizeRoutePlanDays(routePlan: RouteCheckoutPlanDay[]) {
+  const nonEmptyDays = routePlan
+    .filter((day) => day.items.length > 0)
+    .sort((left, right) => left.day - right.day);
 
-function getPlaceRegionLabelKey(place: MapSheetPlace) {
-  if (place.areaCode && place.signguCode) {
-    return `${place.areaCode}:${place.signguCode}`;
+  if (nonEmptyDays.length === 0) {
+    return {
+      routePlan: [],
+      tripDays: 1,
+    };
   }
 
-  return place.areaCode || place.signguCode || null;
+  return {
+    routePlan: nonEmptyDays.map((day, index) => ({
+      ...day,
+      day: index + 1,
+    })),
+    tripDays: nonEmptyDays.length,
+  };
+}
+
+export function getEffectiveRoutePlanTripDays(
+  routePlan: RouteCheckoutPlanDay[]
+) {
+  return normalizeRoutePlanDays(routePlan).tripDays;
 }
 
 function getMostFrequentValue(values: Array<string | null | undefined>) {
@@ -102,24 +116,25 @@ async function resolveTravelMinutesFromPrevious({
 async function buildCreateRouteInput(
   input: SaveRoutePlanInput
 ): Promise<CreateRouteInput> {
-  const routeStops = input.routePlan.flatMap((day) =>
+  const normalizedPlan = normalizeRoutePlanDays(input.routePlan);
+  const routeStops = normalizedPlan.routePlan.flatMap((day) =>
     day.items.map((item) => ({
       day,
       item,
     }))
   );
   const primaryRegionCode = getMostFrequentValue(
-    routeStops.map(({ item }) => getPlaceRegionCode(item.place))
+    routeStops.map(({ item }) => getMapSheetPlaceRegionCode(item.place))
   );
   const primaryRegionLabelKey = getMostFrequentValue(
-    routeStops.map(({ item }) => getPlaceRegionLabelKey(item.place))
+    routeStops.map(({ item }) => getMapSheetPlaceRegionLabelKey(item.place))
   );
 
   const routeInput: CreateRouteInput = {
     countryCode: "KR",
     primaryRegionCode,
     primaryRegionLabelKey,
-    tripDays: input.tripDays,
+    tripDays: normalizedPlan.tripDays,
     travelStartDate: input.travelStartDate,
     dailyStartMinutes: input.dailyStartMinutes,
     scheduleEndMinutes: input.scheduleEndMinutes,
@@ -129,7 +144,7 @@ async function buildCreateRouteInput(
 
   let order = 1;
 
-  for (const day of input.routePlan) {
+  for (const day of normalizedPlan.routePlan) {
     let previousPoint: RouteTravelPoint | null = input.startLocation ?? null;
 
     for (const item of day.items) {
@@ -144,21 +159,7 @@ async function buildCreateRouteInput(
         order,
         stayMinutes: item.stayMinutes,
         travelMinutesFromPrevious,
-        place: {
-          provider: ROUTE_PLACE_PROVIDER,
-          externalId: item.place.id,
-          contentId: item.place.contentId,
-          contentTypeId: item.place.contentTypeId,
-          title: item.place.title,
-          address: item.place.address,
-          lat: item.place.lat,
-          lng: item.place.lng,
-          categoryLabel: item.place.contentTypeLabel,
-          categoryName: item.place.categoryName,
-          imageUrl: item.place.images[0] ?? null,
-          regionCode: getPlaceRegionCode(item.place),
-          regionLabelKey: getPlaceRegionLabelKey(item.place),
-        },
+        place: mapSheetPlaceToPlaceSnapshotInput(item.place),
       });
 
       previousPoint = item.place;

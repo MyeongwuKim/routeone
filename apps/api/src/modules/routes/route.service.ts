@@ -1,5 +1,6 @@
 import type {
   PlaceProvider,
+  Prisma,
   PrismaClient,
   Route,
   RouteStop,
@@ -9,7 +10,7 @@ import type {
 } from "@prisma/client";
 import { isDevVerificationBypassEnabled } from "../../lib/devVerification.js";
 
-type PlaceSnapshotInput = {
+export type PlaceSnapshotInput = {
   provider: PlaceProvider;
   externalId?: string | null;
   contentId?: string | null;
@@ -84,11 +85,36 @@ export type UpdateRouteStopStayMinutesInput = {
   stayMinutes: number;
 };
 
+export type PlaceStaySummary = {
+  averageActualStayMinutes: number | null;
+  visitCount: number;
+  lastVisitedAt: Date | null;
+};
+
+export type PlacePhotoListOptions = {
+  limit?: number | null;
+};
+
+type RouteServicePrisma = PrismaClient | Prisma.TransactionClient;
+
+type RouteStopStayContributionSource = Pick<
+  RouteStop,
+  "place" | "visitStatus" | "visitedAt" | "actualStayMinutes"
+> & {
+  stayStatSyncedAt?: Date | null;
+};
+
+type RouteStopStayContribution = {
+  minutes: number;
+  visitedAt: Date | null;
+};
+
 export type RouteStopVisitVerificationInput = {
   status?: RouteStopVerificationStatus | null;
   lat?: number | null;
   lng?: number | null;
   accuracyMeters?: number | null;
+  photoImageId?: string | null;
   photoUrl?: string | null;
 };
 
@@ -96,10 +122,54 @@ const VERIFIED_ROUTE_STOP_STATUSES = new Set<RouteStopVerificationStatus>([
   "GPS_PHOTO",
 ]);
 const GPS_VERIFICATION_MAX_DISTANCE_METERS = 100;
+const BYPASS_GPS_PHOTO_LOCATION_VERIFICATION = false;
 const EARTH_RADIUS_METERS = 6_371_000;
+const DEFAULT_PLACE_PHOTO_LIMIT = 30;
+const MAX_PLACE_PHOTO_LIMIT = 60;
 
 function clampTripDays(value: number) {
   return Math.max(1, Math.min(30, Math.round(value || 1)));
+}
+
+function normalizeRouteStopDayIndex(
+  value: number | null | undefined,
+  tripDays: number
+) {
+  const dayIndex = Number.isFinite(value) ? Math.round(value ?? 1) : 1;
+  return Math.max(1, Math.min(tripDays, dayIndex));
+}
+
+function normalizeRouteStopDayInputs(
+  tripDays: number,
+  stops: CreateRouteStopInput[]
+) {
+  const requestedTripDays = clampTripDays(tripDays);
+  const normalizedStops = stops.map((stop) => ({
+    ...stop,
+    dayIndex: normalizeRouteStopDayIndex(stop.dayIndex, requestedTripDays),
+  }));
+
+  if (normalizedStops.length === 0) {
+    return {
+      tripDays: 1,
+      stops: normalizedStops,
+    };
+  }
+
+  const usedDayIndexes = [
+    ...new Set(normalizedStops.map((stop) => stop.dayIndex)),
+  ].sort((left, right) => left - right);
+  const compactDayIndexByOriginal = new Map(
+    usedDayIndexes.map((dayIndex, index) => [dayIndex, index + 1] as const)
+  );
+
+  return {
+    tripDays: usedDayIndexes.length,
+    stops: normalizedStops.map((stop) => ({
+      ...stop,
+      dayIndex: compactDayIndexByOriginal.get(stop.dayIndex) ?? 1,
+    })),
+  };
 }
 
 function addDays(date: Date, days: number) {
@@ -203,6 +273,96 @@ function getPlaceDuplicateKeys(place: PlaceSnapshotInput) {
   }
 
   return [...keys];
+}
+
+function getPlaceStayStatKeys(place: PlaceSnapshotInput) {
+  return getPlaceDuplicateKeys(normalizePlaceSnapshot(place));
+}
+
+function getPrimaryPlaceStayStatKey(place: PlaceSnapshotInput) {
+  return getPlaceStayStatKeys(place)[0] ?? null;
+}
+
+function buildPlaceStayStatSnapshotData(place: PlaceSnapshotInput) {
+  const normalizedPlace = normalizePlaceSnapshot(place);
+
+  return {
+    provider: normalizedPlace.provider,
+    externalId: normalizedPlace.externalId,
+    contentId: normalizedPlace.contentId,
+    contentTypeId: normalizedPlace.contentTypeId,
+    title: normalizedPlace.title,
+    address: normalizedPlace.address,
+    lat: normalizedPlace.lat,
+    lng: normalizedPlace.lng,
+    categoryLabel: normalizedPlace.categoryLabel,
+    categoryName: normalizedPlace.categoryName,
+    imageUrl: normalizedPlace.imageUrl,
+    regionCode: normalizedPlace.regionCode,
+    regionLabelKey: normalizedPlace.regionLabelKey,
+  };
+}
+
+function buildPlacePhotoSnapshotData(place: PlaceSnapshotInput) {
+  const { imageUrl, ...snapshotData } = buildPlaceStayStatSnapshotData(place);
+
+  return {
+    ...snapshotData,
+    placeImageUrl: imageUrl,
+  };
+}
+
+function parseImageDeliveryUrl(imageUrl: string) {
+  try {
+    const url = new URL(imageUrl);
+
+    if (url.hostname !== "imagedelivery.net") {
+      return null;
+    }
+
+    const pathParts = url.pathname.split("/").filter(Boolean);
+
+    if (pathParts.length < 3) {
+      return null;
+    }
+
+    return {
+      url,
+      accountHash: pathParts[0],
+      imageId: pathParts[1],
+      variant: pathParts[2],
+      pathParts,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildImageDeliveryVariantUrl(imageUrl: string, variant: string) {
+  const parsedImageUrl = parseImageDeliveryUrl(imageUrl);
+
+  if (!parsedImageUrl) {
+    return null;
+  }
+
+  const nextUrl = new URL(parsedImageUrl.url.toString());
+  const nextPathParts = [...parsedImageUrl.pathParts];
+  nextPathParts[2] = variant;
+  nextUrl.pathname = `/${nextPathParts.join("/")}`;
+
+  return nextUrl.toString();
+}
+
+function getImageDeliveryVariantName(imageUrl: string) {
+  return parseImageDeliveryUrl(imageUrl)?.variant ?? null;
+}
+
+function clampPlacePhotoLimit(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) {
+    return DEFAULT_PLACE_PHOTO_LIMIT;
+  }
+
+  return Math.max(1, Math.min(MAX_PLACE_PHOTO_LIMIT, Math.round(value)));
 }
 
 function assertNoDuplicateRouteStops(stops: CreateRouteStopInput[]) {
@@ -614,12 +774,18 @@ export async function createRoute(
   owner: User,
   input: CreateRouteInput
 ) {
-  const tripDays = clampTripDays(input.tripDays);
-  const stopInputs = input.stops ?? [];
+  const normalizedRouteStops = normalizeRouteStopDayInputs(
+    input.tripDays,
+    input.stops ?? []
+  );
+  const tripDays = normalizedRouteStops.tripDays;
+  const stopInputs = normalizedRouteStops.stops;
   assertNoDuplicateRouteStops(stopInputs);
   const travelStartDate = input.travelStartDate ?? null;
   const travelEndDate =
-    input.travelEndDate ?? (travelStartDate ? addDays(travelStartDate, tripDays - 1) : null);
+    travelStartDate
+      ? addDays(travelStartDate, tripDays - 1)
+      : (input.travelEndDate ?? null);
   const startLocation = normalizeRouteStartLocation(input.startLocation);
   await assertNoRouteDateConflict(
     prisma,
@@ -673,9 +839,17 @@ export async function appendRouteDays(
   input: AppendRouteDaysInput
 ) {
   const route = await assertRouteOwner(prisma, input.routeId, user.id);
-  const tripDays = clampTripDays(input.tripDays);
-  const stopInputs = input.stops ?? [];
+  const normalizedRouteStops = normalizeRouteStopDayInputs(
+    input.tripDays,
+    input.stops ?? []
+  );
+  const tripDays = normalizedRouteStops.tripDays;
+  const stopInputs = normalizedRouteStops.stops;
   assertNoDuplicateRouteStops(stopInputs);
+
+  if (stopInputs.length === 0) {
+    throw new Error("추가할 장소가 없습니다.");
+  }
 
   const existingDayCount = await prisma.routeDay.count({
     where: {
@@ -685,8 +859,9 @@ export async function appendRouteDays(
   const baseDayIndex = Math.max(route.tripDays, existingDayCount);
   const travelStartDate = input.travelStartDate ?? null;
   const travelEndDate =
-    input.travelEndDate ??
-    (travelStartDate ? addDays(travelStartDate, tripDays - 1) : null);
+    travelStartDate
+      ? addDays(travelStartDate, tripDays - 1)
+      : (input.travelEndDate ?? null);
   const startLocation = normalizeRouteStartLocation(input.startLocation);
 
   if (
@@ -828,7 +1003,7 @@ function getVisitVerificationStatus(
   const status = verification?.status ?? "MANUAL";
 
   if (status === "GPS") {
-    throw new Error("방문 인증은 위치와 사진을 함께 확인해야 해요.");
+    throw new Error("사진 인증은 위치와 사진을 함께 확인해야 해요.");
   }
 
   return status === "NONE" ? "MANUAL" : status;
@@ -844,6 +1019,10 @@ function assertRouteStopGpsVerification(
   }
 
   if (isDevVerificationBypassEnabled()) {
+    return;
+  }
+
+  if (BYPASS_GPS_PHOTO_LOCATION_VERIFICATION) {
     return;
   }
 
@@ -888,10 +1067,19 @@ function getActualStayMinutes(checkedInAt: Date | null, checkedOutAt: Date | nul
   );
 }
 
+function normalizeActualStayMinutes(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return Math.max(10, Math.min(480, Math.round(value)));
+}
+
 function buildRouteStopVisitData(
   stop: RouteStop,
   visited: boolean,
-  verification?: RouteStopVisitVerificationInput | null
+  verification?: RouteStopVisitVerificationInput | null,
+  actualStayMinutes?: number | null
 ) {
   if (!visited) {
     return {
@@ -899,6 +1087,7 @@ function buildRouteStopVisitData(
       visitedAt: null,
       verificationStatus: "NONE" as RouteStopVerificationStatus,
       verifiedAt: null,
+      verificationPhotoImageId: null,
       verificationPhotoUrl: null,
       verificationLat: null,
       verificationLng: null,
@@ -917,12 +1106,17 @@ function buildRouteStopVisitData(
 
   const checkedInAt = stop.checkedInAt ?? (isVerified ? visitedAt : null);
   const checkedOutAt = stop.checkedInAt ? visitedAt : null;
+  const normalizedActualStayMinutes =
+    normalizeActualStayMinutes(actualStayMinutes);
 
   return {
     visitStatus: "VISITED" as VisitStatus,
     visitedAt,
     verificationStatus,
     verifiedAt: isVerified ? visitedAt : null,
+    verificationPhotoImageId: isVerified
+      ? nullableString(verification?.photoImageId)
+      : null,
     verificationPhotoUrl: isVerified ? (verification?.photoUrl?.trim() ?? null) : null,
     verificationLat: isVerified ? (verification?.lat ?? null) : null,
     verificationLng: isVerified ? (verification?.lng ?? null) : null,
@@ -931,8 +1125,186 @@ function buildRouteStopVisitData(
       : null,
     checkedInAt,
     checkedOutAt,
-    actualStayMinutes: getActualStayMinutes(checkedInAt, checkedOutAt),
+    actualStayMinutes:
+      normalizedActualStayMinutes ??
+      getActualStayMinutes(checkedInAt, checkedOutAt),
   };
+}
+
+type RouteStopVisitData = ReturnType<typeof buildRouteStopVisitData>;
+
+function getRouteStopStayContribution(
+  source: RouteStopStayContributionSource | null
+): RouteStopStayContribution | null {
+  const minutes = source?.actualStayMinutes ?? 0;
+
+  if (!source || source.visitStatus !== "VISITED" || minutes <= 0) {
+    return null;
+  }
+
+  return {
+    minutes,
+    visitedAt: source.visitedAt,
+  };
+}
+
+async function applyPlaceStayStatChange(
+  prisma: RouteServicePrisma,
+  place: PlaceSnapshotInput,
+  previousContribution: RouteStopStayContribution | null,
+  nextContribution: RouteStopStayContribution | null
+) {
+  const placeKey = getPrimaryPlaceStayStatKey(place);
+
+  if (!placeKey) {
+    return;
+  }
+
+  const previousMinutes = previousContribution?.minutes ?? 0;
+  const nextMinutes = nextContribution?.minutes ?? 0;
+  const deltaMinutes = nextMinutes - previousMinutes;
+  const deltaVisitCount =
+    (nextContribution ? 1 : 0) - (previousContribution ? 1 : 0);
+
+  if (deltaMinutes === 0 && deltaVisitCount === 0) {
+    return;
+  }
+
+  const snapshotData = buildPlaceStayStatSnapshotData(place);
+
+  if (nextContribution) {
+    await prisma.placeStayStat.upsert({
+      where: {
+        placeKey,
+      },
+      create: {
+        placeKey,
+        ...snapshotData,
+        totalActualStayMinutes: nextContribution.minutes,
+        visitCount: 1,
+        lastVisitedAt: nextContribution.visitedAt,
+      },
+      update: {
+        ...snapshotData,
+        totalActualStayMinutes: {
+          increment: deltaMinutes,
+        },
+        visitCount: {
+          increment: deltaVisitCount,
+        },
+        lastVisitedAt: nextContribution.visitedAt,
+      },
+    });
+    return;
+  }
+
+  const currentStat = await prisma.placeStayStat.findUnique({
+    where: {
+      placeKey,
+    },
+  });
+
+  if (!currentStat) {
+    return;
+  }
+
+  const nextVisitCount = Math.max(0, currentStat.visitCount + deltaVisitCount);
+  const nextTotalActualStayMinutes = Math.max(
+    0,
+    currentStat.totalActualStayMinutes + deltaMinutes
+  );
+
+  await prisma.placeStayStat.update({
+    where: {
+      placeKey,
+    },
+    data: {
+      ...snapshotData,
+      totalActualStayMinutes: nextTotalActualStayMinutes,
+      visitCount: nextVisitCount,
+      lastVisitedAt: nextVisitCount === 0 ? null : currentStat.lastVisitedAt,
+    },
+  });
+}
+
+async function syncPlaceStayStatForRouteStopChange(
+  prisma: RouteServicePrisma,
+  previousStop: RouteStopStayContributionSource,
+  nextStop: RouteStopStayContributionSource | null
+) {
+  await applyPlaceStayStatChange(
+    prisma,
+    previousStop.place,
+    previousStop.stayStatSyncedAt
+      ? getRouteStopStayContribution(previousStop)
+      : null,
+    getRouteStopStayContribution(nextStop)
+  );
+}
+
+async function markPlacePhotoDeletedForRouteStop(
+  prisma: RouteServicePrisma,
+  routeStopId: string
+) {
+  await prisma.placePhoto.updateMany({
+    where: {
+      routeStopId,
+    },
+    data: {
+      status: "DELETED",
+    },
+  });
+}
+
+async function syncPlacePhotoForRouteStopVisit(
+  prisma: RouteServicePrisma,
+  user: User,
+  route: Route,
+  stop: RouteStop,
+  visitData: RouteStopVisitData
+) {
+  const photoUrl = nullableString(visitData.verificationPhotoUrl);
+
+  if (visitData.verificationStatus !== "GPS_PHOTO" || !photoUrl) {
+    await markPlacePhotoDeletedForRouteStop(prisma, stop.id);
+    return;
+  }
+
+  const placeKeys = getPlaceStayStatKeys(stop.place);
+  const placeKey = placeKeys[0];
+
+  if (!placeKey) {
+    await markPlacePhotoDeletedForRouteStop(prisma, stop.id);
+    return;
+  }
+
+  const verifiedAt = visitData.verifiedAt ?? visitData.visitedAt ?? new Date();
+  const thumbnailUrl = buildImageDeliveryVariantUrl(photoUrl, "thumbnail");
+  const placePhotoData = {
+    placeKey,
+    placeKeys,
+    ...buildPlacePhotoSnapshotData(stop.place),
+    userId: user.id,
+    routeId: route.id,
+    routeStopId: stop.id,
+    routeDayId: stop.dayId,
+    routeVisibility: route.visibility,
+    imageId: nullableString(visitData.verificationPhotoImageId),
+    imageUrl: photoUrl,
+    thumbnailUrl: thumbnailUrl ?? photoUrl,
+    variant: getImageDeliveryVariantName(photoUrl),
+    source: "VISIT_PHOTO" as const,
+    status: "ACTIVE" as const,
+    verifiedAt,
+  };
+
+  await prisma.placePhoto.upsert({
+    where: {
+      routeStopId: stop.id,
+    },
+    create: placePhotoData,
+    update: placePhotoData,
+  });
 }
 
 export async function markRouteStopVisited(
@@ -940,7 +1312,8 @@ export async function markRouteStopVisited(
   user: User,
   stopId: string,
   visited: boolean,
-  verification?: RouteStopVisitVerificationInput | null
+  verification?: RouteStopVisitVerificationInput | null,
+  actualStayMinutes?: number | null
 ) {
   const stop = await prisma.routeStop.findUnique({
     where: {
@@ -954,11 +1327,42 @@ export async function markRouteStopVisited(
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
 
-  await prisma.routeStop.update({
-    where: {
-      id: stopId,
-    },
-    data: buildRouteStopVisitData(stop, visited, verification),
+  const visitData = buildRouteStopVisitData(
+    stop,
+    visited,
+    verification,
+    actualStayMinutes
+  );
+  const nextStop: RouteStopStayContributionSource = {
+    place: stop.place,
+    visitStatus: visitData.visitStatus,
+    visitedAt: visitData.visitedAt,
+    actualStayMinutes: visitData.actualStayMinutes,
+  };
+  const shouldSyncNextStayStat =
+    Boolean(getRouteStopStayContribution(nextStop)) &&
+    Boolean(getPrimaryPlaceStayStatKey(stop.place));
+  const nextStayStatSyncedAt = shouldSyncNextStayStat ? new Date() : null;
+
+  await prisma.$transaction(async (transaction) => {
+    await transaction.routeStop.update({
+      where: {
+        id: stopId,
+      },
+      data: {
+        ...visitData,
+        stayStatSyncedAt: nextStayStatSyncedAt,
+      },
+    });
+
+    await syncPlaceStayStatForRouteStopChange(transaction, stop, nextStop);
+    await syncPlacePhotoForRouteStopVisit(
+      transaction,
+      user,
+      route,
+      stop,
+      visitData
+    );
   });
 
   const refreshedRoute = await refreshRouteProgress(prisma, stop.routeId);
@@ -984,6 +1388,110 @@ export async function markRouteStopVisited(
   }
 
   return refreshedRoute;
+}
+
+export async function getPlaceStaySummary(
+  prisma: PrismaClient,
+  input: PlaceSnapshotInput
+): Promise<PlaceStaySummary> {
+  const [summary] = await getPlaceStaySummaries(prisma, [input]);
+  return summary ?? createEmptyPlaceStaySummary();
+}
+
+function createEmptyPlaceStaySummary(): PlaceStaySummary {
+  return {
+    averageActualStayMinutes: null,
+    visitCount: 0,
+    lastVisitedAt: null,
+  };
+}
+
+export async function getPlaceStaySummaries(
+  prisma: PrismaClient,
+  inputs: PlaceSnapshotInput[]
+): Promise<PlaceStaySummary[]> {
+  const targetKeys = inputs.map((input) => getPlaceStayStatKeys(input));
+  const uniquePlaceKeys = [...new Set(targetKeys.flat())];
+
+  if (targetKeys.length === 0 || uniquePlaceKeys.length === 0) {
+    return targetKeys.map(() => createEmptyPlaceStaySummary());
+  }
+
+  const stats = await prisma.placeStayStat.findMany({
+    where: {
+      placeKey: {
+        in: uniquePlaceKeys,
+      },
+    },
+    select: {
+      placeKey: true,
+      totalActualStayMinutes: true,
+      visitCount: true,
+      lastVisitedAt: true,
+    },
+  });
+
+  const statByPlaceKey = new Map(
+    stats.map((stat) => [stat.placeKey, stat] as const)
+  );
+
+  return targetKeys.map((placeKeys) => {
+    const stat = placeKeys
+      .map((placeKey) => statByPlaceKey.get(placeKey))
+      .find(Boolean);
+
+    if (!stat || stat.visitCount <= 0) {
+      return createEmptyPlaceStaySummary();
+    }
+
+    return {
+      averageActualStayMinutes: Math.round(
+        stat.totalActualStayMinutes / stat.visitCount
+      ),
+      visitCount: stat.visitCount,
+      lastVisitedAt: stat.lastVisitedAt,
+    };
+  });
+}
+
+export async function getPlacePhotos(
+  prisma: PrismaClient,
+  input: PlaceSnapshotInput,
+  options: PlacePhotoListOptions = {}
+) {
+  const placeKeys = getPlaceStayStatKeys(input);
+
+  if (placeKeys.length === 0) {
+    return [];
+  }
+
+  return prisma.placePhoto.findMany({
+    where: {
+      status: "ACTIVE",
+      routeVisibility: "PUBLIC",
+      OR: [
+        {
+          placeKey: {
+            in: placeKeys,
+          },
+        },
+        {
+          placeKeys: {
+            hasSome: placeKeys,
+          },
+        },
+      ],
+    },
+    orderBy: [
+      {
+        verifiedAt: "desc",
+      },
+      {
+        createdAt: "desc",
+      },
+    ],
+    take: clampPlacePhotoLimit(options.limit),
+  });
 }
 
 export async function updateRouteStopStayMinutes(
@@ -1129,31 +1637,47 @@ export async function deleteRoute(
   routeId: string
 ) {
   const route = await assertRouteOwner(prisma, routeId, user.id);
+  const routeStops = await prisma.routeStop.findMany({
+    where: {
+      routeId: route.id,
+    },
+  });
 
-  await prisma.routeStop.deleteMany({
-    where: {
-      routeId: route.id,
-    },
-  });
-  await prisma.routeDay.deleteMany({
-    where: {
-      routeId: route.id,
-    },
-  });
-  await prisma.routeLike.deleteMany({
-    where: {
-      routeId: route.id,
-    },
-  });
-  await prisma.routeSave.deleteMany({
-    where: {
-      routeId: route.id,
-    },
-  });
-  await prisma.route.delete({
-    where: {
-      id: route.id,
-    },
+  await prisma.$transaction(async (transaction) => {
+    for (const routeStop of routeStops) {
+      await syncPlaceStayStatForRouteStopChange(transaction, routeStop, null);
+    }
+
+    await transaction.placePhoto.deleteMany({
+      where: {
+        routeId: route.id,
+      },
+    });
+    await transaction.routeStop.deleteMany({
+      where: {
+        routeId: route.id,
+      },
+    });
+    await transaction.routeDay.deleteMany({
+      where: {
+        routeId: route.id,
+      },
+    });
+    await transaction.routeLike.deleteMany({
+      where: {
+        routeId: route.id,
+      },
+    });
+    await transaction.routeSave.deleteMany({
+      where: {
+        routeId: route.id,
+      },
+    });
+    await transaction.route.delete({
+      where: {
+        id: route.id,
+      },
+    });
   });
 
   return {
@@ -1190,47 +1714,66 @@ export async function deleteRouteDay(
     throw new Error("마지막 DAY는 전체 일정 삭제로 지워 주세요.");
   }
 
-  await prisma.routeStop.deleteMany({
+  const routeStops = await prisma.routeStop.findMany({
     where: {
       routeId: route.id,
       dayId: day.id,
     },
   });
-  await prisma.routeDay.delete({
-    where: {
-      id: day.id,
-    },
-  });
 
   const remainingDays = routeDays.filter((routeDay) => routeDay.id !== day.id);
-
-  for (const [index, remainingDay] of remainingDays.entries()) {
-    await prisma.routeDay.update({
-      where: {
-        id: remainingDay.id,
-      },
-      data: {
-        dayIndex: index + 1,
-        date: route.travelStartDate
-          ? addDays(route.travelStartDate, index)
-          : remainingDay.date,
-      },
-    });
-  }
-
   const nextTripDays = remainingDays.length;
 
-  await prisma.route.update({
-    where: {
-      id: route.id,
-    },
-    data: {
-      tripDays: nextTripDays,
-      travelEndDate: route.travelStartDate
-        ? addDays(route.travelStartDate, nextTripDays - 1)
-        : (remainingDays.at(-1)?.date ?? route.travelEndDate),
-      status: route.status === "COMPLETED" ? "ACTIVE" : route.status,
-    },
+  await prisma.$transaction(async (transaction) => {
+    for (const routeStop of routeStops) {
+      await syncPlaceStayStatForRouteStopChange(transaction, routeStop, null);
+    }
+
+    await transaction.placePhoto.deleteMany({
+      where: {
+        routeStopId: {
+          in: routeStops.map((routeStop) => routeStop.id),
+        },
+      },
+    });
+    await transaction.routeStop.deleteMany({
+      where: {
+        routeId: route.id,
+        dayId: day.id,
+      },
+    });
+    await transaction.routeDay.delete({
+      where: {
+        id: day.id,
+      },
+    });
+
+    for (const [index, remainingDay] of remainingDays.entries()) {
+      await transaction.routeDay.update({
+        where: {
+          id: remainingDay.id,
+        },
+        data: {
+          dayIndex: index + 1,
+          date: route.travelStartDate
+            ? addDays(route.travelStartDate, index)
+            : remainingDay.date,
+        },
+      });
+    }
+
+    await transaction.route.update({
+      where: {
+        id: route.id,
+      },
+      data: {
+        tripDays: nextTripDays,
+        travelEndDate: route.travelStartDate
+          ? addDays(route.travelStartDate, nextTripDays - 1)
+          : (remainingDays.at(-1)?.date ?? route.travelEndDate),
+        status: route.status === "COMPLETED" ? "ACTIVE" : route.status,
+      },
+    });
   });
 
   return refreshRouteProgress(prisma, route.id);
@@ -1258,15 +1801,29 @@ export async function shareRoute(
 
   const shareTags = buildRouteShareTags(refreshedRoute, routeStops);
 
-  return prisma.route.update({
-    where: {
-      id: routeId,
-    },
-    data: {
-      visibility: "PUBLIC",
-      sharedAt: refreshedRoute.sharedAt ?? new Date(),
-      shareTags,
-    },
+  return prisma.$transaction(async (transaction) => {
+    const sharedRoute = await transaction.route.update({
+      where: {
+        id: routeId,
+      },
+      data: {
+        visibility: "PUBLIC",
+        sharedAt: refreshedRoute.sharedAt ?? new Date(),
+        shareTags,
+      },
+    });
+
+    await transaction.placePhoto.updateMany({
+      where: {
+        routeId,
+        status: "ACTIVE",
+      },
+      data: {
+        routeVisibility: "PUBLIC",
+      },
+    });
+
+    return sharedRoute;
   });
 }
 

@@ -1,0 +1,7 @@
+query PlaceStaySummary($place: PlaceSnapshotInput!) {
+  placeStaySummary(place: $place) {
+    averageActualStayMinutes
+    visitCount
+    lastVisitedAt
+  }
+}

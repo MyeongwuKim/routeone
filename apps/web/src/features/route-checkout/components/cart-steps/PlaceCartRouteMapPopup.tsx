@@ -58,6 +58,21 @@ type RouteMapSegment = {
   distanceM?: number;
 };
 
+type RouteMapInstance = {
+  setOptions?: (
+    optionsOrKey: Record<string, unknown> | string,
+    value?: unknown
+  ) => void;
+  fitBounds: (bounds: unknown, options?: unknown) => void;
+  setCenter?: (center: unknown) => void;
+  setZoom?: (zoom: number) => void;
+  getZoom?: () => number;
+};
+
+type RouteMapOverlay = {
+  setMap: (map: null) => void;
+};
+
 type RouteMapDayOption = {
   id: string;
   label: string;
@@ -171,10 +186,15 @@ function routeMapViewReducer(
   }
 }
 
+const ROUTE_ORIGINAL_LABEL = "기존 경로";
+const ROUTE_CURRENT_LABEL = "재계산 경로";
+const ROUTE_ORIGINAL_DETAIL_LABEL = "기존 경로";
+const ROUTE_CURRENT_DETAIL_LABEL = "재계산 경로";
+
 const ROUTE_VIEW_OPTIONS = [
   { value: "all", label: "전체" },
-  { value: "comparison", label: "원래 순서" },
-  { value: "current", label: "현재 순서" },
+  { value: "comparison", label: ROUTE_ORIGINAL_LABEL },
+  { value: "current", label: ROUTE_CURRENT_LABEL },
 ] satisfies ReadonlyArray<SegmentedToggleOption<RouteMapViewMode>>;
 
 const ROUTE_SEGMENT_COLORS = [
@@ -198,8 +218,8 @@ const DEFAULT_START_PREVIEW_OFFSET = {
 };
 
 const START_PREVIEW_MODE_OPTIONS = [
-  { value: "original", label: "기존" },
-  { value: "changed", label: "재조정" },
+  { value: "original", label: ROUTE_ORIGINAL_LABEL },
+  { value: "changed", label: ROUTE_CURRENT_LABEL },
 ] satisfies ReadonlyArray<SegmentedToggleOption<StartPreviewMode>>;
 
 function escapeMarkerHtml(text: string) {
@@ -521,7 +541,7 @@ function createRoutePointBubbleMarkerIconHtml({
       : isStart
         ? "rgba(20,184,166,0.30)"
         : "rgba(15,118,110,0.18)";
-  const badgeLabel = isComparison ? "원래" : "현재";
+  const badgeLabel = isComparison ? ROUTE_ORIGINAL_LABEL : ROUTE_CURRENT_LABEL;
 
   return `
     <div style="
@@ -792,10 +812,10 @@ function PlaceCartRouteMapPopup({
 }: PlaceCartRouteMapPopupProps) {
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
+  const mapInstanceRef = useRef<RouteMapInstance | null>(null);
   const renderedDayKeyRef = useRef<string | null>(null);
   const autoFitKeyRef = useRef<string | null>(null);
-  const overlayRefs = useRef<any[]>([]);
+  const overlayRefs = useRef<RouteMapOverlay[]>([]);
   const overlayCleanupRefs = useRef<Array<() => void>>([]);
   const [isSdkReady, setIsSdkReady] = useState(false);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
@@ -1017,7 +1037,7 @@ function PlaceCartRouteMapPopup({
     if (shouldShowComparisonRoute) {
       groups.push({
         key: "comparison",
-        label: "원래 순서",
+        label: ROUTE_ORIGINAL_DETAIL_LABEL,
         points: comparisonRoutePoints,
         segments: comparisonRouteSegments,
       });
@@ -1026,7 +1046,7 @@ function PlaceCartRouteMapPopup({
     if (shouldShowCurrentRoute) {
       groups.push({
         key: "current",
-        label: "현재 순서",
+        label: ROUTE_CURRENT_DETAIL_LABEL,
         points: routePoints,
         segments: routeSegments,
       });
@@ -1218,8 +1238,14 @@ function PlaceCartRouteMapPopup({
   }, [hasComparisonRoute, routeViewMode]);
 
   useEffect(() => {
-    setRouteSegments(fallbackSegments);
-    setComparisonRouteSegments(comparisonFallbackSegments);
+    const frameId = window.requestAnimationFrame(() => {
+      setRouteSegments(fallbackSegments);
+      setComparisonRouteSegments(comparisonFallbackSegments);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
   }, [comparisonFallbackSegments, fallbackSegments]);
 
   useEffect(() => {
@@ -1241,9 +1267,6 @@ function PlaceCartRouteMapPopup({
   useEffect(() => {
     let isActive = true;
 
-    setIsSdkReady(false);
-    setRouteError(null);
-
     loadNaverMapSdk(NCP_KEY_ID)
       .then(() => {
         if (isActive) {
@@ -1263,9 +1286,12 @@ function PlaceCartRouteMapPopup({
 
   useEffect(() => {
     let isActive = true;
-
-    setIsRouteLoading(true);
-    setRouteError(null);
+    queueMicrotask(() => {
+      if (isActive) {
+        setIsRouteLoading(true);
+        setRouteError(null);
+      }
+    });
 
     const loadSegments = async (
       points: RouteMapPoint[],
@@ -1352,6 +1378,11 @@ function PlaceCartRouteMapPopup({
     } else {
       naverMaps.Event.trigger(routeMap, "resize");
     }
+
+    if (!routeMap) {
+      return;
+    }
+
     applyNaverMapTheme(routeMap, isDarkMode);
     enableNaverMapPointerInteractions(routeMap);
 
@@ -1486,18 +1517,18 @@ function PlaceCartRouteMapPopup({
         const strokeWeight = isSelectedSegment
           ? 11
           : isAllComparisonView && isComparisonLine
-            ? 7
+            ? 6
             : isAllComparisonView
-              ? 6
+              ? 7
               : 5;
         const strokeOpacity = isSelectedSegment
           ? 1
           : hasSelectedSegment
             ? 0.12
           : isAllComparisonView && isComparisonLine
-            ? 0.7
+            ? 0.76
             : isAllComparisonView
-              ? 0.68
+              ? 0.66
               : 0.9;
         const strokeStyle =
           isAllComparisonView && isComparisonLine
@@ -1505,9 +1536,13 @@ function PlaceCartRouteMapPopup({
             : "solid";
         const lineZIndex = isSelectedSegment
           ? 1000
-          : variant === "comparison"
-            ? 380 + index
-            : 430 + index;
+          : isAllComparisonView && isComparisonLine
+            ? 620 + index
+            : isAllComparisonView
+              ? 560 + index
+              : variant === "comparison"
+                ? 380 + index
+                : 430 + index;
 
         if (isSelectedSegment) {
           const highlightLine = new naverMaps.Polyline({
@@ -1524,17 +1559,21 @@ function PlaceCartRouteMapPopup({
           overlayRefs.current.push(highlightLine);
         }
 
-        const routeCasingLine = new naverMaps.Polyline({
-          map: routeMap,
-          path,
-          strokeColor: "#ffffff",
-          strokeWeight: strokeWeight + (isAllComparisonView ? 7 : 6),
-          strokeOpacity: hasSelectedSegment ? 0.4 : 0.86,
-          strokeStyle,
-          strokeLineCap: "round",
-          strokeLineJoin: "round",
-          zIndex: lineZIndex - 1,
-        });
+        const shouldRenderCasingLine =
+          !isAllComparisonView || hasSelectedSegment || isSelectedSegment;
+        const routeCasingLine = shouldRenderCasingLine
+          ? new naverMaps.Polyline({
+              map: routeMap,
+              path,
+              strokeColor: "#ffffff",
+              strokeWeight: strokeWeight + (isAllComparisonView ? 4 : 6),
+              strokeOpacity: hasSelectedSegment ? 0.36 : 0.86,
+              strokeStyle,
+              strokeLineCap: "round",
+              strokeLineJoin: "round",
+              zIndex: lineZIndex - 1,
+            })
+          : null;
         const routeLine = new naverMaps.Polyline({
           map: routeMap,
           path,
@@ -1547,7 +1586,10 @@ function PlaceCartRouteMapPopup({
           zIndex: lineZIndex,
         });
 
-        overlayRefs.current.push(routeCasingLine, routeLine);
+        if (routeCasingLine) {
+          overlayRefs.current.push(routeCasingLine);
+        }
+        overlayRefs.current.push(routeLine);
       });
     };
 
@@ -1590,11 +1632,11 @@ function PlaceCartRouteMapPopup({
 
     clearOverlays();
 
-    if (shouldShowComparisonRoute) {
-      createSegmentLines(comparisonRouteSegments, "comparison");
-    }
     if (shouldShowCurrentRoute) {
       createSegmentLines(routeSegments, "current");
+    }
+    if (shouldShowComparisonRoute) {
+      createSegmentLines(comparisonRouteSegments, "comparison");
     }
 
     if (shouldShowComparisonRoute) {
@@ -1652,7 +1694,7 @@ function PlaceCartRouteMapPopup({
                   ? formatDateLabel(displayDay.date)
                   : "선택한 일정"}{" "}
               · {displayDay.items.length}곳
-              {hasComparisonRoute ? " · 원래 순서 비교" : ""}
+              {hasComparisonRoute ? " · 기존/재계산 비교" : ""}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1811,11 +1853,11 @@ function PlaceCartRouteMapPopup({
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <span className="inline-flex items-center gap-1.5 text-indigo-600">
                   <span className="h-1.5 w-8 rounded-full border-t-[4px] border-dashed border-indigo-500/70" />
-                  원래 순서 점선
+                  기존 경로 점선
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-teal-700">
                   <span className="h-1.5 w-8 rounded-full bg-teal-500/70" />
-                  현재 순서 실선
+                  재계산 경로 실선
                 </span>
               </div>
             </div>

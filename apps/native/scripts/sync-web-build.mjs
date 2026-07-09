@@ -13,9 +13,22 @@ const packageManager = process.env.npm_execpath?.includes("pnpm")
   ? "pnpm"
   : "npm";
 
-if (!shouldSkipBuild) {
+async function hasSplitWebDist() {
+  try {
+    const html = await readFile(path.join(webDist, "index.html"), "utf8");
+    return /<link\s+rel="modulepreload"/.test(html);
+  } catch {
+    return true;
+  }
+}
+
+async function buildNativeWebBundle() {
   const result = spawnSync(packageManager, ["run", "build"], {
     cwd: webRoot,
+    env: {
+      ...process.env,
+      ROUTEONE_NATIVE_WEB_BUNDLE: "1",
+    },
     stdio: "inherit",
     shell: process.platform === "win32"
   });
@@ -23,6 +36,15 @@ if (!shouldSkipBuild) {
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
+}
+
+if (!shouldSkipBuild) {
+  await buildNativeWebBundle();
+} else if (await hasSplitWebDist()) {
+  console.warn(
+    "[routeone-native] split web dist detected. Rebuilding single-file WebView bundle."
+  );
+  await buildNativeWebBundle();
 }
 
 function toDistPath(assetPath) {

@@ -8,13 +8,13 @@ datasource db {
 }
 
 model User {
-  id          String        @id @default(auto()) @map("_id") @db.ObjectId
-  accountId   String?
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
+  accountId    String?
   passwordHash String?
-  email       String?       @unique
-  displayName String?
-  avatarUrl   String?
-  locale      String?
+  email        String?
+  displayName  String?
+  avatarUrl    String?
+  locale       String?
 
   accounts AuthAccount[]
   routes   Route[]
@@ -25,6 +25,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@index([accountId])
+  @@index([email])
 }
 
 model AuthAccount {
@@ -44,8 +45,8 @@ model AuthAccount {
 }
 
 model Route {
-  id       String @id @default(auto()) @map("_id") @db.ObjectId
-  ownerId  String @db.ObjectId
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId String @db.ObjectId
 
   sourceRouteId String? @db.ObjectId
 
@@ -53,10 +54,10 @@ model Route {
   primaryRegionCode     String?
   primaryRegionLabelKey String?
 
-  tripDays        Int       @default(1)
-  travelStartDate DateTime?
-  travelEndDate   DateTime?
-  dailyStartMinutes Int?
+  tripDays           Int       @default(1)
+  travelStartDate    DateTime?
+  travelEndDate      DateTime?
+  dailyStartMinutes  Int?
   scheduleEndMinutes Int?
 
   status     RouteStatus     @default(DRAFT)
@@ -70,11 +71,11 @@ model Route {
   startedAt   DateTime?
   completedAt DateTime?
   sharedAt    DateTime?
-  shareTags   String[] @default([])
+  shareTags   String[]  @default([])
 
   startLocation RouteStartLocation?
 
-  owner User @relation(fields: [ownerId], references: [id])
+  owner User        @relation(fields: [ownerId], references: [id])
   days  RouteDay[]
   stops RouteStop[]
   likes RouteLike[]
@@ -114,15 +115,16 @@ model RouteStop {
   order Int
   place PlaceSnapshot
 
-  stayMinutes Int?
+  stayMinutes               Int?
   travelMinutesFromPrevious Int?
-  memo        String?
+  memo                      String?
 
   visitStatus VisitStatus @default(PENDING)
   visitedAt   DateTime?
 
   verificationStatus         RouteStopVerificationStatus @default(NONE)
   verifiedAt                 DateTime?
+  verificationPhotoImageId   String?
   verificationPhotoUrl       String?
   verificationLat            Float?
   verificationLng            Float?
@@ -130,6 +132,7 @@ model RouteStop {
   checkedInAt                DateTime?
   checkedOutAt               DateTime?
   actualStayMinutes          Int?
+  stayStatSyncedAt           DateTime?
 
   route Route     @relation(fields: [routeId], references: [id])
   day   RouteDay? @relation(fields: [dayId], references: [id])
@@ -139,6 +142,87 @@ model RouteStop {
 
   @@index([routeId, order])
   @@index([dayId, order])
+}
+
+model PlaceStayStat {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  placeKey String @unique
+
+  provider       PlaceProvider
+  externalId     String?
+  contentId      String?
+  contentTypeId  String?
+  title          String
+  address        String?
+  lat            Float
+  lng            Float
+  categoryLabel  String?
+  categoryName   String?
+  imageUrl       String?
+  regionCode     String?
+  regionLabelKey String?
+
+  totalActualStayMinutes Int       @default(0)
+  visitCount             Int       @default(0)
+  lastVisitedAt          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([provider])
+  @@index([externalId])
+  @@index([contentId])
+  @@index([regionCode])
+}
+
+model PlacePhoto {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  placeKey  String
+  placeKeys String[] @default([])
+
+  provider       PlaceProvider
+  externalId     String?
+  contentId      String?
+  contentTypeId  String?
+  title          String
+  address        String?
+  lat            Float
+  lng            Float
+  categoryLabel  String?
+  categoryName   String?
+  placeImageUrl  String?
+  regionCode     String?
+  regionLabelKey String?
+
+  userId      String  @db.ObjectId
+  routeId     String  @db.ObjectId
+  routeStopId String  @unique @db.ObjectId
+  routeDayId  String? @db.ObjectId
+  routeVisibility RouteVisibility @default(PRIVATE)
+
+  imageId      String?
+  imageUrl     String
+  thumbnailUrl String?
+  variant      String?
+  source       PlacePhotoSource @default(VISIT_PHOTO)
+  status       PlacePhotoStatus @default(ACTIVE)
+  verifiedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([placeKey, createdAt])
+  @@index([placeKey, verifiedAt])
+  @@index([placeKey, routeVisibility, verifiedAt])
+  @@index([placeKeys])
+  @@index([userId, createdAt])
+  @@index([routeId])
+  @@index([routeDayId])
+  @@index([status, createdAt])
+  @@index([status, verifiedAt])
+  @@index([routeVisibility, status, verifiedAt])
 }
 
 model RouteLike {
@@ -170,18 +254,18 @@ model RouteSave {
 }
 
 type PlaceSnapshot {
-  provider      PlaceProvider
-  externalId    String?
-  contentId     String?
-  contentTypeId String?
-  title         String
-  address       String?
-  lat           Float
-  lng           Float
-  categoryLabel String?
-  categoryName  String?
-  imageUrl      String?
-  regionCode    String?
+  provider       PlaceProvider
+  externalId     String?
+  contentId      String?
+  contentTypeId  String?
+  title          String
+  address        String?
+  lat            Float
+  lng            Float
+  categoryLabel  String?
+  categoryName   String?
+  imageUrl       String?
+  regionCode     String?
   regionLabelKey String?
 }
 
@@ -223,4 +307,14 @@ enum PlaceProvider {
   TOUR_API
   NAVER
   CUSTOM
+}
+
+enum PlacePhotoSource {
+  VISIT_PHOTO
+}
+
+enum PlacePhotoStatus {
+  ACTIVE
+  HIDDEN
+  DELETED
 }

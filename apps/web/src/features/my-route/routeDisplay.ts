@@ -90,16 +90,16 @@ export function getRouteTimelineState(
     return "undated";
   }
 
-  if (route.startedAt) {
-    return "current";
-  }
-
   if (todayKey < startDateKey) {
     return "upcoming";
   }
 
   if (todayKey > endDateKey) {
-    return "needsReview";
+    return route.startedAt ? "past" : "needsReview";
+  }
+
+  if (route.startedAt) {
+    return "current";
   }
 
   return "current";

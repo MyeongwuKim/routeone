@@ -550,13 +550,15 @@ function MyRoutePage() {
       </div>
 
       {myRoutesQuery.isLoading ? (
-        <PotatoLoadingCard
-          title="루트를 불러오는 중"
-          description="내 여행 루트를 확인하고 있어요."
-          animation="map-thinking"
-          compact
-          className="shadow-sm"
-        />
+        <div className="flex min-h-[calc(100dvh-18rem)] flex-col justify-center">
+          <PotatoLoadingCard
+            title="루트를 불러오는 중"
+            description="내 여행 루트를 확인하고 있어요."
+            animation="map-thinking"
+            compact
+            className="shadow-sm"
+          />
+        </div>
       ) : null}
 
       {myRoutesQuery.isError ? (
@@ -657,6 +659,7 @@ function MyRoutePage() {
           route={selectedRouteDay.route}
           day={selectedRouteDay.day}
           onClose={() => setSelectedDayRoute(null)}
+          enableVerificationPhotoPreview
         />
       ) : null}
 

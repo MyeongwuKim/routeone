@@ -3,9 +3,17 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+const nestedPnpmModuleSegment =
+  String.raw`(?:\.pnpm[\\/][^\\/]+[\\/]node_modules[\\/])?`
+const nodeModulePattern = (packagePattern: string) =>
+  new RegExp(
+    String.raw`node_modules[\\/]${nestedPnpmModuleSegment}${packagePattern}[\\/]`
+  )
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const isNativeWebBundle = env.ROUTEONE_NATIVE_WEB_BUNDLE === '1'
   const naverMapClientId =
     env.NAVER_MAP_API_KEY_ID ??
     env.VITE_NAVER_MAP_API_KEY_ID ??
@@ -30,6 +38,66 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@": fileURLToPath(new URL("./src", import.meta.url)),
+      },
+    },
+    build: {
+      rolldownOptions: {
+        output: isNativeWebBundle
+          ? {
+              codeSplitting: false,
+            }
+          : {
+              codeSplitting: {
+                minSize: 20 * 1024,
+                groups: [
+                  {
+                    name: 'react-vendor',
+                    test: nodeModulePattern(
+                      String.raw`(?:react|react-dom|scheduler)`
+                    ),
+                    priority: 50,
+                  },
+                  {
+                    name: 'router-vendor',
+                    test: nodeModulePattern(String.raw`react-router(?:-dom)?`),
+                    priority: 45,
+                  },
+                  {
+                    name: 'query-vendor',
+                    test: nodeModulePattern(
+                      String.raw`@tanstack[\\/]react-query`
+                    ),
+                    priority: 40,
+                  },
+                  {
+                    name: 'chart-vendor',
+                    test: nodeModulePattern(
+                      String.raw`(?:chart\.js|react-chartjs-2)`
+                    ),
+                    priority: 40,
+                  },
+                  {
+                    name: 'graphql-vendor',
+                    test: nodeModulePattern(
+                      String.raw`(?:graphql|@graphql-typed-document-node[\\/]core)`
+                    ),
+                    priority: 35,
+                  },
+                  {
+                    name: 'icons-vendor',
+                    test: nodeModulePattern(String.raw`react-icons`),
+                    priority: 30,
+                    maxSize: 180 * 1024,
+                  },
+                  {
+                    name: 'vendor',
+                    test: nodeModulePattern(String.raw`[^\\/]+`),
+                    priority: 10,
+                    maxSize: 220 * 1024,
+                  },
+                ],
+              },
+            },
       },
     },
     server: {

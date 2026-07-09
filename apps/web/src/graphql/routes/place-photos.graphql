@@ -1,0 +1,29 @@
+query PlacePhotos($place: PlaceSnapshotInput!, $limit: Int) {
+  placePhotos(place: $place, limit: $limit) {
+    id
+    placeKey
+    placeKeys
+    provider
+    externalId
+    contentId
+    contentTypeId
+    title
+    address
+    lat
+    lng
+    categoryLabel
+    categoryName
+    placeImageUrl
+    regionCode
+    regionLabelKey
+    imageId
+    imageUrl
+    thumbnailUrl
+    variant
+    source
+    status
+    verifiedAt
+    createdAt
+    updatedAt
+  }
+}

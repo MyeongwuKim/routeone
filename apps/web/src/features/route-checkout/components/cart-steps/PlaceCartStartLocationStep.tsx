@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IoLocateOutline, IoLocationSharp } from "react-icons/io5";
-import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
-import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import {
-  applyNaverMapTheme,
-  getNaverMapThemeOptions,
-} from "@/lib/naverMapTheme";
-import { useUiThemeStore } from "@/stores/uiThemeStore";
+  type NaverMapInstance,
+  type NaverMapReadyContext,
+  type NaverMarkerInstance,
+} from "@/components/map/NaverMapView";
+import NaverMapView from "@/components/map/NaverMapView";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import { useRouteCheckout } from "../RouteCheckoutContext";
 import type { RouteStartLocation } from "./routePlanTypes";
@@ -15,7 +14,6 @@ type PlaceCartStartLocationStepProps = {
   savedPlaces: SavedPlaceItem[];
 };
 
-const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 const FAR_START_DISTANCE_METERS = 30_000;
 
 function calculateDistanceMeters(
@@ -130,26 +128,31 @@ function PlaceCartStartLocationStep({
   savedPlaces,
 }: PlaceCartStartLocationStepProps) {
   const { startLocation, setStartLocation } = useRouteCheckout();
-  const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
-  const mapNodeRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const startMarkerRef = useRef<any>(null);
-  const initialStartLocationRef = useRef<RouteStartLocation | null>(
-    startLocation
-  );
-  const overlayRefs = useRef<Array<{ setMap: (map: null) => void }>>([]);
+  const mapInstanceRef = useRef<NaverMapInstance | null>(null);
+  const startMarkerRef = useRef<NaverMarkerInstance | null>(null);
   const [draftLocation, setDraftLocation] =
     useState<RouteStartLocation | null>(startLocation);
-  const [mapError, setMapError] = useState<string | null>(null);
-  const [isMapReady, setIsMapReady] = useState(false);
-  const [canInitializeMap, setCanInitializeMap] = useState(false);
-  const [mapContainerSize, setMapContainerSize] = useState({
-    width: 0,
-    height: 0,
-  });
+  const [mapInitialLocation, setMapInitialLocation] =
+    useState<RouteStartLocation | null>(startLocation);
   const savedPlaceCenter = useMemo(
     () => getSavedPlaceCenter(savedPlaces),
     [savedPlaces]
+  );
+  const mapResetKey = useMemo(
+    () =>
+      mapInitialLocation
+        ? [
+            mapInitialLocation.lat,
+            mapInitialLocation.lng,
+            ...savedPlaces
+              .slice(0, 40)
+              .map(
+                (item) =>
+                  `${item.place.id}:${item.place.lat}:${item.place.lng}`
+              ),
+          ].join("|")
+        : "empty",
+    [mapInitialLocation, savedPlaces]
   );
   const distanceFromPlaces =
     draftLocation && savedPlaceCenter
@@ -159,258 +162,148 @@ function PlaceCartStartLocationStep({
     distanceFromPlaces != null &&
     distanceFromPlaces >= FAR_START_DISTANCE_METERS;
 
-  const updateStartLocation = (
-    nextLocation: RouteStartLocation,
-    options: { pan?: boolean } = {}
-  ) => {
-    setDraftLocation(nextLocation);
-    setStartLocation(nextLocation);
+  const updateStartLocation = useCallback(
+    (nextLocation: RouteStartLocation, options: { pan?: boolean } = {}) => {
+      setDraftLocation(nextLocation);
+      setStartLocation(nextLocation);
 
-    if (!window.naver?.maps) {
-      return;
-    }
-
-    const nextPosition = new window.naver.maps.LatLng(
-      nextLocation.lat,
-      nextLocation.lng
-    );
-    startMarkerRef.current?.setPosition(nextPosition);
-
-    if (options.pan) {
-      mapInstanceRef.current?.panTo(nextPosition);
-    }
-  };
-
-  useEffect(() => {
-    if (!startLocation && savedPlaceCenter) {
-      setStartLocation(savedPlaceCenter);
-      setDraftLocation(savedPlaceCenter);
-      return;
-    }
-
-    setDraftLocation(startLocation);
-  }, [savedPlaceCenter, setStartLocation, startLocation]);
-
-  useEffect(() => {
-    const timerId = window.setTimeout(() => {
-      setCanInitializeMap(true);
-    }, 280);
-
-    return () => {
-      window.clearTimeout(timerId);
-    };
-  }, []);
-
-  useEffect(() => {
-    const node = mapNodeRef.current;
-
-    if (!node) {
-      return;
-    }
-
-    const updateSize = () => {
-      const rect = node.getBoundingClientRect();
-      setMapContainerSize({
-        width: rect.width,
-        height: rect.height,
-      });
-    };
-    const observer = new ResizeObserver(updateSize);
-
-    updateSize();
-    observer.observe(node);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
-  useEffect(() => {
-    const initialLocation = initialStartLocationRef.current ?? savedPlaceCenter;
-
-    if (
-      !canInitializeMap ||
-      !initialLocation ||
-      mapContainerSize.width < 40 ||
-      mapContainerSize.height < 40
-    ) {
-      return;
-    }
-
-    const mapInitialLocation = initialLocation;
-    let cancelled = false;
-
-    setMapError(null);
-    setIsMapReady(false);
-    overlayRefs.current.forEach((overlay) => overlay.setMap(null));
-    overlayRefs.current = [];
-    startMarkerRef.current = null;
-    mapInstanceRef.current = null;
-
-    async function setupMap() {
-      if (!mapNodeRef.current) {
+      if (!window.naver?.maps) {
         return;
       }
 
-      try {
-        await loadNaverMapSdk(NCP_KEY_ID);
+      const nextPosition = new window.naver.maps.LatLng(
+        nextLocation.lat,
+        nextLocation.lng
+      );
+      startMarkerRef.current?.setPosition?.(nextPosition);
 
-        if (cancelled || !mapNodeRef.current || !window.naver?.maps) {
+      if (options.pan) {
+        mapInstanceRef.current?.panTo?.(nextPosition);
+      }
+    },
+    [setStartLocation]
+  );
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      if (!mapInitialLocation && savedPlaceCenter) {
+        setMapInitialLocation(savedPlaceCenter);
+      }
+
+      if (!startLocation && savedPlaceCenter) {
+        updateStartLocation(savedPlaceCenter);
+        return;
+      }
+
+      setDraftLocation(startLocation);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [mapInitialLocation, savedPlaceCenter, startLocation, updateStartLocation]);
+
+  const handleMapReady = useCallback(
+    ({ map, naverMaps, center }: NaverMapReadyContext) => {
+      mapInstanceRef.current = map;
+
+      const overlays: NaverMarkerInstance[] = [];
+      const bounds = new naverMaps.LatLngBounds();
+      bounds.extend(center);
+
+      const startMarker = new naverMaps.Marker({
+        map,
+        position: center,
+        draggable: true,
+        zIndex: 2600,
+        icon: {
+          content: createStartMarkerIconHtml(),
+          anchor: new naverMaps.Point(0, 0),
+        },
+      }) as NaverMarkerInstance & {
+        getPosition: () => { lat: () => number; lng: () => number };
+      };
+      startMarkerRef.current = startMarker;
+      overlays.push(startMarker);
+
+      const dragListener = naverMaps.Event.addListener(
+        startMarker,
+        "dragend",
+        () => {
+          const position = startMarker.getPosition();
+          updateStartLocation({
+            lat: position.lat(),
+            lng: position.lng(),
+          });
+        }
+      );
+      const clickListener = naverMaps.Event.addListener(
+        map,
+        "click",
+        (event: { coord: { lat: () => number; lng: () => number } }) => {
+          updateStartLocation(
+            {
+              lat: event.coord.lat(),
+              lng: event.coord.lng(),
+            },
+            { pan: true }
+          );
+        }
+      );
+
+      savedPlaces.slice(0, 40).forEach((item, index) => {
+        const position = new naverMaps.LatLng(item.place.lat, item.place.lng);
+        bounds.extend(position);
+
+        const marker = new naverMaps.Marker({
+          map,
+          position,
+          title: item.place.title,
+          zIndex: 1200 + index,
+          icon: {
+            content: createPlaceMarkerIconHtml(index + 1),
+            anchor: new naverMaps.Point(15, 15),
+          },
+        }) as NaverMarkerInstance;
+        overlays.push(marker);
+      });
+
+      const fitVisibleBounds = () => {
+        naverMaps.Event.trigger(map, "resize");
+
+        if (savedPlaces.length > 0) {
+          try {
+            map.fitBounds?.(bounds, {
+              top: 88,
+              right: 28,
+              bottom: 28,
+              left: 28,
+            });
+          } catch {
+            map.fitBounds?.(bounds);
+          }
           return;
         }
 
-        const naverMaps = window.naver.maps;
-        const center = new naverMaps.LatLng(
-          mapInitialLocation.lat,
-          mapInitialLocation.lng
-        );
-        const map = new naverMaps.Map(mapNodeRef.current, {
-          center,
-          zoom: 12,
-          minZoom: 7,
-          mapTypeId: naverMaps.MapTypeId.NORMAL,
-          draggable: true,
-          pinchZoom: true,
-          scrollWheel: true,
-          zoomControl: false,
-          scaleControl: false,
-          mapDataControl: false,
-          logoControl: false,
-          ...getNaverMapThemeOptions(isDarkMode),
-        });
-        mapInstanceRef.current = map;
-        applyNaverMapTheme(map, isDarkMode);
-        enableNaverMapPointerInteractions(map);
+        map.setCenter?.(center);
+      };
+      const frameId = window.requestAnimationFrame(fitVisibleBounds);
+      const firstTimerId = window.setTimeout(fitVisibleBounds, 120);
+      const secondTimerId = window.setTimeout(fitVisibleBounds, 360);
 
-        const bounds = new naverMaps.LatLngBounds();
-        bounds.extend(center);
-
-        const startMarker = new naverMaps.Marker({
-          map,
-          position: center,
-          draggable: true,
-          zIndex: 2600,
-          icon: {
-            content: createStartMarkerIconHtml(),
-            anchor: new naverMaps.Point(0, 0),
-          },
-        });
-        startMarkerRef.current = startMarker;
-        overlayRefs.current.push(startMarker);
-
-        const dragListener = naverMaps.Event.addListener(
-          startMarker,
-          "dragend",
-          () => {
-            const position = startMarker.getPosition();
-            updateStartLocation({
-              lat: position.lat(),
-              lng: position.lng(),
-            });
-          }
-        );
-        const clickListener = naverMaps.Event.addListener(
-          map,
-          "click",
-          (event: { coord: { lat: () => number; lng: () => number } }) => {
-            updateStartLocation(
-              {
-                lat: event.coord.lat(),
-                lng: event.coord.lng(),
-              },
-              { pan: true }
-            );
-          }
-        );
-
-        savedPlaces.slice(0, 40).forEach((item, index) => {
-          const position = new naverMaps.LatLng(item.place.lat, item.place.lng);
-          bounds.extend(position);
-
-          const marker = new naverMaps.Marker({
-            map,
-            position,
-            title: item.place.title,
-            zIndex: 1200 + index,
-            icon: {
-              content: createPlaceMarkerIconHtml(index + 1),
-              anchor: new naverMaps.Point(15, 15),
-            },
-          });
-          overlayRefs.current.push(marker);
-        });
-
-        const fitVisibleBounds = () => {
-          if (cancelled) {
-            return;
-          }
-
-          naverMaps.Event.trigger(map, "resize");
-
-          if (savedPlaces.length > 0) {
-            try {
-              map.fitBounds(bounds, {
-                top: 88,
-                right: 28,
-                bottom: 28,
-                left: 28,
-              });
-            } catch {
-              map.fitBounds(bounds);
-            }
-            return;
-          }
-
-          map.setCenter(center);
-        };
-
-        requestAnimationFrame(() => {
-          fitVisibleBounds();
-          if (!cancelled) {
-            setIsMapReady(true);
-          }
-        });
-        setTimeout(fitVisibleBounds, 120);
-        setTimeout(fitVisibleBounds, 360);
-
-        overlayRefs.current.push({
-          setMap: () => {
-            naverMaps.Event.removeListener(dragListener);
-            naverMaps.Event.removeListener(clickListener);
-          },
-        });
-      } catch (error) {
-        if (!cancelled) {
-          setMapError(
-            error instanceof Error
-              ? error.message
-              : "지도를 불러오지 못했어요."
-          );
-        }
-      }
-    }
-
-    void setupMap();
-
-    return () => {
-      cancelled = true;
-      overlayRefs.current.forEach((overlay) => overlay.setMap(null));
-      overlayRefs.current = [];
-      startMarkerRef.current = null;
-      mapInstanceRef.current = null;
-    };
-  }, [
-    canInitializeMap,
-    mapContainerSize.height,
-    mapContainerSize.width,
-    savedPlaceCenter,
-    savedPlaces,
-    isDarkMode,
-  ]);
-
-  useEffect(() => {
-    applyNaverMapTheme(mapInstanceRef.current, isDarkMode);
-  }, [isDarkMode]);
+      return () => {
+        window.cancelAnimationFrame(frameId);
+        window.clearTimeout(firstTimerId);
+        window.clearTimeout(secondTimerId);
+        naverMaps.Event.removeListener(dragListener);
+        naverMaps.Event.removeListener(clickListener);
+        overlays.forEach((overlay) => overlay.setMap(null));
+        startMarkerRef.current = null;
+        mapInstanceRef.current = null;
+      };
+    },
+    [savedPlaces, updateStartLocation]
+  );
 
   return (
     <div className="space-y-4">
@@ -426,36 +319,22 @@ function PlaceCartStartLocationStep({
       </div>
 
       <section className="overflow-hidden rounded-[1.4rem] border border-brand-100 bg-white shadow-sm">
-        <div className="relative h-[390px] bg-brand-50">
-          <div
-            ref={mapNodeRef}
-            className="naver-map-root"
-            style={{
-              height: "100%",
-              minHeight: "390px",
-              width: "100%",
-            }}
-          />
-
-          {mapError ? (
-            <div className="absolute inset-x-4 top-4 rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm font-bold text-rose-600 shadow-sm">
-              {mapError}
+        {mapInitialLocation ? (
+          <NaverMapView
+            center={mapInitialLocation}
+            className="relative h-[390px] bg-brand-50"
+            resetKey={mapResetKey}
+            onReady={handleMapReady}
+          >
+            <div className="pointer-events-none absolute inset-x-4 top-4 rounded-2xl border border-brand-100 bg-white/95 px-4 py-3 text-xs font-semibold leading-5 text-slate-600 shadow-sm backdrop-blur">
+              지도를 탭하거나 출발 마커를 드래그해서 위치를 맞춰요.
             </div>
-          ) : null}
-
-          {!mapError && !isMapReady ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-brand-50">
-              <div className="flex items-center gap-2 rounded-2xl border border-brand-100 bg-white px-4 py-3 text-xs font-bold text-brand-700 shadow-sm">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" />
-                지도 불러오는 중
-              </div>
-            </div>
-          ) : null}
-
-          <div className="pointer-events-none absolute inset-x-4 top-4 rounded-2xl border border-brand-100 bg-white/95 px-4 py-3 text-xs font-semibold leading-5 text-slate-600 shadow-sm backdrop-blur">
-            지도를 탭하거나 출발 마커를 드래그해서 위치를 맞춰요.
+          </NaverMapView>
+        ) : (
+          <div className="flex h-[390px] items-center justify-center bg-brand-50 px-4 text-center text-xs font-bold text-brand-700">
+            출발 위치를 준비하고 있어요.
           </div>
-        </div>
+        )}
 
         <div className="space-y-3 px-4 py-3">
           <div className="flex items-center justify-between gap-3">

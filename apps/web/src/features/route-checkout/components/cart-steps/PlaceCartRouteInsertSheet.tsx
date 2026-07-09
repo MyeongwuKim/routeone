@@ -136,19 +136,19 @@ function PlaceCartRouteInsertSheet({
         className="absolute inset-0 cursor-default"
         onClick={onClose}
       />
-      <section className="route-checkout-bottom-sheet-enter relative flex h-[min(72dvh,780px)] max-h-[calc(100dvh-1rem)] w-full flex-col overflow-hidden rounded-t-[28px] border border-brand-100 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl">
-        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200" />
+      <section className="route-checkout-bottom-sheet-enter relative flex h-[min(72dvh,780px)] max-h-[calc(100dvh-1rem)] w-full flex-col overflow-hidden rounded-t-[28px] border border-slate-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl dark:border-brand-400/25 dark:bg-[#102a27]">
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200 dark:bg-brand-400/25" />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-trip text-sm text-brand-700">
+            <p className="font-trip text-sm text-brand-700 dark:text-brand-200">
               이 구간에 장소 추가
             </p>
-            <div className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-900">
+            <div className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
               <span className="min-w-0 truncate">{request.from.title}</span>
-              <span className="text-brand-500">→</span>
+              <span className="text-brand-500 dark:text-brand-200">→</span>
               <span className="min-w-0 truncate">{request.to.title}</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               경로에서 크게 벗어나지 않는 후보를 먼저 보여줘요.
             </p>
           </div>
@@ -156,19 +156,19 @@ function PlaceCartRouteInsertSheet({
             type="button"
             aria-label="닫기"
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 dark:border-brand-400/25 dark:bg-[#0b211f] dark:text-slate-200"
           >
             <IoClose />
           </button>
         </div>
 
-        <div className="mt-4 flex h-11 items-center gap-2 rounded-2xl border border-brand-100 bg-brand-50/70 px-3">
-          <IoSearch className="shrink-0 text-brand-600" />
+        <div className="mt-4 flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/90 px-3 dark:border-brand-400/25 dark:bg-slate-950/40">
+          <IoSearch className="shrink-0 text-slate-400 dark:text-slate-500" />
           <input
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             placeholder="이 구간에 넣을 장소 검색"
-            className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+            className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
         </div>
 
@@ -181,7 +181,8 @@ function PlaceCartRouteInsertSheet({
                 key={filter.key}
                 selected={isActive}
                 icon={getFilterIcon(filter.key)}
-                idleClassName="border-brand-100 bg-white text-slate-600"
+                selectedClassName="border-brand-500 bg-brand-50 text-brand-700 shadow-sm shadow-brand-100 dark:border-brand-300 dark:bg-brand-400/15 dark:text-brand-100 dark:shadow-brand-950/30"
+                idleClassName="border-slate-200 bg-white text-slate-600 dark:border-brand-400/25 dark:bg-[#0b211f] dark:text-slate-200"
                 onClick={() => setActiveFilter(filter.key)}
               >
                 {filter.label}
@@ -197,39 +198,41 @@ function PlaceCartRouteInsertSheet({
                 key={place.id}
                 type="button"
                 onClick={() => onSelectPlace(place, request)}
-                className="flex w-full items-center gap-3 rounded-2xl border border-brand-100 bg-white p-3 text-left shadow-sm active:scale-[0.99]"
+                className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-sm active:scale-[0.99] dark:border-brand-400/25 dark:bg-slate-950/40"
               >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-lg">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-lg dark:bg-brand-400/15">
                   {place.icon}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-slate-900">
+                  <p className="truncate text-sm font-bold text-slate-900 dark:text-white">
                     {place.title}
                   </p>
-                  <p className="mt-0.5 truncate text-xs font-semibold text-brand-700">
+                  <p className="mt-0.5 truncate text-xs font-semibold text-brand-700 dark:text-brand-200">
                     {place.contentTypeLabel}
                     {place.categoryName !== place.contentTypeLabel
                       ? ` · ${place.categoryName}`
                       : ""}
                   </p>
-                  <p className="mt-1 truncate text-xs text-slate-500">
+                  <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
                     {place.address}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-xs font-bold text-brand-700">
+                  <p className="text-xs font-bold text-brand-700 dark:text-brand-200">
                     +{formatDistance(fit.detourDistance)}
                   </p>
-                  <p className="mt-1 text-[10px] text-slate-400">우회</p>
+                  <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+                    우회
+                  </p>
                 </div>
               </button>
             ))
           ) : (
-            <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-4 py-6 text-center">
-              <p className="text-sm font-bold text-slate-700">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center dark:border-brand-400/25 dark:bg-slate-950/40">
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-100">
                 이 조건에 맞는 추천 후보가 없어요
               </p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
+              <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                 검색어를 바꾸거나 전체 검색에서 직접 찾아볼 수 있어요.
               </p>
             </div>
@@ -239,7 +242,7 @@ function PlaceCartRouteInsertSheet({
         <button
           type="button"
           onClick={onRequestSearchPlace}
-          className="mt-2 w-full shrink-0 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-700"
+          className="mt-2 w-full shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700 dark:border-brand-400/25 dark:bg-[#0b211f] dark:text-slate-100 dark:hover:border-brand-300/60 dark:hover:text-brand-100"
         >
           전체 검색에서 직접 찾기
         </button>

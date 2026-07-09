@@ -29,6 +29,7 @@ fragment RouteStopFields on RouteStop {
   visitedAt
   verificationStatus
   verifiedAt
+  verificationPhotoImageId
   verificationPhotoUrl
   verificationLat
   verificationLng

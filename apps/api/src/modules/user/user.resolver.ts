@@ -119,7 +119,7 @@ async function findOrCreateOAuthUser(
   }
 
   const existingUser = identity.email
-    ? await context.prisma.user.findUnique({
+    ? await context.prisma.user.findFirst({
         where: {
           email: identity.email,
         },

@@ -33,6 +33,7 @@ export type NativeLocationRequest = {
 export type NativePhotoRequest = {
   type: "routeone:native-visit-photo";
   id: string;
+  source?: "camera" | "library";
   uploadTarget?: NativePhotoUploadTarget;
 };
 
@@ -40,6 +41,8 @@ export type NativePhotoUploadTarget = {
   uploadUrl?: string;
   imageId?: string;
   imageUrl?: string;
+  fileName?: string;
+  environment?: string;
 };
 
 export type NativePhotoUploadRequest = {
@@ -52,6 +55,14 @@ export type NativePhotoUploadRequest = {
 export type NativeExternalUrlRequest = {
   type: "routeone:native-open-url";
   url: string;
+};
+
+export type NativeSaveImageRequest = {
+  type: "routeone:native-save-image";
+  id: string;
+  dataUrl: string;
+  fileName: string;
+  title?: string | null;
 };
 
 export type NativeFetchResponse =
@@ -106,6 +117,17 @@ export type NativePhotoUploadResponse =
       ok: true;
       uploadedImageId?: string | null;
       uploadedImageUrl?: string | null;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type NativeSaveImageResponse =
+  | {
+      ok: true;
+      shared: boolean;
+      uri?: string | null;
     }
   | {
       ok: false;

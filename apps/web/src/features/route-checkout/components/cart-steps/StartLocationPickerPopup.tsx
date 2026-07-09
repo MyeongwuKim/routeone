@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IoClose, IoLocationSharp } from "react-icons/io5";
-import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
-import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import {
-  applyNaverMapTheme,
-  getNaverMapThemeOptions,
-} from "@/lib/naverMapTheme";
-import { useUiThemeStore } from "@/stores/uiThemeStore";
+  type NaverMapInstance,
+  type NaverMapReadyContext,
+  type NaverMarkerInstance,
+} from "@/components/map/NaverMapView";
+import NaverMapView from "@/components/map/NaverMapView";
 import type { PlannedRouteDay, RouteStartLocation } from "./routePlanTypes";
 
 type StartLocationPickerPopupProps = {
@@ -15,8 +14,6 @@ type StartLocationPickerPopupProps = {
   onClose: () => void;
   onApply: (location: RouteStartLocation) => void;
 };
-
-const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 
 function createStartMarkerIconHtml() {
   return `
@@ -88,128 +85,157 @@ function StartLocationPickerPopup({
   onClose,
   onApply,
 }: StartLocationPickerPopupProps) {
-  const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
-  const mapNodeRef = useRef<HTMLDivElement | null>(null);
-  const overlayRefs = useRef<Array<{ setMap: (map: null) => void }>>([]);
+  const mapInstanceRef = useRef<NaverMapInstance | null>(null);
+  const startMarkerRef = useRef<NaverMarkerInstance | null>(null);
   const [draftLocation, setDraftLocation] = useState(initialLocation);
-  const [mapError, setMapError] = useState<string | null>(null);
   const visiblePlaces = useMemo(
     () => routePlan.flatMap((day) => day.items).slice(0, 40),
     [routePlan]
   );
+  const mapResetKey = useMemo(
+    () =>
+      [
+        initialLocation.lat,
+        initialLocation.lng,
+        ...visiblePlaces.map(
+          (item) => `${item.place.id}:${item.place.lat}:${item.place.lng}`
+        ),
+      ].join("|"),
+    [initialLocation.lat, initialLocation.lng, visiblePlaces]
+  );
 
-  useEffect(() => {
-    setDraftLocation(initialLocation);
-  }, [initialLocation]);
+  const updateDraftLocation = useCallback(
+    (nextLocation: RouteStartLocation, options: { pan?: boolean } = {}) => {
+      setDraftLocation(nextLocation);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    overlayRefs.current.forEach((overlay) => overlay.setMap(null));
-    overlayRefs.current = [];
-
-    async function setupMap() {
-      if (!mapNodeRef.current) {
+      if (!window.naver?.maps) {
         return;
       }
 
-      try {
-        await loadNaverMapSdk(NCP_KEY_ID);
+      const nextPosition = new window.naver.maps.LatLng(
+        nextLocation.lat,
+        nextLocation.lng
+      );
+      startMarkerRef.current?.setPosition?.(nextPosition);
 
-        if (cancelled || !mapNodeRef.current || !window.naver?.maps) {
+      if (options.pan) {
+        mapInstanceRef.current?.panTo?.(nextPosition);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      updateDraftLocation(initialLocation, { pan: true });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [initialLocation, updateDraftLocation]);
+
+  const handleMapReady = useCallback(
+    ({ map, naverMaps, center }: NaverMapReadyContext) => {
+      mapInstanceRef.current = map;
+
+      const overlays: NaverMarkerInstance[] = [];
+      const bounds = new naverMaps.LatLngBounds();
+      bounds.extend(center);
+
+      const startMarker = new naverMaps.Marker({
+        map,
+        position: center,
+        draggable: true,
+        zIndex: 2600,
+        icon: {
+          content: createStartMarkerIconHtml(),
+          anchor: new naverMaps.Point(0, 0),
+        },
+      }) as NaverMarkerInstance & {
+        getPosition: () => { lat: () => number; lng: () => number };
+      };
+      startMarkerRef.current = startMarker;
+      overlays.push(startMarker);
+
+      const dragListener = naverMaps.Event.addListener(
+        startMarker,
+        "dragend",
+        () => {
+          const position = startMarker.getPosition();
+          updateDraftLocation({
+            lat: position.lat(),
+            lng: position.lng(),
+          });
+        }
+      );
+      const clickListener = naverMaps.Event.addListener(
+        map,
+        "click",
+        (event: { coord: { lat: () => number; lng: () => number } }) => {
+          updateDraftLocation(
+            {
+              lat: event.coord.lat(),
+              lng: event.coord.lng(),
+            },
+            { pan: true }
+          );
+        }
+      );
+
+      visiblePlaces.forEach((item, index) => {
+        const position = new naverMaps.LatLng(item.place.lat, item.place.lng);
+        bounds.extend(position);
+
+        const marker = new naverMaps.Marker({
+          map,
+          position,
+          title: item.place.title,
+          zIndex: 1200 + index,
+          icon: {
+            content: createPlaceMarkerIconHtml(index + 1),
+            anchor: new naverMaps.Point(15, 15),
+          },
+        }) as NaverMarkerInstance;
+        overlays.push(marker);
+      });
+
+      const fitVisibleBounds = () => {
+        naverMaps.Event.trigger(map, "resize");
+
+        if (visiblePlaces.length > 0) {
+          try {
+            map.fitBounds?.(bounds, {
+              top: 92,
+              right: 28,
+              bottom: 28,
+              left: 28,
+            });
+          } catch {
+            map.fitBounds?.(bounds);
+          }
           return;
         }
 
-        const naverMaps = window.naver.maps;
-        const center = new naverMaps.LatLng(
-          initialLocation.lat,
-          initialLocation.lng
-        );
-        const map = new naverMaps.Map(mapNodeRef.current, {
-          center,
-          zoom: 12,
-          minZoom: 7,
-          draggable: true,
-          pinchZoom: true,
-          scrollWheel: true,
-          scaleControl: false,
-          mapDataControl: false,
-          logoControl: false,
-          zoomControl: true,
-          ...getNaverMapThemeOptions(isDarkMode),
-        });
-        applyNaverMapTheme(map, isDarkMode);
-        enableNaverMapPointerInteractions(map);
-        const bounds = new naverMaps.LatLngBounds();
-        bounds.extend(center);
+        map.setCenter?.(center);
+      };
+      const frameId = window.requestAnimationFrame(fitVisibleBounds);
+      const firstTimerId = window.setTimeout(fitVisibleBounds, 120);
+      const secondTimerId = window.setTimeout(fitVisibleBounds, 360);
 
-        const startMarker = new naverMaps.Marker({
-          map,
-          position: center,
-          draggable: true,
-          zIndex: 2600,
-          icon: {
-            content: createStartMarkerIconHtml(),
-            anchor: new naverMaps.Point(0, 0),
-          },
-        });
-        overlayRefs.current.push(startMarker);
-
-        const dragListener = naverMaps.Event.addListener(
-          startMarker,
-          "dragend",
-          () => {
-            const position = startMarker.getPosition();
-            setDraftLocation({
-              lat: position.lat(),
-              lng: position.lng(),
-            });
-          }
-        );
-
-        visiblePlaces.forEach((item, index) => {
-          const position = new naverMaps.LatLng(item.place.lat, item.place.lng);
-          bounds.extend(position);
-
-          const marker = new naverMaps.Marker({
-            map,
-            position,
-            title: item.place.title,
-            zIndex: 1200 + index,
-            icon: {
-              content: createPlaceMarkerIconHtml(index + 1),
-              anchor: new naverMaps.Point(15, 15),
-            },
-          });
-          overlayRefs.current.push(marker);
-        });
-
-        if (visiblePlaces.length > 0) {
-          map.fitBounds(bounds);
-        }
-
-        overlayRefs.current.push({
-          setMap: () => naverMaps.Event.removeListener(dragListener),
-        });
-      } catch (error) {
-        if (!cancelled) {
-          setMapError(
-            error instanceof Error
-              ? error.message
-              : "지도를 불러오지 못했어요."
-          );
-        }
-      }
-    }
-
-    void setupMap();
-
-    return () => {
-      cancelled = true;
-      overlayRefs.current.forEach((overlay) => overlay.setMap(null));
-      overlayRefs.current = [];
-    };
-  }, [initialLocation, visiblePlaces, isDarkMode]);
+      return () => {
+        window.cancelAnimationFrame(frameId);
+        window.clearTimeout(firstTimerId);
+        window.clearTimeout(secondTimerId);
+        naverMaps.Event.removeListener(dragListener);
+        naverMaps.Event.removeListener(clickListener);
+        overlays.forEach((overlay) => overlay.setMap(null));
+        startMarkerRef.current = null;
+        mapInstanceRef.current = null;
+      };
+    },
+    [updateDraftLocation, visiblePlaces]
+  );
 
   return (
     <div className="fixed inset-0 z-[2800] bg-white">
@@ -231,17 +257,16 @@ function StartLocationPickerPopup({
           </button>
         </header>
 
-        <div className="relative min-h-0 flex-1 bg-brand-50">
-          <div ref={mapNodeRef} className="naver-map-root" />
-          {mapError ? (
-            <div className="absolute inset-x-4 top-4 rounded-2xl border border-rose-100 bg-white px-4 py-3 text-sm font-bold text-rose-600 shadow-sm">
-              {mapError}
-            </div>
-          ) : null}
+        <NaverMapView
+          center={initialLocation}
+          className="relative min-h-0 flex-1 bg-brand-50"
+          resetKey={mapResetKey}
+          onReady={handleMapReady}
+        >
           <div className="pointer-events-none absolute inset-x-4 top-4 rounded-2xl border border-brand-100 bg-white/95 px-4 py-3 text-xs font-semibold leading-5 text-slate-600 shadow-sm backdrop-blur">
-            시작 마커를 길게 잡고 움직여 출발 위치를 맞춰요.
+            지도를 탭하거나 시작 마커를 드래그해서 출발 위치를 맞춰요.
           </div>
-        </div>
+        </NaverMapView>
 
         <footer className="app-safe-area-footer shrink-0 border-t border-brand-100 bg-white px-4 py-3">
           <div className="mb-3 flex items-center gap-2 rounded-2xl bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700">

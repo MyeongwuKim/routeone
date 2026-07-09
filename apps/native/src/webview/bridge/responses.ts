@@ -3,6 +3,7 @@ import type {
   NativeLocationResponse,
   NativePhotoUploadResponse,
   NativePhotoResponse,
+  NativeSaveImageResponse,
   WebViewRef,
 } from "./types";
 
@@ -66,6 +67,19 @@ export function postNativePhotoUploadResponse(
   postNativeResponse(
     webViewRef,
     "__ROUTEONE_NATIVE_PHOTO_UPLOAD_RESPONSE__",
+    id,
+    payload
+  );
+}
+
+export function postNativeSaveImageResponse(
+  webViewRef: WebViewRef,
+  id: string,
+  payload: NativeSaveImageResponse
+) {
+  postNativeResponse(
+    webViewRef,
+    "__ROUTEONE_NATIVE_SAVE_IMAGE_RESPONSE__",
     id,
     payload
   );

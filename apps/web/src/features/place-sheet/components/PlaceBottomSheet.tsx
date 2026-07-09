@@ -6,6 +6,7 @@ import {
   type PointerEvent,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { routeApi } from "@/api/routeApi";
 import {
   IoBagAdd,
   IoBagAddOutline,
@@ -20,6 +21,11 @@ import {
 import { usePlaceSheetLayout } from "../hooks/usePlaceSheetLayout";
 import PlaceTrendChart from "./PlaceTrendChart";
 import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
+import {
+  MIN_PLACE_STAY_SUMMARY_VISIT_COUNT,
+  mapSheetPlaceToPlaceSnapshotInput,
+  resolvePlaceStaySummaryForDisplay,
+} from "@/lib/routePlaceSnapshot";
 import {
   fetchNearbyTouristPlaces,
   fetchTourPlaceDetail,
@@ -61,6 +67,24 @@ type CurrentLocation = {
   lng: number;
 };
 
+type ImageViewerTarget = {
+  imageUrls: string[];
+  index: number;
+  title: string;
+};
+
+type PreviewMapInstance = {
+  setOptions?: (
+    optionsOrKey: Record<string, unknown> | string,
+    value?: unknown
+  ) => void;
+  fitBounds: (bounds: unknown, options?: unknown) => void;
+};
+
+type PreviewMapOverlay = {
+  setMap: (map: null) => void;
+};
+
 function getTopRankBadgeStyle(rank: number) {
   if (rank === 1) {
     return {
@@ -93,6 +117,21 @@ function getTopRankBadgeStyle(rank: number) {
 function formatDurationMinutes(durationMs: number) {
   const minutes = Math.max(1, Math.round(durationMs / 60000));
   return `${minutes}분`;
+}
+
+function formatStayMinutes(minutes: number | null | undefined) {
+  if (!minutes) {
+    return null;
+  }
+
+  if (minutes < 60) {
+    return `${minutes}분`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+
+  return restMinutes > 0 ? `${hours}시간 ${restMinutes}분` : `${hours}시간`;
 }
 
 function formatDistance(distanceM: number) {
@@ -325,15 +364,16 @@ function PlaceBottomSheet() {
   const { savedPlaceIds, toggleSavedPlace } = usePlaceCartStore();
   const showToast = useUiToastStore((state) => state.showToast);
   const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
-  const [activeImageIndex, setActiveImageIndex] = useState<number | null>(null);
+  const [imageViewerTarget, setImageViewerTarget] =
+    useState<ImageViewerTarget | null>(null);
   const [isPreviewMapSdkReady, setIsPreviewMapSdkReady] = useState(false);
   const [previewMapError, setPreviewMapError] = useState<string | null>(null);
   const imageSwipeStartXRef = useRef<number | null>(null);
 
   const previewMapRef = useRef<HTMLDivElement | null>(null);
-  const previewMapInstanceRef = useRef<any>(null);
+  const previewMapInstanceRef = useRef<PreviewMapInstance | null>(null);
   const previewMapContainerRef = useRef<HTMLDivElement | null>(null);
-  const previewOverlaysRef = useRef<any[]>([]);
+  const previewOverlaysRef = useRef<PreviewMapOverlay[]>([]);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
 
   const currentLocation: CurrentLocation = GANGNEUNG_CENTER_LOCATION;
@@ -409,6 +449,39 @@ function PlaceBottomSheet() {
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
   });
+  const placeStaySummaryQuery = useQuery({
+    queryKey: ["place-stay-summary", selectedPlaceKey],
+    enabled: isOpen && Boolean(selectedPlace),
+    queryFn: async () => {
+      if (!selectedPlace) {
+        throw new Error("선택된 장소가 없습니다.");
+      }
+
+      const result = await routeApi.placeStaySummary(
+        mapSheetPlaceToPlaceSnapshotInput(selectedPlace)
+      );
+      return result.placeStaySummary;
+    },
+    staleTime: 1000 * 60 * 30,
+    gcTime: 1000 * 60 * 60,
+  });
+  const placePhotosQuery = useQuery({
+    queryKey: ["place-photos", selectedPlaceKey],
+    enabled: isOpen && Boolean(selectedPlace),
+    queryFn: async () => {
+      if (!selectedPlace) {
+        throw new Error("선택된 장소가 없습니다.");
+      }
+
+      const result = await routeApi.placePhotos(
+        mapSheetPlaceToPlaceSnapshotInput(selectedPlace),
+        12
+      );
+      return result.placePhotos;
+    },
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+  });
 
   const concentrationTrendQuery = useQuery({
     queryKey: [
@@ -478,7 +551,10 @@ function PlaceBottomSheet() {
   });
 
   const detailOverview = detailQuery.data?.overview ?? "";
-  const detailImages = detailQuery.data?.images ?? [];
+  const detailImages = useMemo(
+    () => detailQuery.data?.images ?? [],
+    [detailQuery.data]
+  );
   const detailOperatingHours = detailQuery.data?.operatingHours ?? "";
   const detailRestDate = detailQuery.data?.restDate ?? "";
   const detailInfoCenter = detailQuery.data?.infoCenter ?? "";
@@ -494,13 +570,37 @@ function PlaceBottomSheet() {
     ],
     [detailImages, selectedPlace?.images]
   );
+  const userPlacePhotos = placePhotosQuery.data ?? [];
+  const userPlacePhotoViewerUrls = useMemo(
+    () => userPlacePhotos.map((photo) => photo.imageUrl),
+    [userPlacePhotos]
+  );
   const routeDurationText = routeQuery.data
     ? formatDurationMinutes(routeQuery.data.durationMs)
     : null;
   const routeDistanceText = routeQuery.data
     ? formatDistance(routeQuery.data.distanceM)
     : null;
-  const routePathPoints = routeQuery.data?.path ?? [];
+  const routePathPoints = useMemo(
+    () => routeQuery.data?.path ?? [],
+    [routeQuery.data]
+  );
+  const displayPlaceStaySummary = selectedPlace
+    ? resolvePlaceStaySummaryForDisplay(selectedPlace, placeStaySummaryQuery.data)
+    : null;
+  const averageStayLabel = formatStayMinutes(
+    displayPlaceStaySummary?.averageActualStayMinutes
+  );
+  const placeStaySummaryVisitCount = displayPlaceStaySummary?.visitCount ?? 0;
+  const placeStaySummaryLabel = placeStaySummaryQuery.isFetching
+    ? "유저 체류 데이터를 불러오는 중이에요."
+    : placeStaySummaryVisitCount === 0
+      ? "아직 사용자 체류 데이터가 없어요."
+      : placeStaySummaryVisitCount < MIN_PLACE_STAY_SUMMARY_VISIT_COUNT
+        ? `표본이 아직 적어요. ${MIN_PLACE_STAY_SUMMARY_VISIT_COUNT}회 이상 쌓이면 평균을 보여줘요.`
+        : averageStayLabel
+          ? `${averageStayLabel} · ${placeStaySummaryVisitCount}회 방문 기준`
+          : "아직 사용자 체류 데이터가 없어요.";
   const isRouteLoading = routeQuery.isFetching;
   const routeError =
     routeQuery.error instanceof Error ? routeQuery.error.message : null;
@@ -582,23 +682,46 @@ function PlaceBottomSheet() {
       "noopener,noreferrer"
     );
   };
-  const closeImageViewer = () => setActiveImageIndex(null);
+  const openImageViewer = (
+    imageUrls: string[],
+    index: number,
+    title: string
+  ) => {
+    if (imageUrls.length === 0) {
+      return;
+    }
+
+    setImageViewerTarget({
+      imageUrls,
+      index,
+      title,
+    });
+  };
+  const closeImageViewer = () => setImageViewerTarget(null);
   const showPreviousImage = () => {
-    setActiveImageIndex((index) => {
-      if (index == null || activeImageList.length === 0) {
-        return index;
+    setImageViewerTarget((target) => {
+      if (!target || target.imageUrls.length === 0) {
+        return target;
       }
 
-      return (index - 1 + activeImageList.length) % activeImageList.length;
+      return {
+        ...target,
+        index:
+          (target.index - 1 + target.imageUrls.length) %
+          target.imageUrls.length,
+      };
     });
   };
   const showNextImage = () => {
-    setActiveImageIndex((index) => {
-      if (index == null || activeImageList.length === 0) {
-        return index;
+    setImageViewerTarget((target) => {
+      if (!target || target.imageUrls.length === 0) {
+        return target;
       }
 
-      return (index + 1) % activeImageList.length;
+      return {
+        ...target,
+        index: (target.index + 1) % target.imageUrls.length,
+      };
     });
   };
   const handleImageViewerPointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -735,6 +858,11 @@ function PlaceBottomSheet() {
     } else {
       naverMaps.Event.trigger(previewMap, "resize");
     }
+
+    if (!previewMap) {
+      return;
+    }
+
     applyNaverMapTheme(previewMap, isDarkMode);
 
     clearPreviewOverlays();
@@ -821,7 +949,13 @@ function PlaceBottomSheet() {
   }, []);
 
   useEffect(() => {
-    setIsTopRankInfoOpen(false);
+    const frameId = window.requestAnimationFrame(() => {
+      setIsTopRankInfoOpen(false);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
   }, [isOpen, selectedPlaceKey]);
 
   if (!isOpen || !selectedPlace) {
@@ -850,7 +984,7 @@ function PlaceBottomSheet() {
       <section
         className={
           isFullPopupMode
-            ? "fixed inset-0 z-[2400] w-full bg-white"
+            ? "fixed inset-0 z-[3000] w-full bg-white"
             : `fixed bottom-0 z-[1900] w-full bg-white ${
                 isSheetExpanded
                   ? "inset-x-0 rounded-none border-0 shadow-none"
@@ -970,6 +1104,20 @@ function PlaceBottomSheet() {
                 {selectedPlace.address}
               </p>
 
+              <div className="mt-3 flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/70 px-3 py-3 text-xs dark:border-brand-400/25 dark:bg-slate-950/35">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-base text-brand-600 shadow-sm dark:bg-brand-400/15 dark:text-brand-200">
+                  <IoTimeOutline />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-black text-brand-700 dark:text-brand-200">
+                    유저 평균 체류
+                  </p>
+                  <p className="mt-1 line-clamp-2 leading-5 text-slate-600 dark:text-slate-300">
+                    {placeStaySummaryLabel}
+                  </p>
+                </div>
+              </div>
+
               <div className="mt-5">
                 <div className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
                   {!isSelectedPlaceDetailReady ? (
@@ -983,10 +1131,20 @@ function PlaceBottomSheet() {
                           alt={`${selectedPlace.title} 이미지 ${index + 1}`}
                           role="button"
                           tabIndex={0}
-                          onClick={() => setActiveImageIndex(index)}
+                          onClick={() =>
+                            openImageViewer(
+                              activeImageList,
+                              index,
+                              selectedPlace.title
+                            )
+                          }
                           onKeyDown={(event) => {
                             if (event.key === "Enter" || event.key === " ") {
-                              setActiveImageIndex(index);
+                              openImageViewer(
+                                activeImageList,
+                                index,
+                                selectedPlace.title
+                              );
                             }
                           }}
                           className="h-44 w-40 shrink-0 snap-start cursor-zoom-in rounded-2xl border border-brand-100 bg-brand-50 object-cover"
@@ -1026,6 +1184,66 @@ function PlaceBottomSheet() {
                       >
                         구글에서 보기
                       </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-slate-900 dark:text-white">
+                      사용자들이 올린 사진
+                    </p>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-300">
+                      사진 인증으로 공유된 방문 사진이에요.
+                    </p>
+                  </div>
+                  {userPlacePhotos.length > 0 ? (
+                    <span className="shrink-0 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100 dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25">
+                      {userPlacePhotos.length}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
+                  {placePhotosQuery.isFetching ? (
+                    <ImageStripSkeleton />
+                  ) : userPlacePhotos.length > 0 ? (
+                    userPlacePhotos.map((photo, index) => (
+                      <button
+                        key={photo.id}
+                        type="button"
+                        onClick={() =>
+                          openImageViewer(
+                            userPlacePhotoViewerUrls,
+                            index,
+                            `${selectedPlace.title} 사용자 사진`
+                          )
+                        }
+                        className="group relative h-44 w-40 shrink-0 snap-start overflow-hidden rounded-2xl border border-brand-100 bg-brand-50 text-left shadow-sm"
+                      >
+                        <img
+                          src={photo.thumbnailUrl ?? photo.imageUrl}
+                          alt={`${selectedPlace.title} 사용자 사진 ${index + 1}`}
+                          className="h-full w-full object-cover transition duration-200 group-active:scale-95"
+                          loading="lazy"
+                        />
+                        <span className="absolute bottom-2 left-2 rounded-full bg-slate-950/60 px-2 py-1 text-[10px] font-black text-white backdrop-blur">
+                          사진 인증
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="flex h-32 w-full min-w-full shrink-0 snap-start flex-col items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50/70 px-4 text-center dark:border-brand-400/25 dark:bg-slate-950/35">
+                      <div className="flex size-10 items-center justify-center rounded-full bg-white text-lg shadow-sm dark:bg-brand-400/15">
+                        {selectedPlace.icon}
+                      </div>
+                      <p className="mt-3 text-sm font-black text-slate-700 dark:text-slate-100">
+                        아직 올라온 사진이 없어요.
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">
+                        이 장소를 사진 인증하면 여기에 모여요.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -1240,7 +1458,8 @@ function PlaceBottomSheet() {
         </div>
       ) : null}
 
-      {activeImageIndex != null && activeImageList[activeImageIndex] ? (
+      {imageViewerTarget &&
+      imageViewerTarget.imageUrls[imageViewerTarget.index] ? (
         <section className="fixed inset-0 z-[2700] flex items-center justify-center bg-white/35 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
           <button
             type="button"
@@ -1261,17 +1480,17 @@ function PlaceBottomSheet() {
               <div
                 className="flex transition-transform duration-300 ease-out"
                 style={{
-                  transform: `translateX(-${activeImageIndex * 100}%)`,
+                  transform: `translateX(-${imageViewerTarget.index * 100}%)`,
                 }}
               >
-                {activeImageList.map((imageUrl, index) => (
+                {imageViewerTarget.imageUrls.map((imageUrl, index) => (
                   <div
                     key={`${imageUrl}-viewer-${index}`}
                     className="flex min-w-full items-center justify-center"
                   >
                     <img
                       src={imageUrl}
-                      alt={`${selectedPlace.title} 이미지 ${index + 1}`}
+                      alt={`${imageViewerTarget.title} ${index + 1}`}
                       draggable={false}
                       className="max-h-[78dvh] max-w-full select-none rounded-3xl object-contain shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
                     />
@@ -1280,7 +1499,7 @@ function PlaceBottomSheet() {
               </div>
             </div>
             <div className="mt-4 rounded-full bg-slate-900/45 px-3 py-1 text-xs font-bold text-white shadow-sm backdrop-blur">
-              {activeImageIndex + 1} / {activeImageList.length}
+              {imageViewerTarget.index + 1} / {imageViewerTarget.imageUrls.length}
             </div>
           </div>
 

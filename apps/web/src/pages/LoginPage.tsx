@@ -2,8 +2,9 @@ import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { MdLogin, MdPassword, MdRoute } from "react-icons/md";
-import { authApi } from "@/api/authApi";
+import { authApi, ME_QUERY_KEY } from "@/api/authApi";
 import { setAuthToken } from "@/lib/authToken";
+import { useAuthUserStore } from "@/stores/authUserStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 function getAuthErrorMessage(error: unknown) {
@@ -16,6 +17,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
+  const setAuthUser = useAuthUserStore((state) => state.setUser);
   const [accountId, setAccountId] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -38,8 +40,9 @@ function LoginPage() {
       });
 
       setAuthToken(payload.loginWithPassword.token);
-      void queryClient.invalidateQueries({
-        queryKey: ["me"],
+      setAuthUser(payload.loginWithPassword.user);
+      queryClient.setQueryData(ME_QUERY_KEY, {
+        me: payload.loginWithPassword.user,
       });
       void queryClient.invalidateQueries({
         queryKey: ["my-routes"],

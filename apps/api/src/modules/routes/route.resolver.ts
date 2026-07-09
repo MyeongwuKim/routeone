@@ -18,6 +18,9 @@ import {
   getPublicRoutes,
   getLikedRoutes,
   getSavedRoutes,
+  getPlacePhotos,
+  getPlaceStaySummary,
+  getPlaceStaySummaries,
   markRouteStopVisited,
   reorderRouteStops,
   setRouteLike,
@@ -28,11 +31,13 @@ import {
   type CloneRouteInput,
   type AppendRouteDaysInput,
   type CreateRouteInput,
+  type PlaceSnapshotInput,
   type ReorderRouteStopsInput,
   type RouteStopVisitVerificationInput,
   type StartRouteInput,
   type UpdateRouteStopStayMinutesInput,
 } from "./route.service.js";
+import { ensureDevHistoryRoutes } from "./devHistorySeed.js";
 
 export const routeTypeDefs = gql`
   enum RouteStatus {
@@ -63,6 +68,16 @@ export const routeTypeDefs = gql`
     TOUR_API
     NAVER
     CUSTOM
+  }
+
+  enum PlacePhotoSource {
+    VISIT_PHOTO
+  }
+
+  enum PlacePhotoStatus {
+    ACTIVE
+    HIDDEN
+    DELETED
   }
 
   type PlaceSnapshot {
@@ -141,6 +156,7 @@ export const routeTypeDefs = gql`
     visitedAt: DateTime
     verificationStatus: RouteStopVerificationStatus!
     verifiedAt: DateTime
+    verificationPhotoImageId: String
     verificationPhotoUrl: String
     verificationLat: Float
     verificationLng: Float
@@ -156,6 +172,40 @@ export const routeTypeDefs = gql`
     route: Route!
     liked: Boolean!
     saved: Boolean!
+  }
+
+  type PlaceStaySummary {
+    averageActualStayMinutes: Int
+    visitCount: Int!
+    lastVisitedAt: DateTime
+  }
+
+  type PlacePhoto {
+    id: ID!
+    placeKey: String!
+    placeKeys: [String!]!
+    provider: PlaceProvider!
+    externalId: String
+    contentId: String
+    contentTypeId: String
+    title: String!
+    address: String
+    lat: Float!
+    lng: Float!
+    categoryLabel: String
+    categoryName: String
+    placeImageUrl: String
+    regionCode: String
+    regionLabelKey: String
+    imageId: String
+    imageUrl: String!
+    thumbnailUrl: String
+    variant: String
+    source: PlacePhotoSource!
+    status: PlacePhotoStatus!
+    verifiedAt: DateTime
+    createdAt: DateTime!
+    updatedAt: DateTime!
   }
 
   type DeletedRoutePayload {
@@ -242,6 +292,7 @@ export const routeTypeDefs = gql`
     lat: Float
     lng: Float
     accuracyMeters: Float
+    photoImageId: String
     photoUrl: String
   }
 
@@ -251,6 +302,9 @@ export const routeTypeDefs = gql`
     likedRoutes: [Route!]!
     sharedRoutes(regionCode: String, limit: Int): [Route!]!
     route(id: ID!): Route
+    placeStaySummary(place: PlaceSnapshotInput!): PlaceStaySummary!
+    placeStaySummaries(places: [PlaceSnapshotInput!]!): [PlaceStaySummary!]!
+    placePhotos(place: PlaceSnapshotInput!, limit: Int): [PlacePhoto!]!
   }
 
   extend type Mutation {
@@ -263,6 +317,7 @@ export const routeTypeDefs = gql`
       stopId: ID!
       visited: Boolean = true
       verification: RouteStopVisitVerificationInput
+      actualStayMinutes: Int
     ): Route!
     reorderRouteStops(input: ReorderRouteStopsInput!): Route!
     updateRouteStopStayMinutes(input: UpdateRouteStopStayMinutesInput!): Route!
@@ -289,6 +344,19 @@ type SharedRoutesArgs = {
   limit?: number | null;
 };
 
+type PlaceStaySummaryArgs = {
+  place: PlaceSnapshotInput;
+};
+
+type PlaceStaySummariesArgs = {
+  places: PlaceSnapshotInput[];
+};
+
+type PlacePhotosArgs = {
+  place: PlaceSnapshotInput;
+  limit?: number | null;
+};
+
 type CreateRouteArgs = {
   input: CreateRouteInput;
 };
@@ -305,6 +373,7 @@ type MarkRouteStopVisitedArgs = {
   stopId: string;
   visited?: boolean | null;
   verification?: RouteStopVisitVerificationInput | null;
+  actualStayMinutes?: number | null;
 };
 
 type RouteIdArgs = {
@@ -329,12 +398,14 @@ type UpdateRouteStopStayMinutesArgs = {
 
 export const routeResolvers = {
   Query: {
-    myRoutes(
+    async myRoutes(
       _parent: unknown,
       args: MyRoutesArgs,
       context: GraphQLContext
     ) {
       const user = requireUser(context);
+
+      await ensureDevHistoryRoutes(context.prisma, user);
 
       return context.prisma.route.findMany({
         where: {
@@ -385,6 +456,29 @@ export const routeResolvers = {
 
       return context.user?.id === route.ownerId ? route : null;
     },
+    placeStaySummary(
+      _parent: unknown,
+      args: PlaceStaySummaryArgs,
+      context: GraphQLContext
+    ) {
+      return getPlaceStaySummary(context.prisma, args.place);
+    },
+    placeStaySummaries(
+      _parent: unknown,
+      args: PlaceStaySummariesArgs,
+      context: GraphQLContext
+    ) {
+      return getPlaceStaySummaries(context.prisma, args.places);
+    },
+    placePhotos(
+      _parent: unknown,
+      args: PlacePhotosArgs,
+      context: GraphQLContext
+    ) {
+      return getPlacePhotos(context.prisma, args.place, {
+        limit: args.limit,
+      });
+    },
   },
   Mutation: {
     createRoute(
@@ -430,7 +524,8 @@ export const routeResolvers = {
         user,
         args.stopId,
         args.visited ?? true,
-        args.verification
+        args.verification,
+        args.actualStayMinutes
       );
     },
     reorderRouteStops(

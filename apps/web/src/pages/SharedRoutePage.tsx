@@ -71,7 +71,11 @@ type SharedRoutePageProps = {
 };
 
 type SharedRouteListData = SharedRoutesQuery | LikedSharedRoutesQuery;
-type SharedRouteSortKey = "latest" | "likes";
+type SharedRouteSortKey =
+  | "shared-desc"
+  | "shared-asc"
+  | "likes-desc"
+  | "likes-asc";
 type SharedRouteFilters = {
   tags: string[];
   places: SharedRoutePlaceFilterOption[];
@@ -87,24 +91,34 @@ type SharedRouteFilterOptions = {
   }>;
 };
 
-const SHARED_ROUTE_SORT_OPTIONS: ReadonlyArray<
-  DropdownSelectOption<SharedRouteSortKey>
-> = [
-  {
-    value: "latest",
-    label: "최신순",
-    description: "최근 공유된 루트 먼저",
-  },
-  {
-    value: "likes",
-    label: "하트순",
-    description: "하트가 많은 루트 먼저",
-  },
-];
 const EMPTY_SHARED_ROUTE_FILTERS: SharedRouteFilters = {
   tags: [],
   places: [],
 };
+const SHARED_ROUTE_SORT_OPTIONS: ReadonlyArray<
+  DropdownSelectOption<SharedRouteSortKey>
+> = [
+  {
+    value: "shared-desc",
+    label: "최근 공유순",
+    description: "최근 공유된 루트 먼저",
+  },
+  {
+    value: "shared-asc",
+    label: "오래된 공유순",
+    description: "오래전에 공유된 루트 먼저",
+  },
+  {
+    value: "likes-desc",
+    label: "하트 많은순",
+    description: "하트가 많은 루트 먼저",
+  },
+  {
+    value: "likes-asc",
+    label: "하트 적은순",
+    description: "하트가 적은 루트 먼저",
+  },
+];
 const DEFAULT_FILTER_REGION: (typeof GANGWON_REGION_LABELS)[number] = "강릉";
 const GANGWON_REGION_CENTERS: Record<
   (typeof GANGWON_REGION_LABELS)[number],
@@ -903,7 +917,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const [checkoutRoutePlan, setCheckoutRoutePlan] = useState<
     PlannedRouteDay[] | null
   >(null);
-  const [sortKey, setSortKey] = useState<SharedRouteSortKey>("latest");
+  const [sortKey, setSortKey] = useState<SharedRouteSortKey>("shared-desc");
   const [activeFilters, setActiveFilters] = useState<SharedRouteFilters>(
     EMPTY_SHARED_ROUTE_FILTERS
   );
@@ -941,17 +955,24 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     return routes
       .filter((route) => routeMatchesFilters(route, activeFilters))
       .sort((left, right) => {
-        if (sortKey === "likes") {
+        if (sortKey === "likes-desc" || sortKey === "likes-asc") {
+          const likeCountDifference =
+            sortKey === "likes-desc"
+              ? right.likeCount - left.likeCount
+              : left.likeCount - right.likeCount;
+
           return (
-            right.likeCount - left.likeCount ||
+            likeCountDifference ||
             getRouteSortTime(right) - getRouteSortTime(left)
           );
         }
 
-        return (
-          getRouteSortTime(right) - getRouteSortTime(left) ||
-          right.likeCount - left.likeCount
-        );
+        const sharedTimeDifference =
+          sortKey === "shared-desc"
+            ? getRouteSortTime(right) - getRouteSortTime(left)
+            : getRouteSortTime(left) - getRouteSortTime(right);
+
+        return sharedTimeDifference || right.likeCount - left.likeCount;
       });
   }, [activeFilters, routes, sortKey]);
   const selectedRouteQuery = useQuery({
@@ -1310,7 +1331,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
             options={SHARED_ROUTE_SORT_OPTIONS}
             value={sortKey}
             onChange={setSortKey}
-            className="w-36 shrink-0"
+            className="w-40 shrink-0"
             buttonClassName="min-h-10 rounded-full px-3 py-2 text-xs"
             menuClassName="left-0 right-auto"
           />
@@ -1383,15 +1404,17 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         ) : null}
       </div>
 
-      <div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto pb-4">
+      <div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-px pb-4 pt-1">
         {routeListQuery.isLoading ? (
-          <PotatoLoadingCard
-            title={pageCopy.loadingTitle}
-            description={pageCopy.loadingDescription}
-            animation="map-thinking"
-            compact
-            className="shadow-sm"
-          />
+          <div className="flex min-h-full flex-col justify-center">
+            <PotatoLoadingCard
+              title={pageCopy.loadingTitle}
+              description={pageCopy.loadingDescription}
+              animation="map-thinking"
+              compact
+              className="shadow-sm"
+            />
+          </div>
         ) : null}
 
         {routeListQuery.isError ? (
@@ -1403,8 +1426,10 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         {!routeListQuery.isLoading &&
         !routeListQuery.isError &&
         routes.length === 0 ? (
-          <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40 dark:text-slate-300">
-            {pageCopy.empty}
+          <div className="flex min-h-full flex-col justify-center">
+            <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40 dark:text-slate-300">
+              {pageCopy.empty}
+            </div>
           </div>
         ) : null}
 
@@ -1412,8 +1437,10 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         !routeListQuery.isError &&
         routes.length > 0 &&
         filteredRoutes.length === 0 ? (
-          <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40 dark:text-slate-300">
-            조건에 맞는 공유 루트가 없어요.
+          <div className="flex min-h-full flex-col justify-center">
+            <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40 dark:text-slate-300">
+              조건에 맞는 공유 루트가 없어요.
+            </div>
           </div>
         ) : null}
 
@@ -1468,6 +1495,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           headerLabel="SHARED ROUTE"
           headerBadge={selectedRoute.isMine ? "내 공유 루트" : undefined}
           enableStartPreview
+          enableVerificationPhotoPreview
           onRequestCheckout={handleRequestCheckoutFromSharedRoute}
           readOnlyFooterAction={
             selectedRoute.isMine

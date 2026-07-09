@@ -11,12 +11,18 @@ export type GraphQLContext = {
 const LOCAL_DEV_USER_EMAIL = "local@routeone.dev";
 
 async function getLocalDevUser() {
-  return prisma.user.upsert({
+  const existingUser = await prisma.user.findFirst({
     where: {
       email: LOCAL_DEV_USER_EMAIL,
     },
-    update: {},
-    create: {
+  });
+
+  if (existingUser) {
+    return existingUser;
+  }
+
+  return prisma.user.create({
+    data: {
       email: LOCAL_DEV_USER_EMAIL,
       displayName: "RouteOne Local User",
       locale: "ko",

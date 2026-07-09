@@ -341,6 +341,47 @@ function dedupeImageUrls(urls: string[]) {
   return [...unique.values()];
 }
 
+export async function fetchTourPlaceImageUrls(
+  serviceKey: string,
+  contentId: string
+) {
+  if (!serviceKey || !contentId) {
+    return [];
+  }
+
+  const imageQuery = new URLSearchParams({
+    serviceKey: normalizeServiceKey(serviceKey),
+    MobileOS: "ETC",
+    MobileApp: "RouteOne",
+    _type: "json",
+    contentId,
+    imageYN: "Y",
+    numOfRows: "50",
+    pageNo: "1",
+  });
+
+  const imageResponse = await fetch(
+    `${TOUR_DETAIL_IMAGE_BASE_URL}?${imageQuery.toString()}`
+  );
+
+  if (!imageResponse.ok) {
+    return [];
+  }
+
+  const imageData = (await imageResponse.json()) as TourApiResponse;
+  const imageCode = imageData.response?.header?.resultCode;
+
+  if (imageCode && imageCode !== "0000") {
+    return [];
+  }
+
+  return dedupeImageUrls(
+    toArray(imageData.response?.body?.items?.item)
+      .map((item) => item.originimgurl ?? "")
+      .filter((image): image is string => Boolean(image))
+  );
+}
+
 function normalizeYmd(rawValue: unknown) {
   if (typeof rawValue !== "string" && typeof rawValue !== "number") {
     return null;

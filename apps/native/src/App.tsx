@@ -34,7 +34,7 @@ export default function App() {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
         <NativeOnboardingStep
-          description="장소 근처에 도착했는지 확인하고 방문 인증을 도와드릴게요."
+          description="장소 근처에 도착했는지 확인하고 사진 인증을 도와드릴게요."
           primaryAction={{
             disabled: isRequestingLocationPermission,
             label: "허용",

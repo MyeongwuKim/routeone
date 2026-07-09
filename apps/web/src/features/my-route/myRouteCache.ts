@@ -316,7 +316,9 @@ export function optimisticVisitRouteStopCache({
   verificationLat,
   verificationLng,
   verificationAccuracyMeters,
+  verificationPhotoImageId,
   verificationPhotoUrl,
+  actualStayMinutes,
 }: {
   data: MyRoutesQuery | undefined;
   routeId: string;
@@ -327,7 +329,9 @@ export function optimisticVisitRouteStopCache({
   verificationLat?: number | null;
   verificationLng?: number | null;
   verificationAccuracyMeters?: number | null;
+  verificationPhotoImageId?: string | null;
   verificationPhotoUrl?: string | null;
+  actualStayMinutes?: number | null;
 }) {
   return updateRoute(data, routeId, (route) => {
     const nextVisitStatus: MyRouteStop["visitStatus"] = visited
@@ -347,6 +351,9 @@ export function optimisticVisitRouteStopCache({
               visitedAt: visited ? visitedAt : null,
               verificationStatus: nextVerificationStatus,
               verifiedAt: isVerified ? visitedAt : null,
+              verificationPhotoImageId: isVerified
+                ? (verificationPhotoImageId ?? null)
+                : null,
               verificationPhotoUrl: isVerified
                 ? (verificationPhotoUrl ?? null)
                 : null,
@@ -357,7 +364,7 @@ export function optimisticVisitRouteStopCache({
                 : null,
               checkedInAt: isVerified ? (stop.checkedInAt ?? visitedAt) : null,
               checkedOutAt: null,
-              actualStayMinutes: null,
+              actualStayMinutes: visited ? (actualStayMinutes ?? null) : null,
             }
           : stop
       ),

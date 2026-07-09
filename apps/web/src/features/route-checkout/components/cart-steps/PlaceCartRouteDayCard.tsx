@@ -17,6 +17,7 @@ import {
 } from "react";
 import PlaceCartRouteMapPopup from "./PlaceCartRouteMapPopup";
 import PlaceCartRouteInsertSheet from "./PlaceCartRouteInsertSheet";
+import { MIN_PLACE_STAY_SUMMARY_VISIT_COUNT } from "@/lib/routePlaceSnapshot";
 import type { MapSheetPlace } from "@/types/place";
 import type {
   PlannedRouteDay,
@@ -32,6 +33,7 @@ type PlaceCartRouteDayCardProps = {
   comparisonDay?: PlannedRouteDay | null;
   candidatePlaces: MapSheetPlace[];
   excludedPlaceKeys: string[];
+  placeStaySummaryByPlaceId: Map<string, PlaceStaySummaryPreview>;
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
   onInsertPlace: (request: RouteInsertRequest, place: MapSheetPlace) => void;
   onRemovePlace: (placeId: string) => void;
@@ -47,6 +49,11 @@ type PlaceCartRouteDayCardProps = {
   onRequestOrderEditing: () => void;
   onFinishOrderEditing: () => void;
   onRequestSearchPlace: () => void;
+};
+
+type PlaceStaySummaryPreview = {
+  averageActualStayMinutes: number | null;
+  visitCount: number;
 };
 
 type DraggedDayItem = {
@@ -154,7 +161,7 @@ const ROUTE_STATIONS_PER_ROW = 3;
 const ROUTE_COLUMNS = [18, 50, 82] as const;
 const ROUTE_TURN_LEFT_X = 6;
 const ROUTE_TURN_RIGHT_X = 96;
-const ROUTE_ROW_HEIGHT = 128;
+const ROUTE_ROW_HEIGHT = 142;
 const ROUTE_ROW_GAP = 18;
 const ROUTE_LINE_Y = 20;
 const ROUTE_NODE_EDGE_OFFSET_X = 6;
@@ -188,6 +195,20 @@ function getDurationText(minutes: number) {
   const hour = Math.floor(minutes / 60);
   const restMinutes = minutes % 60;
   return restMinutes > 0 ? `${hour}시간 ${restMinutes}분` : `${hour}시간`;
+}
+
+function getAverageStaySummaryLabel(summary?: PlaceStaySummaryPreview) {
+  if (
+    !summary ||
+    !summary.averageActualStayMinutes ||
+    summary.visitCount < MIN_PLACE_STAY_SUMMARY_VISIT_COUNT
+  ) {
+    return null;
+  }
+
+  return `${summary.visitCount}회 평균 ${getDurationText(
+    summary.averageActualStayMinutes
+  )}`;
 }
 
 function clampStayMinutes(value: number) {
@@ -510,6 +531,7 @@ function RouteRowGroup({
   row,
   rowIndex,
   isOrderEditing,
+  placeStaySummaryByPlaceId,
   onRequestStayMinutesEdit,
   onSelectItem,
   onStartDragItem,
@@ -523,6 +545,7 @@ function RouteRowGroup({
   row: RouteRowEntry[];
   rowIndex: number;
   isOrderEditing: boolean;
+  placeStaySummaryByPlaceId: Map<string, PlaceStaySummaryPreview>;
   onRequestStayMinutesEdit: (item: PlannedRouteItem) => void;
   onSelectItem: (item: PlannedRouteItem) => void;
   onStartDragItem: (payload: DragStartPayload) => void;
@@ -586,6 +609,11 @@ function RouteRowGroup({
               <StationNode
                 station={cell.station}
                 isOrderEditing={isOrderEditing}
+                averageStaySummary={
+                  cell.station.item
+                    ? placeStaySummaryByPlaceId.get(cell.station.item.place.id)
+                    : undefined
+                }
                 onRequestStayMinutesEdit={onRequestStayMinutesEdit}
                 onSelectItem={onSelectItem}
                 onStartDragItem={onStartDragItem}
@@ -641,6 +669,7 @@ function RouteRowGroup({
 function StationNode({
   station,
   isOrderEditing,
+  averageStaySummary,
   onRequestStayMinutesEdit,
   onSelectItem,
   onStartDragItem,
@@ -648,6 +677,7 @@ function StationNode({
 }: {
   station: RouteStation;
   isOrderEditing: boolean;
+  averageStaySummary?: PlaceStaySummaryPreview;
   onRequestStayMinutesEdit: (item: PlannedRouteItem) => void;
   onSelectItem: (item: PlannedRouteItem) => void;
   onStartDragItem: (payload: DragStartPayload) => void;
@@ -657,6 +687,8 @@ function StationNode({
   const longPressPointerRef = useRef<LongPressPointer | null>(null);
   const didLongPressRef = useRef(false);
   const isOverSchedule = station.item?.isOverSchedule ?? false;
+  const averageStaySummaryLabel =
+    getAverageStaySummaryLabel(averageStaySummary);
   const orderLabel =
     station.type === "place" ? String(station.itemIndex + 1) : "S";
   const clearLongPressTimer = () => {
@@ -816,16 +848,25 @@ function StationNode({
       )}
 
       {station.item && !isOrderEditing ? (
-        <button
-          type="button"
-          onClick={() => onRequestStayMinutesEdit(station.item as PlannedRouteItem)}
-          className="mt-1 flex w-[62px] max-w-full items-center justify-center gap-0.5 rounded-full border border-brand-100 bg-brand-50 px-1.5 py-1 text-[11px] font-bold text-slate-800 active:scale-95 dark:border-brand-400/35 dark:bg-slate-950 dark:text-slate-100"
-        >
-          <span>{station.item.stayMinutes}</span>
-          <span className="text-[9px] text-slate-500 dark:text-slate-300">
-            분
-          </span>
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              onRequestStayMinutesEdit(station.item as PlannedRouteItem)
+            }
+            className="mt-1 flex w-[62px] max-w-full items-center justify-center gap-0.5 rounded-full border border-brand-100 bg-brand-50 px-1.5 py-1 text-[11px] font-bold text-slate-800 active:scale-95 dark:border-brand-400/35 dark:bg-slate-950 dark:text-slate-100"
+          >
+            <span>{station.item.stayMinutes}</span>
+            <span className="text-[9px] text-slate-500 dark:text-slate-300">
+              분
+            </span>
+          </button>
+          {averageStaySummaryLabel ? (
+            <p className="mt-1 max-w-[92px] truncate text-center text-[9px] font-semibold text-slate-400 dark:text-slate-500">
+              {averageStaySummaryLabel}
+            </p>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -932,6 +973,7 @@ function PlaceCartRouteItemSheet({
   item,
   currentDay,
   routePlan,
+  averageStaySummary,
   onClose,
   onRemove,
   onMovePlaceToDay,
@@ -939,6 +981,7 @@ function PlaceCartRouteItemSheet({
   item: PlannedRouteItem;
   currentDay: number;
   routePlan: PlannedRouteDay[];
+  averageStaySummary?: PlaceStaySummaryPreview;
   onClose: () => void;
   onRemove: (placeId: string) => void;
   onMovePlaceToDay: (
@@ -948,6 +991,14 @@ function PlaceCartRouteItemSheet({
   ) => void;
 }) {
   const movableDays = routePlan.filter((day) => day.day !== currentDay);
+  const averageStayMinutesLabel = averageStaySummary?.averageActualStayMinutes
+    && averageStaySummary.visitCount >= MIN_PLACE_STAY_SUMMARY_VISIT_COUNT
+    ? getDurationText(averageStaySummary.averageActualStayMinutes)
+    : null;
+  const averageStayEmptyLabel =
+    (averageStaySummary?.visitCount ?? 0) === 0
+      ? "아직 사용자 체류 데이터가 없어요"
+      : `표본이 아직 적어요. ${MIN_PLACE_STAY_SUMMARY_VISIT_COUNT}회 이상 쌓이면 평균을 보여줘요.`;
 
   return (
     <div className="fixed inset-0 z-[2600] flex items-end bg-slate-950/30">
@@ -1007,6 +1058,26 @@ function PlaceCartRouteItemSheet({
                 {getDurationText(item.travelMinutesFromPrevious)}
               </p>
             </div>
+          </div>
+          <div className="mt-2 rounded-2xl bg-white px-3 py-3 dark:bg-slate-950">
+            <p className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-300">
+              <IoTimeOutline className="text-brand-600 dark:text-brand-200" />
+              사용자 평균 체류
+            </p>
+            {averageStayMinutesLabel && averageStaySummary ? (
+              <>
+                <p className="mt-1 text-base font-bold text-slate-900 dark:text-white">
+                  평균 {averageStayMinutesLabel}
+                </p>
+                <p className="mt-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
+                  {averageStaySummary.visitCount}회 방문 기록 기준
+                </p>
+              </>
+            ) : (
+              <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                {averageStayEmptyLabel}
+              </p>
+            )}
           </div>
         </div>
 
@@ -1075,6 +1146,7 @@ function PlaceCartRouteDayCard({
   comparisonDay,
   candidatePlaces,
   excludedPlaceKeys,
+  placeStaySummaryByPlaceId,
   onChangeStayMinutes,
   onInsertPlace,
   onRemovePlace,
@@ -1489,6 +1561,7 @@ function PlaceCartRouteDayCard({
                   row={row}
                   rowIndex={rowIndex}
                   isOrderEditing={isOrderEditing}
+                  placeStaySummaryByPlaceId={placeStaySummaryByPlaceId}
                   onRequestStayMinutesEdit={setStayMinutesItem}
                   onSelectItem={setSelectedItem}
                   onStartDragItem={handleStartDragItem}
@@ -1577,6 +1650,9 @@ function PlaceCartRouteDayCard({
           item={selectedItem}
           currentDay={day.day}
           routePlan={routePlan}
+          averageStaySummary={placeStaySummaryByPlaceId.get(
+            selectedItem.place.id
+          )}
           onClose={() => setSelectedItem(null)}
           onRemove={onRemovePlace}
           onMovePlaceToDay={onMovePlaceToDay}

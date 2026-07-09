@@ -93,6 +93,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   var pendingLocationRequests = Object.create(null);
   var pendingPhotoRequests = Object.create(null);
   var pendingPhotoUploadRequests = Object.create(null);
+  var pendingSaveImageRequests = Object.create(null);
   var requestSeq = 0;
 
   function getUrl(input) {
@@ -303,6 +304,26 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     });
   };
 
+  window.__ROUTEONE_NATIVE_SAVE_IMAGE_RESPONSE__ = function handleNativeSaveImageResponse(id, payload) {
+    var handlers = pendingSaveImageRequests[id];
+
+    if (!handlers) {
+      return;
+    }
+
+    delete pendingSaveImageRequests[id];
+
+    if (!payload || !payload.ok) {
+      handlers.reject(new Error((payload && payload.error) || "Native image save failed"));
+      return;
+    }
+
+    handlers.resolve({
+      shared: payload.shared,
+      uri: payload.uri
+    });
+  };
+
   window.RouteOneNative = Object.assign({}, window.RouteOneNative, {
     getCurrentPosition: function getCurrentPosition() {
       if (!window.ReactNativeWebView) {
@@ -329,6 +350,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 
       var requestId = "native-photo-" + Date.now() + "-" + requestSeq++;
       var uploadTarget = options && options.uploadTarget ? options.uploadTarget : null;
+      var source = options && options.source === "library" ? "library" : "camera";
 
       return new Promise(function routeOneNativePhoto(resolve, reject) {
         pendingPhotoRequests[requestId] = { resolve: resolve, reject: reject };
@@ -337,6 +359,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
           JSON.stringify({
             type: "routeone:native-visit-photo",
             id: requestId,
+            source: source,
             uploadTarget: uploadTarget
           })
         );
@@ -360,6 +383,30 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
             id: requestId,
             photoUri: photoUri,
             uploadTarget: uploadTarget
+          })
+        );
+      });
+    },
+    saveImage: function saveImage(options) {
+      if (!window.ReactNativeWebView) {
+        return Promise.reject(new Error("Native bridge is not available"));
+      }
+
+      var requestId = "native-save-image-" + Date.now() + "-" + requestSeq++;
+      var dataUrl = options && options.dataUrl ? options.dataUrl : "";
+      var fileName = options && options.fileName ? options.fileName : "routeone-card.png";
+      var title = options && options.title ? options.title : null;
+
+      return new Promise(function routeOneNativeSaveImage(resolve, reject) {
+        pendingSaveImageRequests[requestId] = { resolve: resolve, reject: reject };
+
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: "routeone:native-save-image",
+            id: requestId,
+            dataUrl: dataUrl,
+            fileName: fileName,
+            title: title
           })
         );
       });

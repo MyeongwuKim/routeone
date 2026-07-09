@@ -68,6 +68,7 @@ import {
   getSortedRouteDays,
   isVisitedStop,
 } from "../routeDisplay";
+import { cacheRouteStopVerificationPhotoDataUrl } from "../routeCompletionPoster";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
 
 type DayRoutePopupProps = {
@@ -78,6 +79,7 @@ type DayRoutePopupProps = {
   headerLabel?: string;
   headerBadge?: string;
   enableStartPreview?: boolean;
+  enableVerificationPhotoPreview?: boolean;
   onRequestCheckout?: (routePlan: PlannedRouteDay[]) => void;
   readOnlyFooterAction?: {
     label: string;
@@ -111,6 +113,15 @@ type StayMinutesEditTarget = {
 };
 
 type VisitCompletionTarget = {
+  routeDay: MyRouteDay;
+  stop: MyRouteStop;
+};
+
+type ActualStayMinutesTarget = VisitCompletionTarget & {
+  verification: RouteStopVisitVerificationInput;
+};
+
+type VerificationPhotoPreviewTarget = {
   routeDay: MyRouteDay;
   stop: MyRouteStop;
 };
@@ -158,10 +169,14 @@ type RouteOneNativePhoto = {
   uploadedImageUrl?: string | null;
 };
 
+type VisitPhotoSource = "camera" | "library";
+
 type RouteOneNativePhotoUploadTarget = {
   uploadUrl: string;
   imageId: string;
   imageUrl: string;
+  fileName: string;
+  environment: string;
 };
 
 type RouteOneNativePhotoUploadResult = {
@@ -172,6 +187,7 @@ type RouteOneNativePhotoUploadResult = {
 type RouteOneNativeBridge = {
   getCurrentPosition?: () => Promise<RouteOneNativePosition>;
   takeVisitPhoto?: (options?: {
+    source?: VisitPhotoSource;
     uploadTarget?: RouteOneNativePhotoUploadTarget;
   }) => Promise<RouteOneNativePhoto>;
   uploadVisitPhoto?: (options: {
@@ -197,7 +213,6 @@ type RouteStopSchedule = {
 };
 
 const DEFAULT_ROUTE_DAY_START_MINUTES = 9 * 60;
-const GPS_PHOTO_MAX_DISTANCE_METERS = 100;
 
 function formatClock(totalMinutes: number) {
   const normalizedMinutes = Math.max(0, Math.round(totalMinutes));
@@ -242,7 +257,7 @@ function formatTravelMinutes(value: number) {
 
 function getRouteStopVerificationLabel(stop: MyRouteStop) {
   if (stop.verificationStatus === "GPS_PHOTO") {
-    return "방문 인증";
+    return "사진 인증";
   }
 
   if (stop.verificationStatus === "GPS") {
@@ -267,7 +282,18 @@ async function requestCurrentPosition() {
   return nativeBridge.getCurrentPosition();
 }
 
-async function requestVisitPhoto(uploadTarget?: RouteOneNativePhotoUploadTarget) {
+async function requestOptionalCurrentPosition() {
+  try {
+    return await requestCurrentPosition();
+  } catch {
+    return null;
+  }
+}
+
+async function requestVisitPhoto(
+  source: VisitPhotoSource,
+  uploadTarget?: RouteOneNativePhotoUploadTarget
+) {
   const nativeBridge = getRouteOneNativeBridge();
 
   if (!nativeBridge?.takeVisitPhoto) {
@@ -277,9 +303,12 @@ async function requestVisitPhoto(uploadTarget?: RouteOneNativePhotoUploadTarget)
   return nativeBridge.takeVisitPhoto(
     uploadTarget
       ? {
+          source,
           uploadTarget,
         }
-      : undefined
+      : {
+          source,
+        }
   );
 }
 
@@ -368,7 +397,15 @@ async function uploadVerifiedVisitPhoto(
   uploadTarget: RouteOneNativePhotoUploadTarget,
   photo: RouteOneNativePhoto
 ) {
+  if (photo.uploadedImageUrl) {
+    return photo.uploadedImageUrl;
+  }
+
   if (!uploadTarget.uploadUrl) {
+    if (photo.dataUrl) {
+      return photo.dataUrl;
+    }
+
     return uploadTarget.imageUrl;
   }
 
@@ -394,7 +431,7 @@ async function uploadVerifiedVisitPhoto(
   formData.append(
     "file",
     createBlobFromDataUrl(photo.dataUrl),
-    `routeone-visit-${Date.now()}.jpg`
+    uploadTarget.fileName
   );
 
   const response = await fetch(uploadTarget.uploadUrl, {
@@ -431,14 +468,6 @@ function calculateDistanceKm(from: RouteLatLng, to: RouteLatLng) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return earthRadiusKm * c;
-}
-
-function formatDistanceMeters(distanceMeters: number) {
-  if (distanceMeters < 1000) {
-    return `${Math.round(distanceMeters)}m`;
-  }
-
-  return `${(distanceMeters / 1000).toFixed(1)}km`;
 }
 
 function estimateTravelMinutes(
@@ -630,12 +659,14 @@ function RouteStopNode({
   isVisitSaving,
   isStaySaving,
   isReadOnly,
+  enableVerificationPhotoPreview,
   travelSegmentToNext,
   scheduleLabel,
   onStartDrag,
   onRequestStayMinutesEdit,
   onToggleVisited,
   onOpenPlace,
+  onOpenVerificationPhoto,
 }: {
   stop: MyRouteStop;
   index: number;
@@ -645,12 +676,14 @@ function RouteStopNode({
   isVisitSaving: boolean;
   isStaySaving: boolean;
   isReadOnly: boolean;
+  enableVerificationPhotoPreview: boolean;
   travelSegmentToNext: TravelSegmentState | null;
   scheduleLabel: string | null;
   onStartDrag: (event: React.PointerEvent<HTMLButtonElement>) => void;
   onRequestStayMinutesEdit: (stop: MyRouteStop) => void;
   onToggleVisited: (stop: MyRouteStop) => void;
   onOpenPlace: (stop: MyRouteStop) => void;
+  onOpenVerificationPhoto: (stop: MyRouteStop) => void;
 }) {
   const isVisited = isVisitedStop(stop);
   const stayMinutes = stop.stayMinutes ?? 60;
@@ -658,6 +691,10 @@ function RouteStopNode({
   const verificationLabel = isVisited
     ? getRouteStopVerificationLabel(stop)
     : null;
+  const canOpenVerificationPhoto =
+    enableVerificationPhotoPreview &&
+    stop.verificationStatus === "GPS_PHOTO" &&
+    Boolean(stop.verificationPhotoUrl);
   const stayTimeClass =
     "inline-flex items-center justify-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 ring-1 ring-brand-100 disabled:opacity-45 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25";
 
@@ -755,10 +792,32 @@ function RouteStopNode({
                   {statusLabel}
                 </span>
                 {verificationLabel ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-100 dark:ring-emerald-400/25">
-                    <MdMyLocation className="text-sm" />
-                    {verificationLabel}
-                  </span>
+                  canOpenVerificationPhoto ? (
+                    <button
+                      type="button"
+                      aria-label={`${stop.place.title} 사진 인증 이미지 보기`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenVerificationPhoto(stop);
+                      }}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 py-1 pl-1 pr-2.5 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100 transition active:scale-95 dark:bg-emerald-400/10 dark:text-emerald-100 dark:ring-emerald-400/25"
+                    >
+                      <span className="size-5 overflow-hidden rounded-full bg-white ring-1 ring-white/80">
+                        <img
+                          src={stop.verificationPhotoUrl ?? ""}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </span>
+                      {verificationLabel}
+                    </button>
+                  ) : (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-100 dark:ring-emerald-400/25">
+                      <MdMyLocation className="text-sm" />
+                      {verificationLabel}
+                    </span>
+                  )
                 ) : null}
                 <span className="min-w-0 truncate text-xs font-semibold text-slate-500 dark:text-slate-300">
                   {stop.place.categoryLabel ?? stop.place.categoryName ?? "장소"}
@@ -975,6 +1034,119 @@ function StayMinutesPopup({
   );
 }
 
+function ActualStayMinutesPopup({
+  target,
+  isSaving,
+  onSkip,
+  onApply,
+}: {
+  target: ActualStayMinutesTarget;
+  isSaving: boolean;
+  onSkip: (target: ActualStayMinutesTarget) => void;
+  onApply: (target: ActualStayMinutesTarget, actualStayMinutes: number) => void;
+}) {
+  const [draftMinutes, setDraftMinutes] = useState(
+    target.stop.stayMinutes ?? 60
+  );
+  const updateDraftMinutes = (nextMinutes: number) => {
+    setDraftMinutes(clampStayMinutes(nextMinutes));
+  };
+
+  return (
+    <div className="center-modal-backdrop-enter fixed inset-0 z-[3100] flex items-center justify-center bg-slate-950/35 px-4">
+      <button
+        type="button"
+        aria-label="머문 시간 입력 배경"
+        className="absolute inset-0 cursor-default"
+        disabled={isSaving}
+      />
+      <section className="center-modal-panel-enter relative w-full max-w-[340px] rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-trip text-sm text-brand-700">ACTUAL STAY</p>
+            <h3 className="mt-1 truncate text-lg font-bold text-slate-900">
+              얼마나 머물렀나요?
+            </h3>
+            <p className="mt-1 truncate text-xs font-semibold text-slate-500">
+              {target.stop.place.title}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="머문 시간 입력 건너뛰기"
+            disabled={isSaving}
+            onClick={() => onSkip(target)}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 disabled:opacity-40"
+          >
+            <MdClose />
+          </button>
+        </div>
+
+        <div className="mt-5 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            aria-label="머문 시간 줄이기"
+            disabled={isSaving}
+            onClick={() => updateDraftMinutes(draftMinutes - 10)}
+            className="flex size-11 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 disabled:opacity-40"
+          >
+            <MdRemove />
+          </button>
+          <label className="flex min-w-[132px] items-center justify-center gap-1 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3">
+            <input
+              aria-label="실제 머문 시간(분)"
+              type="number"
+              min={10}
+              max={480}
+              step={10}
+              value={draftMinutes}
+              disabled={isSaving}
+              onChange={(event) => updateDraftMinutes(Number(event.target.value))}
+              className="w-16 bg-transparent text-center text-2xl font-black text-slate-900 outline-none disabled:opacity-60"
+            />
+            <span className="text-sm font-bold text-slate-500">분</span>
+          </label>
+          <button
+            type="button"
+            aria-label="머문 시간 늘리기"
+            disabled={isSaving}
+            onClick={() => updateDraftMinutes(draftMinutes + 10)}
+            className="flex size-11 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 disabled:opacity-40"
+          >
+            <MdAdd />
+          </button>
+        </div>
+
+        <p className="mt-3 text-center text-sm font-black text-brand-700">
+          {formatStayMinutes(draftMinutes)}
+        </p>
+
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() => onSkip(target)}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
+          >
+            건너뛰기
+          </button>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() => onApply(target, draftMinutes)}
+            className="flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+          >
+            {isSaving ? (
+              <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : null}
+            저장
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function VisitCompletionPopup({
   target,
   isSaving,
@@ -985,9 +1157,14 @@ function VisitCompletionPopup({
   target: VisitCompletionTarget;
   isSaving: boolean;
   onClose: () => void;
-  onCompleteWithPhoto: (target: VisitCompletionTarget) => void;
+  onCompleteWithPhoto: (
+    target: VisitCompletionTarget,
+    source: VisitPhotoSource
+  ) => void;
   onCompleteManually: (target: VisitCompletionTarget) => void;
 }) {
+  const photoActionDisabled = isSaving;
+
   return (
     <div className="center-modal-backdrop-enter fixed inset-0 z-[3100] flex items-center justify-center bg-slate-950/35 px-4">
       <button
@@ -1004,7 +1181,7 @@ function VisitCompletionPopup({
               {target.stop.place.title}
             </h3>
             <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-              현재 위치와 방문 사진을 함께 확인하면 공유 루트에 인증 태그로 반영돼요.
+              사진과 현재 위치를 확인해 사진 인증으로 저장해요.
             </p>
           </div>
           <button
@@ -1019,19 +1196,30 @@ function VisitCompletionPopup({
         </div>
 
         <div className="mt-5 grid gap-2">
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={() => onCompleteWithPhoto(target)}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-black text-white disabled:opacity-60"
-          >
-            {isSaving ? (
-              <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            ) : (
-              <MdPhotoCamera className="text-lg" />
-            )}
-            방문 인증 후 완료
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={photoActionDisabled}
+              onClick={() => onCompleteWithPhoto(target, "camera")}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-3 py-3 text-sm font-black text-white disabled:opacity-60"
+            >
+              {photoActionDisabled ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <MdPhotoCamera className="text-lg" />
+              )}
+              카메라
+            </button>
+            <button
+              type="button"
+              disabled={photoActionDisabled}
+              onClick={() => onCompleteWithPhoto(target, "library")}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-brand-50 px-3 py-3 text-sm font-black text-brand-700 disabled:opacity-60"
+            >
+              <MdImage className="text-lg" />
+              앨범
+            </button>
+          </div>
           <button
             type="button"
             disabled={isSaving}
@@ -1040,6 +1228,70 @@ function VisitCompletionPopup({
           >
             인증 없이 완료
           </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function VerificationPhotoPreviewPopup({
+  target,
+  onClose,
+}: {
+  target: VerificationPhotoPreviewTarget;
+  onClose: () => void;
+}) {
+  const photoUrl = target.stop.verificationPhotoUrl;
+  const verifiedAtLabel = target.stop.verifiedAt
+    ? formatDateKeyLabel(target.stop.verifiedAt.slice(0, 10))
+    : null;
+
+  if (!photoUrl) {
+    return null;
+  }
+
+  return (
+    <div className="center-modal-backdrop-enter fixed inset-0 z-[3300] flex items-center justify-center bg-slate-950/75 px-4 py-6">
+      <button
+        type="button"
+        aria-label="사진 인증 이미지 닫기"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <section className="center-modal-panel-enter relative flex max-h-full w-full max-w-[430px] flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-2xl dark:bg-slate-950">
+        <div className="relative min-h-0 bg-slate-950">
+          <img
+            src={photoUrl}
+            alt={`${target.stop.place.title} 사진 인증 이미지`}
+            className="max-h-[68vh] w-full object-contain"
+          />
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={onClose}
+            className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full bg-slate-950/65 text-lg text-white shadow-lg backdrop-blur"
+          >
+            <MdClose />
+          </button>
+        </div>
+        <div className="p-4">
+          <p className="font-trip text-sm text-brand-700">PHOTO VERIFIED</p>
+          <h3 className="mt-1 truncate text-lg font-black text-slate-900 dark:text-white">
+            {target.stop.place.title}
+          </h3>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100 dark:bg-brand-400/10 dark:text-brand-100 dark:ring-brand-400/25">
+              DAY {target.routeDay.dayIndex}
+            </span>
+            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-100 dark:ring-emerald-400/25">
+              사진 인증
+            </span>
+            {verifiedAtLabel ? (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                {verifiedAtLabel}
+              </span>
+            ) : null}
+          </div>
         </div>
       </section>
     </div>
@@ -1281,6 +1533,7 @@ function DayRouteAccordionItem({
   visitSavingStopId,
   staySavingStopId,
   isReadOnly,
+  enableVerificationPhotoPreview,
   travelSegmentByKey,
   onSelect,
   onRegisterDropZone,
@@ -1288,6 +1541,7 @@ function DayRouteAccordionItem({
   onRequestStayMinutesEdit,
   onToggleVisited,
   onOpenPlace,
+  onOpenVerificationPhoto,
 }: {
   routeDay: MyRouteDay;
   isExpanded: boolean;
@@ -1299,6 +1553,7 @@ function DayRouteAccordionItem({
   visitSavingStopId: string | null;
   staySavingStopId: string | null;
   isReadOnly: boolean;
+  enableVerificationPhotoPreview: boolean;
   travelSegmentByKey: Record<string, TravelSegmentState>;
   onSelect: (day: MyRouteDay) => void;
   onRegisterDropZone: (index: number, node: HTMLDivElement | null) => void;
@@ -1310,6 +1565,7 @@ function DayRouteAccordionItem({
   onRequestStayMinutesEdit: (stop: MyRouteStop) => void;
   onToggleVisited: (stop: MyRouteStop) => void;
   onOpenPlace: (stop: MyRouteStop) => void;
+  onOpenVerificationPhoto: (target: VerificationPhotoPreviewTarget) => void;
 }) {
   const dayStops = orderedStops;
   const hasDayStops = dayStops.length > 0;
@@ -1537,6 +1793,9 @@ function DayRouteAccordionItem({
                     isVisitSaving={visitSavingStopId === stop.id}
                     isStaySaving={staySavingStopId === stop.id}
                     isReadOnly={isReadOnly}
+                    enableVerificationPhotoPreview={
+                      enableVerificationPhotoPreview
+                    }
                     travelSegmentToNext={
                       getStoredTravelSegment(dayStops[index + 1]) ??
                       (dayStops[index + 1]
@@ -1555,6 +1814,12 @@ function DayRouteAccordionItem({
                     onRequestStayMinutesEdit={onRequestStayMinutesEdit}
                     onToggleVisited={onToggleVisited}
                     onOpenPlace={onOpenPlace}
+                    onOpenVerificationPhoto={(selectedStop) =>
+                      onOpenVerificationPhoto({
+                        routeDay,
+                        stop: selectedStop,
+                      })
+                    }
                   />
                 </div>
               ))}
@@ -1587,6 +1852,7 @@ function DayRoutePopup({
   headerLabel = "MY ROUTE",
   headerBadge,
   enableStartPreview = false,
+  enableVerificationPhotoPreview = false,
   onRequestCheckout,
   readOnlyFooterAction,
   readOnlyPosterAction,
@@ -1616,6 +1882,10 @@ function DayRoutePopup({
     useState<StayMinutesEditTarget | null>(null);
   const [visitCompletionTarget, setVisitCompletionTarget] =
     useState<VisitCompletionTarget | null>(null);
+  const [verificationPhotoPreviewTarget, setVerificationPhotoPreviewTarget] =
+    useState<VerificationPhotoPreviewTarget | null>(null);
+  const [actualStayMinutesTarget, setActualStayMinutesTarget] =
+    useState<ActualStayMinutesTarget | null>(null);
   const [earlyRouteCompletionTarget, setEarlyRouteCompletionTarget] =
     useState<EarlyRouteCompletionTarget | null>(null);
   const [isUpdatingRouteStartDate, setIsUpdatingRouteStartDate] =
@@ -1668,6 +1938,7 @@ function DayRoutePopup({
   const readOnlyActionIcon = readOnlyFooterAction?.icon ?? (
     <MdShare className="text-lg" />
   );
+
   const readOnlyActionDisabledClass = readOnlyFooterAction?.isActive
     ? "disabled:opacity-100"
     : "disabled:opacity-60";
@@ -1970,7 +2241,8 @@ function DayRoutePopup({
     routeDay: MyRouteDay,
     stop: MyRouteStop,
     nextVisited: boolean,
-    verification?: RouteStopVisitVerificationInput | null
+    verification?: RouteStopVisitVerificationInput | null,
+    actualStayMinutes?: number | null
   ) => {
     const isActiveRouteDay = routeDay.id === activeDay.id;
     const sourceStops = isActiveRouteDay ? orderedStops : routeDay.stops;
@@ -1991,6 +2263,9 @@ function DayRoutePopup({
             visitedAt: nextVisited ? visitedAt : null,
             verificationStatus: nextVerificationStatus,
             verifiedAt: isVerified ? visitedAt : null,
+            verificationPhotoImageId: isVerified
+              ? (verification?.photoImageId ?? null)
+              : null,
             verificationPhotoUrl: isVerified
               ? (verification?.photoUrl ?? null)
               : null,
@@ -2003,7 +2278,7 @@ function DayRoutePopup({
               ? (currentStop.checkedInAt ?? visitedAt)
               : null,
             checkedOutAt: null,
-            actualStayMinutes: null,
+            actualStayMinutes: nextVisited ? (actualStayMinutes ?? null) : null,
           }
         : currentStop
     );
@@ -2031,7 +2306,9 @@ function DayRoutePopup({
         verificationLat: verification?.lat ?? null,
         verificationLng: verification?.lng ?? null,
         verificationAccuracyMeters: verification?.accuracyMeters ?? null,
+        verificationPhotoImageId: verification?.photoImageId ?? null,
         verificationPhotoUrl: verification?.photoUrl ?? null,
+        actualStayMinutes,
       })
     );
 
@@ -2039,7 +2316,8 @@ function DayRoutePopup({
       const result = await routeApi.markRouteStopVisited(
         stop.id,
         nextVisited,
-        nextVisited ? verification : null
+        nextVisited ? verification : null,
+        nextVisited ? actualStayMinutes : null
       );
       const nextDay = result.markRouteStopVisited.days.find(
         (candidateDay) => candidateDay.id === routeDay.id
@@ -2060,7 +2338,7 @@ function DayRoutePopup({
         showToast(
           nextVisited
             ? isVerified
-              ? "방문 인증 완료 처리했어요."
+              ? "사진 인증 완료 처리했어요."
               : "장소를 완료 처리했어요."
             : "완료를 취소했어요."
         );
@@ -2111,81 +2389,19 @@ function DayRoutePopup({
   };
 
   const handleCompleteStopVisitWithPhoto = async (
-    target: VisitCompletionTarget
+    target: VisitCompletionTarget,
+    source: VisitPhotoSource
   ) => {
     if (visitSavingStopId) {
       return;
     }
 
     setVisitSavingStopId(target.stop.id);
-    let position: RouteOneNativePosition | null = null;
-    let photo: RouteOneNativePhoto | null = null;
 
     try {
-      position = await requestCurrentPosition();
+      const position = await requestOptionalCurrentPosition();
 
-      if (!position || position.lat == null || position.lng == null) {
-        showToast("현재 위치를 확인하지 못했어요.", 2600);
-        return;
-      }
-
-      if (!hasValidCoordinate(target.stop.place)) {
-        showToast("장소 좌표가 없어 사진 인증을 진행할 수 없어요.", 2600);
-        return;
-      }
-
-      const currentPosition = {
-        lat: position.lat,
-        lng: position.lng,
-      };
-      const distanceMeters =
-        calculateDistanceKm(currentPosition, target.stop.place) * 1000;
-
-      if (distanceMeters > GPS_PHOTO_MAX_DISTANCE_METERS) {
-        showToast(
-          `장소 근처에서만 사진 인증할 수 있어요. 현재 위치가 약 ${formatDistanceMeters(
-            distanceMeters
-          )} 떨어져 있어요.`,
-          3000
-        );
-        return;
-      }
-
-      photo = await requestVisitPhoto();
-
-      const analysisPhotoUrl = photo.dataUrl ?? photo.uploadedImageUrl;
-
-      if (!analysisPhotoUrl) {
-        showToast("사진 데이터를 읽지 못했어요. 다시 촬영해주세요.", 2600);
-        return;
-      }
-
-      const analysisResult = await routeApi.analyzeRouteStopVisitPhoto({
-        stopId: target.stop.id,
-        photoUrl: analysisPhotoUrl,
-        lat: position?.lat ?? null,
-        lng: position?.lng ?? null,
-        accuracyMeters: position?.accuracyMeters ?? null,
-      });
-      const analysis = analysisResult.analyzeRouteStopVisitPhoto;
-
-      if (analysis.decision === "SKIPPED") {
-        showToast(
-          analysis.skippedReason ?? "사진 판별 설정이 없어 인증을 완료하지 못했어요.",
-          2600
-        );
-        return;
-      }
-
-      if (analysis.decision === "NO") {
-        showToast("사진에서 장소 확인이 어려워요. 간판이나 입구가 보이게 다시 촬영해주세요.");
-        return;
-      }
-
-      if (analysis.decision !== "MATCH") {
-        showToast("장소 인증 근거가 부족해요. 간판이나 입구가 보이게 다시 촬영해주세요.");
-        return;
-      }
+      const photo = await requestVisitPhoto(source);
 
       const uploadPayload = await routeApi.createRouteStopVisitPhotoUpload(
         target.stop.id
@@ -2194,17 +2410,23 @@ function DayRoutePopup({
         uploadPayload.createRouteStopVisitPhotoUpload,
         photo
       );
-      const isSaved = await persistStopVisit(target.routeDay, target.stop, true, {
-        status: "GPS_PHOTO",
-        lat: position?.lat ?? null,
-        lng: position?.lng ?? null,
-        accuracyMeters: position?.accuracyMeters ?? null,
+      cacheRouteStopVerificationPhotoDataUrl({
+        stopId: target.stop.id,
         photoUrl,
+        dataUrl: photo.dataUrl,
       });
-
-      if (isSaved) {
-        setVisitCompletionTarget(null);
-      }
+      setActualStayMinutesTarget({
+        ...target,
+        verification: {
+          status: "GPS_PHOTO",
+          lat: position?.lat ?? null,
+          lng: position?.lng ?? null,
+          accuracyMeters: position?.accuracyMeters ?? null,
+          photoImageId: uploadPayload.createRouteStopVisitPhotoUpload.imageId,
+          photoUrl,
+        },
+      });
+      setVisitCompletionTarget(null);
     } catch (error) {
       showToast(
         error instanceof Error
@@ -2215,6 +2437,31 @@ function DayRoutePopup({
     } finally {
       setVisitSavingStopId(null);
     }
+  };
+
+  const handleSaveActualStayMinutes = async (
+    target: ActualStayMinutesTarget,
+    actualStayMinutes: number | null
+  ) => {
+    if (visitSavingStopId) {
+      return;
+    }
+
+    const isSaved = await persistStopVisit(
+      target.routeDay,
+      target.stop,
+      true,
+      target.verification,
+      actualStayMinutes
+    );
+
+    if (isSaved) {
+      setActualStayMinutesTarget(null);
+    }
+  };
+
+  const handleSkipActualStayMinutes = (target: ActualStayMinutesTarget) => {
+    void handleSaveActualStayMinutes(target, null);
   };
 
   const shouldConfirmEarlyRouteCompletion = (stop: MyRouteStop) => {
@@ -2431,6 +2678,43 @@ function DayRoutePopup({
     }
   };
 
+  const handleRequestShareRoute = () => {
+    if (isSharingRoute) {
+      return;
+    }
+
+    if (isRouteShared) {
+      navigate("/shared-route");
+      return;
+    }
+
+    if (!isRouteCompleted) {
+      showToast("모든 장소를 완료한 루트만 공유할 수 있어요.");
+      return;
+    }
+
+    openModal({
+      title: "이대로 공유할까요?",
+      description:
+        "한 번 공유하면 현재 앱에서는 직접 삭제하거나 공유를 되돌릴 수 없어요.",
+      detail:
+        "완료한 일정과 사진 인증 이미지가 공개돼요. 부적절한 사진이나 내용은 관리자에 의해 삭제 조치될 수 있어요.",
+      actions: [
+        {
+          label: "취소",
+          variant: "secondary",
+        },
+        {
+          label: "동의하고 공유",
+          variant: "primary",
+          onClick: () => {
+            void handleShareRoute();
+          },
+        },
+      ],
+    });
+  };
+
   const deleteCurrentDay = async () => {
     if (isReadOnly || isDeletingDay) {
       return;
@@ -2603,6 +2887,7 @@ function DayRoutePopup({
     setVisitSavingStopId(null);
     setStaySavingStopId(null);
     setStayMinutesEditTarget(null);
+    setActualStayMinutesTarget(null);
     setMapTargetDayId(null);
     stopCurrentDrag();
   }, [activeDay]);
@@ -2752,6 +3037,9 @@ function DayRoutePopup({
                   visitSavingStopId={visitSavingStopId}
                   staySavingStopId={staySavingStopId}
                   isReadOnly={isReadOnly}
+                  enableVerificationPhotoPreview={
+                    enableVerificationPhotoPreview
+                  }
                   travelSegmentByKey={travelSegmentByKey}
                   onSelect={handleSelectDay}
                   onRegisterDropZone={
@@ -2782,6 +3070,7 @@ function DayRoutePopup({
                     handleToggleStopVisited(routeDay, stop)
                   }
                   onOpenPlace={handleOpenPlaceDetail}
+                  onOpenVerificationPhoto={setVerificationPhotoPreviewTarget}
                 />
               );
             })}
@@ -2803,7 +3092,7 @@ function DayRoutePopup({
                     ? `하트 ${route.likeCount}개 받은 공유 루트`
                     : readOnlyActionLabel)
                 }
-                onClick={readOnlyFooterAction?.onClick ?? handleShareRoute}
+                onClick={readOnlyFooterAction?.onClick ?? handleRequestShareRoute}
                 disabled={readOnlyActionDisabled}
                 className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-bold disabled:cursor-default ${readOnlyActionDisabledClass} ${
                   readOnlyFooterAction?.isActive
@@ -2982,12 +3271,28 @@ function DayRoutePopup({
               setVisitCompletionTarget(null);
             }
           }}
-          onCompleteWithPhoto={(target) => {
-            void handleCompleteStopVisitWithPhoto(target);
+          onCompleteWithPhoto={(target, source) => {
+            void handleCompleteStopVisitWithPhoto(target, source);
           }}
           onCompleteManually={(target) => {
             void handleCompleteStopVisitManually(target);
           }}
+        />
+      ) : null}
+      {actualStayMinutesTarget ? (
+        <ActualStayMinutesPopup
+          target={actualStayMinutesTarget}
+          isSaving={visitSavingStopId === actualStayMinutesTarget.stop.id}
+          onSkip={handleSkipActualStayMinutes}
+          onApply={(target, actualStayMinutes) => {
+            void handleSaveActualStayMinutes(target, actualStayMinutes);
+          }}
+        />
+      ) : null}
+      {verificationPhotoPreviewTarget ? (
+        <VerificationPhotoPreviewPopup
+          target={verificationPhotoPreviewTarget}
+          onClose={() => setVerificationPhotoPreviewTarget(null)}
         />
       ) : null}
     </div>,

@@ -29,12 +29,21 @@ type EmbeddedStopImage = {
   dataUrl: string | null;
 };
 
+const routeStopVerificationPhotoDataUrlCache = new Map<string, string>();
+const routeStopVerificationPhotoUrlCache = new Map<string, string>();
+
 export type RouteCompletionPosterCard = {
   dayIndex: number;
   label: string;
   dataUrl: string;
   fileName: string;
 };
+
+export type RouteCompletionPosterSaveResult = {
+  mode: "native" | "web";
+  completed: boolean;
+};
+
 
 type PosterTile = {
   index: number;
@@ -303,7 +312,7 @@ function getPosterRank({
 
   return {
     title: "ROUTE CLEAR",
-    label: "방문 인증 완료",
+    label: "사진 인증 완료",
     color: "#0f766e",
     accent: "#14b8a6",
   };
@@ -837,6 +846,38 @@ function getStopMemoryImageUrl(stop: PosterStop) {
   return stop.place.imageUrl;
 }
 
+export function cacheRouteStopVerificationPhotoDataUrl({
+  stopId,
+  photoUrl,
+  dataUrl,
+}: {
+  stopId: string;
+  photoUrl?: string | null;
+  dataUrl?: string | null;
+}) {
+  if (!dataUrl?.startsWith("data:image/")) {
+    return;
+  }
+
+  routeStopVerificationPhotoDataUrlCache.set(stopId, dataUrl);
+
+  if (photoUrl) {
+    routeStopVerificationPhotoUrlCache.set(photoUrl, dataUrl);
+  }
+}
+
+function getCachedRouteStopVerificationPhotoDataUrl(stop: PosterStop) {
+  const stopDataUrl = routeStopVerificationPhotoDataUrlCache.get(stop.id);
+
+  if (stopDataUrl) {
+    return stopDataUrl;
+  }
+
+  return stop.verificationPhotoUrl
+    ? routeStopVerificationPhotoUrlCache.get(stop.verificationPhotoUrl) ?? null
+    : null;
+}
+
 function buildDayMemoryItems(stops: PosterStop[]) {
   const visibleStops =
     stops.length > DAY_MEMORY_MAX_POLAROIDS
@@ -1190,6 +1231,10 @@ function blobToDataUrl(blob: Blob) {
 }
 
 async function fetchImageAsDataUrl(url: string) {
+  if (url.startsWith("data:image/")) {
+    return url;
+  }
+
   try {
     const response = await fetch(new URL(url, window.location.href).toString());
 
@@ -1212,8 +1257,9 @@ async function getEmbeddedPhotoData(route: MyRoute) {
 
   return Promise.all(
     photoStops.map(async (stop): Promise<EmbeddedPhoto> => {
+      const cachedDataUrl = getCachedRouteStopVerificationPhotoDataUrl(stop);
       const dataUrl = stop.verificationPhotoUrl
-        ? await fetchImageAsDataUrl(stop.verificationPhotoUrl)
+        ? cachedDataUrl ?? (await fetchImageAsDataUrl(stop.verificationPhotoUrl))
         : null;
 
       return {
@@ -1253,10 +1299,16 @@ async function getEmbeddedDayMemoryImageData(route: MyRoute) {
       .filter((stop) => getStopMemoryImageUrl(stop))
       .map(async (stop): Promise<EmbeddedStopImage> => {
         const imageUrl = getStopMemoryImageUrl(stop);
+        const cachedDataUrl =
+          stop.verificationStatus === "GPS_PHOTO"
+            ? getCachedRouteStopVerificationPhotoDataUrl(stop)
+            : null;
 
         return {
           stopId: stop.id,
-          dataUrl: imageUrl ? await fetchImageAsDataUrl(imageUrl) : null,
+          dataUrl: imageUrl
+            ? cachedDataUrl ?? (await fetchImageAsDataUrl(imageUrl))
+            : null,
         };
       })
   );
@@ -1362,13 +1414,34 @@ export function getRouteCompletionPosterFileName(
   return `routeone-${safeTitle}${daySuffix}-${route.id.slice(0, 8)}.png`;
 }
 
-export function downloadRouteCompletionPoster(dataUrl: string, fileName: string) {
+export async function downloadRouteCompletionPoster(
+  dataUrl: string,
+  fileName: string,
+  title = "RouteOne 포토카드"
+): Promise<RouteCompletionPosterSaveResult> {
+  if (window.RouteOneNative?.saveImage) {
+    const saveResult = await window.RouteOneNative.saveImage({
+      dataUrl,
+      fileName,
+      title
+    });
+    return {
+      mode: "native",
+      completed: saveResult.shared,
+    };
+  }
+
   const anchor = document.createElement("a");
   anchor.href = dataUrl;
   anchor.download = fileName;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
+
+  return {
+    mode: "web",
+    completed: true,
+  };
 }
 
 export async function shareRouteCompletionPoster(

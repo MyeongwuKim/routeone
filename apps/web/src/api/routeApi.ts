@@ -1,5 +1,4 @@
 import {
-  AnalyzeRouteStopVisitPhotoDocument,
   AppendRouteDaysDocument,
   ClearRouteDocument,
   CloneRouteDocument,
@@ -11,6 +10,9 @@ import {
   LikeRouteDocument,
   MarkRouteStopVisitedDocument,
   MyRoutesDocument,
+  PlacePhotosDocument,
+  PlaceStaySummariesDocument,
+  PlaceStaySummaryDocument,
   ReorderRouteStopsDocument,
   RouteByIdDocument,
   SaveRouteDocument,
@@ -20,11 +22,11 @@ import {
   UnlikeRouteDocument,
   UnsaveRouteDocument,
   UpdateRouteStopStayMinutesDocument,
-  type AnalyzeRouteStopVisitPhotoInput,
   type AppendRouteDaysInput,
   type CloneRouteInput,
   type CreateRouteInput,
   type MyRoutesQueryVariables,
+  type PlaceSnapshotInput,
   type ReorderRouteStopsInput,
   type RouteStopVisitVerificationInput,
   type SharedRoutesQueryVariables,
@@ -48,6 +50,22 @@ export const routeApi = {
   routeById(id: RouteId) {
     return requestGraphQL(RouteByIdDocument, {
       id,
+    });
+  },
+  placeStaySummary(place: PlaceSnapshotInput) {
+    return requestGraphQL(PlaceStaySummaryDocument, {
+      place,
+    });
+  },
+  placeStaySummaries(places: PlaceSnapshotInput[]) {
+    return requestGraphQL(PlaceStaySummariesDocument, {
+      places,
+    });
+  },
+  placePhotos(place: PlaceSnapshotInput, limit?: number | null) {
+    return requestGraphQL(PlacePhotosDocument, {
+      place,
+      limit,
     });
   },
   createRoute(input: CreateRouteInput) {
@@ -80,20 +98,17 @@ export const routeApi = {
       stopId,
     });
   },
-  analyzeRouteStopVisitPhoto(input: AnalyzeRouteStopVisitPhotoInput) {
-    return requestGraphQL(AnalyzeRouteStopVisitPhotoDocument, {
-      input,
-    });
-  },
   markRouteStopVisited(
     stopId: RouteId,
     visited = true,
-    verification?: RouteStopVisitVerificationInput | null
+    verification?: RouteStopVisitVerificationInput | null,
+    actualStayMinutes?: number | null
   ) {
     return requestGraphQL(MarkRouteStopVisitedDocument, {
       stopId,
       visited,
       verification,
+      actualStayMinutes,
     });
   },
   reorderRouteStops(input: ReorderRouteStopsInput) {

@@ -317,6 +317,10 @@ function SharedRouteCard({
     0,
     placeOptions.length - visiblePlaceOptions.length
   );
+  const canCollapseTags =
+    isTagExpanded && shareTags.length > VISIBLE_SHARE_TAG_COUNT;
+  const canCollapsePlaces =
+    isPlaceExpanded && placeOptions.length > VISIBLE_PLACE_CHIP_COUNT;
   const progressPercent =
     route.totalStopCount > 0
       ? Math.round((route.completedStopCount / route.totalStopCount) * 100)
@@ -335,15 +339,15 @@ function SharedRouteCard({
         event.preventDefault();
         onOpen(route);
       }}
-      className={`min-h-[156px] rounded-2xl border p-4 shadow-sm ${
+      className={`relative min-h-[156px] overflow-hidden rounded-2xl border bg-clip-padding p-4 shadow-sm ${
         isMine
-          ? "border-brand-300 bg-brand-50 dark:border-brand-400/40 dark:bg-slate-900/70"
-          : "border-brand-100 bg-white dark:border-brand-400/25 dark:bg-slate-950/40"
+          ? "border-brand-300 bg-brand-50 dark:border-brand-300/45 dark:bg-[#082b28]"
+          : "border-brand-100 bg-white dark:border-brand-400/35 dark:bg-[#071f1d]"
       } ${onOpen ? "cursor-pointer transition active:scale-[0.99]" : ""}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="flex min-w-0 items-center gap-1.5 text-base font-black text-slate-900">
+          <p className="flex min-w-0 items-center gap-1.5 text-base font-black text-slate-900 dark:text-white">
             {isMine ? (
               <span className="shrink-0 rounded-full border border-brand-200 bg-white px-2 py-0.5 text-[10px] font-black leading-5 text-brand-700 dark:border-brand-400/35 dark:bg-slate-950 dark:text-brand-100">
                 내 공유
@@ -351,8 +355,8 @@ function SharedRouteCard({
             ) : null}
             <span className="min-w-0 truncate">{getSharedRouteTitle(route)}</span>
           </p>
-          <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
-            <MdOutlineCalendarToday className="text-sm" />
+          <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-200/80">
+            <MdOutlineCalendarToday className="text-sm dark:text-brand-200" />
             {getSharedRouteSubtitle(route)}
           </p>
         </div>
@@ -384,7 +388,7 @@ function SharedRouteCard({
 
       {shareTags.length > 0 ? (
         <div className="mt-3 min-w-0">
-          <div className="scrollbar-hide flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {visibleTags.map((tag) => (
               <button
                 key={tag}
@@ -422,13 +426,29 @@ function SharedRouteCard({
                 +{hiddenTagCount}
               </button>
             ) : null}
+            {canCollapseTags ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsTagExpanded(false);
+                }}
+                className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-black ${
+                  isMine
+                    ? "bg-white text-brand-700 ring-1 ring-brand-100 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25"
+                    : "bg-slate-50 text-slate-600 ring-1 ring-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
+                }`}
+              >
+                접기
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
 
       {placeOptions.length > 0 ? (
         <div className="mt-2 min-w-0">
-          <div className="scrollbar-hide flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             {visiblePlaceOptions.map((placeOption) => (
               <button
                 key={`${placeOption.region}:${placeOption.name}`}
@@ -441,7 +461,7 @@ function SharedRouteCard({
                     region: placeOption.region,
                   });
                 }}
-                className={`inline-flex max-w-[150px] shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                className={`inline-flex max-w-full shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
                   isMine
                     ? "bg-brand-100 text-brand-800 ring-1 ring-brand-200 dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25"
                     : "bg-white text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
@@ -466,6 +486,22 @@ function SharedRouteCard({
               >
                 <MdAdd className="text-xs" />
                 {hiddenPlaceCount}
+              </button>
+            ) : null}
+            {canCollapsePlaces ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsPlaceExpanded(false);
+                }}
+                className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-black ${
+                  isMine
+                    ? "bg-brand-100 text-brand-800 ring-1 ring-brand-200 dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25"
+                    : "bg-white text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
+                }`}
+              >
+                접기
               </button>
             ) : null}
           </div>

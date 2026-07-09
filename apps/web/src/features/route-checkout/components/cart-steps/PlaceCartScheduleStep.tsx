@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { DateInput, TimeWheelInput } from "@/components/inputs";
 import { useRouteCheckout } from "../RouteCheckoutContext";
 
@@ -71,12 +71,6 @@ function PlaceCartScheduleStep() {
   const [isCustomTripDaysOpen, setIsCustomTripDaysOpen] = useState(false);
   const [customTripDaysInput, setCustomTripDaysInput] = useState(String(tripDays));
 
-  useEffect(() => {
-    if (!isCustomTripDaysOpen) {
-      setCustomTripDaysInput(String(tripDays));
-    }
-  }, [isCustomTripDaysOpen, tripDays]);
-
   const endDate = (() => {
     const startDate = parseDateValue(travelStartDate);
     if (!startDate) {
@@ -104,10 +98,10 @@ function PlaceCartScheduleStep() {
           <p className="mt-1 text-xl font-semibold text-slate-900">여행 일정 정보를 정해주세요</p>
         </div>
 
-        <label className="block">
+        <div>
           <p className="mb-2 text-sm font-semibold text-slate-700">여행 시작일</p>
           <DateInput value={travelStartDate} onChange={setTravelStartDate} />
-        </label>
+        </div>
 
         <div>
           <p className="mb-2 text-sm font-semibold text-slate-700">여행 일수</p>
@@ -128,7 +122,10 @@ function PlaceCartScheduleStep() {
             ))}
             <button
               type="button"
-              onClick={() => setIsCustomTripDaysOpen(true)}
+              onClick={() => {
+                setCustomTripDaysInput(String(tripDays));
+                setIsCustomTripDaysOpen(true);
+              }}
               className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
                 tripDays > 7
                   ? "border-brand-500 bg-brand-600 text-white"
@@ -154,7 +151,7 @@ function PlaceCartScheduleStep() {
           ) : null}
         </div>
 
-        <label className="block">
+        <div>
           <p className="mb-2 text-sm font-semibold text-slate-700">매일 출발시간</p>
           <TimeWheelInput
             value={dailyStartTime}
@@ -162,9 +159,9 @@ function PlaceCartScheduleStep() {
             description="여행하는 날마다 이 시간에 일정을 시작해요."
             onChange={setDailyStartTime}
           />
-        </label>
+        </div>
 
-        <label className="block">
+        <div>
           <p className="mb-2 text-sm font-semibold text-slate-700">일정 종료 희망시간</p>
           <TimeWheelInput
             value={scheduleEndTime}
@@ -172,7 +169,7 @@ function PlaceCartScheduleStep() {
             description="하루 일정을 마무리하고 싶은 시각이에요."
             onChange={setScheduleEndTime}
           />
-        </label>
+        </div>
 
         {!isScheduleValid ? <p className="text-xs text-rose-600">{scheduleValidationMessage}</p> : null}
       </div>

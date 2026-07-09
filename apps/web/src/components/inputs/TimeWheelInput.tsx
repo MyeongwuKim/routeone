@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type TimeWheelInputProps = {
   value: string;
@@ -11,7 +18,14 @@ type TimeWheelInputProps = {
 type WheelValue = "오전" | "오후";
 
 const ROW_HEIGHT = 46;
+const WHEEL_CENTER_OFFSET = ROW_HEIGHT / 2;
 const REPEAT_COUNT = 24;
+const SCROLL_IDLE_SNAP_DELAY_MS = 220;
+const WHEEL_MOMENTUM_DECAY = 0.955;
+const WHEEL_MOMENTUM_STOP_VELOCITY = 0.35;
+const WHEEL_MAX_VELOCITY = ROW_HEIGHT * 2.4;
+const TAP_STEP_MAX_DISTANCE = 8;
+const TAP_STEP_MAX_SCROLL_DISTANCE = 2;
 
 const PERIOD_OPTIONS: WheelValue[] = ["오전", "오후"];
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => String(index + 1));
@@ -57,6 +71,17 @@ function formatTimeLabel(timeValue: string) {
   return `${period} ${hour12}:${minute}`;
 }
 
+function clampWheelVelocity(value: number) {
+  return Math.max(-WHEEL_MAX_VELOCITY, Math.min(WHEEL_MAX_VELOCITY, value));
+}
+
+function getWheelMomentumImpulse(deltaY: number) {
+  const magnitude = Math.abs(deltaY);
+  const multiplier = Math.min(5.5, 2 + magnitude / 90);
+
+  return deltaY * multiplier * 0.12;
+}
+
 type WheelColumnProps = {
   options: string[];
   selectedValue: string;
@@ -64,28 +89,249 @@ type WheelColumnProps = {
   loop?: boolean;
 };
 
+type PointerStart = {
+  pointerId: number;
+  x: number;
+  y: number;
+  scrollTop: number;
+};
+
 function WheelColumn({ options, selectedValue, onSelect, loop = true }: WheelColumnProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const scrollResetTimerRef = useRef<number | null>(null);
+  const scrollEndTimerRef = useRef<number | null>(null);
+  const wheelMomentumFrameRef = useRef<number | null>(null);
+  const wheelVelocityRef = useRef(0);
+  const pointerStartRef = useRef<PointerStart | null>(null);
+  const isWheelMomentumActiveRef = useRef(false);
   const hasSyncedInitialValueRef = useRef(false);
   const isProgrammaticScrollRef = useRef(false);
   const lastEmittedValueRef = useRef(selectedValue);
 
-  const getValueScrollTop = (value: string) => {
-    const optionIndex = Math.max(options.indexOf(value), 0);
+  const getValueScrollTop = useCallback(
+    (value: string) => {
+      const optionIndex = Math.max(options.indexOf(value), 0);
 
-    if (!loop) {
-      return optionIndex * ROW_HEIGHT;
-    }
+      if (!loop) {
+        return optionIndex * ROW_HEIGHT + WHEEL_CENTER_OFFSET;
+      }
 
-    return (Math.floor(REPEAT_COUNT / 2) * options.length + optionIndex) * ROW_HEIGHT;
-  };
+      return (
+        (Math.floor(REPEAT_COUNT / 2) * options.length + optionIndex) *
+          ROW_HEIGHT +
+        WHEEL_CENTER_OFFSET
+      );
+    },
+    [loop, options]
+  );
 
   const resetProgrammaticScrollFlag = () => {
     window.requestAnimationFrame(() => {
       isProgrammaticScrollRef.current = false;
     });
   };
+
+  const clearScrollEndTimer = useCallback(() => {
+    if (scrollEndTimerRef.current) {
+      window.clearTimeout(scrollEndTimerRef.current);
+      scrollEndTimerRef.current = null;
+    }
+  }, []);
+
+  const cancelWheelMomentum = useCallback(() => {
+    if (wheelMomentumFrameRef.current) {
+      window.cancelAnimationFrame(wheelMomentumFrameRef.current);
+      wheelMomentumFrameRef.current = null;
+    }
+
+    wheelVelocityRef.current = 0;
+    isWheelMomentumActiveRef.current = false;
+  }, []);
+
+  const getScrollValue = useCallback(
+    (scrollTop: number) => {
+      const currentIndex = Math.round(
+        (scrollTop - WHEEL_CENTER_OFFSET) / ROW_HEIGHT
+      );
+      const normalizedIndex = loop
+        ? ((currentIndex % options.length) + options.length) % options.length
+        : Math.min(Math.max(currentIndex, 0), options.length - 1);
+
+      return {
+        currentIndex,
+        normalizedIndex,
+        currentValue: options[normalizedIndex],
+      };
+    },
+    [loop, options]
+  );
+
+  const emitSelectedValue = useCallback(
+    (scrollTop: number) => {
+      const { currentValue } = getScrollValue(scrollTop);
+
+      if (currentValue !== lastEmittedValueRef.current) {
+        lastEmittedValueRef.current = currentValue;
+        onSelect(currentValue);
+      }
+    },
+    [getScrollValue, onSelect]
+  );
+
+  const alignScrollToNearestValue = useCallback(
+    (container: HTMLDivElement) => {
+      if (isProgrammaticScrollRef.current) {
+        return;
+      }
+
+      const { currentIndex, normalizedIndex } = getScrollValue(
+        container.scrollTop
+      );
+      const minIndex = options.length * 3;
+      const maxIndex = options.length * (REPEAT_COUNT - 3);
+      const nextIndex =
+        loop && (currentIndex <= minIndex || currentIndex >= maxIndex)
+          ? Math.floor(REPEAT_COUNT / 2) * options.length + normalizedIndex
+          : currentIndex;
+
+      isProgrammaticScrollRef.current = true;
+      container.scrollTo({
+        top: nextIndex * ROW_HEIGHT + WHEEL_CENTER_OFFSET,
+        behavior: nextIndex === currentIndex ? "smooth" : "auto",
+      });
+      resetProgrammaticScrollFlag();
+    },
+    [getScrollValue, loop, options.length]
+  );
+
+  const moveOneStep = useCallback(
+    (direction: -1 | 1) => {
+      const container = containerRef.current;
+
+      if (!container) {
+        return;
+      }
+
+      const { currentIndex, normalizedIndex } = getScrollValue(
+        container.scrollTop
+      );
+      const nextIndex = loop
+        ? currentIndex + direction
+        : Math.min(Math.max(normalizedIndex + direction, 0), options.length - 1);
+      const nextNormalizedIndex = loop
+        ? ((nextIndex % options.length) + options.length) % options.length
+        : nextIndex;
+      const nextValue = options[nextNormalizedIndex];
+
+      if (!nextValue || nextValue === lastEmittedValueRef.current) {
+        alignScrollToNearestValue(container);
+        return;
+      }
+
+      clearScrollEndTimer();
+      cancelWheelMomentum();
+      lastEmittedValueRef.current = nextValue;
+      onSelect(nextValue);
+      isProgrammaticScrollRef.current = true;
+      container.scrollTo({
+        top: nextIndex * ROW_HEIGHT + WHEEL_CENTER_OFFSET,
+        behavior: "smooth",
+      });
+      resetProgrammaticScrollFlag();
+    },
+    [
+      alignScrollToNearestValue,
+      cancelWheelMomentum,
+      clearScrollEndTimer,
+      getScrollValue,
+      loop,
+      onSelect,
+      options,
+    ]
+  );
+
+  const handlePointerUp = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const pointerStart = pointerStartRef.current;
+      const container = event.currentTarget;
+
+      pointerStartRef.current = null;
+
+      if (!pointerStart || pointerStart.pointerId !== event.pointerId) {
+        return;
+      }
+
+      const movedDistance = Math.hypot(
+        event.clientX - pointerStart.x,
+        event.clientY - pointerStart.y
+      );
+      const scrolledDistance = Math.abs(
+        container.scrollTop - pointerStart.scrollTop
+      );
+
+      if (
+        movedDistance > TAP_STEP_MAX_DISTANCE ||
+        scrolledDistance > TAP_STEP_MAX_SCROLL_DISTANCE
+      ) {
+        return;
+      }
+
+      const rect = container.getBoundingClientRect();
+      const pointerY = event.clientY - rect.top;
+      const selectedTop = rect.height / 2 - ROW_HEIGHT / 2;
+      const selectedBottom = rect.height / 2 + ROW_HEIGHT / 2;
+
+      if (pointerY < selectedTop) {
+        moveOneStep(-1);
+        return;
+      }
+
+      if (pointerY > selectedBottom) {
+        moveOneStep(1);
+      }
+    },
+    [moveOneStep]
+  );
+
+  const scheduleScrollEndSnap = useCallback(
+    (container: HTMLDivElement) => {
+      clearScrollEndTimer();
+
+      scrollEndTimerRef.current = window.setTimeout(() => {
+        alignScrollToNearestValue(container);
+      }, SCROLL_IDLE_SNAP_DELAY_MS);
+    },
+    [alignScrollToNearestValue, clearScrollEndTimer]
+  );
+
+  const startWheelMomentum = useCallback(
+    (container: HTMLDivElement) => {
+      if (wheelMomentumFrameRef.current) {
+        return;
+      }
+
+      isWheelMomentumActiveRef.current = true;
+
+      const step = () => {
+        const velocity = wheelVelocityRef.current;
+
+        if (Math.abs(velocity) < WHEEL_MOMENTUM_STOP_VELOCITY) {
+          wheelVelocityRef.current = 0;
+          wheelMomentumFrameRef.current = null;
+          isWheelMomentumActiveRef.current = false;
+          alignScrollToNearestValue(container);
+          return;
+        }
+
+        container.scrollTop += velocity;
+        emitSelectedValue(container.scrollTop);
+        wheelVelocityRef.current = velocity * WHEEL_MOMENTUM_DECAY;
+        wheelMomentumFrameRef.current = window.requestAnimationFrame(step);
+      };
+
+      wheelMomentumFrameRef.current = window.requestAnimationFrame(step);
+    },
+    [alignScrollToNearestValue, emitSelectedValue]
+  );
 
   const repeatedOptions = useMemo(() => {
     if (!loop) {
@@ -110,68 +356,73 @@ function WheelColumn({ options, selectedValue, onSelect, loop = true }: WheelCol
 
     hasSyncedInitialValueRef.current = true;
     lastEmittedValueRef.current = selectedValue;
+    cancelWheelMomentum();
     isProgrammaticScrollRef.current = true;
     container.scrollTop = getValueScrollTop(selectedValue);
     resetProgrammaticScrollFlag();
-  }, [loop, options, selectedValue]);
+  }, [cancelWheelMomentum, getValueScrollTop, selectedValue]);
 
   useEffect(() => {
     return () => {
-      if (scrollResetTimerRef.current) {
-        window.clearTimeout(scrollResetTimerRef.current);
-      }
+      clearScrollEndTimer();
+      cancelWheelMomentum();
     };
-  }, []);
+  }, [cancelWheelMomentum, clearScrollEndTimer]);
 
   return (
     <div className="relative flex-1 overflow-hidden">
       <div
         ref={containerRef}
-        className="scrollbar-hide h-[186px] snap-y snap-mandatory overflow-y-auto"
-        style={{ paddingTop: ROW_HEIGHT * 2, paddingBottom: ROW_HEIGHT * 2 }}
-        onScroll={(event) => {
-          if (scrollResetTimerRef.current) {
-            window.clearTimeout(scrollResetTimerRef.current);
-          }
-
+        className="scrollbar-hide h-[186px] overflow-y-auto"
+        style={{
+          paddingTop: ROW_HEIGHT * 2,
+          paddingBottom: ROW_HEIGHT * 2,
+          overscrollBehavior: "contain",
+          WebkitOverflowScrolling: "touch",
+        }}
+        onWheel={(event) => {
           const target = event.currentTarget;
-          const currentIndex = Math.round(target.scrollTop / ROW_HEIGHT);
-          const normalizedIndex = loop
-            ? ((currentIndex % options.length) + options.length) % options.length
-            : Math.min(Math.max(currentIndex, 0), options.length - 1);
-          const currentValue = options[normalizedIndex];
+          const impulse = getWheelMomentumImpulse(event.deltaY);
+          const currentVelocity = wheelVelocityRef.current;
 
-          if (currentValue !== lastEmittedValueRef.current) {
-            lastEmittedValueRef.current = currentValue;
-            onSelect(currentValue);
+          event.preventDefault();
+          clearScrollEndTimer();
+          wheelVelocityRef.current =
+            Math.sign(currentVelocity) !== 0 &&
+            Math.sign(currentVelocity) !== Math.sign(impulse)
+              ? impulse
+              : clampWheelVelocity(currentVelocity + impulse);
+          startWheelMomentum(target);
+        }}
+        onScroll={(event) => {
+          const target = event.currentTarget;
+
+          emitSelectedValue(target.scrollTop);
+          if (!isWheelMomentumActiveRef.current) {
+            scheduleScrollEndSnap(target);
           }
-
-          if (!loop) {
+        }}
+        onPointerDown={(event) => {
+          if (event.button !== 0) {
             return;
           }
 
-          scrollResetTimerRef.current = window.setTimeout(() => {
-            if (isProgrammaticScrollRef.current) {
-              return;
-            }
-
-            const minIndex = options.length * 3;
-            const maxIndex = options.length * (REPEAT_COUNT - 3);
-            if (currentIndex > minIndex && currentIndex < maxIndex) {
-              return;
-            }
-
-            const middleIndex = Math.floor(REPEAT_COUNT / 2) * options.length + normalizedIndex;
-            isProgrammaticScrollRef.current = true;
-            target.scrollTo({ top: middleIndex * ROW_HEIGHT, behavior: "auto" });
-            resetProgrammaticScrollFlag();
-          }, 120);
+          pointerStartRef.current = {
+            pointerId: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            scrollTop: event.currentTarget.scrollTop,
+          };
+        }}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={() => {
+          pointerStartRef.current = null;
         }}
       >
         {repeatedOptions.map((option) => (
           <div
             key={option.key}
-            className="flex h-[46px] snap-center items-center justify-center text-[26px] font-bold leading-none text-slate-500"
+            className="flex h-[46px] items-center justify-center text-[26px] font-bold leading-none text-slate-500"
           >
             {option.value}
           </div>
@@ -193,16 +444,14 @@ function TimeWheelInput({
   const [draftHour, setDraftHour] = useState("9");
   const [draftMinute, setDraftMinute] = useState("00");
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
+  const openTimePicker = () => {
     const parsed = parseTimeValue(value);
+
     setDraftPeriod(parsed.period);
     setDraftHour(parsed.hour12);
     setDraftMinute(parsed.minute);
-  }, [isOpen, value]);
+    setIsOpen(true);
+  };
 
   useEffect(() => {
     if (!isOpen) {
@@ -225,7 +474,7 @@ function TimeWheelInput({
     <>
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={openTimePicker}
         className="w-full rounded-2xl border border-brand-200 bg-white px-3 py-3 text-left text-sm text-slate-700"
       >
         {hasValue ? formatTimeLabel(value) : <span className="text-slate-400">{placeholder}</span>}

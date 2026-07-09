@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { isSamePlaceDuplicate } from "@/lib/placeDuplicate";
 import type { MapSheetPlace } from "@/types/place";
 
@@ -20,10 +21,20 @@ type PlaceCartState = {
   clearSavedPlaces: () => void;
 };
 
+type PersistedPlaceCartState = Pick<
+  PlaceCartState,
+  "savedPlaceIds" | "savedPlaces"
+>;
+
 const getSavedPlaceThumbnailUrl = (
   place: MapSheetPlace,
   thumbnailUrl: string
 ) => thumbnailUrl || place.images[0] || "";
+
+const isPersistedPlaceCartState = (
+  value: unknown
+): value is Partial<PersistedPlaceCartState> =>
+  typeof value === "object" && value !== null;
 
 const createSeedPlace = (
   place: Omit<
@@ -180,52 +191,80 @@ const DEV_GANGNEUNG_SEED_SAVED_PLACES: SavedPlaceItem[] =
       }))
     : [];
 
-export const usePlaceCartStore = create<PlaceCartState>((set) => ({
-  isSavedListOpen: false,
-  savedPlaceIds: DEV_GANGNEUNG_SEED_SAVED_PLACES.map((item) => item.id),
-  savedPlaces: DEV_GANGNEUNG_SEED_SAVED_PLACES,
-  openSavedList: () =>
-    set({
-      isSavedListOpen: true,
-    }),
-  closeSavedList: () =>
-    set({
+export const usePlaceCartStore = create<PlaceCartState>()(
+  persist(
+    (set) => ({
       isSavedListOpen: false,
-    }),
-  toggleSavedPlace: (place, thumbnailUrl = "") =>
-    set((state) => {
-      const exists = state.savedPlaces.some((item) =>
-        isSamePlaceDuplicate(item.place, place)
-      );
-      const nextSavedPlaces = exists
-        ? state.savedPlaces.filter(
-            (item) => !isSamePlaceDuplicate(item.place, place)
-          )
-        : [
-            {
-              id: place.id,
-              place,
-              thumbnailUrl: getSavedPlaceThumbnailUrl(place, thumbnailUrl),
-              savedAt: Date.now(),
-            },
-            ...state.savedPlaces.filter(
-              (item) => !isSamePlaceDuplicate(item.place, place)
-            ),
-          ];
+      savedPlaceIds: DEV_GANGNEUNG_SEED_SAVED_PLACES.map((item) => item.id),
+      savedPlaces: DEV_GANGNEUNG_SEED_SAVED_PLACES,
+      openSavedList: () =>
+        set({
+          isSavedListOpen: true,
+        }),
+      closeSavedList: () =>
+        set({
+          isSavedListOpen: false,
+        }),
+      toggleSavedPlace: (place, thumbnailUrl = "") =>
+        set((state) => {
+          const exists = state.savedPlaces.some((item) =>
+            isSamePlaceDuplicate(item.place, place)
+          );
+          const nextSavedPlaces = exists
+            ? state.savedPlaces.filter(
+                (item) => !isSamePlaceDuplicate(item.place, place)
+              )
+            : [
+                {
+                  id: place.id,
+                  place,
+                  thumbnailUrl: getSavedPlaceThumbnailUrl(place, thumbnailUrl),
+                  savedAt: Date.now(),
+                },
+                ...state.savedPlaces.filter(
+                  (item) => !isSamePlaceDuplicate(item.place, place)
+                ),
+              ];
 
-      return {
-        savedPlaceIds: nextSavedPlaces.map((item) => item.id),
-        savedPlaces: nextSavedPlaces,
-      };
+          return {
+            savedPlaceIds: nextSavedPlaces.map((item) => item.id),
+            savedPlaces: nextSavedPlaces,
+          };
+        }),
+      removeSavedPlace: (placeId) =>
+        set((state) => ({
+          savedPlaceIds: state.savedPlaceIds.filter((id) => id !== placeId),
+          savedPlaces: state.savedPlaces.filter((item) => item.id !== placeId),
+        })),
+      clearSavedPlaces: () =>
+        set({
+          savedPlaceIds: [],
+          savedPlaces: [],
+        }),
     }),
-  removeSavedPlace: (placeId) =>
-    set((state) => ({
-      savedPlaceIds: state.savedPlaceIds.filter((id) => id !== placeId),
-      savedPlaces: state.savedPlaces.filter((item) => item.id !== placeId),
-    })),
-  clearSavedPlaces: () =>
-    set({
-      savedPlaceIds: [],
-      savedPlaces: [],
-    }),
-}));
+    {
+      name: "routeone-place-cart",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        savedPlaceIds: state.savedPlaceIds,
+        savedPlaces: state.savedPlaces,
+      }),
+      merge: (persistedState, currentState) => {
+        if (!isPersistedPlaceCartState(persistedState)) {
+          return currentState;
+        }
+
+        const savedPlaces = Array.isArray(persistedState.savedPlaces)
+          ? persistedState.savedPlaces
+          : currentState.savedPlaces;
+
+        return {
+          ...currentState,
+          savedPlaceIds: savedPlaces.map((item) => item.id),
+          savedPlaces,
+        };
+      },
+      version: 1,
+    }
+  )
+);

@@ -6,6 +6,7 @@ import type {
   NativeLocationRequest,
   NativePhotoUploadRequest,
   NativePhotoRequest,
+  NativeSaveImageRequest,
 } from "./types";
 
 export function isNativeFetchRequest(
@@ -106,5 +107,22 @@ export function isNativeExternalUrlRequest(
   return (
     maybeRequest.type === "routeone:native-open-url" &&
     typeof maybeRequest.url === "string"
+  );
+}
+
+export function isNativeSaveImageRequest(
+  value: unknown
+): value is NativeSaveImageRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeRequest = value as Partial<NativeSaveImageRequest>;
+
+  return (
+    maybeRequest.type === "routeone:native-save-image" &&
+    typeof maybeRequest.id === "string" &&
+    typeof maybeRequest.dataUrl === "string" &&
+    typeof maybeRequest.fileName === "string"
   );
 }

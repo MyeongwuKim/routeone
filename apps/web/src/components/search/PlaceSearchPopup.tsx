@@ -60,29 +60,29 @@ function PlaceSearchPopup({
   const hasKeyword = Boolean(searchKeyword.trim());
 
   return (
-    <section className="fixed inset-0 z-[2300] bg-[#071f1f] text-slate-100">
+    <section className="fixed inset-0 z-[2300] bg-slate-50 text-slate-900 dark:bg-[#071718] dark:text-slate-100">
       <div className="flex h-full flex-col">
-        <div className="border-b border-brand-400/20 bg-[#0b2524]/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
+        <div className="border-b border-slate-200 bg-white/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur dark:border-brand-400/20 dark:bg-[#0b211f]/95">
           <div className="flex items-center gap-2">
-            <div className="flex h-12 min-w-0 flex-1 items-center rounded-full border border-brand-400/35 bg-[#071718] px-4 shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
+            <div className="flex h-12 min-w-0 flex-1 items-center rounded-full border border-slate-200 bg-slate-50/90 px-4 shadow-[0_8px_18px_rgba(15,23,42,0.06)] dark:border-brand-400/25 dark:bg-slate-950/60 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
               <input
                 ref={searchInputRef}
                 value={searchKeyword}
                 onChange={(event) => onKeywordChange(event.target.value)}
                 placeholder="강원도 명소, 카페, 음식점, 축제 검색"
-                className="w-full bg-transparent text-sm font-semibold text-slate-100 placeholder:text-slate-400 outline-none"
+                className="w-full bg-transparent text-sm font-semibold text-slate-800 placeholder:text-slate-400 outline-none dark:text-slate-100 dark:placeholder:text-slate-500"
               />
               {searchKeyword ? (
                 <button
                   type="button"
                   aria-label="검색어 지우기"
                   onClick={() => onKeywordChange("")}
-                  className="ml-2 text-slate-400 transition hover:text-slate-100"
+                  className="ml-2 text-slate-400 transition hover:text-slate-700 dark:hover:text-slate-100"
                 >
                   <IoClose />
                 </button>
               ) : (
-                <span className="ml-2 text-slate-400">
+                <span className="ml-2 text-slate-400 dark:text-slate-500">
                   <IoSearch />
                 </span>
               )}
@@ -91,7 +91,7 @@ function PlaceSearchPopup({
               type="button"
               aria-label="검색 닫기"
               onClick={onClose}
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-400/30 bg-[#0f3431] text-xl text-brand-200 shadow-[0_10px_24px_rgba(0,0,0,0.22)] transition hover:bg-[#13423e]"
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-slate-500 shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition hover:bg-slate-50 hover:text-slate-700 dark:border-brand-400/25 dark:bg-slate-950/60 dark:text-slate-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#102a27]"
             >
               <IoClose />
             </button>
@@ -104,8 +104,7 @@ function PlaceSearchPopup({
                 <SelectablePillButton
                   key={filter.key}
                   selected={isActive}
-                  variant="dark"
-                  selectedClassName="border-brand-400 bg-brand-600 text-white shadow-sm shadow-brand-900/30"
+                  selectedClassName="border-brand-500 bg-brand-50 text-brand-700 shadow-sm shadow-brand-100 dark:border-brand-300 dark:bg-brand-400/15 dark:text-brand-100 dark:shadow-brand-950/30"
                   onClick={() => onSearchFilterChange(filter.key)}
                 >
                   {filter.label}
@@ -115,7 +114,7 @@ function PlaceSearchPopup({
           </div>
         </div>
 
-        <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto bg-[#071f1f] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+        <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto bg-slate-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:bg-[#071718]">
           {hasKeyword ? (
             <div className="space-y-2">
               {searchResults.length > 0 ? (
@@ -143,14 +142,14 @@ function PlaceSearchPopup({
                     <button
                       type="button"
                       onClick={onLoadMore}
-                      className="w-full rounded-2xl border border-brand-400/30 bg-[#0b2524] px-4 py-3 text-sm font-semibold text-brand-200 shadow-sm transition hover:bg-[#10332f]"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700 dark:border-brand-400/25 dark:bg-[#0b211f] dark:text-slate-200 dark:hover:border-brand-300/60 dark:hover:text-brand-100"
                     >
                       더 보기 {visibleSearchResults.length}/{searchResults.length}
                     </button>
                   ) : null}
                 </>
               ) : (
-                <div className="rounded-2xl border border-dashed border-brand-400/35 bg-[#0b2524] px-4 py-8 text-center text-sm font-semibold text-slate-300">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-500 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-300">
                   검색 결과가 없습니다.
                 </div>
               )}
@@ -158,12 +157,14 @@ function PlaceSearchPopup({
           ) : (
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold text-slate-400">최근 검색</p>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  최근 검색
+                </p>
                 {recentSearches.length > 0 ? (
                   <button
                     type="button"
                     onClick={onRecentSearchClear}
-                    className="text-xs font-semibold text-slate-400 transition hover:text-slate-100"
+                    className="text-xs font-semibold text-slate-400 transition hover:text-slate-700 dark:hover:text-slate-100"
                   >
                     전체 삭제
                   </button>
@@ -181,7 +182,7 @@ function PlaceSearchPopup({
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-brand-400/35 bg-[#0b2524] px-4 py-8 text-center text-sm font-semibold text-slate-300">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-500 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-300">
                   최근 검색어가 없습니다.
                 </div>
               )}

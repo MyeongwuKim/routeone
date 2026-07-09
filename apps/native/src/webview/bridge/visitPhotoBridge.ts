@@ -185,6 +185,34 @@ function showCameraPermissionSettingsAlert() {
   });
 }
 
+function showMediaLibraryPermissionSettingsAlert() {
+  return new Promise<void>((resolve) => {
+    Alert.alert(
+      "사진 접근 권한이 꺼져 있어요",
+      "앨범에서 방문 사진을 선택하려면 설정에서 사진 접근 권한을 켜야 해요.",
+      [
+        {
+          text: "취소",
+          style: "cancel",
+          onPress: () => resolve()
+        },
+        {
+          text: "설정 열기",
+          onPress: () => {
+            void Linking.openSettings()
+              .catch(() => undefined)
+              .finally(resolve);
+          }
+        }
+      ],
+      {
+        cancelable: true,
+        onDismiss: () => resolve()
+      }
+    );
+  });
+}
+
 async function ensureCameraPermission() {
   const permission = await ImagePicker.getCameraPermissionsAsync();
 
@@ -211,6 +239,38 @@ async function ensureCameraPermission() {
   throw new Error("카메라 권한을 허용해야 사진 인증을 할 수 있어요.");
 }
 
+async function ensureMediaLibraryPermission() {
+  const permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+
+  if (
+    permission.status === "granted" ||
+    permission.accessPrivileges === "limited"
+  ) {
+    return;
+  }
+
+  if (!permission.canAskAgain) {
+    await showMediaLibraryPermissionSettingsAlert();
+    throw new Error("설정에서 사진 접근 권한을 켜야 앨범 사진을 선택할 수 있어요.");
+  }
+
+  const nextPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+  if (
+    nextPermission.status === "granted" ||
+    nextPermission.accessPrivileges === "limited"
+  ) {
+    return;
+  }
+
+  if (!nextPermission.canAskAgain) {
+    await showMediaLibraryPermissionSettingsAlert();
+    throw new Error("설정에서 사진 접근 권한을 켜야 앨범 사진을 선택할 수 있어요.");
+  }
+
+  throw new Error("사진 접근 권한을 허용해야 앨범 사진을 선택할 수 있어요.");
+}
+
 async function uploadNativeVisitPhotoFile(
   uploadFile: NativeVisitPhotoUploadFile,
   uploadTarget: NativePhotoUploadTarget
@@ -225,10 +285,11 @@ async function uploadNativeVisitPhotoFile(
   assertCloudflareUploadUrl(uploadTarget.uploadUrl);
 
   const formData = new FormData();
+  const fileName = uploadTarget.fileName || uploadFile.fileName;
 
   formData.append("file", {
     uri: uploadFile.uri,
-    name: uploadFile.fileName,
+    name: fileName,
     type: uploadFile.mimeType
   } satisfies NativeFormDataFile as unknown as Blob);
 
@@ -291,15 +352,62 @@ async function takeNativeVisitPhoto(
   };
 }
 
+async function pickNativeVisitPhoto(
+  uploadTarget?: NativePhotoRequest["uploadTarget"]
+): Promise<NativePhotoResponse> {
+  await ensureMediaLibraryPermission();
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    allowsEditing: false,
+    mediaTypes: ["images"],
+    preferredAssetRepresentationMode:
+      ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+    quality: 0.72,
+    exif: false
+  });
+
+  if (result.canceled) {
+    throw new Error("앨범 사진 선택을 취소했어요.");
+  }
+
+  const asset = result.assets[0];
+
+  if (!asset) {
+    throw new Error("사진 인증에 사용할 사진을 찾지 못했어요.");
+  }
+
+  const photoFile = await getNativeVisitPhotoFile(asset);
+  const uploadResult = uploadTarget
+    ? await uploadNativeVisitPhotoFile(photoFile, uploadTarget)
+    : {
+        uploadedImageId: null,
+        uploadedImageUrl: null
+      };
+
+  return {
+    ok: true,
+    uri: photoFile.uri,
+    dataUrl: photoFile.dataUrl,
+    width: photoFile.width ?? null,
+    height: photoFile.height ?? null,
+    uploadedImageId: uploadResult.uploadedImageId,
+    uploadedImageUrl: uploadResult.uploadedImageUrl
+  };
+}
+
 export async function handleNativePhotoRequest(
   message: NativePhotoRequest,
   webViewRef: WebViewRef
 ) {
   try {
+    const source = message.source === "library" ? "library" : "camera";
+
     postNativePhotoResponse(
       webViewRef,
       message.id,
-      await takeNativeVisitPhoto(message.uploadTarget)
+      source === "library"
+        ? await pickNativeVisitPhoto(message.uploadTarget)
+        : await takeNativeVisitPhoto(message.uploadTarget)
     );
   } catch (error) {
     postNativePhotoResponse(webViewRef, message.id, {

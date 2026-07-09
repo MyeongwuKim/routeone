@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";
@@ -11,13 +11,21 @@ import {
   MdLogout,
   MdOutlineAccountCircle,
 } from "react-icons/md";
-import { authApi } from "@/api/authApi";
+import {
+  authApi,
+  ME_QUERY_KEY,
+  ME_QUERY_STALE_TIME_MS,
+} from "@/api/authApi";
 import {
   LIKED_SHARED_ROUTES_QUERY_KEY,
   MY_ROUTES_QUERY_KEY,
   SHARED_ROUTES_QUERY_KEY,
 } from "@/features/my-route/myRouteCache";
 import { clearAuthToken } from "@/lib/authToken";
+import {
+  getAuthUserLabel,
+  useAuthUserStore,
+} from "@/stores/authUserStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
@@ -120,18 +128,31 @@ function MyInfoPage() {
   const showToast = useUiToastStore((state) => state.showToast);
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const toggleDarkMode = useUiThemeStore((state) => state.toggleDarkMode);
+  const authUser = useAuthUserStore((state) => state.user);
+  const setAuthUser = useAuthUserStore((state) => state.setUser);
+  const clearAuthUser = useAuthUserStore((state) => state.clearUser);
   const meQuery = useQuery({
-    queryKey: ["me"],
+    queryKey: ME_QUERY_KEY,
     queryFn: authApi.me,
+    enabled: !authUser,
+    staleTime: ME_QUERY_STALE_TIME_MS,
   });
-  const user = meQuery.data?.me;
+  const user = authUser ?? meQuery.data?.me ?? null;
   const activeAccountLabel =
-    user?.accountId ?? user?.displayName ?? user?.email ?? "로컬 테스트 계정";
+    getAuthUserLabel(user) ??
+    (meQuery.isLoading ? "계정 확인 중" : "로컬 테스트 계정");
+
+  useEffect(() => {
+    if (meQuery.data?.me) {
+      setAuthUser(meQuery.data.me);
+    }
+  }, [meQuery.data?.me, setAuthUser]);
 
   const handleLogout = () => {
     clearAuthToken();
+    clearAuthUser();
     queryClient.removeQueries({
-      queryKey: ["me"],
+      queryKey: ME_QUERY_KEY,
     });
     queryClient.removeQueries({
       queryKey: MY_ROUTES_QUERY_KEY,
@@ -172,7 +193,7 @@ function MyInfoPage() {
         <MyInfoMenuRow
           icon={<MdOutlineAccountCircle />}
           title="아이디 정보"
-          description={meQuery.isFetching ? "계정 확인 중" : activeAccountLabel}
+          description={activeAccountLabel}
           onClick={() => navigate("/me/account")}
         />
 
