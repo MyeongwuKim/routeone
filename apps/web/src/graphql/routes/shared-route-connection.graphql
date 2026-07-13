@@ -1,0 +1,25 @@
+query SharedRouteConnection($regionCode: String, $limit: Int, $cursor: String) {
+  sharedRouteConnection(
+    regionCode: $regionCode
+    limit: $limit
+    cursor: $cursor
+  ) {
+    nodes {
+      ...RouteSummaryFields
+      stops {
+        id
+        place {
+          title
+          categoryLabel
+          categoryName
+          regionCode
+          regionLabelKey
+        }
+      }
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+    }
+  }
+}

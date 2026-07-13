@@ -1,6 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  type InfiniteData,
+} from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   MdArrowBack,
@@ -13,7 +16,7 @@ import { routeApi } from "@/api/routeApi";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
 import MyRouteCard from "@/features/my-route/components/MyRouteCard";
-import { MY_ROUTES_QUERY_KEY } from "@/features/my-route/myRouteCache";
+import { MY_ROUTE_HISTORY_QUERY_KEY } from "@/features/my-route/myRouteCache";
 import {
   createRouteCompletionPosterCards,
   downloadRouteCompletionPoster,
@@ -22,13 +25,14 @@ import {
   type RouteCompletionPosterCard,
 } from "@/features/my-route/routeCompletionPoster";
 import {
+  getDateKeyDiffInDays,
   getRouteEndDateKey,
-  getRouteTimelineState,
   getRouteTitle,
   getSelectableRouteDay,
   getTodayDateKey,
 } from "@/features/my-route/routeDisplay";
 import type { MyRoute, MyRouteDay } from "@/features/my-route/types";
+import type { MyRouteHistoryConnectionQuery } from "@/generated/graphql";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 type RoutePosterPreview = {
@@ -36,6 +40,38 @@ type RoutePosterPreview = {
   cards: RouteCompletionPosterCard[];
   currentIndex: number;
 };
+
+const PAST_ROUTE_COMPLETION_GRACE_DAYS = 7;
+const MY_ROUTE_HISTORY_PAGE_SIZE = 12;
+
+type MyRouteHistoryInfiniteData = InfiniteData<
+  MyRouteHistoryConnectionQuery,
+  string | null
+>;
+
+function getHistoryRoutesFromInfiniteData(
+  data: MyRouteHistoryInfiniteData | undefined
+) {
+  return (
+    data?.pages.flatMap(
+      (page) => page.myRouteHistoryConnection.nodes
+    ) ?? []
+  );
+}
+
+function canCompletePastRoute(route: MyRoute, todayKey = getTodayDateKey()) {
+  const endDateKey = getRouteEndDateKey(route);
+
+  if (!endDateKey) {
+    return false;
+  }
+
+  const daysSinceEnd = getDateKeyDiffInDays(todayKey, endDateKey);
+
+  return (
+    daysSinceEnd >= 0 && daysSinceEnd <= PAST_ROUTE_COMPLETION_GRACE_DAYS
+  );
+}
 
 function RoutePosterPreviewModal({
   preview,
@@ -167,27 +203,36 @@ function MyRouteHistoryPage() {
   >(null);
   const [posterPreview, setPosterPreview] =
     useState<RoutePosterPreview | null>(null);
-  const myRoutesQuery = useQuery({
-    queryKey: MY_ROUTES_QUERY_KEY,
-    queryFn: () => routeApi.myRoutes(),
-  });
-  const historyRoutes = useMemo(() => {
-    const todayKey = getTodayDateKey();
+  const todayKey = useMemo(() => getTodayDateKey(), []);
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+  const historyRoutesQuery = useInfiniteQuery({
+    queryKey: [...MY_ROUTE_HISTORY_QUERY_KEY, todayKey],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      routeApi.myRouteHistoryConnection({
+        limit: MY_ROUTE_HISTORY_PAGE_SIZE,
+        cursor: pageParam,
+        today: todayKey,
+      }),
+    getNextPageParam: (lastPage) => {
+      const { pageInfo } = lastPage.myRouteHistoryConnection;
 
-    return (myRoutesQuery.data?.myRoutes ?? [])
-      .filter((route) => getRouteTimelineState(route, todayKey) === "past")
-      .sort((left, right) =>
-        (getRouteEndDateKey(right) ?? "").localeCompare(
-          getRouteEndDateKey(left) ?? ""
-        )
-      );
-  }, [myRoutesQuery.data]);
+      return pageInfo.hasNextPage ? pageInfo.endCursor : undefined;
+    },
+  });
+  const historyRoutes = useMemo(
+    () =>
+      getHistoryRoutesFromInfiniteData(
+        historyRoutesQuery.data as MyRouteHistoryInfiniteData | undefined
+      ),
+    [historyRoutesQuery.data]
+  );
   const selectedRouteDay = useMemo(() => {
     if (!selectedHistoryRoute) {
       return null;
     }
 
-    const route = myRoutesQuery.data?.myRoutes.find(
+    const route = historyRoutes.find(
       (candidateRoute) => candidateRoute.id === selectedHistoryRoute.routeId
     );
 
@@ -206,7 +251,45 @@ function MyRouteHistoryPage() {
           day,
         }
       : null;
-  }, [myRoutesQuery.data, selectedHistoryRoute]);
+  }, [historyRoutes, selectedHistoryRoute]);
+  const canCompleteSelectedHistoryRoute = selectedRouteDay
+    ? canCompletePastRoute(selectedRouteDay.route)
+    : false;
+
+  useEffect(() => {
+    const target = loadMoreTriggerRef.current;
+
+    if (!target || !historyRoutesQuery.hasNextPage) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const isVisible = entries.some((entry) => entry.isIntersecting);
+
+        if (
+          isVisible &&
+          historyRoutesQuery.hasNextPage &&
+          !historyRoutesQuery.isFetchingNextPage
+        ) {
+          void historyRoutesQuery.fetchNextPage();
+        }
+      },
+      {
+        rootMargin: "180px 0px",
+      }
+    );
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    historyRoutesQuery.fetchNextPage,
+    historyRoutesQuery.hasNextPage,
+    historyRoutesQuery.isFetchingNextPage,
+  ]);
 
   const handleSelectHistoryDay = (route: MyRoute, day: MyRouteDay) => {
     setSelectedHistoryRoute({
@@ -219,17 +302,28 @@ function MyRouteHistoryPage() {
     setPosterGeneratingRouteId(route.id);
 
     try {
-      const cards = await createRouteCompletionPosterCards(route);
+      const routeResult = await routeApi.routeById(route.id);
+      const posterRoute = routeResult.route ?? route;
+      const cards = await createRouteCompletionPosterCards(posterRoute);
 
       if (cards.length === 0) {
         throw new Error("No poster cards were generated.");
       }
 
+      const missingPhotoCount = cards.reduce(
+        (sum, card) => sum + card.missingPhotoCount,
+        0
+      );
+
       setPosterPreview({
-        route,
+        route: posterRoute,
         cards,
         currentIndex: 0,
       });
+
+      if (missingPhotoCount > 0) {
+        showToast(`사진 ${missingPhotoCount}장을 카드에 넣지 못했어요.`);
+      }
     } catch (error) {
       console.error(error);
       showToast("DAY 포스터를 만들지 못했어요.");
@@ -352,33 +446,41 @@ function MyRouteHistoryPage() {
               완료했거나 지난 일정
             </p>
             <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-200/75">
-              {historyRoutes.length}개 루트
+              불러온 {historyRoutes.length}개 루트 · 종료 후 7일 보정 가능
             </p>
           </div>
         </div>
       </div>
 
-      {myRoutesQuery.isLoading ? (
-        <PotatoLoadingCard
-          title="다녀온 루트를 불러오는 중"
-          description="완료한 일정과 지난 일정을 확인하고 있어요."
-          animation="map-thinking"
-          compact
-          className="shadow-sm"
-        />
-      ) : null}
-
-      {myRoutesQuery.isError ? (
+      {historyRoutesQuery.isError ? (
         <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
           다녀온 루트를 불러오지 못했어요.
         </div>
       ) : null}
 
-      {!myRoutesQuery.isLoading &&
-      !myRoutesQuery.isError &&
+      {historyRoutesQuery.isLoading ? (
+        <div className="flex min-h-[calc(100dvh-18rem)] flex-col justify-center">
+          <PotatoLoadingCard
+            title="기록 찾는 중"
+            animation="running"
+            compact
+            className="shadow-sm"
+          />
+        </div>
+      ) : null}
+
+      {!historyRoutesQuery.isLoading &&
+      !historyRoutesQuery.isError &&
       historyRoutes.length === 0 ? (
-        <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d] dark:text-slate-200">
-          아직 다녀온 루트가 없어요.
+        <div className="flex min-h-[calc(100dvh-18rem)] flex-col justify-center">
+          <PotatoLoadingCard
+            title="아직 다녀온 루트가 없어요."
+            description="감자가 빈 여행 기록을 보고 있어요."
+            footerText="일정을 완료하면 여기에 모여요."
+            animation="empty"
+            compact
+            className="shadow-sm"
+          />
         </div>
       ) : null}
 
@@ -393,6 +495,21 @@ function MyRouteHistoryPage() {
               onSelectDay={handleSelectHistoryDay}
             />
           ))}
+
+          {historyRoutesQuery.hasNextPage ? (
+            <div ref={loadMoreTriggerRef} className="h-8" aria-hidden="true" />
+          ) : null}
+
+          {historyRoutesQuery.isFetchingNextPage ? (
+            <div className="py-2">
+              <PotatoLoadingCard
+                title="다음 기록 찾는 중"
+                animation="running"
+                compact
+                className="shadow-sm"
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -402,6 +519,8 @@ function MyRouteHistoryPage() {
           day={selectedRouteDay.day}
           onClose={() => setSelectedHistoryRoute(null)}
           isReadOnly
+          allowVisitCompletion={canCompleteSelectedHistoryRoute}
+          visitCompletionMode="retrospective"
           enableVerificationPhotoPreview
           readOnlyPosterAction={
             getRouteCompletionPosterStats(selectedRouteDay.route).canCreate

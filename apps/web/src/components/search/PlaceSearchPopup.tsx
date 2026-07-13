@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
-import { IoClose, IoSearch } from "react-icons/io5";
+import { IoClose, IoSearch, IoTrashOutline } from "react-icons/io5";
+import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
 import RecentSearchItem from "@/components/search/RecentSearchItem";
@@ -31,6 +32,7 @@ type PlaceSearchPopupProps = {
   visibleSearchResults: PlaceSearchResult[];
   recentSearches: string[];
   onKeywordChange: (keyword: string) => void;
+  onSearchSubmit: (keyword: string) => void;
   onSearchFilterChange: (filter: SearchFilter) => void;
   onClose: () => void;
   onLoadMore: () => void;
@@ -49,6 +51,7 @@ function PlaceSearchPopup({
   visibleSearchResults,
   recentSearches,
   onKeywordChange,
+  onSearchSubmit,
   onSearchFilterChange,
   onClose,
   onLoadMore,
@@ -64,11 +67,18 @@ function PlaceSearchPopup({
       <div className="flex h-full flex-col">
         <div className="border-b border-slate-200 bg-white/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur dark:border-brand-400/20 dark:bg-[#0b211f]/95">
           <div className="flex items-center gap-2">
-            <div className="flex h-12 min-w-0 flex-1 items-center rounded-full border border-slate-200 bg-slate-50/90 px-4 shadow-[0_8px_18px_rgba(15,23,42,0.06)] dark:border-brand-400/25 dark:bg-slate-950/60 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
+            <form
+              className="flex h-12 min-w-0 flex-1 items-center rounded-full border border-slate-200 bg-slate-50/90 px-4 shadow-[0_8px_18px_rgba(15,23,42,0.06)] dark:border-brand-400/25 dark:bg-slate-950/60 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)]"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onSearchSubmit(searchKeyword);
+              }}
+            >
               <input
                 ref={searchInputRef}
                 value={searchKeyword}
                 onChange={(event) => onKeywordChange(event.target.value)}
+                enterKeyHint="search"
                 placeholder="강원도 명소, 카페, 음식점, 축제 검색"
                 className="w-full bg-transparent text-sm font-semibold text-slate-800 placeholder:text-slate-400 outline-none dark:text-slate-100 dark:placeholder:text-slate-500"
               />
@@ -86,7 +96,7 @@ function PlaceSearchPopup({
                   <IoSearch />
                 </span>
               )}
-            </div>
+            </form>
             <button
               type="button"
               aria-label="검색 닫기"
@@ -149,9 +159,14 @@ function PlaceSearchPopup({
                   ) : null}
                 </>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-500 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-300">
-                  검색 결과가 없습니다.
-                </div>
+                <PotatoLoadingCard
+                  title="검색 결과가 없어요"
+                  description="감자가 다른 장소도 꼼꼼히 찾아봤어요."
+                  footerText="검색어나 카테고리를 바꿔보세요."
+                  animation="searching"
+                  compact
+                  className="shadow-sm"
+                />
               )}
             </div>
           ) : (
@@ -164,9 +179,10 @@ function PlaceSearchPopup({
                   <button
                     type="button"
                     onClick={onRecentSearchClear}
-                    className="text-xs font-semibold text-slate-400 transition hover:text-slate-700 dark:hover:text-slate-100"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 transition hover:text-rose-600 dark:hover:text-rose-300"
                   >
-                    전체 삭제
+                    <IoTrashOutline aria-hidden="true" />
+                    전체 비우기
                   </button>
                 ) : null}
               </div>
@@ -182,9 +198,14 @@ function PlaceSearchPopup({
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-500 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-300">
-                  최근 검색어가 없습니다.
-                </div>
+                <PotatoLoadingCard
+                  title="아직 최근 검색어가 없어요"
+                  description="감자가 첫 번째 검색을 기다리고 있어요."
+                  footerText="장소를 검색하면 여기에 기록돼요."
+                  animation="empty"
+                  compact
+                  className="shadow-sm"
+                />
               )}
             </div>
           )}

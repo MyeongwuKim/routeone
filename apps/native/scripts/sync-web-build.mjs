@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { Buffer } from "node:buffer";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,15 +12,11 @@ const shouldSkipBuild = process.argv.includes("--skip-build");
 const packageManager = process.env.npm_execpath?.includes("pnpm")
   ? "pnpm"
   : "npm";
-
-async function hasSplitWebDist() {
-  try {
-    const html = await readFile(path.join(webDist, "index.html"), "utf8");
-    return /<link\s+rel="modulepreload"/.test(html);
-  } catch {
-    return true;
-  }
-}
+const moduleSpecifierPrefix = "@routeone/";
+const nativeRuntimeConfig = {
+  graphqlEndpoint: "/graphql",
+  routerMode: "hash"
+};
 
 async function buildNativeWebBundle() {
   const result = spawnSync(packageManager, ["run", "build"], {
@@ -40,15 +36,43 @@ async function buildNativeWebBundle() {
 
 if (!shouldSkipBuild) {
   await buildNativeWebBundle();
-} else if (await hasSplitWebDist()) {
-  console.warn(
-    "[routeone-native] split web dist detected. Rebuilding single-file WebView bundle."
-  );
-  await buildNativeWebBundle();
+}
+
+function normalizeDistAssetPath(assetPath) {
+  return assetPath.trim().replace(/^\/+/, "").replace(/^\.\//, "");
+}
+
+function resolveDistAssetPath(assetPath, fromAssetPath) {
+  const cleanAssetPath = assetPath.trim().split(/[?#]/)[0] ?? "";
+
+  if (!cleanAssetPath || isExternalAssetUrl(cleanAssetPath)) {
+    return null;
+  }
+
+  if (cleanAssetPath.startsWith("/")) {
+    return normalizeDistAssetPath(cleanAssetPath);
+  }
+
+  if (!fromAssetPath) {
+    return normalizeDistAssetPath(cleanAssetPath);
+  }
+
+  return path.posix
+    .normalize(
+      path.posix.join(path.posix.dirname(fromAssetPath), cleanAssetPath)
+    )
+    .replace(/^\.\//, "");
 }
 
 function toDistPath(assetPath) {
-  return path.join(webDist, assetPath.replace(/^\//, ""));
+  const normalizedAssetPath = normalizeDistAssetPath(assetPath);
+  const resolvedPath = path.resolve(webDist, normalizedAssetPath);
+
+  if (!resolvedPath.startsWith(webDist)) {
+    throw new Error(`Invalid dist asset path: ${assetPath}`);
+  }
+
+  return resolvedPath;
 }
 
 function getMimeType(filePath) {
@@ -74,7 +98,23 @@ function getMimeType(filePath) {
     return "image/jpeg";
   }
 
+  if (extname === ".json") {
+    return "application/json";
+  }
+
+  if (extname === ".js") {
+    return "text/javascript";
+  }
+
+  if (extname === ".css") {
+    return "text/css";
+  }
+
   return "application/octet-stream";
+}
+
+function isExternalAssetUrl(assetUrl) {
+  return /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(assetUrl);
 }
 
 async function toDataUrl(assetPath) {
@@ -84,14 +124,17 @@ async function toDataUrl(assetPath) {
   return `data:${getMimeType(filePath)};base64,${file.toString("base64")}`;
 }
 
-async function inlineCssAssetUrls(css) {
+async function inlineCssAssetUrls(css, cssAssetPath) {
   let result = css;
-  const matches = [...css.matchAll(/url\((["']?)(\/?fonts\/[^"')]+)\1\)/g)];
+  const matches = [...css.matchAll(/url\((["']?)([^"')]+)\1\)/g)];
 
   for (const match of matches) {
-    const assetPath = match[2].startsWith("/")
-      ? match[2]
-      : `/${match[2]}`;
+    const assetPath = resolveDistAssetPath(match[2], cssAssetPath);
+
+    if (!assetPath) {
+      continue;
+    }
+
     const dataUrl = await toDataUrl(assetPath);
     result = result.replace(match[0], () => `url("${dataUrl}")`);
   }
@@ -106,46 +149,33 @@ async function inlineStylesheets(html) {
   ];
 
   for (const match of matches) {
-    const css = await readFile(toDistPath(match[1]), "utf8");
-    const inlinedCss = await inlineCssAssetUrls(css);
+    const stylesheetPath = normalizeDistAssetPath(match[1]);
+    const css = await readFile(toDistPath(stylesheetPath), "utf8");
+    const inlinedCss = await inlineCssAssetUrls(css, stylesheetPath);
     result = result.replace(
       match[0],
-      () => `<style data-routeone-href="${match[1]}">\n${inlinedCss}\n</style>`
+      () =>
+        `<style data-routeone-href="${match[1]}">\n${inlinedCss}\n</style>`
     );
   }
 
   return result;
 }
 
-async function inlineModuleScripts(html) {
-  let result = html;
-  const boundaryJson = await readFile(
-    path.join(webDist, "gangwon-sigungu-boundary.json")
-  );
-  const boundaryDataUrl = `data:application/json;base64,${Buffer.from(
-    boundaryJson
-  ).toString("base64")}`;
-  const matches = [
-    ...html.matchAll(
-      /<script\s+type="module"[^>]*src="([^"]+)"[^>]*><\/script>/g
-    )
-  ];
+function getTagAttribute(tag, name) {
+  const match = tag.match(new RegExp(`\\s${name}=["']([^"']+)["']`, "i"));
+  return match?.[1] ?? null;
+}
 
-  for (const match of matches) {
-    let script = await readFile(toDistPath(match[1]), "utf8");
-    script = script.replaceAll(
-      "/gangwon-sigungu-boundary.json",
-      boundaryDataUrl
-    );
-    script = script.replaceAll("</script>", "<\\/script>");
-    result = result.replace(
-      match[0],
-      () =>
-        `<script type="module" data-routeone-src="${match[1]}">\n${script}\n</script>`
-    );
-  }
+function getEntryModuleScripts(html) {
+  const scripts = [...html.matchAll(/<script\b[^>]*><\/script>/gi)];
 
-  return result;
+  return scripts
+    .map((match) => match[0])
+    .filter((tag) => getTagAttribute(tag, "type") === "module")
+    .map((tag) => getTagAttribute(tag, "src"))
+    .filter((src) => typeof src === "string")
+    .map((src) => normalizeDistAssetPath(src));
 }
 
 function cleanupDocument(html) {
@@ -153,15 +183,160 @@ function cleanupDocument(html) {
     .replace(/<link\s+rel="icon"[^>]*>\s*/g, "")
     .replace(/<link\s+rel="preload"[^>]*as="font"[^>]*>\s*/g, "")
     .replace(
+      /<link\b(?=[^>]*\brel=["']modulepreload["'])[^>]*>\s*/gi,
+      ""
+    )
+    .replace(
+      /<script\b(?=[^>]*\btype=["']module["'])(?=[^>]*\bsrc=)[^>]*><\/script>\s*/gi,
+      ""
+    )
+    .replace(
       /<head>/,
-      '<head>\n    <base href="https://routeone.native/" />'
+      `<head>
+    <base href="https://routeone.native/" />
+    <script data-routeone-runtime-config>
+      window.RouteOneRuntimeConfig = Object.assign({}, window.RouteOneRuntimeConfig, ${JSON.stringify(
+        nativeRuntimeConfig
+      )});
+    </script>`
     );
 }
 
+async function collectDistFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      files.push(...(await collectDistFiles(entryPath)));
+      continue;
+    }
+
+    if (entry.isFile()) {
+      files.push(
+        path
+          .relative(webDist, entryPath)
+          .split(path.sep)
+          .join(path.posix.sep)
+      );
+    }
+  }
+
+  return files;
+}
+
+function toModuleSpecifier(assetPath) {
+  return `${moduleSpecifierPrefix}${normalizeDistAssetPath(assetPath)}`;
+}
+
+function resolveJsImportPath(importPath, fromAssetPath) {
+  return path.posix
+    .normalize(path.posix.join(path.posix.dirname(fromAssetPath), importPath))
+    .replace(/^\.\//, "");
+}
+
+function rewriteJsImportSpecifiers(source, assetPath) {
+  const toNativeSpecifier = (importPath) =>
+    toModuleSpecifier(resolveJsImportPath(importPath, assetPath));
+
+  return source
+    .replace(
+      /\bfrom\s*(["'`])(\.{1,2}\/[^"'`]+?\.js)\1/g,
+      (_, quote, specifier) =>
+        `from${quote}${toNativeSpecifier(specifier)}${quote}`
+    )
+    .replace(
+      /\bimport\s*(["'`])(\.{1,2}\/[^"'`]+?\.js)\1/g,
+      (_, quote, specifier) =>
+        `import${quote}${toNativeSpecifier(specifier)}${quote}`
+    )
+    .replace(
+      /\bimport\s*\(\s*(["'`])(\.{1,2}\/[^"'`]+?\.js)\1\s*\)/g,
+      (_, quote, specifier) =>
+        `import(${quote}${toNativeSpecifier(specifier)}${quote})`
+    );
+}
+
+function rewriteJsPublicAssets(source, publicAssetDataUrls) {
+  return source.replaceAll(
+    "/gangwon-sigungu-boundary.json",
+    publicAssetDataUrls.gangwonBoundary
+  );
+}
+
+function rewriteJsSource(source, assetPath, publicAssetDataUrls) {
+  return rewriteJsImportSpecifiers(
+    rewriteJsPublicAssets(
+      source.replace(/__vite__mapDeps\(\[[^\]]*\]\)/g, "[]"),
+      publicAssetDataUrls
+    ),
+    assetPath
+  );
+}
+
+async function buildNativeModuleScripts(entryScriptPaths) {
+  const distFiles = await collectDistFiles(webDist);
+  const jsAssetPaths = distFiles
+    .filter((assetPath) => assetPath.endsWith(".js"))
+    .sort();
+  const publicAssetDataUrls = {
+    gangwonBoundary: await toDataUrl("gangwon-sigungu-boundary.json")
+  };
+  const imports = {};
+
+  for (const assetPath of jsAssetPaths) {
+    const source = await readFile(toDistPath(assetPath), "utf8");
+    const rewrittenSource = rewriteJsSource(
+      source,
+      assetPath,
+      publicAssetDataUrls
+    );
+
+    imports[toModuleSpecifier(assetPath)] = `data:text/javascript;base64,${Buffer.from(
+      rewrittenSource
+    ).toString("base64")}`;
+  }
+
+  for (const entryScriptPath of entryScriptPaths) {
+    const entrySpecifier = toModuleSpecifier(entryScriptPath);
+
+    if (!imports[entrySpecifier]) {
+      throw new Error(`Missing native entry module: ${entryScriptPath}`);
+    }
+  }
+
+  const entryImports = entryScriptPaths
+    .map(
+      (entryScriptPath) =>
+        `import ${JSON.stringify(toModuleSpecifier(entryScriptPath))};`
+    )
+    .join("\n");
+
+  return {
+    html: `<script type="importmap" data-routeone-native-modules>${JSON.stringify({
+      imports
+    })}</script>
+    <script type="module" data-routeone-entry>
+${entryImports}
+    </script>`,
+    moduleCount: jsAssetPaths.length
+  };
+}
+
 let html = await readFile(path.join(webDist, "index.html"), "utf8");
+const entryScriptPaths = getEntryModuleScripts(html);
+
+if (entryScriptPaths.length === 0) {
+  throw new Error("No Vite module entry script found in web dist.");
+}
+
 html = cleanupDocument(html);
 html = await inlineStylesheets(html);
-html = await inlineModuleScripts(html);
+
+const nativeModuleScripts = await buildNativeModuleScripts(entryScriptPaths);
+html = html.replace("</head>", `${nativeModuleScripts.html}\n  </head>`);
 
 await mkdir(path.dirname(generatedFile), { recursive: true });
 await writeFile(
@@ -171,4 +346,6 @@ await writeFile(
   )};\n`
 );
 
-console.log(`Generated ${path.relative(nativeRoot, generatedFile)}`);
+console.log(
+  `Generated ${path.relative(nativeRoot, generatedFile)} with ${nativeModuleScripts.moduleCount} split modules`
+);

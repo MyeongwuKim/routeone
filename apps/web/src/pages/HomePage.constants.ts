@@ -4,12 +4,6 @@ export const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 export const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
 export const SEARCH_RESULTS_PAGE_SIZE = 12;
 
-export const DEFAULT_RECENT_SEARCHES = [
-  "경포해변",
-  "속초해수욕장",
-  "봉포머구리집",
-];
-
 type PlaceSearchFilterOption = {
   key: SearchFilter;
   label: string;

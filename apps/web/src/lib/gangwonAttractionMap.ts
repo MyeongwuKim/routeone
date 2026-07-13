@@ -17,47 +17,55 @@ import {
   calculateDistanceMeters,
   type CurrentLocation,
 } from "@/lib/gangwonBoundaryUtils";
+import {
+  getTourContentTypeCategory,
+  isTourContentTypeId,
+  type TourContentTypeCategory,
+} from "@/lib/tourContentType";
 
 const OVERLAPPING_MARKER_DISTANCE_METERS = 36;
 const OVERLAPPING_MARKER_OFFSET_DEGREES = 0.0002;
 
-const CONTENT_TYPE_BADGES: Record<string, MapMarkerBadge> = {
-  "12": {
+const CONTENT_TYPE_BADGES: Record<
+  TourContentTypeCategory,
+  MapMarkerBadge
+> = {
+  tourist: {
     label: "관광지",
     icon: "📍",
     background: "#e0f2fe",
     border: "#0284c7",
     text: "#0c4a6e",
   },
-  "14": {
+  culture: {
     label: "문화시설",
     icon: "🏛",
     background: "#fef3c7",
     border: "#d97706",
     text: "#78350f",
   },
-  "15": {
+  festival: {
     label: "축제/공연",
     icon: "🎉",
     background: "#fee2e2",
     border: "#dc2626",
     text: "#7f1d1d",
   },
-  "28": {
+  leisure: {
     label: "레포츠",
     icon: "🚴",
     background: "#dcfce7",
     border: "#16a34a",
     text: "#14532d",
   },
-  "38": {
+  shopping: {
     label: "쇼핑",
     icon: "🛍",
     background: "#ffedd5",
     border: "#ea580c",
     text: "#7c2d12",
   },
-  "39": {
+  food: {
     label: "음식점",
     icon: "🍽",
     background: "#fed7aa",
@@ -87,14 +95,20 @@ export type AttractionLoadingStage =
   | "idle"
   | "fetching-places"
   | "ranking"
+  | "localizing"
   | "rendering-markers";
 
 export function resolveMarkerType(
   attraction: GangwonAttraction,
   lclsNameByCode: Record<string, string>
 ) {
+  const contentTypeCategory = getTourContentTypeCategory(
+    attraction.contentTypeId
+  );
   const contentTypeBadge =
-    CONTENT_TYPE_BADGES[attraction.contentTypeId] ?? DEFAULT_BADGE;
+    (contentTypeCategory
+      ? CONTENT_TYPE_BADGES[contentTypeCategory]
+      : null) ?? DEFAULT_BADGE;
   const categoryName =
     lclsNameByCode[attraction.lclsSystm3] ||
     lclsNameByCode[attraction.lclsSystm2] ||
@@ -240,6 +254,40 @@ export function getTouristNameMatchScore(
   return 0;
 }
 
+export function getPlaceSearchMatchPriority(
+  title: string,
+  address: string,
+  typeName: string,
+  keyword: string
+) {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  if (!normalizedKeyword) {
+    return 0;
+  }
+
+  const normalizedTitle = title.trim().toLowerCase();
+  const normalizedAddress = address.trim().toLowerCase();
+  const normalizedTypeName = typeName.trim().toLowerCase();
+
+  if (normalizedTitle === normalizedKeyword) {
+    return 0;
+  }
+  if (normalizedTitle.startsWith(normalizedKeyword)) {
+    return 1;
+  }
+  if (normalizedTitle.includes(normalizedKeyword)) {
+    return 2;
+  }
+  if (normalizedAddress.includes(normalizedKeyword)) {
+    return 3;
+  }
+  if (normalizedTypeName.includes(normalizedKeyword)) {
+    return 4;
+  }
+
+  return null;
+}
+
 export function matchesPlaceFilter(
   attraction: GangwonAttraction,
   markerType: ResolvedMarkerType,
@@ -250,10 +298,13 @@ export function matchesPlaceFilter(
   }
 
   if (filter === "festival") {
-    return attraction.contentTypeId === "15";
+    return isTourContentTypeId(attraction.contentTypeId, "festival");
   }
 
-  if (filter === "tourist" && attraction.contentTypeId === "15") {
+  if (
+    filter === "tourist" &&
+    isTourContentTypeId(attraction.contentTypeId, "festival")
+  ) {
     return false;
   }
 

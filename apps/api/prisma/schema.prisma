@@ -176,6 +176,48 @@ model PlaceStayStat {
   @@index([regionCode])
 }
 
+model PlaceLocalization {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  provider   PlaceProvider
+  externalId String
+  locale     String
+
+  sourceTitle   String
+  sourceAddress String?
+  sourceHash    String
+
+  title         String
+  address       String?
+  titleSource   PlaceLocalizationTitleSource
+  addressSource PlaceLocalizationAddressSource
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, externalId, locale])
+  @@index([locale, updatedAt])
+}
+
+model PlaceOverviewLocalization {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  provider   PlaceProvider
+  externalId String
+  locale     String
+
+  sourceOverview String
+  sourceHash     String
+  overview       String
+  overviewSource PlaceLocalizationOverviewSource
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, externalId, locale])
+  @@index([locale, updatedAt])
+}
+
 model PlacePhoto {
   id String @id @default(auto()) @map("_id") @db.ObjectId
 
@@ -196,10 +238,10 @@ model PlacePhoto {
   regionCode     String?
   regionLabelKey String?
 
-  userId      String  @db.ObjectId
-  routeId     String  @db.ObjectId
-  routeStopId String  @unique @db.ObjectId
-  routeDayId  String? @db.ObjectId
+  userId          String          @db.ObjectId
+  routeId         String          @db.ObjectId
+  routeStopId     String          @unique @db.ObjectId
+  routeDayId      String?         @db.ObjectId
   routeVisibility RouteVisibility @default(PRIVATE)
 
   imageId      String?
@@ -317,4 +359,20 @@ enum PlacePhotoStatus {
   ACTIVE
   HIDDEN
   DELETED
+}
+
+enum PlaceLocalizationTitleSource {
+  OPENAI
+  SOURCE
+}
+
+enum PlaceLocalizationAddressSource {
+  JUSO
+  OPENAI
+  SOURCE
+}
+
+enum PlaceLocalizationOverviewSource {
+  OPENAI
+  SOURCE
 }

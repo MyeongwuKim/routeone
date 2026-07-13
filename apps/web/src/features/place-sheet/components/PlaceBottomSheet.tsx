@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { routeApi } from "@/api/routeApi";
+import { placeLocalizationApi } from "@/api/placeLocalizationApi";
 import {
   IoBagAdd,
   IoBagAddOutline,
@@ -41,11 +42,13 @@ import {
 } from "@/lib/placeCategory";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
+import { localizeTourPlaces } from "@/lib/placeLocalization";
 import {
   applyNaverMapTheme,
   getNaverMapThemeOptions,
 } from "@/lib/naverMapTheme";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
+import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -156,6 +159,33 @@ async function preloadImageUrls(urls: string[]) {
   );
 
   return results.filter((result) => result.loaded).map((result) => result.url);
+}
+
+function PlacePhotoThumbnail({
+  thumbnailUrl,
+  imageUrl,
+  alt,
+}: {
+  thumbnailUrl?: string | null;
+  imageUrl: string;
+  alt: string;
+}) {
+  const [useOriginalImage, setUseOriginalImage] = useState(!thumbnailUrl);
+  const source = useOriginalImage || !thumbnailUrl ? imageUrl : thumbnailUrl;
+
+  return (
+    <img
+      src={source}
+      alt={alt}
+      className="h-full w-full object-cover transition duration-200 group-active:scale-95"
+      loading="lazy"
+      onError={() => {
+        if (!useOriginalImage && thumbnailUrl !== imageUrl) {
+          setUseOriginalImage(true);
+        }
+      }}
+    />
+  );
 }
 
 function buildGoogleImageSearchUrl(keyword: string) {
@@ -352,6 +382,7 @@ function createMapSheetPlaceFromNearbyPlace({
 }
 
 function PlaceBottomSheet() {
+  const appLanguage = useAppLanguageStore((state) => state.language);
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const {
     isOpen,
@@ -403,7 +434,7 @@ function PlaceBottomSheet() {
   });
 
   const detailQuery = useQuery({
-    queryKey: ["place-detail", selectedPlaceKey],
+    queryKey: ["place-detail", selectedPlaceKey, appLanguage],
     enabled: isOpen && Boolean(selectedPlace) && hasTourApiServiceKey,
     queryFn: async () => {
       if (!selectedPlace) {
@@ -412,11 +443,27 @@ function PlaceBottomSheet() {
       const detail = await fetchTourPlaceDetail(
         TOUR_API_SERVICE_KEY,
         selectedPlace.contentId,
-        selectedPlace.contentTypeId
+        selectedPlace.contentTypeId,
+        "ko"
       );
+      let overview = detail.overview;
+      if (appLanguage === "en" && overview) {
+        try {
+          const localized = await placeLocalizationApi.localizeTourPlaceOverview({
+            contentId: selectedPlace.contentId,
+            overview,
+          });
+          overview = localized.localizeTourPlaceOverview.overview;
+        } catch (error) {
+          console.warn(
+            "장소 설명 영문 현지화에 실패해 한국어 원문을 사용합니다.",
+            error
+          );
+        }
+      }
       const loadedImages = await preloadImageUrls(detail.images);
       return {
-        overview: detail.overview,
+        overview,
         images: loadedImages,
         operatingHours: detail.operatingHours,
         restDate: detail.restDate,
@@ -525,6 +572,7 @@ function PlaceBottomSheet() {
       selectedPlace?.contentId ?? "",
       selectedPlace?.lat ?? 0,
       selectedPlace?.lng ?? 0,
+      appLanguage,
     ],
     enabled:
       isOpen &&
@@ -537,14 +585,15 @@ function PlaceBottomSheet() {
         throw new Error("선택된 장소가 없습니다.");
       }
 
-      return fetchNearbyTouristPlaces(TOUR_API_SERVICE_KEY, {
+      const nearbyPlaces = await fetchNearbyTouristPlaces(TOUR_API_SERVICE_KEY, {
         lat: selectedPlace.lat,
         lng: selectedPlace.lng,
         radiusM: 6000,
         numOfRows: 12,
         contentTypeIds: ["12", "39"],
         excludeContentId: selectedPlace.contentId,
-      });
+      }, "ko");
+      return localizeTourPlaces(nearbyPlaces, appLanguage);
     },
     staleTime: 1000 * 60 * 20,
     gcTime: 1000 * 60 * 60,
@@ -593,7 +642,7 @@ function PlaceBottomSheet() {
   );
   const placeStaySummaryVisitCount = displayPlaceStaySummary?.visitCount ?? 0;
   const placeStaySummaryLabel = placeStaySummaryQuery.isFetching
-    ? "유저 체류 데이터를 불러오는 중이에요."
+    ? "감자가 체류 데이터를 확인 중이에요."
     : placeStaySummaryVisitCount === 0
       ? "아직 사용자 체류 데이터가 없어요."
       : placeStaySummaryVisitCount < MIN_PLACE_STAY_SUMMARY_VISIT_COUNT
@@ -1196,7 +1245,7 @@ function PlaceBottomSheet() {
                       사용자들이 올린 사진
                     </p>
                     <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-300">
-                      사진 인증으로 공유된 방문 사진이에요.
+                      사진 인증과 기록으로 공유된 방문 사진이에요.
                     </p>
                   </div>
                   {userPlacePhotos.length > 0 ? (
@@ -1222,14 +1271,13 @@ function PlaceBottomSheet() {
                         }
                         className="group relative h-44 w-40 shrink-0 snap-start overflow-hidden rounded-2xl border border-brand-100 bg-brand-50 text-left shadow-sm"
                       >
-                        <img
-                          src={photo.thumbnailUrl ?? photo.imageUrl}
+                        <PlacePhotoThumbnail
+                          thumbnailUrl={photo.thumbnailUrl}
+                          imageUrl={photo.imageUrl}
                           alt={`${selectedPlace.title} 사용자 사진 ${index + 1}`}
-                          className="h-full w-full object-cover transition duration-200 group-active:scale-95"
-                          loading="lazy"
                         />
                         <span className="absolute bottom-2 left-2 rounded-full bg-slate-950/60 px-2 py-1 text-[10px] font-black text-white backdrop-blur">
-                          사진 인증
+                          방문 사진
                         </span>
                       </button>
                     ))
@@ -1318,7 +1366,7 @@ function PlaceBottomSheet() {
                         <div className="absolute inset-0 flex items-center justify-center bg-white/70 px-6 backdrop-blur-[1px] dark:bg-slate-950/45">
                           <div className="flex items-center gap-2 rounded-2xl border border-brand-100 bg-white/90 px-4 py-3 text-xs font-bold text-brand-700 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/80 dark:text-brand-100">
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" />
-                            지도 불러오는 중
+                            지도 준비 중
                           </div>
                         </div>
                       ) : previewMapError ? (

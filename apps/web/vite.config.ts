@@ -34,6 +34,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    base: isNativeWebBundle ? './' : '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
@@ -41,63 +42,60 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
+      modulePreload: isNativeWebBundle ? false : undefined,
       rolldownOptions: {
-        output: isNativeWebBundle
-          ? {
-              codeSplitting: false,
-            }
-          : {
-              codeSplitting: {
-                minSize: 20 * 1024,
-                groups: [
-                  {
-                    name: 'react-vendor',
-                    test: nodeModulePattern(
-                      String.raw`(?:react|react-dom|scheduler)`
-                    ),
-                    priority: 50,
-                  },
-                  {
-                    name: 'router-vendor',
-                    test: nodeModulePattern(String.raw`react-router(?:-dom)?`),
-                    priority: 45,
-                  },
-                  {
-                    name: 'query-vendor',
-                    test: nodeModulePattern(
-                      String.raw`@tanstack[\\/]react-query`
-                    ),
-                    priority: 40,
-                  },
-                  {
-                    name: 'chart-vendor',
-                    test: nodeModulePattern(
-                      String.raw`(?:chart\.js|react-chartjs-2)`
-                    ),
-                    priority: 40,
-                  },
-                  {
-                    name: 'graphql-vendor',
-                    test: nodeModulePattern(
-                      String.raw`(?:graphql|@graphql-typed-document-node[\\/]core)`
-                    ),
-                    priority: 35,
-                  },
-                  {
-                    name: 'icons-vendor',
-                    test: nodeModulePattern(String.raw`react-icons`),
-                    priority: 30,
-                    maxSize: 180 * 1024,
-                  },
-                  {
-                    name: 'vendor',
-                    test: nodeModulePattern(String.raw`[^\\/]+`),
-                    priority: 10,
-                    maxSize: 220 * 1024,
-                  },
-                ],
+        output: {
+          codeSplitting: {
+            minSize: 20 * 1024,
+            groups: [
+              {
+                name: 'react-vendor',
+                test: nodeModulePattern(
+                  String.raw`(?:react|react-dom|scheduler)`
+                ),
+                priority: 50,
               },
-            },
+              {
+                name: 'router-vendor',
+                test: nodeModulePattern(String.raw`react-router(?:-dom)?`),
+                priority: 45,
+              },
+              {
+                name: 'query-vendor',
+                test: nodeModulePattern(
+                  String.raw`@tanstack[\\/]react-query`
+                ),
+                priority: 40,
+              },
+              {
+                name: 'chart-vendor',
+                test: nodeModulePattern(
+                  String.raw`(?:chart\.js|react-chartjs-2)`
+                ),
+                priority: 40,
+              },
+              {
+                name: 'graphql-vendor',
+                test: nodeModulePattern(
+                  String.raw`(?:graphql|@graphql-typed-document-node[\\/]core)`
+                ),
+                priority: 35,
+              },
+              {
+                name: 'icons-vendor',
+                test: nodeModulePattern(String.raw`react-icons`),
+                priority: 30,
+                maxSize: 180 * 1024,
+              },
+              {
+                name: 'vendor',
+                test: nodeModulePattern(String.raw`[^\\/]+`),
+                priority: 10,
+                maxSize: 220 * 1024,
+              },
+            ],
+          },
+        },
       },
     },
     server: {

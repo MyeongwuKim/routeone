@@ -7,7 +7,8 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   window.__ROUTEONE_NATIVE_BRIDGE_INSTALLED__ = true;
   window.RouteOneRuntimeConfig = Object.assign({}, window.RouteOneRuntimeConfig, ${JSON.stringify(
     {
-      graphqlEndpoint: "/graphql"
+      graphqlEndpoint: "/graphql",
+      routerMode: "hash"
     }
   )});
 

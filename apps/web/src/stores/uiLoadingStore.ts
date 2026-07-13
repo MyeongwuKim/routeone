@@ -4,6 +4,7 @@ export type AppLoadingAnimation =
   | "map-thinking"
   | "ranking"
   | "map-rendering"
+  | "running"
   | "searching"
   | "pondering"
   | "empty"

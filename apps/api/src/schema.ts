@@ -11,6 +11,10 @@ import {
   routeVisitPhotoTypeDefs,
 } from "./modules/routes/routeVisitPhoto.resolver.js";
 import { userResolvers, userTypeDefs } from "./modules/user/user.resolver.js";
+import {
+  placeLocalizationResolvers,
+  placeLocalizationTypeDefs,
+} from "./modules/places/placeLocalization.resolver.js";
 
 type ResolverRecord = Record<string, unknown>;
 type TypeDefsServerOptions = Extract<
@@ -64,6 +68,7 @@ export const typeDefs = [
   userTypeDefs,
   routeTypeDefs,
   routeVisitPhotoTypeDefs,
+  placeLocalizationTypeDefs,
 ];
 
 export const resolvers = mergeResolvers(
@@ -72,5 +77,6 @@ export const resolvers = mergeResolvers(
   },
   userResolvers,
   routeResolvers,
-  routeVisitPhotoResolvers
+  routeVisitPhotoResolvers,
+  placeLocalizationResolvers
 );

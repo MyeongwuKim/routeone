@@ -7,8 +7,10 @@ import {
   MdSell,
 } from "react-icons/md";
 import type {
+  LikedSharedRouteConnectionQuery,
   LikedSharedRoutesQuery,
   RouteSummaryFieldsFragment,
+  SharedRouteConnectionQuery,
   SharedRoutesQuery,
 } from "@/generated/graphql";
 
@@ -86,7 +88,9 @@ const LEGACY_SHARE_TAG_LABELS: Record<string, string> = {
 
 export type SharedRoute =
   | SharedRoutesQuery["sharedRoutes"][number]
-  | LikedSharedRoutesQuery["likedRoutes"][number];
+  | LikedSharedRoutesQuery["likedRoutes"][number]
+  | SharedRouteConnectionQuery["sharedRouteConnection"]["nodes"][number]
+  | LikedSharedRouteConnectionQuery["likedRouteConnection"]["nodes"][number];
 
 export type SharedRouteFilterCandidate =
   | {

@@ -1,28 +1,26 @@
-const TOUR_API_BASE_URL = "/tour-api/B551011/KorService2/areaBasedList2";
-const TOUR_LCLS_CODE_BASE_URL = "/tour-api/B551011/KorService2/lclsSystmCode2";
-const TOUR_DETAIL_COMMON_BASE_URL =
-  "/tour-api/B551011/KorService2/detailCommon2";
-const TOUR_DETAIL_INTRO_BASE_URL =
-  "/tour-api/B551011/KorService2/detailIntro2";
-const TOUR_DETAIL_IMAGE_BASE_URL = "/tour-api/B551011/KorService2/detailImage2";
-const TOUR_FESTIVAL_BASE_URL = "/tour-api/B551011/KorService2/searchFestival2";
+import type { AppLanguage } from "@/stores/appLanguageStore";
+import {
+  getDefaultTourContentTypeIds,
+  getTourContentTypeId,
+  isTourContentTypeId,
+  localizeTourContentTypeId,
+} from "@/lib/tourContentType";
+
 const TOUR_TATS_CONCENTRATION_BASE_URL =
   "/tour-api/B551011/TatsCnctrRateService/tatsCnctrRatedList";
-const TOUR_LOCATION_BASED_BASE_URL =
-  "/tour-api/B551011/KorService2/locationBasedList2";
 const TOUR_RELATED_TOURIST_KEYWORD_BASE_URL =
   "/tour-api/B551011/TarRlteTarService1/searchKeyword1";
 
-export const GANGWON_AREA_CODE = "32";
+const TOUR_SERVICE_NAME_BY_LANGUAGE: Record<AppLanguage, string> = {
+  ko: "KorService2",
+  en: "EngService2",
+};
 
-export const TOUR_CONTENT_TYPE_IDS = [
-  "39", // 음식점
-  "38", // 쇼핑
-  "12", // 관광지
-  "14", // 문화시설
-  "15", // 축제/공연
-  "28", // 레포츠
-] as const;
+function getTourApiUrl(language: AppLanguage, operation: string) {
+  return `/tour-api/B551011/${TOUR_SERVICE_NAME_BY_LANGUAGE[language]}/${operation}`;
+}
+
+export const GANGWON_AREA_CODE = "32";
 
 type TourApiItem = {
   title?: string;
@@ -343,7 +341,8 @@ function dedupeImageUrls(urls: string[]) {
 
 export async function fetchTourPlaceImageUrls(
   serviceKey: string,
-  contentId: string
+  contentId: string,
+  language: AppLanguage = "ko"
 ) {
   if (!serviceKey || !contentId) {
     return [];
@@ -361,7 +360,7 @@ export async function fetchTourPlaceImageUrls(
   });
 
   const imageResponse = await fetch(
-    `${TOUR_DETAIL_IMAGE_BASE_URL}?${imageQuery.toString()}`
+    `${getTourApiUrl(language, "detailImage2")}?${imageQuery.toString()}`
   );
 
   if (!imageResponse.ok) {
@@ -510,7 +509,7 @@ function parseGangwonAttraction(
     normalizeYmd(item.eventenddate) ?? normalizeYmd(item.eventEndDate) ?? "";
   const resolvedContentTypeId = item.contenttypeid ?? contentTypeId;
   const isTodayFestival =
-    resolvedContentTypeId === "15" &&
+    isTourContentTypeId(resolvedContentTypeId, "festival") &&
     (options?.forceTodayFestival ||
       Boolean(
         options?.todayYmd &&
@@ -770,16 +769,24 @@ function getPageNumbers(startPage: number, endPage: number) {
 
 export async function fetchGangwonAttractions(
   serviceKey: string,
-  options: FetchGangwonAttractionsOptions = {}
+  options: FetchGangwonAttractionsOptions = {},
+  language: AppLanguage = "ko"
 ) {
   if (!serviceKey) {
     throw new Error("VisitKorea service key is missing.");
   }
 
-  const contentTypeIds =
+  const requestedContentTypeIds =
     options.contentTypeIds && options.contentTypeIds.length > 0
       ? options.contentTypeIds
-      : [...TOUR_CONTENT_TYPE_IDS];
+      : getDefaultTourContentTypeIds(language);
+  const contentTypeIds = [
+    ...new Set(
+      requestedContentTypeIds.map((contentTypeId) =>
+        localizeTourContentTypeId(contentTypeId, language)
+      )
+    ),
+  ];
 
   const pageSize = 200;
   const maxPagesSafetyLimit = 100;
@@ -808,7 +815,7 @@ export async function fetchGangwonAttractions(
         });
 
       const firstPage = await requestTourApiListPage(
-        TOUR_API_BASE_URL,
+        getTourApiUrl(language, "areaBasedList2"),
         createQuery(1),
         "Tour API"
       );
@@ -829,7 +836,7 @@ export async function fetchGangwonAttractions(
         remainingPages = await Promise.all(
           getPageNumbers(2, knownTotalPages).map((pageNo) =>
             requestTourApiListPage(
-              TOUR_API_BASE_URL,
+              getTourApiUrl(language, "areaBasedList2"),
               createQuery(pageNo),
               "Tour API"
             )
@@ -838,7 +845,7 @@ export async function fetchGangwonAttractions(
       } else {
         for (let pageNo = 2; pageNo <= maxPagesSafetyLimit; pageNo += 1) {
           const page = await requestTourApiListPage(
-            TOUR_API_BASE_URL,
+            getTourApiUrl(language, "areaBasedList2"),
             createQuery(pageNo),
             "Tour API"
           );
@@ -874,7 +881,8 @@ export async function fetchGangwonAttractions(
 
 export async function fetchGangwonFestivals(
   serviceKey: string,
-  options: FetchGangwonFestivalsOptions = {}
+  options: FetchGangwonFestivalsOptions = {},
+  language: AppLanguage = "ko"
 ) {
   if (!serviceKey) {
     throw new Error("VisitKorea service key is missing.");
@@ -900,7 +908,7 @@ export async function fetchGangwonFestivals(
     });
 
   const firstPage = await requestTourApiListPage(
-    TOUR_FESTIVAL_BASE_URL,
+    getTourApiUrl(language, "searchFestival2"),
     createQuery(1),
     "Tour festival"
   );
@@ -916,7 +924,7 @@ export async function fetchGangwonFestivals(
       remainingPages = await Promise.all(
         getPageNumbers(2, knownTotalPages).map((pageNo) =>
           requestTourApiListPage(
-            TOUR_FESTIVAL_BASE_URL,
+            getTourApiUrl(language, "searchFestival2"),
             createQuery(pageNo),
             "Tour festival"
           )
@@ -925,7 +933,7 @@ export async function fetchGangwonFestivals(
     } else {
       for (let pageNo = 2; pageNo <= maxPagesSafetyLimit; pageNo += 1) {
         const page = await requestTourApiListPage(
-          TOUR_FESTIVAL_BASE_URL,
+          getTourApiUrl(language, "searchFestival2"),
           createQuery(pageNo),
           "Tour festival"
         );
@@ -945,10 +953,15 @@ export async function fetchGangwonFestivals(
     .flatMap((page) => page.items)
     .filter(isGangwonTourApiItem)
     .map((item, index) =>
-      parseGangwonAttraction(item, "15", index, {
-        todayYmd,
-        forceTodayFestival: false,
-      })
+      parseGangwonAttraction(
+        item,
+        getTourContentTypeId(language, "festival"),
+        index,
+        {
+          todayYmd,
+          forceTodayFestival: false,
+        }
+      )
     )
     .filter((item): item is GangwonAttraction => item !== null)
     .filter((festival) => {
@@ -981,14 +994,18 @@ export async function fetchGangwonFestivals(
   return [...unique.values()];
 }
 
-export async function fetchLclsSystemNameMap(serviceKey: string) {
+export async function fetchLclsSystemNameMap(
+  serviceKey: string,
+  language: AppLanguage = "ko"
+) {
   if (!serviceKey) {
     throw new Error("VisitKorea service key is missing.");
   }
 
   const normalizedServiceKey = normalizeServiceKey(serviceKey);
+  const cacheKey = `${language}:${normalizedServiceKey}`;
   const cachedPromise =
-    lclsSystemNameMapPromiseByServiceKey.get(normalizedServiceKey);
+    lclsSystemNameMapPromiseByServiceKey.get(cacheKey);
 
   if (cachedPromise) {
     return cachedPromise;
@@ -1006,7 +1023,7 @@ export async function fetchLclsSystemNameMap(serviceKey: string) {
     });
 
     const response = await fetch(
-      `${TOUR_LCLS_CODE_BASE_URL}?${query.toString()}`
+      `${getTourApiUrl(language, "lclsSystmCode2")}?${query.toString()}`
     );
 
     if (!response.ok) {
@@ -1043,12 +1060,12 @@ export async function fetchLclsSystemNameMap(serviceKey: string) {
 
     return codeNameMap;
   })().catch((error) => {
-    lclsSystemNameMapPromiseByServiceKey.delete(normalizedServiceKey);
+    lclsSystemNameMapPromiseByServiceKey.delete(cacheKey);
     throw error;
   });
 
   lclsSystemNameMapPromiseByServiceKey.set(
-    normalizedServiceKey,
+    cacheKey,
     requestPromise
   );
 
@@ -1058,7 +1075,8 @@ export async function fetchLclsSystemNameMap(serviceKey: string) {
 export async function fetchTourPlaceDetail(
   serviceKey: string,
   contentId: string,
-  contentTypeId?: string
+  contentTypeId?: string,
+  language: AppLanguage = "ko"
 ) {
   if (!serviceKey || !contentId) {
     throw new Error("Tour place detail params are missing.");
@@ -1097,9 +1115,15 @@ export async function fetchTourPlaceDetail(
   });
 
   const [commonResponse, imageResponse, introResponse] = await Promise.all([
-    fetch(`${TOUR_DETAIL_COMMON_BASE_URL}?${commonQuery.toString()}`),
-    fetch(`${TOUR_DETAIL_IMAGE_BASE_URL}?${imageQuery.toString()}`),
-    fetch(`${TOUR_DETAIL_INTRO_BASE_URL}?${introQuery.toString()}`),
+    fetch(
+      `${getTourApiUrl(language, "detailCommon2")}?${commonQuery.toString()}`
+    ),
+    fetch(
+      `${getTourApiUrl(language, "detailImage2")}?${imageQuery.toString()}`
+    ),
+    fetch(
+      `${getTourApiUrl(language, "detailIntro2")}?${introQuery.toString()}`
+    ),
   ]);
 
   if (!commonResponse.ok) {
@@ -1159,7 +1183,8 @@ export async function fetchTourPlaceDetail(
 
 export async function fetchNearbyTouristPlaces(
   serviceKey: string,
-  options: FetchNearbyTouristPlacesOptions
+  options: FetchNearbyTouristPlacesOptions,
+  language: AppLanguage = "ko"
 ) {
   if (!serviceKey) {
     throw new Error("VisitKorea service key is missing.");
@@ -1171,10 +1196,17 @@ export async function fetchNearbyTouristPlaces(
 
   const maxCount = Math.max(1, Math.min(30, options.numOfRows ?? 12));
   const radiusM = Math.max(100, Math.min(20000, Math.round(options.radiusM ?? 5000)));
-  const contentTypeIds =
+  const requestedContentTypeIds =
     options.contentTypeIds && options.contentTypeIds.length > 0
       ? options.contentTypeIds
       : ["12", "14", "15", "28", "38"];
+  const contentTypeIds = [
+    ...new Set(
+      requestedContentTypeIds.map((contentTypeId) =>
+        localizeTourContentTypeId(contentTypeId, language)
+      )
+    ),
+  ];
 
   const unique = new Map<string, NearbyTouristPlace>();
 
@@ -1194,7 +1226,7 @@ export async function fetchNearbyTouristPlaces(
     });
 
     const response = await fetch(
-      `${TOUR_LOCATION_BASED_BASE_URL}?${query.toString()}`
+      `${getTourApiUrl(language, "locationBasedList2")}?${query.toString()}`
     );
 
     if (!response.ok) {

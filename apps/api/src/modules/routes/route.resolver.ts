@@ -15,8 +15,12 @@ import {
   createRoute,
   deleteRoute,
   deleteRouteDay,
+  fetchPosterImageDataUrl,
   getPublicRoutes,
+  getPublicRouteConnection,
+  getLikedRouteConnection,
   getLikedRoutes,
+  getMyRouteHistoryConnection,
   getSavedRoutes,
   getPlacePhotos,
   getPlaceStaySummary,
@@ -174,6 +178,16 @@ export const routeTypeDefs = gql`
     saved: Boolean!
   }
 
+  type RouteConnectionPageInfo {
+    endCursor: String
+    hasNextPage: Boolean!
+  }
+
+  type RouteConnection {
+    nodes: [Route!]!
+    pageInfo: RouteConnectionPageInfo!
+  }
+
   type PlaceStaySummary {
     averageActualStayMinutes: Int
     visitCount: Int!
@@ -298,13 +312,25 @@ export const routeTypeDefs = gql`
 
   extend type Query {
     myRoutes(status: RouteStatus): [Route!]!
+    myRouteHistoryConnection(
+      limit: Int
+      cursor: String
+      today: DateTime
+    ): RouteConnection!
     savedRoutes: [Route!]!
     likedRoutes: [Route!]!
+    likedRouteConnection(limit: Int, cursor: String): RouteConnection!
     sharedRoutes(regionCode: String, limit: Int): [Route!]!
+    sharedRouteConnection(
+      regionCode: String
+      limit: Int
+      cursor: String
+    ): RouteConnection!
     route(id: ID!): Route
     placeStaySummary(place: PlaceSnapshotInput!): PlaceStaySummary!
     placeStaySummaries(places: [PlaceSnapshotInput!]!): [PlaceStaySummary!]!
     placePhotos(place: PlaceSnapshotInput!, limit: Int): [PlacePhoto!]!
+    posterImageDataUrl(url: String!): String
   }
 
   extend type Mutation {
@@ -344,6 +370,13 @@ type SharedRoutesArgs = {
   limit?: number | null;
 };
 
+type RouteConnectionArgs = {
+  regionCode?: string | null;
+  limit?: number | null;
+  cursor?: string | null;
+  today?: Date | null;
+};
+
 type PlaceStaySummaryArgs = {
   place: PlaceSnapshotInput;
 };
@@ -355,6 +388,10 @@ type PlaceStaySummariesArgs = {
 type PlacePhotosArgs = {
   place: PlaceSnapshotInput;
   limit?: number | null;
+};
+
+type PosterImageDataUrlArgs = {
+  url: string;
 };
 
 type CreateRouteArgs = {
@@ -429,6 +466,32 @@ export const routeResolvers = {
       const user = requireUser(context);
       return getLikedRoutes(context.prisma, user);
     },
+    async myRouteHistoryConnection(
+      _parent: unknown,
+      args: RouteConnectionArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+
+      await ensureDevHistoryRoutes(context.prisma, user);
+
+      return getMyRouteHistoryConnection(context.prisma, user, {
+        limit: args.limit,
+        cursor: args.cursor,
+        today: args.today,
+      });
+    },
+    likedRouteConnection(
+      _parent: unknown,
+      args: RouteConnectionArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return getLikedRouteConnection(context.prisma, user, {
+        limit: args.limit,
+        cursor: args.cursor,
+      });
+    },
     sharedRoutes(
       _parent: unknown,
       args: SharedRoutesArgs,
@@ -437,6 +500,17 @@ export const routeResolvers = {
       return getPublicRoutes(context.prisma, {
         regionCode: args.regionCode,
         limit: args.limit,
+      });
+    },
+    sharedRouteConnection(
+      _parent: unknown,
+      args: RouteConnectionArgs,
+      context: GraphQLContext
+    ) {
+      return getPublicRouteConnection(context.prisma, {
+        regionCode: args.regionCode,
+        limit: args.limit,
+        cursor: args.cursor,
       });
     },
     async route(_parent: unknown, args: IdArgs, context: GraphQLContext) {
@@ -478,6 +552,14 @@ export const routeResolvers = {
       return getPlacePhotos(context.prisma, args.place, {
         limit: args.limit,
       });
+    },
+    posterImageDataUrl(
+      _parent: unknown,
+      args: PosterImageDataUrlArgs,
+      context: GraphQLContext
+    ) {
+      requireUser(context);
+      return fetchPosterImageDataUrl(args.url);
     },
   },
   Mutation: {

@@ -13,6 +13,7 @@ import {
 import type { MyRoute, MyRouteStop } from "./types";
 
 export const MY_ROUTES_QUERY_KEY = ["my-routes"] as const;
+export const MY_ROUTE_HISTORY_QUERY_KEY = ["my-route-history"] as const;
 export const SHARED_ROUTES_QUERY_KEY = ["shared-routes"] as const;
 export const LIKED_SHARED_ROUTES_QUERY_KEY = ["liked-shared-routes"] as const;
 
@@ -340,7 +341,8 @@ export function optimisticVisitRouteStopCache({
     const nextVerificationStatus: RouteStopVerificationStatus = visited
       ? (verificationStatus ?? "MANUAL")
       : "NONE";
-    const isVerified = nextVerificationStatus === "GPS_PHOTO";
+    const isPhotoVerified = nextVerificationStatus === "GPS_PHOTO";
+    const hasPhotoRecord = visited && Boolean(verificationPhotoUrl);
     const nextDays = route.days.map((day) => ({
       ...day,
       stops: day.stops.map((stop): MyRouteStop =>
@@ -350,19 +352,21 @@ export function optimisticVisitRouteStopCache({
               visitStatus: nextVisitStatus,
               visitedAt: visited ? visitedAt : null,
               verificationStatus: nextVerificationStatus,
-              verifiedAt: isVerified ? visitedAt : null,
-              verificationPhotoImageId: isVerified
+              verifiedAt: isPhotoVerified ? visitedAt : null,
+              verificationPhotoImageId: isPhotoVerified || hasPhotoRecord
                 ? (verificationPhotoImageId ?? null)
                 : null,
-              verificationPhotoUrl: isVerified
+              verificationPhotoUrl: isPhotoVerified || hasPhotoRecord
                 ? (verificationPhotoUrl ?? null)
                 : null,
-              verificationLat: isVerified ? (verificationLat ?? null) : null,
-              verificationLng: isVerified ? (verificationLng ?? null) : null,
-              verificationAccuracyMeters: isVerified
+              verificationLat: isPhotoVerified ? (verificationLat ?? null) : null,
+              verificationLng: isPhotoVerified ? (verificationLng ?? null) : null,
+              verificationAccuracyMeters: isPhotoVerified
                 ? (verificationAccuracyMeters ?? null)
                 : null,
-              checkedInAt: isVerified ? (stop.checkedInAt ?? visitedAt) : null,
+              checkedInAt: isPhotoVerified
+                ? (stop.checkedInAt ?? visitedAt)
+                : null,
               checkedOutAt: null,
               actualStayMinutes: visited ? (actualStayMinutes ?? null) : null,
             }

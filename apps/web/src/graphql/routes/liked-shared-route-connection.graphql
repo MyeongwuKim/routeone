@@ -1,0 +1,21 @@
+query LikedSharedRouteConnection($limit: Int, $cursor: String) {
+  likedRouteConnection(limit: $limit, cursor: $cursor) {
+    nodes {
+      ...RouteSummaryFields
+      stops {
+        id
+        place {
+          title
+          categoryLabel
+          categoryName
+          regionCode
+          regionLabelKey
+        }
+      }
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+    }
+  }
+}

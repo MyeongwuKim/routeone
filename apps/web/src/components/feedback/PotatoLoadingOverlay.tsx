@@ -70,6 +70,35 @@ function PotatoLoadingStyles() {
           0%, 100% { transform: rotate(-6deg); }
           50% { transform: rotate(7deg); }
         }
+        @keyframes potatoRouteTravel {
+          0% { transform: translate(5px, 48px); opacity: 0; }
+          8% { transform: translate(5px, 48px); opacity: 1; }
+          28% { transform: translate(34px, 30px); opacity: 1; }
+          52% { transform: translate(63px, 50px); opacity: 1; }
+          76% { transform: translate(92px, 24px); opacity: 1; }
+          92% { transform: translate(109px, 34px); opacity: 1; }
+          100% { transform: translate(109px, 34px); opacity: 0; }
+        }
+        @keyframes potatoRouteBob {
+          0%, 100% { transform: translateY(0px) rotate(-5deg); }
+          50% { transform: translateY(-5px) rotate(4deg); }
+        }
+        @keyframes potatoRouteDash {
+          0% { stroke-dashoffset: 0; }
+          100% { stroke-dashoffset: -28; }
+        }
+        @keyframes potatoRouteShadow {
+          0%, 100% { transform: scaleX(0.92); opacity: 0.16; }
+          50% { transform: scaleX(0.68); opacity: 0.1; }
+        }
+        @keyframes potatoRouteLeaf {
+          0%, 100% { transform: rotate(-7deg); }
+          50% { transform: rotate(10deg); }
+        }
+        @keyframes potatoRoutePulse {
+          0%, 100% { transform: scale(1); opacity: 0.65; }
+          50% { transform: scale(1.16); opacity: 1; }
+        }
       `}
     </style>
   );
@@ -88,16 +117,107 @@ function PotatoCharacter({
   const isSearching = animation === "searching";
   const isPondering = animation === "pondering";
   const isEmpty = animation === "empty";
+  const isRunning = animation === "running";
   const shouldHoldMap = isMapThinking || isRanking || isMapRendering;
+
+  if (isRunning) {
+    return (
+      <div className={`${compact ? "h-20 w-28" : "h-24 w-32"} relative shrink-0`}>
+        <svg viewBox="0 0 150 120" className="relative z-10 h-full w-full" aria-hidden="true">
+          <path
+            d="M18 88 C34 58,47 64,59 81 C72 100,88 86,96 60 C104 33,119 33,132 48"
+            fill="none"
+            stroke="#CBD5E1"
+            strokeWidth="6"
+            strokeLinecap="round"
+          />
+          <path
+            d="M18 88 C34 58,47 64,59 81 C72 100,88 86,96 60 C104 33,119 33,132 48"
+            fill="none"
+            stroke="#38BDF8"
+            strokeDasharray="5 8"
+            strokeLinecap="round"
+            strokeWidth="3"
+            style={{ animation: "potatoRouteDash 1.1s linear infinite" }}
+          />
+          <g style={{ transformOrigin: "18px 88px", animation: "potatoRoutePulse 1.4s ease-in-out infinite" }}>
+            <circle cx="18" cy="88" r="4.5" fill="#22C55E" stroke="#166534" strokeWidth="1.5" />
+          </g>
+          <g style={{ transformOrigin: "132px 48px", animation: "potatoRoutePulse 1.4s ease-in-out infinite 0.35s" }}>
+            <circle cx="132" cy="48" r="5" fill="#FB7185" stroke="#BE123C" strokeWidth="1.5" />
+            <path d="M132 53 L132 61" stroke="#BE123C" strokeWidth="1.8" strokeLinecap="round" />
+          </g>
+          <circle cx="59" cy="81" r="3.4" fill="#FFFFFF" stroke="#94A3B8" strokeWidth="1.6" />
+          <circle cx="96" cy="60" r="3.4" fill="#FFFFFF" stroke="#94A3B8" strokeWidth="1.6" />
+
+          <g style={{ animation: "potatoRouteTravel 2.4s ease-in-out infinite" }}>
+            <ellipse
+              cx="19"
+              cy="39"
+              rx="14"
+              ry="3.8"
+              fill="#64748B"
+              opacity="0.28"
+              style={{ animation: "potatoRouteShadow 0.56s ease-in-out infinite" }}
+            />
+            <g
+              style={{
+                animation: "potatoRouteBob 0.56s ease-in-out infinite",
+                transformOrigin: "18px 21px",
+              }}
+            >
+              <path
+                d="M18 2C29 2 37 11 36 23C35 34 28 41 18 41C8 41 1 33 1 23C1 11 8 2 18 2Z"
+                fill="#CFA06D"
+                stroke="#2A1A13"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <ellipse cx="11" cy="15" rx="2.2" ry="1.8" fill="#B9864F" opacity="0.5" />
+              <ellipse cx="25" cy="29" rx="2" ry="1.7" fill="#B9864F" opacity="0.45" />
+              <circle cx="13" cy="22" r="2.1" fill="#111827" />
+              <circle cx="23" cy="22" r="2.1" fill="#111827" />
+              <circle cx="12.3" cy="21.3" r="0.7" fill="#FFFFFF" />
+              <circle cx="22.3" cy="21.3" r="0.7" fill="#FFFFFF" />
+              <path
+                d="M15 30 C18 32,21 32,24 30"
+                fill="none"
+                stroke="#2A1A13"
+                strokeLinecap="round"
+                strokeWidth="1.7"
+              />
+              <circle cx="8.5" cy="28" r="1.8" fill="#F6C8B5" opacity="0.72" />
+              <circle cx="27.5" cy="28" r="1.8" fill="#F6C8B5" opacity="0.72" />
+              <g
+                style={{
+                  animation: "potatoRouteLeaf 0.56s ease-in-out infinite",
+                  transformOrigin: "20px 5px",
+                }}
+              >
+                <path
+                  d="M17 5 C20 -3,30 -2,32 6 C28 9,21 9,17 5Z"
+                  fill="#47B26B"
+                  stroke="#1D6B37"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.5"
+                />
+                <path d="M23 6 C23 3,24 1,26 0" fill="none" stroke="#1D6B37" strokeLinecap="round" strokeWidth="1.3" />
+              </g>
+            </g>
+          </g>
+        </svg>
+      </div>
+    );
+  }
 
   return (
     <div className={`${compact ? "h-20 w-20" : "h-24 w-24"} relative shrink-0`}>
       <div
         className="absolute bottom-[6px] left-1/2 h-3 w-14 -translate-x-1/2 rounded-full bg-slate-400/30"
         style={{
-          animation: isEmpty
-            ? "none"
-            : "potatoShadowPulse 1.8s ease-in-out infinite",
+          animation: isEmpty ? "none" : "potatoShadowPulse 1.8s ease-in-out infinite",
         }}
       />
       <svg
@@ -381,7 +501,7 @@ export function PotatoLoadingCard({
 }: PotatoLoadingCardProps) {
   return (
     <div
-      className={`w-full rounded-3xl border border-brand-200 bg-white/95 shadow-2xl backdrop-blur ${
+      className={`w-full rounded-3xl border border-brand-200 bg-white/95 shadow-2xl backdrop-blur dark:border-brand-400/30 dark:bg-[#0b211f]/95 ${
         compact ? "max-w-none px-4 py-4" : "max-w-sm px-5 py-5"
       } ${className}`}
     >
@@ -389,14 +509,14 @@ export function PotatoLoadingCard({
       <div className="flex items-center gap-4">
         <PotatoCharacter animation={animation} compact={compact} />
         <div>
-          <p className={`${compact ? "text-xs" : "text-sm"} font-semibold text-slate-800`}>{title}</p>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</p>
           {description ? (
-            <p className={`${compact ? "mt-0.5 text-[11px]" : "mt-1 text-xs"} text-slate-500`}>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
               {description}
             </p>
           ) : null}
           {footerText ? (
-            <p className={`${compact ? "mt-1.5 text-[11px]" : "mt-2 text-xs"} text-brand-700`}>
+            <p className={`${compact ? "mt-1.5 text-[11px]" : "mt-2 text-xs"} text-brand-700 dark:text-brand-200`}>
               {footerText}
             </p>
           ) : null}

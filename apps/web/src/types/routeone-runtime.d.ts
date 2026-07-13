@@ -7,6 +7,7 @@ declare global {
   interface Window {
     RouteOneRuntimeConfig?: {
       graphqlEndpoint?: string;
+      routerMode?: "browser" | "hash";
     };
     RouteOneNative?: {
       saveImage?: (options: {

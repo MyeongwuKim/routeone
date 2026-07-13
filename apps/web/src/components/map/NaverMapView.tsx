@@ -110,7 +110,7 @@ function NaverMapView({
   minZoom = 7,
   className = "relative bg-brand-50",
   mapClassName = "naver-map-root h-full w-full",
-  loadingLabel = "지도 불러오는 중",
+  loadingLabel = "지도 준비 중",
   controls,
   interactions,
   mapOptions,

@@ -108,11 +108,30 @@ body,
 #root {
   height: 100%;
   overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 * {
   box-sizing: border-box;
   overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"],
+[data-allow-text-selection="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+img,
+svg {
+  -webkit-user-drag: none;
 }
 
 body {

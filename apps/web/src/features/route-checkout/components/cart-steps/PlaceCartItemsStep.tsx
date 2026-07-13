@@ -1,4 +1,5 @@
 import { IoTrashOutline } from "react-icons/io5";
+import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
 
@@ -15,8 +16,15 @@ function PlaceCartItemsStep({
 }: PlaceCartItemsStepProps) {
   if (savedPlaces.length === 0) {
     return (
-      <div className="mt-12 rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-4 py-8 text-center text-sm text-slate-500">
-        담은 장소가 없습니다
+      <div className="mt-12">
+        <PotatoLoadingCard
+          title="아직 담은 장소가 없어요"
+          description="감자가 여행 가방을 비워두고 기다리고 있어요."
+          footerText="지도에서 가고 싶은 장소를 담아주세요."
+          animation="empty"
+          compact
+          className="shadow-sm"
+        />
       </div>
     );
   }

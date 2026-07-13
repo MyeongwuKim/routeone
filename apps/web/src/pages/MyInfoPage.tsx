@@ -7,6 +7,7 @@ import {
   MdDarkMode,
   MdHistory,
   MdInfoOutline,
+  MdLanguage,
   MdLightMode,
   MdLogout,
   MdOutlineAccountCircle,
@@ -28,6 +29,7 @@ import {
 } from "@/stores/authUserStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
+import { useAppLanguageStore } from "@/stores/appLanguageStore";
 
 function MyInfoMenuRow({
   icon,
@@ -128,6 +130,7 @@ function MyInfoPage() {
   const showToast = useUiToastStore((state) => state.showToast);
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const toggleDarkMode = useUiThemeStore((state) => state.toggleDarkMode);
+  const language = useAppLanguageStore((state) => state.language);
   const authUser = useAuthUserStore((state) => state.user);
   const setAuthUser = useAuthUserStore((state) => state.setUser);
   const clearAuthUser = useAuthUserStore((state) => state.clearUser);
@@ -170,21 +173,7 @@ function MyInfoPage() {
   };
 
   return (
-    <section className="space-y-4 pb-4 text-slate-900">
-      <div className="rounded-2xl border border-brand-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700">
-            <MdOutlineAccountCircle />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-slate-900">내 정보</p>
-            <p className="mt-0.5 text-xs font-semibold text-slate-500">
-              계정과 다녀온 루트를 관리하는 메뉴
-            </p>
-          </div>
-        </div>
-      </div>
-
+    <section className="space-y-4 text-slate-900">
       <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm">
         <div className="border-b border-brand-50 px-4 py-3">
           <p className="text-xs font-black text-brand-700">내 정보 메뉴</p>
@@ -227,6 +216,15 @@ function MyInfoPage() {
           description={isDarkMode ? "어두운 화면으로 보기" : "밝은 화면으로 보기"}
           checked={isDarkMode}
           onToggle={toggleDarkMode}
+        />
+
+        <div className="border-b border-brand-50" />
+
+        <MyInfoMenuRow
+          icon={<MdLanguage />}
+          title="언어 설정"
+          description={language === "ko" ? "한국어" : "English"}
+          onClick={() => navigate("/me/language")}
         />
 
         <div className="border-b border-brand-50" />

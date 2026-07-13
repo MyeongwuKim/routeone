@@ -1,3 +1,4 @@
+import { routeApi } from "@/api/routeApi";
 import {
   formatRouteDate,
   getRouteSubtitle,
@@ -37,6 +38,8 @@ export type RouteCompletionPosterCard = {
   label: string;
   dataUrl: string;
   fileName: string;
+  embeddedPhotoCount: number;
+  missingPhotoCount: number;
 };
 
 export type RouteCompletionPosterSaveResult = {
@@ -269,7 +272,7 @@ export function getRouteCompletionPosterStats(route: MyRoute) {
   const posterStops = getPosterStops(route);
   const completedStops = posterStops.filter(isVisitedStop);
   const photoVerifiedStopCount = completedStops.filter(
-    (stop) => stop.verificationStatus === "GPS_PHOTO"
+    (stop) => Boolean(stop.verificationPhotoUrl)
   ).length;
   const totalStopCount = Math.max(route.totalStopCount, posterStops.length);
   const completedStopCount = Math.max(
@@ -295,7 +298,7 @@ function getPosterRank({
   if (completedStopCount > 0 && photoVerifiedStopCount === completedStopCount) {
     return {
       title: "PHOTO MASTER",
-      label: "사진 인증 올클리어",
+      label: "사진 기록 올클리어",
       color: "#b91c1c",
       accent: "#f59e0b",
     };
@@ -304,7 +307,7 @@ function getPosterRank({
   if (photoVerifiedStopCount > 0) {
     return {
       title: "PHOTO VERIFIED",
-      label: `사진 인증 ${photoVerifiedStopCount}곳`,
+      label: `사진 기록 ${photoVerifiedStopCount}곳`,
       color: "#be123c",
       accent: "#f97316",
     };
@@ -366,7 +369,9 @@ function createPosterTile(stop: PosterStop, index: number): PosterTile {
     title: stop.place.title,
     subtitle: stop.place.categoryLabel ?? `DAY ${stop.dayIndex}`,
     imageUrl: stop.place.imageUrl,
-    verificationStatus: stop.verificationStatus,
+    verificationStatus: stop.verificationPhotoUrl
+      ? "GPS_PHOTO"
+      : stop.verificationStatus,
   };
 }
 
@@ -696,8 +701,8 @@ function renderPosterSvg({
   placeImageData: EmbeddedPlaceImage[];
 }) {
   const completedStops = getCompletedPosterStops(route);
-  const photoVerifiedStops = completedStops.filter(
-    (stop) => stop.verificationStatus === "GPS_PHOTO"
+  const photoRecordStops = completedStops.filter((stop) =>
+    Boolean(stop.verificationPhotoUrl)
   );
   const stats = getRouteCompletionPosterStats(route);
   const rank = getPosterRank(stats);
@@ -713,7 +718,7 @@ function renderPosterSvg({
   const statsY = Math.max(858, dayListEndY + 24);
   const photoY = statsY + 94;
   const photoSlots = Array.from({ length: 3 }, (_, index) => {
-    const stop = photoVerifiedStops[index] ?? null;
+    const stop = photoRecordStops[index] ?? null;
     const photo = stop
       ? photoData.find((candidate) => candidate.stopId === stop.id) ?? null
       : null;
@@ -839,7 +844,7 @@ type PolaroidLayout = {
 const DAY_MEMORY_MAX_POLAROIDS = 6;
 
 function getStopMemoryImageUrl(stop: PosterStop) {
-  if (stop.verificationStatus === "GPS_PHOTO" && stop.verificationPhotoUrl) {
+  if (stop.verificationPhotoUrl) {
     return stop.verificationPhotoUrl;
   }
 
@@ -889,7 +894,9 @@ function buildDayMemoryItems(stops: PosterStop[]) {
       stopId: stop.id,
       title: stop.place.title,
       subtitle: stop.place.categoryLabel ?? `DAY ${stop.dayIndex}`,
-      verificationStatus: stop.verificationStatus,
+      verificationStatus: stop.verificationPhotoUrl
+        ? "GPS_PHOTO"
+        : stop.verificationStatus,
     })
   );
 
@@ -1132,9 +1139,8 @@ function renderDayMemorySvg({
 
     return (rowLayout?.y ?? 336) + 16;
   });
-  const photoCount = day.stops.filter(
-    (stop) => stop.verificationStatus === "GPS_PHOTO"
-  ).length;
+  const photoCount = day.stops.filter((stop) => stop.verificationPhotoUrl)
+    .length;
   const subtitle = day.dateLabel
     ? `${day.dateLabel} · ${day.stops.length}곳`
     : `${day.stops.length}곳`;
@@ -1230,29 +1236,92 @@ function blobToDataUrl(blob: Blob) {
   });
 }
 
-async function fetchImageAsDataUrl(url: string) {
-  if (url.startsWith("data:image/")) {
-    return url;
+function isCloudflareImageDeliveryUrl(url: string) {
+  try {
+    return new URL(url, window.location.href).hostname === "imagedelivery.net";
+  } catch {
+    return false;
+  }
+}
+
+function getRouteOneTestPhotoDataUrl(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+
+    if (parsedUrl.protocol !== "routeone-test:") {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  const accentColors = ["#14b8a6", "#f59e0b", "#38bdf8", "#f472b6"];
+  const colorIndex = Array.from(url).reduce(
+    (sum, char) => sum + char.charCodeAt(0),
+    0
+  ) % accentColors.length;
+  const accent = accentColors[colorIndex];
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="260" viewBox="0 0 360 260">
+  <rect width="360" height="260" rx="22" fill="#f8edd8"/>
+  <rect x="18" y="18" width="324" height="224" rx="18" fill="#fffaf0" stroke="${accent}" stroke-width="6" stroke-dasharray="14 10"/>
+  <path d="M42 198 C92 132 129 164 168 108 C218 174 256 136 318 204 L318 224 L42 224 Z" fill="#cbd5e1"/>
+  <circle cx="268" cy="70" r="28" fill="#facc15"/>
+  <text x="180" y="82" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Pretendard,sans-serif" font-size="28" font-weight="900" fill="#0f766e">TEST PHOTO</text>
+  <text x="180" y="118" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Pretendard,sans-serif" font-size="18" font-weight="800" fill="#64748b">NO REAL IMAGE FILE</text>
+</svg>`.trim();
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+async function fetchCloudflareImageAsDataUrl(url: string) {
+  if (!isCloudflareImageDeliveryUrl(url)) {
+    return null;
   }
 
   try {
-    const response = await fetch(new URL(url, window.location.href).toString());
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await blobToDataUrl(await response.blob());
+    const result = await routeApi.posterImageDataUrl(url);
+    return result.posterImageDataUrl;
   } catch {
     return null;
   }
 }
 
+async function fetchImageAsDataUrl(url: string) {
+  if (url.startsWith("data:image/")) {
+    return url;
+  }
+
+  const testPhotoDataUrl = getRouteOneTestPhotoDataUrl(url);
+
+  if (testPhotoDataUrl) {
+    return testPhotoDataUrl;
+  }
+
+  let normalizedUrl: string;
+
+  try {
+    normalizedUrl = new URL(url, window.location.href).toString();
+  } catch {
+    return null;
+  }
+
+  try {
+    const response = await fetch(normalizedUrl);
+
+    if (!response.ok) {
+      return fetchCloudflareImageAsDataUrl(normalizedUrl);
+    }
+
+    return await blobToDataUrl(await response.blob());
+  } catch {
+    return fetchCloudflareImageAsDataUrl(normalizedUrl);
+  }
+}
+
 async function getEmbeddedPhotoData(route: MyRoute) {
   const photoStops = getCompletedPosterStops(route)
-    .filter(
-      (stop) => stop.verificationStatus === "GPS_PHOTO" && stop.verificationPhotoUrl
-    )
+    .filter((stop) => stop.verificationPhotoUrl)
     .slice(0, 3);
 
   return Promise.all(
@@ -1300,7 +1369,7 @@ async function getEmbeddedDayMemoryImageData(route: MyRoute) {
       .map(async (stop): Promise<EmbeddedStopImage> => {
         const imageUrl = getStopMemoryImageUrl(stop);
         const cachedDataUrl =
-          stop.verificationStatus === "GPS_PHOTO"
+          stop.verificationPhotoUrl
             ? getCachedRouteStopVerificationPhotoDataUrl(stop)
             : null;
 
@@ -1381,6 +1450,18 @@ export async function createRouteCompletionPosterCards(route: MyRoute) {
 
   return Promise.all(
     dayGroups.map(async (day): Promise<RouteCompletionPosterCard> => {
+      const photoStopIds = new Set(
+        day.stops
+          .filter((stop) => stop.verificationPhotoUrl)
+          .map((stop) => stop.id)
+      );
+      const embeddedPhotoCount = imageData.filter(
+        (image) => photoStopIds.has(image.stopId) && image.dataUrl
+      ).length;
+      const missingPhotoCount = Math.max(
+        0,
+        photoStopIds.size - embeddedPhotoCount
+      );
       const dataUrl = await svgToPngDataUrl(
         renderDayMemorySvg({
           route,
@@ -1394,6 +1475,8 @@ export async function createRouteCompletionPosterCards(route: MyRoute) {
         label: `DAY ${day.dayIndex}`,
         dataUrl,
         fileName: getRouteCompletionPosterFileName(route, day.dayIndex),
+        embeddedPhotoCount,
+        missingPhotoCount,
       };
     })
   );

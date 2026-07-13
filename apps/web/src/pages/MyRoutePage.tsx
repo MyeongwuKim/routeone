@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { MdOutlineRoute } from "react-icons/md";
 import { routeApi } from "@/api/routeApi";
+import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
 import MyRouteCard from "@/features/my-route/components/MyRouteCard";
 import MyRouteEmptyState from "@/features/my-route/components/MyRouteEmptyState";
@@ -24,7 +24,6 @@ import {
   isDateKeyInRouteRange,
 } from "@/features/my-route/routeDisplay";
 import type { MyRoute, MyRouteDay } from "@/features/my-route/types";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -532,38 +531,22 @@ function MyRoutePage() {
   };
 
   return (
-    <section className="space-y-4 pb-4 text-slate-900">
-      <div className="rounded-2xl border border-brand-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700">
-            <MdOutlineRoute />
-          </span>
-          <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-brand-700">
-              나의 여행 루트
-            </h1>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
-              현재 루트와 다가오는 일정을 한곳에서 확인해요
-            </p>
-          </div>
+    <section className="space-y-4 text-slate-900">
+      {myRoutesQuery.isError ? (
+        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+          내 루트를 불러오지 못했어요.
         </div>
-      </div>
+      ) : null}
 
       {myRoutesQuery.isLoading ? (
         <div className="flex min-h-[calc(100dvh-18rem)] flex-col justify-center">
           <PotatoLoadingCard
-            title="루트를 불러오는 중"
-            description="내 여행 루트를 확인하고 있어요."
-            animation="map-thinking"
+            title="감자가 내 루트 확인 중"
+            description="여행 일정을 정리하고 있어요."
+            animation="running"
             compact
             className="shadow-sm"
           />
-        </div>
-      ) : null}
-
-      {myRoutesQuery.isError ? (
-        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
-          내 루트를 불러오지 못했어요.
         </div>
       ) : null}
 

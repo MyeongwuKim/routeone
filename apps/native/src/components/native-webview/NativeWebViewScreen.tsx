@@ -96,7 +96,7 @@ export default function NativeWebViewScreen({
       {isLoading ? (
         <View style={styles.overlay}>
           <ActivityIndicator color="#0f766e" />
-          <Text style={styles.overlayText}>RouteOne을 불러오는 중이에요.</Text>
+          <Text style={styles.overlayText}>RouteOne 준비 중이에요.</Text>
         </View>
       ) : null}
       {loadError ? (

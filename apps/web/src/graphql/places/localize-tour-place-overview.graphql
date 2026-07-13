@@ -1,0 +1,8 @@
+mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {
+  localizeTourPlaceOverview(input: $input) {
+    contentId
+    overview
+    overviewSource
+    cached
+  }
+}

@@ -38,6 +38,7 @@ import {
   getPlaceCategoryLabel,
 } from "@/lib/placeCategory";
 import {
+  MY_ROUTE_HISTORY_QUERY_KEY,
   MY_ROUTES_QUERY_KEY,
   SHARED_ROUTES_QUERY_KEY,
   mergeMyRouteSummaryCache,
@@ -45,7 +46,6 @@ import {
   optimisticReorderRouteStopsCache,
   optimisticUpdateRouteStopStayMinutesCache,
   optimisticVisitRouteStopCache,
-  upsertSharedRouteSummaryCache,
   upsertMyRouteCache,
 } from "@/features/my-route/myRouteCache";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
@@ -54,7 +54,6 @@ import { useUiToastStore } from "@/stores/uiToastStore";
 import type {
   MyRoutesQuery,
   RouteStopVisitVerificationInput,
-  SharedRoutesQuery,
 } from "@/generated/graphql";
 import type { MapSheetPlace } from "@/types/place";
 import {
@@ -76,6 +75,8 @@ type DayRoutePopupProps = {
   day: MyRouteDay;
   onClose: () => void;
   isReadOnly?: boolean;
+  allowVisitCompletion?: boolean;
+  visitCompletionMode?: "live" | "retrospective";
   headerLabel?: string;
   headerBadge?: string;
   enableStartPreview?: boolean;
@@ -255,13 +256,45 @@ function formatTravelMinutes(value: number) {
   return minute > 0 ? `${hour}시간 ${minute}분` : `${hour}시간`;
 }
 
-function getRouteStopVerificationLabel(stop: MyRouteStop) {
+function getRouteStopVerificationBadge(stop: MyRouteStop) {
   if (stop.verificationStatus === "GPS_PHOTO") {
-    return "사진 인증";
+    return {
+      kind: "gps-photo" as const,
+      label: "GPS 인증",
+      previewLabel: "GPS 인증 사진",
+      className:
+        "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-100 dark:ring-emerald-400/25",
+    };
   }
 
   if (stop.verificationStatus === "GPS") {
-    return "위치 인증";
+    return {
+      kind: "gps" as const,
+      label: "GPS 인증",
+      previewLabel: "GPS 인증",
+      className:
+        "bg-sky-50 text-sky-700 ring-sky-100 dark:bg-sky-400/10 dark:text-sky-100 dark:ring-sky-400/25",
+    };
+  }
+
+  if (stop.verificationPhotoUrl) {
+    return {
+      kind: "photo-record" as const,
+      label: "사진 기록",
+      previewLabel: "사진 기록",
+      className:
+        "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-400/10 dark:text-amber-100 dark:ring-amber-400/25",
+    };
+  }
+
+  if (stop.verificationStatus === "MANUAL") {
+    return {
+      kind: "manual" as const,
+      label: "수동",
+      previewLabel: "수동",
+      className:
+        "bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700",
+    };
   }
 
   return null;
@@ -280,14 +313,6 @@ async function requestCurrentPosition() {
   }
 
   return nativeBridge.getCurrentPosition();
-}
-
-async function requestOptionalCurrentPosition() {
-  try {
-    return await requestCurrentPosition();
-  } catch {
-    return null;
-  }
 }
 
 async function requestVisitPhoto(
@@ -659,6 +684,7 @@ function RouteStopNode({
   isVisitSaving,
   isStaySaving,
   isReadOnly,
+  canToggleVisited,
   enableVerificationPhotoPreview,
   travelSegmentToNext,
   scheduleLabel,
@@ -676,6 +702,7 @@ function RouteStopNode({
   isVisitSaving: boolean;
   isStaySaving: boolean;
   isReadOnly: boolean;
+  canToggleVisited: boolean;
   enableVerificationPhotoPreview: boolean;
   travelSegmentToNext: TravelSegmentState | null;
   scheduleLabel: string | null;
@@ -688,12 +715,11 @@ function RouteStopNode({
   const isVisited = isVisitedStop(stop);
   const stayMinutes = stop.stayMinutes ?? 60;
   const statusLabel = isVisited ? "완료됨" : "방문 전";
-  const verificationLabel = isVisited
-    ? getRouteStopVerificationLabel(stop)
+  const verificationBadge = isVisited
+    ? getRouteStopVerificationBadge(stop)
     : null;
   const canOpenVerificationPhoto =
     enableVerificationPhotoPreview &&
-    stop.verificationStatus === "GPS_PHOTO" &&
     Boolean(stop.verificationPhotoUrl);
   const stayTimeClass =
     "inline-flex items-center justify-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 ring-1 ring-brand-100 disabled:opacity-45 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25";
@@ -791,16 +817,16 @@ function RouteStopNode({
                   )}
                   {statusLabel}
                 </span>
-                {verificationLabel ? (
+                {verificationBadge ? (
                   canOpenVerificationPhoto ? (
                     <button
                       type="button"
-                      aria-label={`${stop.place.title} 사진 인증 이미지 보기`}
+                      aria-label={`${stop.place.title} ${verificationBadge.previewLabel} 보기`}
                       onClick={(event) => {
                         event.stopPropagation();
                         onOpenVerificationPhoto(stop);
                       }}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 py-1 pl-1 pr-2.5 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100 transition active:scale-95 dark:bg-emerald-400/10 dark:text-emerald-100 dark:ring-emerald-400/25"
+                      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full py-1 pl-1 pr-2.5 text-[11px] font-black ring-1 transition active:scale-95 ${verificationBadge.className}`}
                     >
                       <span className="size-5 overflow-hidden rounded-full bg-white ring-1 ring-white/80">
                         <img
@@ -810,12 +836,23 @@ function RouteStopNode({
                           loading="lazy"
                         />
                       </span>
-                      {verificationLabel}
+                      {verificationBadge.kind === "gps-photo" ? (
+                        <MdMyLocation className="text-sm" />
+                      ) : null}
+                      {verificationBadge.label}
                     </button>
                   ) : (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-100 dark:ring-emerald-400/25">
-                      <MdMyLocation className="text-sm" />
-                      {verificationLabel}
+                    <span
+                      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${verificationBadge.className}`}
+                    >
+                      {verificationBadge.kind === "manual" ? (
+                        <MdCheckCircle className="text-sm" />
+                      ) : verificationBadge.kind === "photo-record" ? (
+                        <MdImage className="text-sm" />
+                      ) : (
+                        <MdMyLocation className="text-sm" />
+                      )}
+                      {verificationBadge.label}
                     </span>
                   )
                 ) : null}
@@ -883,7 +920,7 @@ function RouteStopNode({
               >
                 <MdDragIndicator />
               </button>
-            ) : isReadOnly ? null : (
+            ) : !canToggleVisited ? null : (
               <button
                 type="button"
                 aria-label={
@@ -1150,12 +1187,14 @@ function ActualStayMinutesPopup({
 function VisitCompletionPopup({
   target,
   isSaving,
+  mode,
   onClose,
   onCompleteWithPhoto,
   onCompleteManually,
 }: {
   target: VisitCompletionTarget;
   isSaving: boolean;
+  mode: "live" | "retrospective";
   onClose: () => void;
   onCompleteWithPhoto: (
     target: VisitCompletionTarget,
@@ -1164,6 +1203,7 @@ function VisitCompletionPopup({
   onCompleteManually: (target: VisitCompletionTarget) => void;
 }) {
   const photoActionDisabled = isSaving;
+  const isRetrospective = mode === "retrospective";
 
   return (
     <div className="center-modal-backdrop-enter fixed inset-0 z-[3100] flex items-center justify-center bg-slate-950/35 px-4">
@@ -1181,7 +1221,9 @@ function VisitCompletionPopup({
               {target.stop.place.title}
             </h3>
             <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-              사진과 현재 위치를 확인해 사진 인증으로 저장해요.
+              {isRetrospective
+                ? "지난 일정은 GPS 없이 사진 기록 또는 수동으로 저장해요."
+                : "사진과 현재 위치를 확인해 사진 인증으로 저장해요."}
             </p>
           </div>
           <button
@@ -1196,37 +1238,53 @@ function VisitCompletionPopup({
         </div>
 
         <div className="mt-5 grid gap-2">
-          <div className="grid grid-cols-2 gap-2">
+          {isRetrospective ? (
             <button
               type="button"
               disabled={photoActionDisabled}
-              onClick={() => onCompleteWithPhoto(target, "camera")}
+              onClick={() => onCompleteWithPhoto(target, "library")}
               className="flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-3 py-3 text-sm font-black text-white disabled:opacity-60"
             >
               {photoActionDisabled ? (
                 <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
               ) : (
-                <MdPhotoCamera className="text-lg" />
+                <MdImage className="text-lg" />
               )}
-              카메라
+              사진 기록
             </button>
-            <button
-              type="button"
-              disabled={photoActionDisabled}
-              onClick={() => onCompleteWithPhoto(target, "library")}
-              className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-brand-50 px-3 py-3 text-sm font-black text-brand-700 disabled:opacity-60"
-            >
-              <MdImage className="text-lg" />
-              앨범
-            </button>
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={photoActionDisabled}
+                onClick={() => onCompleteWithPhoto(target, "camera")}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-3 py-3 text-sm font-black text-white disabled:opacity-60"
+              >
+                {photoActionDisabled ? (
+                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <MdPhotoCamera className="text-lg" />
+                )}
+                카메라
+              </button>
+              <button
+                type="button"
+                disabled={photoActionDisabled}
+                onClick={() => onCompleteWithPhoto(target, "library")}
+                className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-brand-50 px-3 py-3 text-sm font-black text-brand-700 disabled:opacity-60"
+              >
+                <MdImage className="text-lg" />
+                앨범
+              </button>
+            </div>
+          )}
           <button
             type="button"
             disabled={isSaving}
             onClick={() => onCompleteManually(target)}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
           >
-            인증 없이 완료
+            {isRetrospective ? "수동" : "인증 없이 완료"}
           </button>
         </div>
       </section>
@@ -1242,6 +1300,12 @@ function VerificationPhotoPreviewPopup({
   onClose: () => void;
 }) {
   const photoUrl = target.stop.verificationPhotoUrl;
+  const isGpsPhoto = target.stop.verificationStatus === "GPS_PHOTO";
+  const previewTitle = isGpsPhoto ? "PHOTO VERIFIED" : "PHOTO RECORD";
+  const previewLabel = isGpsPhoto ? "GPS 인증" : "사진 기록";
+  const previewBadgeClass = isGpsPhoto
+    ? "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-100 dark:ring-emerald-400/25"
+    : "bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-400/10 dark:text-amber-100 dark:ring-amber-400/25";
   const verifiedAtLabel = target.stop.verifiedAt
     ? formatDateKeyLabel(target.stop.verifiedAt.slice(0, 10))
     : null;
@@ -1254,7 +1318,7 @@ function VerificationPhotoPreviewPopup({
     <div className="center-modal-backdrop-enter fixed inset-0 z-[3300] flex items-center justify-center bg-slate-950/75 px-4 py-6">
       <button
         type="button"
-        aria-label="사진 인증 이미지 닫기"
+        aria-label={`${previewLabel} 이미지 닫기`}
         className="absolute inset-0 cursor-default"
         onClick={onClose}
       />
@@ -1262,7 +1326,7 @@ function VerificationPhotoPreviewPopup({
         <div className="relative min-h-0 bg-slate-950">
           <img
             src={photoUrl}
-            alt={`${target.stop.place.title} 사진 인증 이미지`}
+            alt={`${target.stop.place.title} ${previewLabel} 이미지`}
             className="max-h-[68vh] w-full object-contain"
           />
           <button
@@ -1275,7 +1339,7 @@ function VerificationPhotoPreviewPopup({
           </button>
         </div>
         <div className="p-4">
-          <p className="font-trip text-sm text-brand-700">PHOTO VERIFIED</p>
+          <p className="font-trip text-sm text-brand-700">{previewTitle}</p>
           <h3 className="mt-1 truncate text-lg font-black text-slate-900 dark:text-white">
             {target.stop.place.title}
           </h3>
@@ -1283,9 +1347,21 @@ function VerificationPhotoPreviewPopup({
             <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100 dark:bg-brand-400/10 dark:text-brand-100 dark:ring-brand-400/25">
               DAY {target.routeDay.dayIndex}
             </span>
-            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-100 dark:ring-emerald-400/25">
-              사진 인증
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${previewBadgeClass}`}
+            >
+              {isGpsPhoto ? (
+                <MdMyLocation className="text-sm" />
+              ) : (
+                <MdImage className="text-sm" />
+              )}
+              {previewLabel}
             </span>
+            {isGpsPhoto ? null : (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                GPS 없음
+              </span>
+            )}
             {verifiedAtLabel ? (
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
                 {verifiedAtLabel}
@@ -1533,6 +1609,7 @@ function DayRouteAccordionItem({
   visitSavingStopId,
   staySavingStopId,
   isReadOnly,
+  canToggleVisited,
   enableVerificationPhotoPreview,
   travelSegmentByKey,
   onSelect,
@@ -1553,6 +1630,7 @@ function DayRouteAccordionItem({
   visitSavingStopId: string | null;
   staySavingStopId: string | null;
   isReadOnly: boolean;
+  canToggleVisited: boolean;
   enableVerificationPhotoPreview: boolean;
   travelSegmentByKey: Record<string, TravelSegmentState>;
   onSelect: (day: MyRouteDay) => void;
@@ -1793,6 +1871,7 @@ function DayRouteAccordionItem({
                     isVisitSaving={visitSavingStopId === stop.id}
                     isStaySaving={staySavingStopId === stop.id}
                     isReadOnly={isReadOnly}
+                    canToggleVisited={canToggleVisited}
                     enableVerificationPhotoPreview={
                       enableVerificationPhotoPreview
                     }
@@ -1849,6 +1928,8 @@ function DayRoutePopup({
   day,
   onClose,
   isReadOnly = false,
+  allowVisitCompletion = false,
+  visitCompletionMode = "live",
   headerLabel = "MY ROUTE",
   headerBadge,
   enableStartPreview = false,
@@ -1862,6 +1943,11 @@ function DayRoutePopup({
   const openModal = useUiModalStore((state) => state.openModal);
   const openSheet = useMapSheetStore((state) => state.openSheet);
   const showToast = useUiToastStore((state) => state.showToast);
+  const invalidateRouteHistory = () => {
+    void queryClient.invalidateQueries({
+      queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
+    });
+  };
   const dropZoneRefs = useRef<Array<HTMLDivElement | null>>([]);
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const draggedStopRef = useRef<DraggedStop | null>(null);
@@ -1911,6 +1997,8 @@ function DayRoutePopup({
   const todayKey = getTodayDateKey();
   const isOrderDirty = !isSameStopOrder(orderedStops, baseStopIds);
   const isRouteCompleted = routeStopCount > 0 && routeCompletedStopCount === routeStopCount;
+  const canToggleVisitStatus = !isReadOnly || allowVisitCompletion;
+  const isRetrospectiveCompletion = visitCompletionMode === "retrospective";
   const routeActualStartDateKey =
     getRouteDateKey(route.startedAt) ?? todayKey;
   const earlyCompletionStartedAt =
@@ -2218,6 +2306,7 @@ function DayRoutePopup({
         MY_ROUTES_QUERY_KEY,
         (currentData) => upsertMyRouteCache(currentData, result.reorderRouteStops)
       );
+      invalidateRouteHistory();
     } catch (error) {
       if (previousRoutes) {
         queryClient.setQueryData<MyRoutesQuery>(
@@ -2254,7 +2343,8 @@ function DayRoutePopup({
     const nextVerificationStatus = nextVisited
       ? (verification?.status ?? "MANUAL")
       : "NONE";
-    const isVerified = nextVerificationStatus === "GPS_PHOTO";
+    const isPhotoVerified = nextVerificationStatus === "GPS_PHOTO";
+    const hasPhotoRecord = nextVisited && Boolean(verification?.photoUrl);
     const optimisticStops: MyRouteStop[] = sourceStops.map((currentStop) =>
       currentStop.id === stop.id
         ? {
@@ -2262,19 +2352,19 @@ function DayRoutePopup({
             visitStatus: nextVisited ? "VISITED" : "PENDING",
             visitedAt: nextVisited ? visitedAt : null,
             verificationStatus: nextVerificationStatus,
-            verifiedAt: isVerified ? visitedAt : null,
-            verificationPhotoImageId: isVerified
+            verifiedAt: isPhotoVerified ? visitedAt : null,
+            verificationPhotoImageId: isPhotoVerified || hasPhotoRecord
               ? (verification?.photoImageId ?? null)
               : null,
-            verificationPhotoUrl: isVerified
+            verificationPhotoUrl: isPhotoVerified || hasPhotoRecord
               ? (verification?.photoUrl ?? null)
               : null,
-            verificationLat: isVerified ? (verification?.lat ?? null) : null,
-            verificationLng: isVerified ? (verification?.lng ?? null) : null,
-            verificationAccuracyMeters: isVerified
+            verificationLat: isPhotoVerified ? (verification?.lat ?? null) : null,
+            verificationLng: isPhotoVerified ? (verification?.lng ?? null) : null,
+            verificationAccuracyMeters: isPhotoVerified
               ? (verification?.accuracyMeters ?? null)
               : null,
-            checkedInAt: isVerified
+            checkedInAt: isPhotoVerified
               ? (currentStop.checkedInAt ?? visitedAt)
               : null,
             checkedOutAt: null,
@@ -2337,8 +2427,10 @@ function DayRoutePopup({
       } else {
         showToast(
           nextVisited
-            ? isVerified
+            ? isPhotoVerified
               ? "사진 인증 완료 처리했어요."
+              : hasPhotoRecord
+                ? "사진 기록으로 완료 처리했어요."
               : "장소를 완료 처리했어요."
             : "완료를 취소했어요."
         );
@@ -2349,6 +2441,7 @@ function DayRoutePopup({
         (currentData) =>
           upsertMyRouteCache(currentData, result.markRouteStopVisited)
       );
+      invalidateRouteHistory();
 
       return true;
     } catch (error) {
@@ -2399,8 +2492,9 @@ function DayRoutePopup({
     setVisitSavingStopId(target.stop.id);
 
     try {
-      const position = await requestOptionalCurrentPosition();
-
+      const position = isRetrospectiveCompletion
+        ? null
+        : await requestCurrentPosition();
       const photo = await requestVisitPhoto(source);
 
       const uploadPayload = await routeApi.createRouteStopVisitPhotoUpload(
@@ -2415,16 +2509,35 @@ function DayRoutePopup({
         photoUrl,
         dataUrl: photo.dataUrl,
       });
-      setActualStayMinutesTarget({
-        ...target,
-        verification: {
-          status: "GPS_PHOTO",
-          lat: position?.lat ?? null,
-          lng: position?.lng ?? null,
-          accuracyMeters: position?.accuracyMeters ?? null,
+      let verification: RouteStopVisitVerificationInput;
+
+      if (isRetrospectiveCompletion) {
+        verification = {
+          status: "MANUAL",
+          lat: null,
+          lng: null,
+          accuracyMeters: null,
           photoImageId: uploadPayload.createRouteStopVisitPhotoUpload.imageId,
           photoUrl,
-        },
+        };
+      } else {
+        if (!position) {
+          throw new Error("현재 위치를 확인하지 못했어요.");
+        }
+
+        verification = {
+          status: "GPS_PHOTO",
+          lat: position.lat,
+          lng: position.lng,
+          accuracyMeters: position.accuracyMeters,
+          photoImageId: uploadPayload.createRouteStopVisitPhotoUpload.imageId,
+          photoUrl,
+        };
+      }
+
+      setActualStayMinutesTarget({
+        ...target,
+        verification,
       });
       setVisitCompletionTarget(null);
     } catch (error) {
@@ -2529,7 +2642,7 @@ function DayRoutePopup({
     routeDay: MyRouteDay,
     stop: MyRouteStop
   ) => {
-    if (isReadOnly || visitSavingStopId || isOrderEditing) {
+    if (!canToggleVisitStatus || visitSavingStopId || isOrderEditing) {
       return;
     }
 
@@ -2615,6 +2728,7 @@ function DayRoutePopup({
         (currentData) =>
           upsertMyRouteCache(currentData, result.updateRouteStopStayMinutes)
       );
+      invalidateRouteHistory();
     } catch (error) {
       if (previousRoutes) {
         queryClient.setQueryData<MyRoutesQuery>(
@@ -2660,13 +2774,10 @@ function DayRoutePopup({
         (currentData) =>
           mergeMyRouteSummaryCache(currentData, result.shareRoute)
       );
-      queryClient.setQueriesData<SharedRoutesQuery>(
-        {
-          queryKey: SHARED_ROUTES_QUERY_KEY,
-        },
-        (currentData) =>
-          upsertSharedRouteSummaryCache(currentData, result.shareRoute)
-      );
+      void queryClient.invalidateQueries({
+        queryKey: SHARED_ROUTES_QUERY_KEY,
+      });
+      invalidateRouteHistory();
       showToast("공유 루트에 올렸어요.");
     } catch (error) {
       showToast(
@@ -2761,6 +2872,7 @@ function DayRoutePopup({
         MY_ROUTES_QUERY_KEY,
         (currentData) => upsertMyRouteCache(currentData, result.deleteRouteDay)
       );
+      invalidateRouteHistory();
     } catch (error) {
       if (previousRoutes) {
         queryClient.setQueryData<MyRoutesQuery>(
@@ -3037,6 +3149,7 @@ function DayRoutePopup({
                   visitSavingStopId={visitSavingStopId}
                   staySavingStopId={staySavingStopId}
                   isReadOnly={isReadOnly}
+                  canToggleVisited={canToggleVisitStatus}
                   enableVerificationPhotoPreview={
                     enableVerificationPhotoPreview
                   }
@@ -3266,6 +3379,7 @@ function DayRoutePopup({
         <VisitCompletionPopup
           target={visitCompletionTarget}
           isSaving={visitSavingStopId === visitCompletionTarget.stop.id}
+          mode={visitCompletionMode}
           onClose={() => {
             if (!visitSavingStopId) {
               setVisitCompletionTarget(null);

@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+} from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import {
   MdArrowBack,
   MdClose,
   MdFilterAlt,
-  MdOutlineHub,
   MdOutlinePlace,
   MdSell,
 } from "react-icons/md";
@@ -34,10 +38,6 @@ import SharedRouteDetailSkeleton from "@/features/shared-route/components/Shared
 import {
   LIKED_SHARED_ROUTES_QUERY_KEY,
   SHARED_ROUTES_QUERY_KEY,
-  optimisticUpdateLikedSharedRouteLikeCache,
-  optimisticUpdateSharedRouteLikeCache,
-  upsertLikedSharedRouteSummaryCache,
-  upsertSharedRouteSummaryCache,
 } from "@/features/my-route/myRouteCache";
 import { getSortedRouteDays } from "@/features/my-route/routeDisplay";
 import {
@@ -51,13 +51,18 @@ import {
   fetchLclsSystemNameMap,
   type GangwonAttraction,
 } from "@/lib/visitKoreaTourApi";
+import { localizeTourPlaces } from "@/lib/placeLocalization";
 import type {
-  LikedSharedRoutesQuery,
+  LikedSharedRouteConnectionQuery,
   RouteByIdQuery,
   RouteSummaryFieldsFragment,
-  SharedRoutesQuery,
+  SharedRouteConnectionQuery,
 } from "@/generated/graphql";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
+import {
+  useAppLanguageStore,
+  type AppLanguage,
+} from "@/stores/appLanguageStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 const getRouteDetailQueryKey = (routeId: string) =>
@@ -70,7 +75,6 @@ type SharedRoutePageProps = {
   mode?: SharedRoutePageMode;
 };
 
-type SharedRouteListData = SharedRoutesQuery | LikedSharedRoutesQuery;
 type SharedRouteSortKey =
   | "shared-desc"
   | "shared-asc"
@@ -120,6 +124,7 @@ const SHARED_ROUTE_SORT_OPTIONS: ReadonlyArray<
   },
 ];
 const DEFAULT_FILTER_REGION: (typeof GANGWON_REGION_LABELS)[number] = "강릉";
+const SHARED_ROUTE_PAGE_SIZE = 20;
 const GANGWON_REGION_CENTERS: Record<
   (typeof GANGWON_REGION_LABELS)[number],
   { lat: number; lng: number }
@@ -166,14 +171,6 @@ const GANGWON_SIGUNGU_CODE_BY_REGION: Record<
   화천: "17",
   횡성: "18",
 };
-const TOUR_CONTENT_TYPE_CATEGORY_BY_ID: Record<string, string> = {
-  "12": "관광지",
-  "14": "문화시설",
-  "15": "축제/공연",
-  "28": "레포츠",
-  "38": "쇼핑",
-  "39": "음식점",
-};
 const PLACE_CATEGORY_ORDER = [
   "관광지",
   "카페",
@@ -190,8 +187,6 @@ const PAGE_COPY: Record<
   {
     title: string;
     description: string;
-    loadingTitle: string;
-    loadingDescription: string;
     error: string;
     empty: string;
   }
@@ -199,32 +194,179 @@ const PAGE_COPY: Record<
   feed: {
     title: "공유 루트",
     description: "완료한 여행 루트를 모아보는 피드",
-    loadingTitle: "공유 루트를 불러오는 중",
-    loadingDescription: "다녀온 사람들의 루트를 확인하고 있어요.",
     error: "공유 루트를 불러오지 못했어요.",
     empty: "아직 공유된 루트가 없어요.",
   },
   liked: {
     title: "좋아요한 공유 루트",
     description: "내가 좋아요한 공유 루트 모아보기",
-    loadingTitle: "좋아요한 루트를 불러오는 중",
-    loadingDescription: "하트를 눌렀던 공유 루트를 모으고 있어요.",
     error: "좋아요한 공유 루트를 불러오지 못했어요.",
     empty: "아직 좋아요한 공유 루트가 없어요.",
   },
 };
 
-function getSharedRouteList(
-  data: SharedRouteListData | undefined,
+type SharedRouteConnectionPage =
+  | SharedRouteConnectionQuery
+  | LikedSharedRouteConnectionQuery;
+type SharedRouteInfiniteData = InfiniteData<
+  SharedRouteConnectionPage,
+  string | null
+>;
+
+function getSharedRouteConnection(
+  page: SharedRouteConnectionPage,
   mode: SharedRoutePageMode
 ) {
-  if (!data) {
-    return [];
+  return mode === "liked"
+    ? (page as LikedSharedRouteConnectionQuery).likedRouteConnection
+    : (page as SharedRouteConnectionQuery).sharedRouteConnection;
+}
+
+function getSharedRouteInfiniteList(
+  data: SharedRouteInfiniteData | undefined,
+  mode: SharedRoutePageMode
+) {
+  return (
+    data?.pages.flatMap((page) => getSharedRouteConnection(page, mode).nodes) ??
+    []
+  );
+}
+
+function mapSharedRouteConnectionPage(
+  page: SharedRouteConnectionPage,
+  mode: SharedRoutePageMode,
+  mapper: (routes: SharedRoute[]) => SharedRoute[]
+): SharedRouteConnectionPage {
+  if (mode === "liked") {
+    const likedPage = page as LikedSharedRouteConnectionQuery;
+
+    return {
+      ...likedPage,
+      likedRouteConnection: {
+        ...likedPage.likedRouteConnection,
+        nodes: mapper(likedPage.likedRouteConnection.nodes),
+      },
+    };
   }
 
-  return mode === "liked"
-    ? (data as LikedSharedRoutesQuery).likedRoutes
-    : (data as SharedRoutesQuery).sharedRoutes;
+  const sharedPage = page as SharedRouteConnectionQuery;
+
+  return {
+    ...sharedPage,
+    sharedRouteConnection: {
+      ...sharedPage.sharedRouteConnection,
+      nodes: mapper(sharedPage.sharedRouteConnection.nodes),
+    },
+  };
+}
+
+function updateSharedRouteInfiniteData(
+  data: SharedRouteInfiniteData | undefined,
+  mode: SharedRoutePageMode,
+  mapper: (routes: SharedRoute[]) => SharedRoute[]
+) {
+  if (!data) {
+    return data;
+  }
+
+  return {
+    ...data,
+    pages: data.pages.map((page) =>
+      mapSharedRouteConnectionPage(page, mode, mapper)
+    ),
+  };
+}
+
+function upsertSharedRouteInInfiniteData(
+  data: SharedRouteInfiniteData | undefined,
+  mode: SharedRoutePageMode,
+  nextRoute: RouteSummaryFieldsFragment,
+  options: {
+    liked?: boolean;
+    keepUnlikedRoute?: boolean;
+    likeCount?: number;
+  } = {}
+) {
+  if (!data || nextRoute.visibility !== "PUBLIC") {
+    return data;
+  }
+
+  const nextLiked = options.liked ?? nextRoute.likedByMe;
+  const routeForCache = {
+    ...nextRoute,
+    likedByMe: nextLiked,
+    likeCount: options.likeCount ?? nextRoute.likeCount,
+  };
+  const hasRoute = data.pages.some((page) =>
+    getSharedRouteConnection(page, mode).nodes.some(
+      (route) => route.id === nextRoute.id
+    )
+  );
+
+  if (mode === "liked" && !nextLiked && !options.keepUnlikedRoute) {
+    return updateSharedRouteInfiniteData(data, mode, (routes) =>
+      routes.filter((route) => route.id !== nextRoute.id)
+    );
+  }
+
+  if (hasRoute) {
+    return updateSharedRouteInfiniteData(data, mode, (routes) =>
+      routes.map((route) =>
+        route.id === nextRoute.id ? { ...route, ...routeForCache } : route
+      )
+    );
+  }
+
+  if (data.pages.length === 0) {
+    return data;
+  }
+
+  return {
+    ...data,
+    pages: data.pages.map((page, index) =>
+      index === 0
+        ? mapSharedRouteConnectionPage(page, mode, (routes) => [
+            { ...routeForCache, stops: [] },
+            ...routes,
+          ])
+        : page
+    ),
+  };
+}
+
+function optimisticUpdateSharedRouteInfiniteLike({
+  data,
+  mode,
+  route,
+  liked,
+  likeCount,
+  keepUnlikedRoute = false,
+}: {
+  data: SharedRouteInfiniteData | undefined;
+  mode: SharedRoutePageMode;
+  route: RouteSummaryFieldsFragment;
+  liked: boolean;
+  likeCount?: number;
+  keepUnlikedRoute?: boolean;
+}) {
+  const nextLikeCount =
+    likeCount ??
+    Math.max(0, route.likeCount + (liked ? (route.likedByMe ? 0 : 1) : -1));
+
+  return upsertSharedRouteInInfiniteData(
+    data,
+    mode,
+    {
+      ...route,
+      likedByMe: liked,
+      likeCount: nextLikeCount,
+    },
+    {
+      liked,
+      keepUnlikedRoute,
+      likeCount: nextLikeCount,
+    }
+  );
 }
 
 function createSavedPlacesFromRoutePlan(routePlan: PlannedRouteDay[]) {
@@ -319,8 +461,7 @@ function getAttractionCategoryName(
     lclsNameByCode[attraction.lclsSystm3] ||
     lclsNameByCode[attraction.lclsSystm2] ||
     lclsNameByCode[attraction.lclsSystm1] ||
-    TOUR_CONTENT_TYPE_CATEGORY_BY_ID[attraction.contentTypeId] ||
-    "장소"
+    getPlaceCategoryLabel(attraction)
   );
 }
 
@@ -426,33 +567,47 @@ function mergePlaceCategories(
     }));
 }
 
-async function fetchRegionFilterPlaceCategories(region: string) {
+async function fetchRegionFilterPlaceCategories(
+  region: string,
+  language: AppLanguage
+) {
   const sigunguCode = getRegionSigunguCode(region);
 
   if (!TOUR_API_SERVICE_KEY || !sigunguCode) {
     return [];
   }
 
-  const lclsNameByCode = await fetchLclsSystemNameMap(TOUR_API_SERVICE_KEY);
-  lclsNameByCode[CAFE_LCLS_CODE] = lclsNameByCode[CAFE_LCLS_CODE] || "카페";
+  const lclsNameByCode = await fetchLclsSystemNameMap(
+    TOUR_API_SERVICE_KEY,
+    "ko"
+  );
+  lclsNameByCode[CAFE_LCLS_CODE] =
+    lclsNameByCode[CAFE_LCLS_CODE] || (language === "en" ? "Cafe" : "카페");
 
   const [attractions, festivals] = await Promise.all([
     fetchGangwonAttractions(TOUR_API_SERVICE_KEY, {
       sigunguCode,
       contentTypeIds: ["12", "39"],
-    }),
+    }, "ko"),
     fetchGangwonFestivals(TOUR_API_SERVICE_KEY, {
       sigunguCode,
       lookAheadDays: 90,
-    }).catch(() => [] as GangwonAttraction[]),
+    }, "ko").catch(() => [] as GangwonAttraction[]),
   ]);
 
+  const filteredAttractions = dedupeAttractionsByPlace([
+    ...attractions,
+    ...festivals,
+  ]).filter(
+    (attraction) => !shouldHideFilterAttraction(attraction, lclsNameByCode)
+  );
+  const displayAttractions = await localizeTourPlaces(
+    filteredAttractions,
+    language
+  );
+
   return groupPlaceOptionsByCategory(
-    dedupeAttractionsByPlace([...attractions, ...festivals])
-      .filter(
-        (attraction) => !shouldHideFilterAttraction(attraction, lclsNameByCode)
-      )
-      .map((attraction) =>
+    displayAttractions.map((attraction) =>
         createFilterPlaceOptionFromAttraction(
           attraction,
           region,
@@ -650,6 +805,7 @@ function SharedRouteFilterDialog({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const appLanguage = useAppLanguageStore((state) => state.language);
   const activeFilterCount = getActiveFilterCount(filters);
   const getInitialFocusedRegion = () =>
     filters.places[0]?.region ??
@@ -661,9 +817,10 @@ function SharedRouteFilterDialog({
     (placeRegion) => placeRegion.region === focusedRegion
   );
   const focusedRegionPlaceCategoriesQuery = useQuery({
-    queryKey: ["shared-route-filter-places", focusedRegion],
+    queryKey: ["shared-route-filter-places", focusedRegion, appLanguage],
     enabled: Boolean(focusedRegion && TOUR_API_SERVICE_KEY),
-    queryFn: () => fetchRegionFilterPlaceCategories(focusedRegion),
+    queryFn: () =>
+      fetchRegionFilterPlaceCategories(focusedRegion, appLanguage),
     staleTime: 1000 * 60 * 60 * 12,
     gcTime: 1000 * 60 * 60 * 24,
   });
@@ -867,11 +1024,7 @@ function SharedRouteFilterDialog({
                         </div>
                       ))}
                     </div>
-                  ) : shouldShowFocusedRegionLoading ? (
-                    <p className="px-1 py-2 text-xs font-semibold text-slate-500 dark:text-slate-300">
-                      이 지역의 명소를 불러오는 중이에요.
-                    </p>
-                  ) : (
+                  ) : shouldShowFocusedRegionLoading ? null : (
                     <p className="px-1 py-2 text-xs font-semibold text-slate-500 dark:text-slate-300">
                       이 지역의 명소를 찾지 못했어요.
                     </p>
@@ -928,6 +1081,8 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const [defaultFilterRegion, setDefaultFilterRegion] = useState<
     (typeof GANGWON_REGION_LABELS)[number]
   >(DEFAULT_FILTER_REGION);
+  const routeListScrollRef = useRef<HTMLDivElement>(null);
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const pendingLikeRouteIdsRef = useRef<Set<string>>(new Set());
   const [pendingLikeRouteIds, setPendingLikeRouteIds] = useState<Set<string>>(
     new Set()
@@ -935,15 +1090,31 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const pageCopy = PAGE_COPY[mode];
   const routeListQueryKey =
     mode === "liked" ? LIKED_SHARED_ROUTES_QUERY_KEY : SHARED_ROUTES_QUERY_KEY;
-  const routeListQuery = useQuery<SharedRouteListData>({
+  const routeListQuery = useInfiniteQuery({
     queryKey: routeListQueryKey,
-    queryFn: async () =>
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam }) =>
       mode === "liked"
-        ? routeApi.likedSharedRoutes()
-        : routeApi.sharedRoutes(),
+        ? routeApi.likedSharedRouteConnection({
+            limit: SHARED_ROUTE_PAGE_SIZE,
+            cursor: pageParam,
+          })
+        : routeApi.sharedRouteConnection({
+            limit: SHARED_ROUTE_PAGE_SIZE,
+            cursor: pageParam,
+          }),
+    getNextPageParam: (lastPage) => {
+      const pageInfo = getSharedRouteConnection(lastPage, mode).pageInfo;
+
+      return pageInfo.hasNextPage ? pageInfo.endCursor : undefined;
+    },
   });
   const routes = useMemo(
-    () => getSharedRouteList(routeListQuery.data, mode),
+    () =>
+      getSharedRouteInfiniteList(
+        routeListQuery.data as SharedRouteInfiniteData | undefined,
+        mode
+      ),
     [routeListQuery.data, mode]
   );
   const filterOptions = useMemo(
@@ -975,6 +1146,20 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         return sharedTimeDifference || right.likeCount - left.likeCount;
       });
   }, [activeFilters, routes, sortKey]);
+  const canShowEmptyRoutes =
+    !routeListQuery.isLoading &&
+    !routeListQuery.isError &&
+    !routeListQuery.hasNextPage &&
+    !routeListQuery.isFetchingNextPage;
+  const shouldSearchMoreForActiveFilters =
+    activeFilterCount > 0 &&
+    routes.length > 0 &&
+    filteredRoutes.length === 0 &&
+    Boolean(routeListQuery.hasNextPage) &&
+    !routeListQuery.isFetchingNextPage;
+  const shouldShowBottomLoadingCard =
+    routeListQuery.isFetchingNextPage ||
+    shouldSearchMoreForActiveFilters;
   const selectedRouteQuery = useQuery({
     queryKey: ["route-detail", selectedRouteId],
     enabled: Boolean(selectedRouteId),
@@ -1060,6 +1245,51 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     });
   }, [routeListQuery.data, routes]);
 
+  useEffect(() => {
+    const root = routeListScrollRef.current;
+    const target = loadMoreTriggerRef.current;
+
+    if (!target || !routeListQuery.hasNextPage) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const isVisible = entries.some((entry) => entry.isIntersecting);
+
+        if (
+          isVisible &&
+          routeListQuery.hasNextPage &&
+          !routeListQuery.isFetchingNextPage
+        ) {
+          void routeListQuery.fetchNextPage();
+        }
+      },
+      {
+        root,
+        rootMargin: "180px 0px",
+      }
+    );
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    routeListQuery.fetchNextPage,
+    routeListQuery.hasNextPage,
+    routeListQuery.isFetchingNextPage,
+  ]);
+
+  useEffect(() => {
+    if (!shouldSearchMoreForActiveFilters) {
+      return;
+    }
+
+    void routeListQuery.fetchNextPage();
+  }, [routeListQuery.fetchNextPage, shouldSearchMoreForActiveFilters]);
+
   const setLikePending = (routeId: string, pending: boolean) => {
     const nextIds = new Set(pendingLikeRouteIdsRef.current);
 
@@ -1083,7 +1313,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     const previousLikeCount = route.likeCount;
     const keepUnlikedRoute = mode === "liked";
     const previousLikedRoutes =
-      queryClient.getQueryData<LikedSharedRoutesQuery>(
+      queryClient.getQueryData<SharedRouteInfiniteData>(
         LIKED_SHARED_ROUTES_QUERY_KEY
       );
 
@@ -1108,22 +1338,24 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
 
       return nextIds;
     });
-    queryClient.setQueriesData<SharedRoutesQuery>(
+    queryClient.setQueriesData<SharedRouteInfiniteData>(
       {
         queryKey: SHARED_ROUTES_QUERY_KEY,
       },
       (currentData) =>
-        optimisticUpdateSharedRouteLikeCache({
+        optimisticUpdateSharedRouteInfiniteLike({
           data: currentData,
-          routeId: route.id,
+          mode: "feed",
+          route,
           liked: nextLiked,
         })
     );
-    queryClient.setQueryData<LikedSharedRoutesQuery>(
+    queryClient.setQueryData<SharedRouteInfiniteData>(
       LIKED_SHARED_ROUTES_QUERY_KEY,
       (currentData) =>
-        optimisticUpdateLikedSharedRouteLikeCache({
+        optimisticUpdateSharedRouteInfiniteLike({
           data: currentData,
+          mode: "liked",
           route,
           liked: nextLiked,
           keepUnlikedRoute,
@@ -1163,21 +1395,29 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
 
         return nextIds;
       });
-      queryClient.setQueriesData<SharedRoutesQuery>(
+      queryClient.setQueriesData<SharedRouteInfiniteData>(
         {
           queryKey: SHARED_ROUTES_QUERY_KEY,
         },
         (currentData) =>
-          upsertSharedRouteSummaryCache(currentData, interaction.route)
+          upsertSharedRouteInInfiniteData(
+            currentData,
+            "feed",
+            interaction.route,
+            {
+              liked: interaction.liked,
+            }
+          )
       );
-      queryClient.setQueryData<LikedSharedRoutesQuery>(
+      queryClient.setQueryData<SharedRouteInfiniteData>(
         LIKED_SHARED_ROUTES_QUERY_KEY,
         (currentData) =>
-          upsertLikedSharedRouteSummaryCache(
+          upsertSharedRouteInInfiniteData(
             currentData,
+            "liked",
             interaction.route,
-            interaction.liked,
             {
+              liked: interaction.liked,
               keepUnlikedRoute,
             }
           )
@@ -1208,20 +1448,21 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
 
         return nextIds;
       });
-      queryClient.setQueriesData<SharedRoutesQuery>(
+      queryClient.setQueriesData<SharedRouteInfiniteData>(
         {
           queryKey: SHARED_ROUTES_QUERY_KEY,
         },
         (currentData) =>
-          optimisticUpdateSharedRouteLikeCache({
+          optimisticUpdateSharedRouteInfiniteLike({
             data: currentData,
-            routeId: route.id,
+            mode: "feed",
+            route,
             liked: wasLiked,
             likeCount: previousLikeCount,
           })
       );
       if (previousLikedRoutes) {
-        queryClient.setQueryData<LikedSharedRoutesQuery>(
+        queryClient.setQueryData<SharedRouteInfiniteData>(
           LIKED_SHARED_ROUTES_QUERY_KEY,
           previousLikedRoutes
         );
@@ -1308,21 +1549,23 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         </header>
       ) : null}
 
-      <div className="rounded-2xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40">
-        <div className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
-            {mode === "liked" ? <FaHeart /> : <MdOutlineHub />}
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-slate-900 dark:text-white">
-              {pageCopy.title}
-            </p>
-            <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-300">
-              {pageCopy.description}
-            </p>
+      {mode === "liked" ? (
+        <div className="rounded-2xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40">
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
+              <FaHeart />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-slate-900 dark:text-white">
+                {pageCopy.title}
+              </p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-300">
+                {pageCopy.description}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="space-y-2">
         <div className="flex items-center gap-2">
@@ -1404,43 +1647,58 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         ) : null}
       </div>
 
-      <div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-px pb-4 pt-1">
-        {routeListQuery.isLoading ? (
-          <div className="flex min-h-full flex-col justify-center">
-            <PotatoLoadingCard
-              title={pageCopy.loadingTitle}
-              description={pageCopy.loadingDescription}
-              animation="map-thinking"
-              compact
-              className="shadow-sm"
-            />
-          </div>
-        ) : null}
-
+      <div
+        ref={routeListScrollRef}
+        className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-px pb-4 pt-1"
+      >
         {routeListQuery.isError ? (
           <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
             {pageCopy.error}
           </div>
         ) : null}
 
-        {!routeListQuery.isLoading &&
-        !routeListQuery.isError &&
-        routes.length === 0 ? (
+        {routeListQuery.isLoading && routes.length === 0 ? (
           <div className="flex min-h-full flex-col justify-center">
-            <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40 dark:text-slate-300">
-              {pageCopy.empty}
-            </div>
+            <PotatoLoadingCard
+              title={mode === "liked" ? "하트 루트 찾는 중" : "공유 루트 찾는 중"}
+              animation="running"
+              compact
+              className="shadow-sm"
+            />
           </div>
         ) : null}
 
-        {!routeListQuery.isLoading &&
-        !routeListQuery.isError &&
-        routes.length > 0 &&
-        filteredRoutes.length === 0 ? (
+        {canShowEmptyRoutes && routes.length === 0 ? (
           <div className="flex min-h-full flex-col justify-center">
-            <div className="rounded-2xl border border-brand-100 bg-white p-4 text-sm font-semibold text-slate-500 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40 dark:text-slate-300">
-              조건에 맞는 공유 루트가 없어요.
-            </div>
+            <PotatoLoadingCard
+              title={pageCopy.empty}
+              description={
+                mode === "liked"
+                  ? "마음에 드는 공유 루트에 하트를 누르면 여기에 모여요."
+                  : "감자가 공개된 여행 가방을 살펴보고 있어요."
+              }
+              footerText={
+                mode === "liked"
+                  ? "마음에 드는 루트를 찾으면 하트로 모아둘 수 있어요."
+                  : "완료한 루트가 공유되면 여기에 모여요."
+              }
+              animation="empty"
+              compact
+              className="shadow-sm"
+            />
+          </div>
+        ) : null}
+
+        {canShowEmptyRoutes && routes.length > 0 && filteredRoutes.length === 0 ? (
+          <div className="flex min-h-full flex-col justify-center">
+            <PotatoLoadingCard
+              title="조건에 맞는 공유 루트가 없어요."
+              description="감자가 필터 안을 다시 살펴보고 있어요."
+              footerText="필터를 줄이면 더 많은 루트가 보여요."
+              animation="empty"
+              compact
+              className="shadow-sm"
+            />
           </div>
         ) : null}
 
@@ -1455,6 +1713,25 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
             onRequestFilter={openFilterDialogWithCandidate}
           />
         ))}
+
+        {routeListQuery.hasNextPage ? (
+          <div ref={loadMoreTriggerRef} className="h-8" aria-hidden="true" />
+        ) : null}
+
+        {shouldShowBottomLoadingCard ? (
+          <div className="py-2">
+            <PotatoLoadingCard
+              title={
+                activeFilterCount > 0 && filteredRoutes.length === 0
+                  ? "조건 찾는 중"
+                  : "다음 루트 찾는 중"
+              }
+              animation="running"
+              compact
+              className="shadow-sm"
+            />
+          </div>
+        ) : null}
       </div>
       {isFilterDialogOpen ? (
         <SharedRouteFilterDialog

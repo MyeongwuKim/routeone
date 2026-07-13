@@ -7,17 +7,21 @@ import {
   DeleteRouteDayDocument,
   DeleteRouteDocument,
   LikedSharedRoutesDocument,
+  LikedSharedRouteConnectionDocument,
   LikeRouteDocument,
   MarkRouteStopVisitedDocument,
+  MyRouteHistoryConnectionDocument,
   MyRoutesDocument,
   PlacePhotosDocument,
   PlaceStaySummariesDocument,
   PlaceStaySummaryDocument,
+  PosterImageDataUrlDocument,
   ReorderRouteStopsDocument,
   RouteByIdDocument,
   SaveRouteDocument,
   ShareRouteDocument,
   SharedRoutesDocument,
+  SharedRouteConnectionDocument,
   StartRouteDocument,
   UnlikeRouteDocument,
   UnsaveRouteDocument,
@@ -25,6 +29,7 @@ import {
   type AppendRouteDaysInput,
   type CloneRouteInput,
   type CreateRouteInput,
+  type MyRouteHistoryConnectionQueryVariables,
   type MyRoutesQueryVariables,
   type PlaceSnapshotInput,
   type ReorderRouteStopsInput,
@@ -41,11 +46,29 @@ export const routeApi = {
   myRoutes(variables?: MyRoutesQueryVariables) {
     return requestGraphQL(MyRoutesDocument, variables);
   },
+  myRouteHistoryConnection(
+    variables?: MyRouteHistoryConnectionQueryVariables
+  ) {
+    return requestGraphQL(MyRouteHistoryConnectionDocument, variables);
+  },
   sharedRoutes(variables?: SharedRoutesQueryVariables) {
     return requestGraphQL(SharedRoutesDocument, variables);
   },
+  sharedRouteConnection(variables?: {
+    regionCode?: string | null;
+    limit?: number | null;
+    cursor?: string | null;
+  }) {
+    return requestGraphQL(SharedRouteConnectionDocument, variables);
+  },
   likedSharedRoutes() {
     return requestGraphQL(LikedSharedRoutesDocument);
+  },
+  likedSharedRouteConnection(variables?: {
+    limit?: number | null;
+    cursor?: string | null;
+  }) {
+    return requestGraphQL(LikedSharedRouteConnectionDocument, variables);
   },
   routeById(id: RouteId) {
     return requestGraphQL(RouteByIdDocument, {
@@ -66,6 +89,11 @@ export const routeApi = {
     return requestGraphQL(PlacePhotosDocument, {
       place,
       limit,
+    });
+  },
+  posterImageDataUrl(url: string) {
+    return requestGraphQL(PosterImageDataUrlDocument, {
+      url,
     });
   },
   createRoute(input: CreateRouteInput) {

@@ -1,0 +1,11 @@
+query MyRouteHistoryConnection($limit: Int, $cursor: String, $today: DateTime) {
+  myRouteHistoryConnection(limit: $limit, cursor: $cursor, today: $today) {
+    nodes {
+      ...RouteDetailFields
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+    }
+  }
+}

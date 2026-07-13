@@ -58,6 +58,14 @@ function getVerifiedRouteStopCount(stops: MyRouteStop[]) {
   ).length;
 }
 
+function getPhotoRecordRouteStopCount(stops: MyRouteStop[]) {
+  return stops.filter(
+    (stop) =>
+      stop.verificationStatus !== "GPS_PHOTO" &&
+      Boolean(stop.verificationPhotoUrl)
+  ).length;
+}
+
 function getAverageActualStayMinutes(stops: MyRouteStop[]) {
   const actualStayMinutes = stops
     .map((stop) => stop.actualStayMinutes)
@@ -119,6 +127,11 @@ function MyRouteHistoryCard({
   const hiddenStopCount = Math.max(0, visitedStops.length - visibleStops.length);
   const canToggleStops = visitedStops.length > previewStopLimit;
   const verifiedStopCount = getVerifiedRouteStopCount(visitedStops);
+  const photoRecordStopCount = getPhotoRecordRouteStopCount(visitedStops);
+  const verificationSummaryText =
+    photoRecordStopCount > 0
+      ? `GPS ${verifiedStopCount} · 기록 ${photoRecordStopCount}`
+      : `${verifiedStopCount}곳`;
   const averageStayLabel = formatStayMinutes(
     getAverageActualStayMinutes(visitedStops)
   );
@@ -174,12 +187,12 @@ function MyRouteHistoryCard({
             </p>
           </div>
           <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-950/50">
-            <p className="flex items-center gap-1 text-[10px] font-black text-slate-500 dark:text-slate-200/80">
+            <p className="flex items-center gap-1 whitespace-nowrap text-[10px] font-black text-slate-500 dark:text-slate-200/80">
               <MdVerified className="text-xs text-brand-600 dark:text-brand-200" />
-              인증
+              증빙
             </p>
             <p className="mt-0.5 truncate text-xs font-black text-slate-900 dark:text-white">
-              {verifiedStopCount}곳
+              {verificationSummaryText}
             </p>
           </div>
           <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-950/50">

@@ -5,13 +5,13 @@ React Native WebView로 `apps/web` 빌드 산출물을 감싸는 하이브리드
 ## 구조
 
 - `src/App.tsx`: WebView 컨테이너
-- `src/generated/webBundle.ts`: `apps/web/dist`를 단일 HTML 문자열로 인라인한 결과
+- `src/generated/webBundle.ts`: `apps/web/dist`의 HTML, CSS, 분리된 JS 모듈을 WebView용 HTML 문자열로 변환한 결과
 - `src/webview/bridge`: WebView와 네이티브 기능을 연결하는 목적별 브릿지
   - `fetchBridge.ts`: `/graphql`, `/tour-api`, `/map-direction` 요청 프록시
   - `locationBridge.ts`: 현재 위치 요청 처리
   - `visitPhotoBridge.ts`: 방문 사진 촬영 및 업로드 처리
   - `injectedScript.ts`: WebView에 주입되는 브릿지 스크립트
-- `scripts/sync-web-build.mjs`: 웹 빌드 후 native 번들 생성
+- `scripts/sync-web-build.mjs`: 웹 빌드 후 분리 모듈 import map을 포함한 native 번들 생성
 
 ## 실행
 

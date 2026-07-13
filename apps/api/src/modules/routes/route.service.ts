@@ -8,6 +8,7 @@ import type {
   User,
   VisitStatus,
 } from "@prisma/client";
+import { Buffer } from "node:buffer";
 import { isDevVerificationBypassEnabled } from "../../lib/devVerification.js";
 
 export type PlaceSnapshotInput = {
@@ -126,6 +127,11 @@ const BYPASS_GPS_PHOTO_LOCATION_VERIFICATION = false;
 const EARTH_RADIUS_METERS = 6_371_000;
 const DEFAULT_PLACE_PHOTO_LIMIT = 30;
 const MAX_PLACE_PHOTO_LIMIT = 60;
+const MAX_POSTER_IMAGE_PROXY_BYTES = 8 * 1024 * 1024;
+const PUBLISHABLE_PLACE_PHOTO_STATUSES = new Set<RouteStopVerificationStatus>([
+  "GPS_PHOTO",
+  "MANUAL",
+]);
 
 function clampTripDays(value: number) {
   return Math.max(1, Math.min(30, Math.round(value || 1)));
@@ -357,12 +363,72 @@ function getImageDeliveryVariantName(imageUrl: string) {
   return parseImageDeliveryUrl(imageUrl)?.variant ?? null;
 }
 
+function getPlacePhotoThumbnailVariantName() {
+  return process.env.CF_IMAGES_THUMBNAIL_VARIANT?.trim() || null;
+}
+
+function buildPlacePhotoThumbnailUrl(imageUrl: string) {
+  const thumbnailVariant = getPlacePhotoThumbnailVariantName();
+
+  if (!thumbnailVariant) {
+    return imageUrl;
+  }
+
+  return buildImageDeliveryVariantUrl(imageUrl, thumbnailVariant) ?? imageUrl;
+}
+
 function clampPlacePhotoLimit(value?: number | null) {
   if (value == null || !Number.isFinite(value)) {
     return DEFAULT_PLACE_PHOTO_LIMIT;
   }
 
   return Math.max(1, Math.min(MAX_PLACE_PHOTO_LIMIT, Math.round(value)));
+}
+
+function assertPosterImageProxyUrl(imageUrl: string) {
+  const url = new URL(imageUrl);
+
+  if (url.protocol !== "https:" || url.hostname !== "imagedelivery.net") {
+    throw new Error("포토카드에 사용할 수 없는 이미지 URL입니다.");
+  }
+
+  return url;
+}
+
+export async function fetchPosterImageDataUrl(imageUrl: string) {
+  const url = assertPosterImageProxyUrl(imageUrl.trim());
+  const response = await fetch(url, {
+    headers: {
+      Accept: "image/avif,image/webp,image/png,image/jpeg,image/*,*/*",
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const contentType = response.headers.get("content-type")?.split(";")[0]?.trim();
+
+  if (!contentType?.startsWith("image/")) {
+    return null;
+  }
+
+  const contentLength = Number(response.headers.get("content-length"));
+
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_POSTER_IMAGE_PROXY_BYTES
+  ) {
+    throw new Error("포토카드 이미지가 너무 큽니다.");
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+
+  if (arrayBuffer.byteLength > MAX_POSTER_IMAGE_PROXY_BYTES) {
+    throw new Error("포토카드 이미지가 너무 큽니다.");
+  }
+
+  return `data:${contentType};base64,${Buffer.from(arrayBuffer).toString("base64")}`;
 }
 
 function assertNoDuplicateRouteStops(stops: CreateRouteStopInput[]) {
@@ -1100,11 +1166,15 @@ function buildRouteStopVisitData(
 
   const visitedAt = new Date();
   const verificationStatus = getVisitVerificationStatus(verification);
-  const isVerified = VERIFIED_ROUTE_STOP_STATUSES.has(verificationStatus);
+  const isPhotoVerified = VERIFIED_ROUTE_STOP_STATUSES.has(verificationStatus);
+  const photoUrl = nullableString(verification?.photoUrl);
+  const hasPhotoRecord =
+    Boolean(photoUrl) &&
+    (verificationStatus === "GPS_PHOTO" || verificationStatus === "MANUAL");
 
   assertRouteStopGpsVerification(stop, verification, verificationStatus);
 
-  const checkedInAt = stop.checkedInAt ?? (isVerified ? visitedAt : null);
+  const checkedInAt = stop.checkedInAt ?? (isPhotoVerified ? visitedAt : null);
   const checkedOutAt = stop.checkedInAt ? visitedAt : null;
   const normalizedActualStayMinutes =
     normalizeActualStayMinutes(actualStayMinutes);
@@ -1113,14 +1183,14 @@ function buildRouteStopVisitData(
     visitStatus: "VISITED" as VisitStatus,
     visitedAt,
     verificationStatus,
-    verifiedAt: isVerified ? visitedAt : null,
-    verificationPhotoImageId: isVerified
+    verifiedAt: isPhotoVerified ? visitedAt : null,
+    verificationPhotoImageId: isPhotoVerified || hasPhotoRecord
       ? nullableString(verification?.photoImageId)
       : null,
-    verificationPhotoUrl: isVerified ? (verification?.photoUrl?.trim() ?? null) : null,
-    verificationLat: isVerified ? (verification?.lat ?? null) : null,
-    verificationLng: isVerified ? (verification?.lng ?? null) : null,
-    verificationAccuracyMeters: isVerified
+    verificationPhotoUrl: isPhotoVerified || hasPhotoRecord ? photoUrl : null,
+    verificationLat: isPhotoVerified ? (verification?.lat ?? null) : null,
+    verificationLng: isPhotoVerified ? (verification?.lng ?? null) : null,
+    verificationAccuracyMeters: isPhotoVerified
       ? (verification?.accuracyMeters ?? null)
       : null,
     checkedInAt,
@@ -1131,7 +1201,37 @@ function buildRouteStopVisitData(
   };
 }
 
-type RouteStopVisitData = ReturnType<typeof buildRouteStopVisitData>;
+type RouteStopVisitData = {
+  visitStatus: VisitStatus;
+  visitedAt: Date | null;
+  verificationStatus: RouteStopVerificationStatus;
+  verifiedAt: Date | null;
+  verificationPhotoImageId: string | null;
+  verificationPhotoUrl: string | null;
+  verificationLat: number | null;
+  verificationLng: number | null;
+  verificationAccuracyMeters: number | null;
+  checkedInAt: Date | null;
+  checkedOutAt: Date | null;
+  actualStayMinutes: number | null;
+};
+
+function buildRouteStopVisitDataFromStop(stop: RouteStop): RouteStopVisitData {
+  return {
+    visitStatus: stop.visitStatus,
+    visitedAt: stop.visitedAt,
+    verificationStatus: stop.verificationStatus ?? "NONE",
+    verifiedAt: stop.verifiedAt,
+    verificationPhotoImageId: stop.verificationPhotoImageId,
+    verificationPhotoUrl: stop.verificationPhotoUrl,
+    verificationLat: stop.verificationLat,
+    verificationLng: stop.verificationLng,
+    verificationAccuracyMeters: stop.verificationAccuracyMeters,
+    checkedInAt: stop.checkedInAt,
+    checkedOutAt: stop.checkedOutAt,
+    actualStayMinutes: stop.actualStayMinutes,
+  };
+}
 
 function getRouteStopStayContribution(
   source: RouteStopStayContributionSource | null
@@ -1264,8 +1364,11 @@ async function syncPlacePhotoForRouteStopVisit(
   visitData: RouteStopVisitData
 ) {
   const photoUrl = nullableString(visitData.verificationPhotoUrl);
+  const canPublishPhoto =
+    Boolean(photoUrl) &&
+    PUBLISHABLE_PLACE_PHOTO_STATUSES.has(visitData.verificationStatus);
 
-  if (visitData.verificationStatus !== "GPS_PHOTO" || !photoUrl) {
+  if (!photoUrl || !canPublishPhoto) {
     await markPlacePhotoDeletedForRouteStop(prisma, stop.id);
     return;
   }
@@ -1279,7 +1382,7 @@ async function syncPlacePhotoForRouteStopVisit(
   }
 
   const verifiedAt = visitData.verifiedAt ?? visitData.visitedAt ?? new Date();
-  const thumbnailUrl = buildImageDeliveryVariantUrl(photoUrl, "thumbnail");
+  const thumbnailUrl = buildPlacePhotoThumbnailUrl(photoUrl);
   const placePhotoData = {
     placeKey,
     placeKeys,
@@ -1813,15 +1916,15 @@ export async function shareRoute(
       },
     });
 
-    await transaction.placePhoto.updateMany({
-      where: {
-        routeId,
-        status: "ACTIVE",
-      },
-      data: {
-        routeVisibility: "PUBLIC",
-      },
-    });
+    for (const stop of routeStops) {
+      await syncPlacePhotoForRouteStopVisit(
+        transaction,
+        user,
+        sharedRoute,
+        stop,
+        buildRouteStopVisitDataFromStop(stop)
+      );
+    }
 
     return sharedRoute;
   });
@@ -2099,6 +2202,198 @@ export async function getLikedRoutes(prisma: PrismaClient, user: User) {
   return routes.filter((route): route is Route => Boolean(route));
 }
 
+const DEFAULT_ROUTE_CONNECTION_LIMIT = 20;
+const MAX_ROUTE_CONNECTION_LIMIT = 30;
+
+function clampRouteConnectionLimit(limit?: number | null) {
+  return Math.max(
+    1,
+    Math.min(MAX_ROUTE_CONNECTION_LIMIT, limit ?? DEFAULT_ROUTE_CONNECTION_LIMIT)
+  );
+}
+
+type RouteConnection = {
+  nodes: Route[];
+  pageInfo: {
+    endCursor: string | null;
+    hasNextPage: boolean;
+  };
+};
+
+function getRouteHistoryTodayStart(today?: Date | null) {
+  const baseDate = today ?? new Date();
+  const todayKey = baseDate.toISOString().slice(0, 10);
+
+  return new Date(`${todayKey}T00:00:00.000Z`);
+}
+
+function getMyRouteHistoryWhere(
+  user: User,
+  today?: Date | null
+): Prisma.RouteWhereInput {
+  const todayStart = getRouteHistoryTodayStart(today);
+
+  return {
+    ownerId: user.id,
+    OR: [
+      {
+        status: "COMPLETED",
+      },
+      {
+        startedAt: {
+          not: null,
+        },
+        OR: [
+          {
+            travelEndDate: {
+              lt: todayStart,
+            },
+          },
+          {
+            travelEndDate: null,
+            travelStartDate: {
+              lt: todayStart,
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export async function getMyRouteHistoryConnection(
+  prisma: PrismaClient,
+  user: User,
+  options: {
+    limit?: number | null;
+    cursor?: string | null;
+    today?: Date | null;
+  }
+): Promise<RouteConnection> {
+  const limit = clampRouteConnectionLimit(options.limit);
+  const routes = await prisma.route.findMany({
+    where: getMyRouteHistoryWhere(user, options.today),
+    orderBy: [
+      {
+        travelEndDate: "desc",
+      },
+      {
+        completedAt: "desc",
+      },
+      {
+        updatedAt: "desc",
+      },
+      {
+        id: "desc",
+      },
+    ],
+    ...(options.cursor
+      ? {
+          cursor: {
+            id: options.cursor,
+          },
+          skip: 1,
+        }
+      : {}),
+    take: limit + 1,
+  });
+  const nodes = routes.slice(0, limit);
+
+  return {
+    nodes,
+    pageInfo: {
+      endCursor: nodes[nodes.length - 1]?.id ?? null,
+      hasNextPage: routes.length > limit,
+    },
+  };
+}
+
+export async function getLikedRouteConnection(
+  prisma: PrismaClient,
+  user: User,
+  options: {
+    limit?: number | null;
+    cursor?: string | null;
+  }
+): Promise<RouteConnection> {
+  const limit = clampRouteConnectionLimit(options.limit);
+  const entries: Array<{ cursor: string; route: Route }> = [];
+  let cursor = options.cursor ?? null;
+  let lastProcessedCursor: string | null = cursor;
+  let hasMoreLikes = true;
+
+  while (entries.length <= limit && hasMoreLikes) {
+    const likes = await prisma.routeLike.findMany({
+      where: {
+        userId: user.id,
+      },
+      orderBy: [
+        {
+          createdAt: "desc",
+        },
+        {
+          id: "desc",
+        },
+      ],
+      ...(cursor
+        ? {
+            cursor: {
+              id: cursor,
+            },
+            skip: 1,
+          }
+        : {}),
+      take: limit + 1,
+    });
+
+    if (likes.length === 0) {
+      hasMoreLikes = false;
+      break;
+    }
+
+    lastProcessedCursor = likes[likes.length - 1]?.id ?? lastProcessedCursor;
+    cursor = lastProcessedCursor;
+    hasMoreLikes = likes.length > limit;
+
+    const routes = await prisma.route.findMany({
+      where: {
+        id: {
+          in: likes.map((like) => like.routeId),
+        },
+        visibility: "PUBLIC",
+      },
+    });
+    const routeById = new Map(routes.map((route) => [route.id, route]));
+
+    for (const like of likes) {
+      const route = routeById.get(like.routeId);
+
+      if (route) {
+        entries.push({
+          cursor: like.id,
+          route,
+        });
+      }
+
+      if (entries.length > limit) {
+        break;
+      }
+    }
+  }
+
+  const pageEntries = entries.slice(0, limit);
+  const endCursor =
+    pageEntries[pageEntries.length - 1]?.cursor ?? lastProcessedCursor;
+
+  return {
+    nodes: pageEntries.map((entry) => entry.route),
+    pageInfo: {
+      endCursor,
+      hasNextPage: entries.length > limit || hasMoreLikes,
+    },
+  };
+}
+
 export async function getPublicRoutes(
   prisma: PrismaClient,
   options: {
@@ -2120,4 +2415,51 @@ export async function getPublicRoutes(
     },
     take: Math.max(1, Math.min(50, options.limit ?? 20)),
   });
+}
+
+export async function getPublicRouteConnection(
+  prisma: PrismaClient,
+  options: {
+    regionCode?: string | null;
+    limit?: number | null;
+    cursor?: string | null;
+  }
+): Promise<RouteConnection> {
+  const limit = clampRouteConnectionLimit(options.limit);
+  const routes = await prisma.route.findMany({
+    where: {
+      visibility: "PUBLIC",
+      ...(options.regionCode
+        ? {
+            primaryRegionCode: options.regionCode,
+          }
+        : {}),
+    },
+    orderBy: [
+      {
+        sharedAt: "desc",
+      },
+      {
+        id: "desc",
+      },
+    ],
+    ...(options.cursor
+      ? {
+          cursor: {
+            id: options.cursor,
+          },
+          skip: 1,
+        }
+      : {}),
+    take: limit + 1,
+  });
+  const nodes = routes.slice(0, limit);
+
+  return {
+    nodes,
+    pageInfo: {
+      endCursor: nodes[nodes.length - 1]?.id ?? null,
+      hasNextPage: routes.length > limit,
+    },
+  };
 }

@@ -1,3 +1,5 @@
+import { isTourContentTypeId } from "@/lib/tourContentType";
+
 export const CAFE_LCLS_CODE = "FD050100";
 
 export type PlaceCategoryLabel =
@@ -43,7 +45,7 @@ export function isCafePlace(
 
   return (
     place.contentTypeLabel === "카페" ||
-    (place.contentTypeId === "39" &&
+    (isTourContentTypeId(place.contentTypeId, "food") &&
       (place.lclsSystm3 === CAFE_LCLS_CODE ||
         /카페|커피|coffee|디저트|찻집/i.test(targetText)))
   );
@@ -57,15 +59,15 @@ export function getPlaceCategoryLabel(
     return "카페";
   }
 
-  if (place.contentTypeId === "12") {
+  if (isTourContentTypeId(place.contentTypeId, "tourist")) {
     return "관광지";
   }
 
-  if (place.contentTypeId === "39") {
+  if (isTourContentTypeId(place.contentTypeId, "food")) {
     return "음식점";
   }
 
-  if (place.contentTypeId === "15") {
+  if (isTourContentTypeId(place.contentTypeId, "festival")) {
     return "축제/공연";
   }
 
@@ -104,7 +106,10 @@ export function getPlaceCategoryIcon(categoryLabel: PlaceCategoryLabel) {
 export function isTouristPlace(
   place: Pick<PlaceCategorySource, "contentTypeId" | "contentTypeLabel">
 ) {
-  return place.contentTypeLabel === "관광지" || place.contentTypeId === "12";
+  return (
+    place.contentTypeLabel === "관광지" ||
+    isTourContentTypeId(place.contentTypeId, "tourist")
+  );
 }
 
 export function getRoutePlaceCategory(
@@ -114,7 +119,7 @@ export function getRoutePlaceCategory(
     return "cafe";
   }
 
-  if (place.contentTypeId === "39") {
+  if (isTourContentTypeId(place.contentTypeId, "food")) {
     return "food";
   }
 
