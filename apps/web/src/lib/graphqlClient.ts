@@ -14,6 +14,11 @@ const GRAPHQL_RETRY_BASE_DELAY_MS = 600;
 const GRAPHQL_RETRY_MAX_DELAY_MS = 5_000;
 const RETRYABLE_HTTP_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
+type GraphQLRequestOptions = {
+  timeoutMs?: number;
+  maxRetryCount?: number;
+};
+
 type GraphQLResponse<TResult> = {
   data?: TResult;
   errors?: Array<{
@@ -38,6 +43,18 @@ function getPositiveNumberEnv(value: string | undefined, fallback: number) {
 
   return Number.isFinite(parsedValue) && parsedValue > 0
     ? parsedValue
+    : fallback;
+}
+
+function getPositiveNumberOption(value: number | undefined, fallback: number) {
+  return Number.isFinite(value) && Number(value) > 0
+    ? Number(value)
+    : fallback;
+}
+
+function getNonNegativeIntegerOption(value: number | undefined, fallback: number) {
+  return Number.isFinite(value) && Number(value) >= 0
+    ? Math.floor(Number(value))
     : fallback;
 }
 
@@ -99,14 +116,16 @@ async function readGraphQLPayload<TResult>(response: Response) {
 async function executeGraphQLRequest<TResult>({
   headers,
   body,
+  timeoutMs,
 }: {
   headers: Record<string, string>;
   body: string;
+  timeoutMs: number;
 }) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => {
     controller.abort();
-  }, GRAPHQL_REQUEST_TIMEOUT_MS);
+  }, timeoutMs);
 
   try {
     const response = await fetch(getGraphQLEndpoint(), {
@@ -142,7 +161,8 @@ async function executeGraphQLRequest<TResult>({
 
 export async function requestGraphQL<TResult, TVariables>(
   document: TypedDocumentNode<TResult, TVariables>,
-  variables?: TVariables
+  variables?: TVariables,
+  options?: GraphQLRequestOptions
 ) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -158,15 +178,25 @@ export async function requestGraphQL<TResult, TVariables>(
     variables,
   });
 
-  for (let retryCount = 0; retryCount <= GRAPHQL_MAX_RETRY_COUNT; retryCount += 1) {
+  const timeoutMs = getPositiveNumberOption(
+    options?.timeoutMs,
+    GRAPHQL_REQUEST_TIMEOUT_MS
+  );
+  const maxRetryCount = getNonNegativeIntegerOption(
+    options?.maxRetryCount,
+    GRAPHQL_MAX_RETRY_COUNT
+  );
+
+  for (let retryCount = 0; retryCount <= maxRetryCount; retryCount += 1) {
     try {
       return await executeGraphQLRequest<TResult>({
         headers,
         body,
+        timeoutMs,
       });
     } catch (error) {
       const canRetry =
-        retryCount < GRAPHQL_MAX_RETRY_COUNT &&
+        retryCount < maxRetryCount &&
         isRetryableGraphQLError(error);
 
       if (!canRetry) {

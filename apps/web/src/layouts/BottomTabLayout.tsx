@@ -6,21 +6,23 @@ import {
   MdOutlineHub,
   MdOutlineRoute,
 } from "react-icons/md";
+import { useUiText } from "@/lib/uiText";
 
 type TabItem = {
   to: string;
-  label: string;
+  labelKey: keyof ReturnType<typeof useUiText>["nav"];
   icon: IconType;
 };
 
 const tabs: TabItem[] = [
-  { to: "/home", label: "지도", icon: MdMap },
-  { to: "/my-route", label: "내 루트", icon: MdOutlineRoute },
-  { to: "/shared-route", label: "공유 루트", icon: MdOutlineHub },
-  { to: "/me", label: "내 정보", icon: MdOutlineAccountCircle },
+  { to: "/home", labelKey: "home", icon: MdMap },
+  { to: "/my-route", labelKey: "myRoute", icon: MdOutlineRoute },
+  { to: "/shared-route", labelKey: "sharedRoute", icon: MdOutlineHub },
+  { to: "/me", labelKey: "myInfo", icon: MdOutlineAccountCircle },
 ];
 
 function BottomTabLayout() {
+  const text = useUiText();
   const { pathname } = useLocation();
   const isHome = pathname === "/home";
   const shouldSlideInPage = pathname.startsWith("/me/");
@@ -66,7 +68,9 @@ function BottomTabLayout() {
                   <span className="text-[26px] leading-none">
                     <tab.icon />
                   </span>
-                  <span className="mt-1.5 text-[13px]">{tab.label}</span>
+                  <span className="mt-1.5 text-[13px]">
+                    {text.nav[tab.labelKey]}
+                  </span>
                 </NavLink>
               </li>
             ))}

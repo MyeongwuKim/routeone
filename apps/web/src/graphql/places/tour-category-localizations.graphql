@@ -1,0 +1,9 @@
+query TourCategoryLocalizations($locale: String!) {
+  tourCategoryLocalizations(locale: $locale) {
+    code
+    locale
+    label
+    sourceLabel
+    cached
+  }
+}

@@ -25,6 +25,12 @@ import {
   applyNaverMapTheme,
   getNaverMapThemeOptions,
 } from "@/lib/naverMapTheme";
+import {
+  localizePlaceCategoryLabel,
+  useUiText,
+  type UiText,
+} from "@/lib/uiText";
+import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 import type {
   PlannedRouteDay,
@@ -240,17 +246,19 @@ function formatDateLabel(value: string) {
   return `${year}.${month}.${day}`;
 }
 
-function formatDurationMs(value: number) {
+function formatDurationMs(value: number, text: UiText) {
   const minutes = Math.max(1, Math.round(value / 60000));
 
   if (minutes < 60) {
-    return `${minutes}분`;
+    return text.dayRoute.minutes(minutes);
   }
 
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
 
-  return minute > 0 ? `${hour}시간 ${minute}분` : `${hour}시간`;
+  return minute > 0
+    ? text.dayRoute.hoursMinutes(hour, minute)
+    : text.dayRoute.hours(hour);
 }
 
 function formatDistanceM(value: number) {
@@ -386,15 +394,16 @@ function readLatLng(value: unknown): RouteStartLocation | null {
 
 function buildRouteMapPoints(
   day: PlannedRouteDay,
-  completedItemIdSet: Set<string>
+  completedItemIdSet: Set<string>,
+  text: UiText
 ): RouteMapPoint[] {
   return [
     ...(day.startLocation
       ? [
           {
             id: "current-location",
-            title: "출발지",
-            subtitle: "출발",
+            title: text.dayRoute.savedStartLocation,
+            subtitle: text.dayRoute.start,
             icon: "📍",
             sequenceLabel: "S",
             variant: "start" as const,
@@ -406,13 +415,17 @@ function buildRouteMapPoints(
       : []),
     ...day.items.map((item, index) => {
       const isCompleted = completedItemIdSet.has(item.id);
+      const categoryLabel = localizePlaceCategoryLabel(
+        item.place.contentTypeLabel,
+        text
+      );
 
       return {
         id: item.id,
         title: item.place.title,
         subtitle: isCompleted
-          ? `${item.place.contentTypeLabel} · 완료`
-          : item.place.contentTypeLabel,
+          ? `${categoryLabel} · ${text.dayRoute.visited}`
+          : categoryLabel,
         icon: item.place.icon,
         sequenceLabel: `${index + 1}`,
         variant: "place" as const,
@@ -466,7 +479,10 @@ function buildFallbackRouteSegments(points: RouteMapPoint[]): RouteMapSegment[] 
   });
 }
 
-async function fetchRouteMapSegments(points: RouteMapPoint[]) {
+async function fetchRouteMapSegments(
+  points: RouteMapPoint[],
+  language: "ko" | "en"
+) {
   if (points.length < 2) {
     return [];
   }
@@ -481,6 +497,7 @@ async function fetchRouteMapSegments(points: RouteMapPoint[]) {
       startLng: start.lng,
       goalLat: goal.lat,
       goalLng: goal.lng,
+      language,
     });
 
     segments.push({
@@ -736,6 +753,7 @@ type RouteSegmentSelectCardProps = {
   segmentColor: string;
   variant: RouteDisplayVariant;
   isSelected: boolean;
+  text: UiText;
   onSelect: (
     variant: RouteDisplayVariant,
     segment: RouteMapSegment,
@@ -748,6 +766,7 @@ const RouteSegmentSelectCard = memo(function RouteSegmentSelectCard({
   segmentColor,
   variant,
   isSelected,
+  text,
   onSelect,
 }: RouteSegmentSelectCardProps) {
   return (
@@ -791,7 +810,9 @@ const RouteSegmentSelectCard = memo(function RouteSegmentSelectCard({
       <p className="mt-1 min-h-4 truncate text-[10px] font-bold text-slate-500">
         {segment.durationMs && segment.distanceM ? (
           <>
-            차량 약 {formatDurationMs(segment.durationMs)} ·{" "}
+            {text.dayRoute.travelByCar(
+              formatDurationMs(segment.durationMs, text)
+            )} ·{" "}
             {formatDistanceM(segment.distanceM)}
           </>
         ) : null}
@@ -810,6 +831,8 @@ function PlaceCartRouteMapPopup({
   onRequestCheckout,
   onClose,
 }: PlaceCartRouteMapPopupProps) {
+  const appLanguage = useAppLanguageStore((state) => state.language);
+  const text = useUiText();
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<RouteMapInstance | null>(null);
@@ -921,7 +944,7 @@ function PlaceCartRouteMapPopup({
               label: `DAY ${displayDay.day}`,
               summary: displayDay.date
                 ? formatDateLabel(displayDay.date)
-                : `${displayDay.items.length}곳`,
+                : text.dayRoute.placeCount(displayDay.items.length),
               day: displayDay,
             },
           ];
@@ -938,7 +961,7 @@ function PlaceCartRouteMapPopup({
         };
       })
       .filter((option) => option.day.items.length > 0);
-  }, [createStartPreviewRouteDay, dayOptions, displayDay, displayDayKey]);
+  }, [createStartPreviewRouteDay, dayOptions, displayDay, displayDayKey, text]);
   const checkoutRoutePlan = useMemo(
     () => checkoutDayOptions.map((option) => option.day),
     [checkoutDayOptions]
@@ -985,15 +1008,15 @@ function PlaceCartRouteMapPopup({
     [displayCompletedItemIds]
   );
   const routePoints = useMemo(
-    () => buildRouteMapPoints(displayRouteDay, completedItemIdSet),
-    [completedItemIdSet, displayRouteDay]
+    () => buildRouteMapPoints(displayRouteDay, completedItemIdSet, text),
+    [completedItemIdSet, displayRouteDay, text]
   );
   const comparisonRoutePoints = useMemo(
     () =>
       displayComparisonDay
-        ? buildRouteMapPoints(displayComparisonDay, completedItemIdSet)
+        ? buildRouteMapPoints(displayComparisonDay, completedItemIdSet, text)
         : [],
-    [displayComparisonDay, completedItemIdSet]
+    [displayComparisonDay, completedItemIdSet, text]
   );
   const fallbackSegments = useMemo(
     () => buildFallbackRouteSegments(routePoints),
@@ -1267,7 +1290,10 @@ function PlaceCartRouteMapPopup({
   useEffect(() => {
     let isActive = true;
 
-    loadNaverMapSdk(NCP_KEY_ID)
+    setIsSdkReady(false);
+    setRouteError(null);
+
+    loadNaverMapSdk(NCP_KEY_ID, appLanguage)
       .then(() => {
         if (isActive) {
           setIsSdkReady(true);
@@ -1275,14 +1301,14 @@ function PlaceCartRouteMapPopup({
       })
       .catch(() => {
         if (isActive) {
-          setRouteError("지도를 불러오지 못했습니다.");
+          setRouteError(text.home.mapLoadError);
         }
       });
 
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [appLanguage, text]);
 
   useEffect(() => {
     let isActive = true;
@@ -1301,7 +1327,7 @@ function PlaceCartRouteMapPopup({
         return fallback;
       }
 
-      const segments = await fetchRouteMapSegments(points);
+      const segments = await fetchRouteMapSegments(points, appLanguage);
       return segments.length > 0 ? segments : fallback;
     };
 
@@ -1328,7 +1354,7 @@ function PlaceCartRouteMapPopup({
             currentResult.status === "rejected" ||
             comparisonResult.status === "rejected"
           ) {
-            setRouteError("일부 도로 경로를 불러오지 못해 직선으로 표시했습니다.");
+            setRouteError(text.dayRoute.routeMapPartialLoadError);
           }
         }
       })
@@ -1345,7 +1371,9 @@ function PlaceCartRouteMapPopup({
     comparisonFallbackSegments,
     comparisonRoutePoints,
     fallbackSegments,
+    appLanguage,
     routePoints,
+    text,
   ]);
 
   useEffect(() => {
@@ -1685,16 +1713,20 @@ function PlaceCartRouteMapPopup({
         <header className="app-safe-area-header flex items-center justify-between border-b border-brand-100 px-4 py-3">
           <div className="min-w-0">
             <p className="font-trip text-sm text-brand-700">
-              {hasDaySelector ? "ROUTE MAP" : `DAY ${displayDay.day} ROUTE`}
+              {hasDaySelector
+                ? "ROUTE MAP"
+                : text.dayRoute.routeMapDayTitle(displayDay.day)}
             </p>
             <p className="mt-0.5 text-xs text-slate-500">
               {hasDaySelector
-                ? `${dayOptions.length}일 일정 · DAY ${displayDay.day} 선택`
+                ? `${text.dayRoute.daySchedule(
+                    dayOptions.length
+                  )} · ${text.dayRoute.routeMapSelectedDay(displayDay.day)}`
                 : displayDay.date
                   ? formatDateLabel(displayDay.date)
-                  : "선택한 일정"}{" "}
-              · {displayDay.items.length}곳
-              {hasComparisonRoute ? " · 기존/재계산 비교" : ""}
+                  : text.dayRoute.selectedSchedule}{" "}
+              · {text.dayRoute.placeCount(displayDay.items.length)}
+              {hasComparisonRoute ? ` · ${text.dayRoute.routeMapComparison}` : ""}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1706,12 +1738,12 @@ function PlaceCartRouteMapPopup({
                 className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-brand-600 px-4 text-xs font-black text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-40"
               >
                 <MdAdd className="text-base" />
-                담기
+                {text.dayRoute.addToCart}
               </button>
             ) : null}
             <button
               type="button"
-              aria-label="루트 지도 닫기"
+              aria-label={text.dayRoute.routeMapCloseAria}
               onClick={onClose}
               className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
             >
@@ -1831,7 +1863,9 @@ function PlaceCartRouteMapPopup({
             >
               <span className="size-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />
               <span className="truncate">
-                {isSdkReady ? "경로 계산 중" : "지도 준비 중"}
+                {isSdkReady
+                  ? text.dayRoute.routeCalculating
+                  : text.dayRoute.mapPreparing}
               </span>
             </div>
           ) : null}
@@ -1840,11 +1874,10 @@ function PlaceCartRouteMapPopup({
               className={`absolute inset-x-6 ${fallbackPanelTopClass} rounded-2xl border border-brand-100 bg-white/95 p-4 text-sm shadow-sm backdrop-blur`}
             >
               <p className="font-black text-slate-900">
-                지도 대신 장소 순서를 보여드려요
+                {text.dayRoute.mapFallbackTitle}
               </p>
               <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-                지도 SDK를 불러오지 못했지만 아래에서 방문 순서와 완료 장소를
-                확인할 수 있어요.
+                {text.dayRoute.mapFallbackDescription}
               </p>
             </div>
           ) : null}
@@ -1853,11 +1886,11 @@ function PlaceCartRouteMapPopup({
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <span className="inline-flex items-center gap-1.5 text-indigo-600">
                   <span className="h-1.5 w-8 rounded-full border-t-[4px] border-dashed border-indigo-500/70" />
-                  기존 경로 점선
+                  {text.dayRoute.originalRouteDashed}
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-teal-700">
                   <span className="h-1.5 w-8 rounded-full bg-teal-500/70" />
-                  재계산 경로 실선
+                  {text.dayRoute.recalculatedRouteSolid}
                 </span>
               </div>
             </div>
@@ -1870,7 +1903,7 @@ function PlaceCartRouteMapPopup({
               {isStartPreviewDirty ? (
                 <div className="flex items-center justify-between gap-3 pb-1">
                   <p className="shrink-0 text-[10px] font-black text-brand-700">
-                    START 기준
+                    {text.dayRoute.startBasis}
                   </p>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <SegmentedToggle
@@ -1885,7 +1918,7 @@ function PlaceCartRouteMapPopup({
                           type: "clear-selected-segment",
                         });
                       }}
-                      ariaLabel="START 기준 경로 비교"
+                      ariaLabel={text.dayRoute.startRouteComparisonAria}
                       size="xs"
                     />
                     {canResetStartPreview ? (
@@ -1908,7 +1941,7 @@ function PlaceCartRouteMapPopup({
                         }}
                         className="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-500"
                       >
-                        초기화
+                        {text.common.reset}
                       </button>
                     ) : null}
                   </div>
@@ -1947,7 +1980,9 @@ function PlaceCartRouteMapPopup({
                           >
                             {point.variant === "start"
                               ? "START"
-                              : `${point.sequenceLabel}번째`}
+                              : text.dayRoute.stopOrderLabel(
+                                  point.sequenceLabel
+                                )}
                           </p>
                           <p className="mt-1 truncate text-xs font-semibold text-slate-900">
                             {point.title}
@@ -1982,6 +2017,7 @@ function PlaceCartRouteMapPopup({
                               segmentColor={segmentColor}
                               variant={group.key}
                               isSelected={Boolean(isSelectedSegment)}
+                              text={text}
                               onSelect={focusRouteSegment}
                             />
                           );
@@ -2003,22 +2039,22 @@ function PlaceCartRouteMapPopup({
           <section
             role="dialog"
             aria-modal="true"
-            aria-label="담기 범위 선택"
+            aria-label={text.dayRoute.checkoutScopeAria}
             className="flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-[28px] border border-brand-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.28)]"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-black text-brand-700">
-                  담기 범위
+                  {text.dayRoute.checkoutScope}
                 </p>
                 <h2 className="mt-1 text-lg font-black text-slate-950">
-                  담을 DAY를 선택해주세요
+                  {text.dayRoute.checkoutScopeTitle}
                 </h2>
               </div>
               <button
                 type="button"
-                aria-label="담기 범위 닫기"
+                aria-label={text.dayRoute.checkoutScopeCloseAria}
                 onClick={() => setIsCheckoutScopeOpen(false)}
                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg text-slate-500 transition hover:bg-slate-200"
               >
@@ -2044,15 +2080,18 @@ function PlaceCartRouteMapPopup({
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm font-black text-slate-950">
-                    전체 선택
+                    {text.dayRoute.selectAll}
                   </span>
                   <span className="mt-0.5 block text-xs font-bold text-slate-500">
-                    {checkoutRoutePlan.length}일 · {checkoutPlaceCount}곳
+                    {text.dayRoute.daySchedule(checkoutRoutePlan.length)} ·{" "}
+                    {text.dayRoute.placeCount(checkoutPlaceCount)}
                   </span>
                 </span>
               </span>
               <span className="shrink-0 text-xs font-black text-brand-700">
-                {isAllCheckoutDaysSelected ? "선택됨" : "선택"}
+                {isAllCheckoutDaysSelected
+                  ? text.dayRoute.selected
+                  : text.dayRoute.select}
               </span>
             </button>
 
@@ -2061,7 +2100,8 @@ function PlaceCartRouteMapPopup({
                 const isCurrentRouteDay = option.id === selectedDayOptionId;
                 const isSelected = selectedCheckoutDayIdSet.has(option.id);
                 const daySummary =
-                  option.summary || `${option.day.items.length}곳`;
+                  option.summary ||
+                  text.dayRoute.placeCount(option.day.items.length);
 
                 return (
                   <button
@@ -2104,7 +2144,9 @@ function PlaceCartRouteMapPopup({
                       ✓
                     </span>
                     {isCurrentRouteDay ? (
-                      <span className="sr-only">현재 보고 있는 DAY</span>
+                      <span className="sr-only">
+                        {text.dayRoute.currentViewingDaySr}
+                      </span>
                     ) : null}
                   </button>
                 );
@@ -2114,10 +2156,12 @@ function PlaceCartRouteMapPopup({
             <div className="mt-4 flex items-center gap-3 border-t border-slate-100 pt-4">
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-black text-brand-700">
-                  {selectedCheckoutRoutePlan.length}일 선택
+                  {text.dayRoute.selectedDays(
+                    selectedCheckoutRoutePlan.length
+                  )}
                 </p>
                 <p className="mt-0.5 text-xs font-bold text-slate-500">
-                  총 {selectedCheckoutPlaceCount}곳 담기
+                  {text.dayRoute.addPlacesSummary(selectedCheckoutPlaceCount)}
                 </p>
               </div>
               <button
@@ -2126,7 +2170,7 @@ function PlaceCartRouteMapPopup({
                 disabled={selectedCheckoutRoutePlan.length === 0}
                 className="inline-flex h-12 min-w-28 shrink-0 items-center justify-center rounded-full bg-brand-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400"
               >
-                확인
+                {text.common.confirm}
               </button>
             </div>
           </section>

@@ -14,6 +14,7 @@ type MapSheetState = {
       mode?: MapSheetMode;
     }
   ) => void;
+  updateSelectedPlace: (place: MapSheetPlace) => void;
   setSheetMode: (mode: MapSheetMode) => void;
   closeSheet: () => void;
   resetSheet: () => void;
@@ -37,6 +38,14 @@ export const useMapSheetStore = create<MapSheetState>((set) => ({
       sheetMode: options?.mode ?? "bottom-sheet",
       selectedPlace: place,
     }),
+  updateSelectedPlace: (place) =>
+    set((state) =>
+      state.selectedPlace?.id === place.id
+        ? {
+            selectedPlace: place,
+          }
+        : state
+    ),
   setSheetMode: (mode) =>
     set({
       sheetMode: mode,

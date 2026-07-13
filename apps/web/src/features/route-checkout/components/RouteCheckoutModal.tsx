@@ -17,6 +17,7 @@ import type {
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import type { MapSheetPlace } from "@/types/place";
+import { useUiText } from "@/lib/uiText";
 
 type RouteCheckoutModalProps = {
   isOpen: boolean;
@@ -248,6 +249,7 @@ function RouteCheckoutModalContent({
   onClearPlaces,
   onRequestSearchPlace,
 }: RouteCheckoutModalContentProps) {
+  const text = useUiText();
   const {
     step,
     setStep,
@@ -371,7 +373,7 @@ function RouteCheckoutModalContent({
               disabled={savedPlaces.length === 0}
               className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-40"
             >
-              전체 비우기
+              {text.common.clearAll}
             </button>
           ) : null}
         </header>

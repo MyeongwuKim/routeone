@@ -1,5 +1,6 @@
 import { IoTrashOutline } from "react-icons/io5";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
 
@@ -14,13 +15,15 @@ function PlaceCartItemsStep({
   onSelectPlace,
   onRemovePlace,
 }: PlaceCartItemsStepProps) {
+  const text = useUiText();
+
   if (savedPlaces.length === 0) {
     return (
       <div className="mt-12">
         <PotatoLoadingCard
-          title="아직 담은 장소가 없어요"
-          description="감자가 여행 가방을 비워두고 기다리고 있어요."
-          footerText="지도에서 가고 싶은 장소를 담아주세요."
+          title={text.cart.emptyTitle}
+          description={text.cart.emptyDescription}
+          footerText={text.cart.emptyFooter}
           animation="empty"
           compact
           className="shadow-sm"
@@ -33,6 +36,14 @@ function PlaceCartItemsStep({
     <div className="space-y-3">
       {savedPlaces.map((item) => {
         const thumbnailUrl = item.thumbnailUrl || item.place.images[0] || "";
+        const contentTypeLabel = localizePlaceCategoryLabel(
+          item.place.contentTypeLabel,
+          text
+        );
+        const categoryName = localizePlaceCategoryLabel(
+          item.place.categoryName,
+          text
+        );
 
         return (
           <div
@@ -48,7 +59,7 @@ function PlaceCartItemsStep({
                 {thumbnailUrl ? (
                   <img
                     src={thumbnailUrl}
-                    alt={`${item.place.title} 썸네일`}
+                    alt={text.cart.thumbnailAlt(item.place.title)}
                     className="h-full w-full object-cover"
                   />
                 ) : (
@@ -62,14 +73,14 @@ function PlaceCartItemsStep({
                   {item.place.title}
                 </p>
                 <p className="mt-1 truncate text-xs text-slate-500">
-                  {item.place.contentTypeLabel} · {item.place.categoryName}
+                  {contentTypeLabel} · {categoryName}
                 </p>
               </div>
             </button>
             <div className="ml-2 shrink-0">
               <button
                 type="button"
-                aria-label={`${item.place.title} 삭제`}
+                aria-label={text.cart.removeAria(item.place.title)}
                 onClick={() => onRemovePlace(item.id)}
                 className="rounded-full border border-rose-200 bg-rose-50 p-2 text-rose-600"
               >

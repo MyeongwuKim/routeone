@@ -1,5 +1,7 @@
 const DIRECTIONS_API_BASE_URL = "/map-direction/v1/driving";
 
+type DirectionsLanguage = "ko" | "en";
+
 type DirectionsApiResponse = {
   code?: number;
   message?: string;
@@ -25,6 +27,7 @@ type FetchDrivingRouteParams = {
   startLng: number;
   goalLat: number;
   goalLng: number;
+  language?: DirectionsLanguage;
 };
 
 export async function fetchDrivingRouteFromCurrentLocation(
@@ -34,7 +37,7 @@ export async function fetchDrivingRouteFromCurrentLocation(
     start: `${params.startLng},${params.startLat}`,
     goal: `${params.goalLng},${params.goalLat}`,
     option: "traoptimal",
-    lang: "ko",
+    lang: params.language ?? "ko",
   });
 
   const response = await fetch(`${DIRECTIONS_API_BASE_URL}?${query.toString()}`);

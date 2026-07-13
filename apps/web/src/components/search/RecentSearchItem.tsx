@@ -1,4 +1,5 @@
 import { IoClose, IoSearch } from "react-icons/io5";
+import { useUiText } from "@/lib/uiText";
 
 type RecentSearchItemProps = {
   keyword: string;
@@ -11,6 +12,8 @@ function RecentSearchItem({
   onSelect,
   onDelete,
 }: RecentSearchItemProps) {
+  const text = useUiText();
+
   return (
     <div className="flex items-center rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-brand-300 dark:border-brand-400/25 dark:bg-[#0b211f] dark:hover:border-brand-300/45">
       <button
@@ -25,7 +28,7 @@ function RecentSearchItem({
       </button>
       <button
         type="button"
-        aria-label={`${keyword} 최근 검색 삭제`}
+        aria-label={text.search.deleteRecentAria(keyword)}
         onClick={() => onDelete(keyword)}
         className="mr-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700/60 dark:hover:text-slate-100"
       >

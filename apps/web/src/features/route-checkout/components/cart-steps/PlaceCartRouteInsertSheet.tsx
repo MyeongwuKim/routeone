@@ -12,6 +12,7 @@ import {
   type RoutePlaceCategory,
 } from "@/lib/placeCategory";
 import { hasDuplicatePlace } from "@/lib/placeDuplicate";
+import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
 import type { MapSheetPlace } from "@/types/place";
 import type { RouteInsertRequest } from "./routePlanTypes";
 
@@ -26,11 +27,11 @@ type PlaceCartRouteInsertSheetProps = {
   onRequestSearchPlace: () => void;
 };
 
-const FILTERS: Array<{ key: InsertFilter; label: string }> = [
-  { key: "all", label: "전체" },
-  { key: "tourist", label: "관광지" },
-  { key: "food", label: "음식점" },
-  { key: "cafe", label: "카페" },
+const FILTERS: Array<{ key: InsertFilter }> = [
+  { key: "all" },
+  { key: "tourist" },
+  { key: "food" },
+  { key: "cafe" },
 ];
 
 function getFilterIcon(filter: InsertFilter) {
@@ -92,6 +93,7 @@ function PlaceCartRouteInsertSheet({
   onSelectPlace,
   onRequestSearchPlace,
 }: PlaceCartRouteInsertSheetProps) {
+  const text = useUiText();
   const [activeFilter, setActiveFilter] = useState<InsertFilter>("all");
   const [keyword, setKeyword] = useState("");
   const excludedKeySet = useMemo(
@@ -185,7 +187,7 @@ function PlaceCartRouteInsertSheet({
                 idleClassName="border-slate-200 bg-white text-slate-600 dark:border-brand-400/25 dark:bg-[#0b211f] dark:text-slate-200"
                 onClick={() => setActiveFilter(filter.key)}
               >
-                {filter.label}
+                {text.search.filters[filter.key]}
               </SelectablePillButton>
             );
           })}
@@ -208,9 +210,9 @@ function PlaceCartRouteInsertSheet({
                     {place.title}
                   </p>
                   <p className="mt-0.5 truncate text-xs font-semibold text-brand-700 dark:text-brand-200">
-                    {place.contentTypeLabel}
+                    {localizePlaceCategoryLabel(place.contentTypeLabel, text)}
                     {place.categoryName !== place.contentTypeLabel
-                      ? ` · ${place.categoryName}`
+                      ? ` · ${localizePlaceCategoryLabel(place.categoryName, text)}`
                       : ""}
                   </p>
                   <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">

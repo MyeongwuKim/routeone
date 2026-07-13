@@ -1,3 +1,5 @@
+import { useUiText } from "@/lib/uiText";
+
 type PlaceResultCardProps = {
   title: string;
   address: string;
@@ -21,6 +23,8 @@ function PlaceResultCard({
   onClick,
   surface = "white",
 }: PlaceResultCardProps) {
+  const text = useUiText();
+
   return (
     <button
       type="button"
@@ -36,7 +40,7 @@ function PlaceResultCard({
           {thumbnailUrl ? (
             <img
               src={thumbnailUrl}
-              alt={`${title} 썸네일`}
+              alt={text.placeSheet.thumbnailAlt(title)}
               className="h-full w-full object-cover"
               loading="lazy"
             />

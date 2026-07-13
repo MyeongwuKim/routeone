@@ -14,8 +14,10 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
-    "mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {\n  localizeTourPlaceOverview(input: $input) {\n    contentId\n    overview\n    overviewSource\n    cached\n  }\n}": typeof types.LocalizeTourPlaceOverviewDocument,
+    "mutation CacheTourCategoryLocalizations($input: [TourCategoryLocalizationInput!]!) {\n  cacheTourCategoryLocalizations(input: $input) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}": typeof types.CacheTourCategoryLocalizationsDocument,
+    "mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {\n  localizeTourPlaceOverview(input: $input) {\n    contentId\n    overview\n    operatingHours\n    restDate\n    infoCenter\n    overviewSource\n    cached\n  }\n}": typeof types.LocalizeTourPlaceOverviewDocument,
     "mutation LocalizeTourPlaces($input: [TourPlaceLocalizationInput!]!) {\n  localizeTourPlaces(input: $input) {\n    contentId\n    title\n    address\n    titleSource\n    addressSource\n    cached\n  }\n}": typeof types.LocalizeTourPlacesDocument,
+    "query TourCategoryLocalizations($locale: String!) {\n  tourCategoryLocalizations(locale: $locale) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}": typeof types.TourCategoryLocalizationsDocument,
     "mutation AppendRouteDays($input: AppendRouteDaysInput!) {\n  appendRouteDays(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.AppendRouteDaysDocument,
     "mutation ClearRoute($routeId: ID!) {\n  clearRoute(routeId: $routeId) {\n    ...RouteDetailFields\n  }\n}": typeof types.ClearRouteDocument,
     "mutation CloneRoute($input: CloneRouteInput!) {\n  cloneRoute(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.CloneRouteDocument,
@@ -48,8 +50,10 @@ type Documents = {
     "query Me {\n  me {\n    id\n    accountId\n    email\n    displayName\n    locale\n    createdAt\n    updatedAt\n  }\n}": typeof types.MeDocument,
 };
 const documents: Documents = {
-    "mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {\n  localizeTourPlaceOverview(input: $input) {\n    contentId\n    overview\n    overviewSource\n    cached\n  }\n}": types.LocalizeTourPlaceOverviewDocument,
+    "mutation CacheTourCategoryLocalizations($input: [TourCategoryLocalizationInput!]!) {\n  cacheTourCategoryLocalizations(input: $input) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}": types.CacheTourCategoryLocalizationsDocument,
+    "mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {\n  localizeTourPlaceOverview(input: $input) {\n    contentId\n    overview\n    operatingHours\n    restDate\n    infoCenter\n    overviewSource\n    cached\n  }\n}": types.LocalizeTourPlaceOverviewDocument,
     "mutation LocalizeTourPlaces($input: [TourPlaceLocalizationInput!]!) {\n  localizeTourPlaces(input: $input) {\n    contentId\n    title\n    address\n    titleSource\n    addressSource\n    cached\n  }\n}": types.LocalizeTourPlacesDocument,
+    "query TourCategoryLocalizations($locale: String!) {\n  tourCategoryLocalizations(locale: $locale) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}": types.TourCategoryLocalizationsDocument,
     "mutation AppendRouteDays($input: AppendRouteDaysInput!) {\n  appendRouteDays(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.AppendRouteDaysDocument,
     "mutation ClearRoute($routeId: ID!) {\n  clearRoute(routeId: $routeId) {\n    ...RouteDetailFields\n  }\n}": types.ClearRouteDocument,
     "mutation CloneRoute($input: CloneRouteInput!) {\n  cloneRoute(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.CloneRouteDocument,
@@ -99,11 +103,19 @@ export function graphql(source: string): unknown;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {\n  localizeTourPlaceOverview(input: $input) {\n    contentId\n    overview\n    overviewSource\n    cached\n  }\n}"): (typeof documents)["mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {\n  localizeTourPlaceOverview(input: $input) {\n    contentId\n    overview\n    overviewSource\n    cached\n  }\n}"];
+export function graphql(source: "mutation CacheTourCategoryLocalizations($input: [TourCategoryLocalizationInput!]!) {\n  cacheTourCategoryLocalizations(input: $input) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}"): (typeof documents)["mutation CacheTourCategoryLocalizations($input: [TourCategoryLocalizationInput!]!) {\n  cacheTourCategoryLocalizations(input: $input) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {\n  localizeTourPlaceOverview(input: $input) {\n    contentId\n    overview\n    operatingHours\n    restDate\n    infoCenter\n    overviewSource\n    cached\n  }\n}"): (typeof documents)["mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {\n  localizeTourPlaceOverview(input: $input) {\n    contentId\n    overview\n    operatingHours\n    restDate\n    infoCenter\n    overviewSource\n    cached\n  }\n}"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "mutation LocalizeTourPlaces($input: [TourPlaceLocalizationInput!]!) {\n  localizeTourPlaces(input: $input) {\n    contentId\n    title\n    address\n    titleSource\n    addressSource\n    cached\n  }\n}"): (typeof documents)["mutation LocalizeTourPlaces($input: [TourPlaceLocalizationInput!]!) {\n  localizeTourPlaces(input: $input) {\n    contentId\n    title\n    address\n    titleSource\n    addressSource\n    cached\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "query TourCategoryLocalizations($locale: String!) {\n  tourCategoryLocalizations(locale: $locale) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}"): (typeof documents)["query TourCategoryLocalizations($locale: String!) {\n  tourCategoryLocalizations(locale: $locale) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

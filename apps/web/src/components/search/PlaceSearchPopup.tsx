@@ -8,6 +8,7 @@ import type {
   ResolvedMarkerType,
   SearchFilter,
 } from "@/lib/gangwonAttractionMap";
+import { useUiText } from "@/lib/uiText";
 import type { GangwonAttraction } from "@/lib/visitKoreaTourApi";
 
 export type PlaceSearchResult = {
@@ -60,6 +61,7 @@ function PlaceSearchPopup({
   onRecentSearchDelete,
   onRecentSearchClear,
 }: PlaceSearchPopupProps) {
+  const text = useUiText();
   const hasKeyword = Boolean(searchKeyword.trim());
 
   return (
@@ -79,13 +81,13 @@ function PlaceSearchPopup({
                 value={searchKeyword}
                 onChange={(event) => onKeywordChange(event.target.value)}
                 enterKeyHint="search"
-                placeholder="강원도 명소, 카페, 음식점, 축제 검색"
+                placeholder={text.search.placeholder}
                 className="w-full bg-transparent text-sm font-semibold text-slate-800 placeholder:text-slate-400 outline-none dark:text-slate-100 dark:placeholder:text-slate-500"
               />
               {searchKeyword ? (
                 <button
                   type="button"
-                  aria-label="검색어 지우기"
+                  aria-label={text.search.clearKeyword}
                   onClick={() => onKeywordChange("")}
                   className="ml-2 text-slate-400 transition hover:text-slate-700 dark:hover:text-slate-100"
                 >
@@ -99,7 +101,7 @@ function PlaceSearchPopup({
             </form>
             <button
               type="button"
-              aria-label="검색 닫기"
+              aria-label={text.search.close}
               onClick={onClose}
               className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-slate-500 shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition hover:bg-slate-50 hover:text-slate-700 dark:border-brand-400/25 dark:bg-slate-950/60 dark:text-slate-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#102a27]"
             >
@@ -140,9 +142,9 @@ function PlaceSearchPopup({
                       distanceLabel={item.distanceLabel}
                       badgeLabel={
                         item.attraction.isTodayFestival
-                          ? "오늘 진행 중"
+                          ? text.search.todayFestival
                           : item.rank
-                            ? `예측 집중률 ${item.rank}위`
+                            ? text.search.concentrationRank(item.rank)
                             : null
                       }
                       onClick={() => onResultClick(item)}
@@ -154,15 +156,18 @@ function PlaceSearchPopup({
                       onClick={onLoadMore}
                       className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700 dark:border-brand-400/25 dark:bg-[#0b211f] dark:text-slate-200 dark:hover:border-brand-300/60 dark:hover:text-brand-100"
                     >
-                      더 보기 {visibleSearchResults.length}/{searchResults.length}
+                      {text.search.more(
+                        visibleSearchResults.length,
+                        searchResults.length
+                      )}
                     </button>
                   ) : null}
                 </>
               ) : (
                 <PotatoLoadingCard
-                  title="검색 결과가 없어요"
-                  description="감자가 다른 장소도 꼼꼼히 찾아봤어요."
-                  footerText="검색어나 카테고리를 바꿔보세요."
+                  title={text.search.noResultsTitle}
+                  description={text.search.noResultsDescription}
+                  footerText={text.search.noResultsFooter}
                   animation="searching"
                   compact
                   className="shadow-sm"
@@ -173,7 +178,7 @@ function PlaceSearchPopup({
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  최근 검색
+                  {text.search.recentTitle}
                 </p>
                 {recentSearches.length > 0 ? (
                   <button
@@ -182,7 +187,7 @@ function PlaceSearchPopup({
                     className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 transition hover:text-rose-600 dark:hover:text-rose-300"
                   >
                     <IoTrashOutline aria-hidden="true" />
-                    전체 비우기
+                    {text.search.clearRecent}
                   </button>
                 ) : null}
               </div>
@@ -199,9 +204,9 @@ function PlaceSearchPopup({
                 </div>
               ) : (
                 <PotatoLoadingCard
-                  title="아직 최근 검색어가 없어요"
-                  description="감자가 첫 번째 검색을 기다리고 있어요."
-                  footerText="장소를 검색하면 여기에 기록돼요."
+                  title={text.search.noRecentTitle}
+                  description={text.search.noRecentDescription}
+                  footerText={text.search.noRecentFooter}
                   animation="empty"
                   compact
                   className="shadow-sm"

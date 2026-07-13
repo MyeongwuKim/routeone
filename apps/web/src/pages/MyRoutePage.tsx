@@ -24,6 +24,7 @@ import {
   isDateKeyInRouteRange,
 } from "@/features/my-route/routeDisplay";
 import type { MyRoute, MyRouteDay } from "@/features/my-route/types";
+import { useUiText, type UiText } from "@/lib/uiText";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -42,12 +43,14 @@ type StartRouteDatePickerTarget = {
 };
 
 function RouteSection({ title, count, children }: RouteSectionProps) {
+  const text = useUiText();
+
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between px-1">
         <h2 className="text-xs font-black text-slate-500">{title}</h2>
         <span className="text-[11px] font-bold text-slate-400">
-          {count}개
+          {text.myRoute.count(count)}
         </span>
       </div>
       {children}
@@ -55,9 +58,9 @@ function RouteSection({ title, count, children }: RouteSectionProps) {
   );
 }
 
-function formatDateKeyLabel(dateKey: string | null) {
+function formatDateKeyLabel(dateKey: string | null, text: UiText) {
   if (!dateKey) {
-    return "미정";
+    return text.myRoute.unknownDate;
   }
 
   const [year, month, day] = dateKey.split("-");
@@ -70,16 +73,16 @@ function getCurrentMinutes() {
   return now.getHours() * 60 + now.getMinutes();
 }
 
-function formatMinutesLabel(minutes: number) {
+function formatMinutesLabel(minutes: number, text: UiText) {
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
-  const period = hour < 12 ? "오전" : "오후";
+  const period = hour < 12 ? text.myRoute.am : text.myRoute.pm;
   const displayHour = hour % 12 || 12;
 
   return `${period} ${displayHour}:${String(minute).padStart(2, "0")}`;
 }
 
-function getStartTimeReview(route: MyRoute, startedAt: string) {
+function getStartTimeReview(route: MyRoute, startedAt: string, text: UiText) {
   if (startedAt !== getTodayDateKey()) {
     return null;
   }
@@ -94,21 +97,27 @@ function getStartTimeReview(route: MyRoute, startedAt: string) {
     return null;
   }
 
-  const scheduledLabel = formatMinutesLabel(scheduledMinutes);
-  const currentLabel = formatMinutesLabel(currentMinutes);
+  const scheduledLabel = formatMinutesLabel(scheduledMinutes, text);
+  const currentLabel = formatMinutesLabel(currentMinutes, text);
 
   if (currentMinutes > scheduledMinutes) {
     return {
-      title: "출발 예정 시간이 지났어요",
-      description: `예정 출발시간은 ${scheduledLabel}, 현재 시간은 ${currentLabel}예요. 지금 시작하는 게 맞는지 한 번 더 확인해주세요.`,
-      detail: "지금 시작하면 DAY 날짜는 오늘 기준으로 유지돼요.",
+      title: text.myRoute.startTimeLateTitle,
+      description: text.myRoute.startTimeReviewDescription(
+        scheduledLabel,
+        currentLabel
+      ),
+      detail: text.myRoute.startTimeReviewDetail,
     };
   }
 
   return {
-    title: "예정 출발시간보다 빨라요",
-    description: `예정 출발시간은 ${scheduledLabel}, 현재 시간은 ${currentLabel}예요. 지금 바로 시작하는 게 맞는지 한 번 더 확인해주세요.`,
-    detail: "지금 시작하면 DAY 날짜는 오늘 기준으로 유지돼요.",
+    title: text.myRoute.startTimeEarlyTitle,
+    description: text.myRoute.startTimeReviewDescription(
+      scheduledLabel,
+      currentLabel
+    ),
+    detail: text.myRoute.startTimeReviewDetail,
   };
 }
 
@@ -125,6 +134,8 @@ function StartRouteDatePickerModal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const text = useUiText();
+
   return (
     <div
       className="global-modal-backdrop-enter fixed inset-0 z-[2800] flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pb-4"
@@ -142,15 +153,17 @@ function StartRouteDatePickerModal({
             id="start-route-date-title"
             className="text-base font-bold text-slate-900"
           >
-            실제 시작일 선택
+            {text.myRoute.startDateModalTitle}
           </p>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            {getRouteTitle(target.route)}의 DAY 1 기준 날짜를 선택해요.
+            {text.myRoute.startDateModalDescription(getRouteTitle(target.route))}
           </p>
         </div>
 
         <div className="mt-4">
-          <p className="mb-2 text-xs font-black text-slate-500">시작 날짜</p>
+          <p className="mb-2 text-xs font-black text-slate-500">
+            {text.myRoute.startDateLabel}
+          </p>
           <DateInput value={target.startedAt} onChange={onChange} />
         </div>
 
@@ -160,7 +173,7 @@ function StartRouteDatePickerModal({
             onClick={onClose}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600"
           >
-            취소
+            {text.common.cancel}
           </button>
           <button
             type="button"
@@ -168,7 +181,7 @@ function StartRouteDatePickerModal({
             disabled={isPending || !target.startedAt}
             className="rounded-2xl border border-brand-500 bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            시작하기
+            {text.myRoute.startRoute}
           </button>
         </div>
       </section>
@@ -177,6 +190,7 @@ function StartRouteDatePickerModal({
 }
 
 function MyRoutePage() {
+  const text = useUiText();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedDayRoute, setSelectedDayRoute] = useState<{
@@ -219,7 +233,7 @@ function MyRoutePage() {
       };
     },
     onSuccess: () => {
-      showToast("일정을 삭제했어요.");
+      showToast(text.myRoute.deleteSuccess);
     },
     onError: (error, _routeId, context) => {
       if (context?.previousRoutes) {
@@ -230,7 +244,7 @@ function MyRoutePage() {
       }
       setSelectedDayRoute(context?.previousSelectedDayRoute ?? null);
       showToast(
-        error instanceof Error ? error.message : "일정을 삭제하지 못했어요.",
+        error instanceof Error ? error.message : text.myRoute.deleteError,
         2600
       );
     },
@@ -243,11 +257,11 @@ function MyRoutePage() {
         (currentData) => upsertMyRouteCache(currentData, data.startRoute)
       );
       setStartDatePickerTarget(null);
-      showToast("여행을 시작했어요.");
+      showToast(text.myRoute.startSuccess);
     },
     onError: (error) => {
       showToast(
-        error instanceof Error ? error.message : "여행을 시작하지 못했어요.",
+        error instanceof Error ? error.message : text.myRoute.startError,
         2600
       );
     },
@@ -360,7 +374,7 @@ function MyRoutePage() {
       const conflictActions = selectableDay
         ? [
             {
-              label: "해당 일정 보기",
+              label: text.myRoute.viewConflictingRoute,
               variant: "secondary" as const,
               onClick: () =>
                 setSelectedDayRoute({
@@ -369,20 +383,20 @@ function MyRoutePage() {
                 }),
             },
             {
-              label: "확인",
+              label: text.myRoute.conflictConfirm,
               variant: "primary" as const,
             },
           ]
         : undefined;
 
       openModal({
-        title: "다음 날짜에 이미 일정이 있어요",
-        description: `${getRouteTitle(route)}에 DAY ${
-          route.tripDays + 1
-        }을 추가하려면 ${formatRouteDate(nextDateKey)} 날짜가 필요해요.`,
-        detail: `${getRouteTitle(
-          conflictingRoute
-        )} 일정이 같은 날짜를 사용 중이라 바로 이어 붙일 수 없어요. 아래 일정을 수정하거나 날짜를 먼저 비워주세요.`,
+        title: text.myRoute.conflictTitle,
+        description: text.myRoute.conflictDescription(
+          getRouteTitle(route),
+          route.tripDays + 1,
+          formatRouteDate(nextDateKey) ?? text.myRoute.unknownDate
+        ),
+        detail: text.myRoute.conflictDetail(getRouteTitle(conflictingRoute)),
         actions: conflictActions,
       });
       return;
@@ -394,7 +408,7 @@ function MyRoutePage() {
       nextDayIndex: route.tripDays + 1,
       suggestedStartDate: nextDateKey,
     });
-    showToast("지도에서 장소를 담아 추가할 DAY를 만들어요.");
+    showToast(text.myRoute.appendToast);
     navigate("/home");
   };
   const handleStartRoute = (route: MyRoute, startedAt: string) => {
@@ -412,7 +426,7 @@ function MyRoutePage() {
       return false;
     }
 
-    const startTimeReview = getStartTimeReview(route, startedAt);
+    const startTimeReview = getStartTimeReview(route, startedAt, text);
     if (!startTimeReview) {
       handleStartRoute(route, startedAt);
       return false;
@@ -425,12 +439,12 @@ function MyRoutePage() {
       detail: startTimeReview.detail,
       actions: [
         {
-          label: "지금 시작",
+          label: text.myRoute.startNow,
           variant: "primary",
           onClick: () => handleStartRoute(route, startedAt),
         },
         {
-          label: "취소",
+          label: text.common.cancel,
           variant: "secondary",
         },
       ],
@@ -455,19 +469,21 @@ function MyRoutePage() {
 
     openModal({
       title: isPastPlannedPeriod
-        ? "예정 기간이 지났어요"
-        : "예정 시작일과 오늘 날짜가 달라요",
+        ? text.myRoute.plannedPeriodPastTitle
+        : text.myRoute.plannedStartDiffTitle,
       description: isPastPlannedPeriod
-        ? `예정 기간은 ${formatDateKeyLabel(
-            plannedStartKey
-          )} ~ ${formatDateKeyLabel(plannedEndKey)}였어요.`
-        : `예정 시작일은 ${formatDateKeyLabel(
-            plannedStartKey
-          )}, 오늘은 ${formatDateKeyLabel(todayKey)}예요.`,
-      detail: "오늘로 시작하면 DAY 날짜가 오늘 기준으로 다시 맞춰져요.",
+        ? text.myRoute.plannedPeriodDescription(
+            formatDateKeyLabel(plannedStartKey, text),
+            formatDateKeyLabel(plannedEndKey, text)
+          )
+        : text.myRoute.plannedStartDescription(
+            formatDateKeyLabel(plannedStartKey, text),
+            formatDateKeyLabel(todayKey, text)
+          ),
+      detail: text.myRoute.startTodayDetail,
       actions: [
         {
-          label: "오늘로 시작",
+          label: text.myRoute.startToday,
           variant: "primary",
           autoClose: false,
           onClick: () => {
@@ -481,12 +497,12 @@ function MyRoutePage() {
           },
         },
         {
-          label: "예정일로 시작",
+          label: text.myRoute.startPlannedDate,
           variant: "secondary",
           onClick: () => handleStartRoute(route, plannedStartKey),
         },
         {
-          label: "날짜 선택",
+          label: text.myRoute.chooseDate,
           variant: "secondary",
           onClick: () =>
             setStartDatePickerTarget({
@@ -513,16 +529,16 @@ function MyRoutePage() {
     }
 
     openModal({
-      title: "일정을 삭제할까요?",
-      description: `${getRouteTitle(route)} 전체와 포함된 DAY, 장소가 모두 삭제돼요.`,
-      detail: "삭제한 일정은 다시 되돌릴 수 없어요.",
+      title: text.myRoute.deleteTitle,
+      description: text.myRoute.deleteDescription(getRouteTitle(route)),
+      detail: text.myRoute.deleteDetail,
       actions: [
         {
-          label: "취소",
+          label: text.common.cancel,
           variant: "secondary",
         },
         {
-          label: "삭제",
+          label: text.myRoute.delete,
           variant: "danger",
           onClick: () => deleteRouteMutation.mutate(route.id),
         },
@@ -534,15 +550,15 @@ function MyRoutePage() {
     <section className="space-y-4 text-slate-900">
       {myRoutesQuery.isError ? (
         <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
-          내 루트를 불러오지 못했어요.
+          {text.myRoute.loadError}
         </div>
       ) : null}
 
       {myRoutesQuery.isLoading ? (
         <div className="flex min-h-[calc(100dvh-18rem)] flex-col justify-center">
           <PotatoLoadingCard
-            title="감자가 내 루트 확인 중"
-            description="여행 일정을 정리하고 있어요."
+            title={text.myRoute.loadingTitle}
+            description={text.myRoute.loadingDescription}
             animation="running"
             compact
             className="shadow-sm"
@@ -576,7 +592,7 @@ function MyRoutePage() {
 
           {routeGroups.reviewRoutes.length > 0 ? (
             <RouteSection
-              title="시작 확인 필요"
+              title={text.myRoute.needsReviewSection}
               count={routeGroups.reviewRoutes.length}
             >
               <div className="space-y-2">
@@ -596,7 +612,7 @@ function MyRoutePage() {
 
           {routeGroups.upcomingRoutes.length > 0 ? (
             <RouteSection
-              title="다가오는 일정"
+              title={text.myRoute.upcomingSection}
               count={routeGroups.upcomingRoutes.length}
             >
               <div className="space-y-2">
@@ -616,7 +632,7 @@ function MyRoutePage() {
 
           {routeGroups.undatedRoutes.length > 0 ? (
             <RouteSection
-              title="날짜 미정 루트"
+              title={text.myRoute.undatedSection}
               count={routeGroups.undatedRoutes.length}
             >
               <div className="space-y-2">

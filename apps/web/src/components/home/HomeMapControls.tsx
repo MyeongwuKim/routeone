@@ -9,6 +9,7 @@ import {
 } from "react-icons/io5";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
+import { useUiText } from "@/lib/uiText";
 
 type RegionOption = {
   label: string;
@@ -67,12 +68,14 @@ function HomeMapControls({
   onSelectRegion,
   onSelectFilter,
 }: HomeMapControlsProps) {
+  const text = useUiText();
+
   return (
     <>
       <div className="pointer-events-none absolute inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center justify-between">
         <button
           type="button"
-          aria-label="장소 검색 열기"
+          aria-label={text.home.openSearchAria}
           onClick={onOpenSearch}
           className="pointer-events-auto flex h-12 flex-1 items-center rounded-full border border-brand-200 bg-white/95 px-4 text-left shadow-md backdrop-blur"
         >
@@ -80,12 +83,12 @@ function HomeMapControls({
             <IoSearch />
           </span>
           <span className="ml-2 w-full truncate text-sm font-semibold text-slate-400">
-            강원도 명소 검색
+            {text.home.searchPrompt}
           </span>
         </button>
         <button
           type="button"
-          aria-label="담은 장소"
+          aria-label={text.home.savedPlacesAria}
           onClick={onOpenSavedList}
           className="pointer-events-auto ml-2 inline-flex h-12 items-center gap-2 rounded-full border border-brand-500 bg-brand-600/95 px-3 text-xs font-semibold text-white shadow"
         >
@@ -107,7 +110,7 @@ function HomeMapControls({
                 selected={isActive}
                 onClick={() => onSelectRegion(region.sigunguCode)}
               >
-                <span>{region.label}</span>
+                <span>{text.labels.regions[region.label] ?? region.label}</span>
                 {festivalCount > 0 ? (
                   <span
                     className={`inline-flex h-5 items-center rounded-full px-1.5 text-[10px] font-bold ${

@@ -1109,7 +1109,9 @@ export async function fetchTourPlaceDetail(
     MobileApp: "RouteOne",
     _type: "json",
     contentId,
-    contentTypeId: contentTypeId ?? "",
+    contentTypeId: contentTypeId
+      ? localizeTourContentTypeId(contentTypeId, language)
+      : "",
     numOfRows: "10",
     pageNo: "1",
   });
@@ -1172,7 +1174,11 @@ export async function fetchTourPlaceDetail(
     }
   }
 
-  const images = dedupeImageUrls(detailImageUrls);
+  const commonImageUrls = [
+    commonItem?.firstimage ?? "",
+    commonItem?.firstimage2 ?? "",
+  ].filter(Boolean);
+  const images = dedupeImageUrls([...commonImageUrls, ...detailImageUrls]);
 
   return {
     overview: stripHtml(commonItem?.overview),

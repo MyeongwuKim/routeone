@@ -1,0 +1,9 @@
+mutation CacheTourCategoryLocalizations($input: [TourCategoryLocalizationInput!]!) {
+  cacheTourCategoryLocalizations(input: $input) {
+    code
+    locale
+    label
+    sourceLabel
+    cached
+  }
+}

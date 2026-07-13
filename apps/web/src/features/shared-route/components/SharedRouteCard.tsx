@@ -13,6 +13,7 @@ import type {
   SharedRouteConnectionQuery,
   SharedRoutesQuery,
 } from "@/generated/graphql";
+import { getUiText, useUiText, type UiText } from "@/lib/uiText";
 
 const VISIBLE_SHARE_TAG_COUNT = 3;
 const VISIBLE_PLACE_CHIP_COUNT = 3;
@@ -79,12 +80,20 @@ const REGION_SHARE_TAGS = new Set([
   "강원",
   ...GANGWON_REGION_LABELS,
 ]);
-const LEGACY_SHARE_TAG_LABELS: Record<string, string> = {
-  "가볍게 보기": "가벼운 플랜",
-  "촘촘한 루트": "촘촘 플랜",
-  "여유로운 루트": "여유 플랜",
-  "균형 잡힌 루트": "균형 플랜",
-};
+function getLegacyShareTagLabel(tag: string, text: UiText) {
+  const legacyShareTagLabels: Record<string, string> = {
+    "가볍게 보기": text.sharedRouteCard.lightPlan,
+    "촘촘한 루트": text.sharedRouteCard.densePlan,
+    "여유로운 루트": text.sharedRouteCard.relaxedPlan,
+    "균형 잡힌 루트": text.sharedRouteCard.balancedPlan,
+  };
+
+  return legacyShareTagLabels[tag] ?? tag;
+}
+
+function getLocalizedRegionName(regionName: string, text: UiText) {
+  return text.labels.regions[regionName] ?? regionName;
+}
 
 export type SharedRoute =
   | SharedRoutesQuery["sharedRoutes"][number]
@@ -193,10 +202,11 @@ export function getDisplayRegionNames(route: SharedRoute) {
 }
 
 export function getDisplayPlaceOptions(route: SharedRoute) {
+  const text = getUiText("ko");
   const placeOptions: SharedRoutePlaceFilterOption[] = [];
   const fallbackRegionName =
     getRegionName(route.primaryRegionLabelKey, route.primaryRegionCode) ??
-    "지역 미정";
+    text.sharedRouteCard.unknownRegion;
 
   (route.stops ?? []).forEach((stop) => {
     const name = stop.place.title?.trim();
@@ -206,7 +216,7 @@ export function getDisplayPlaceOptions(route: SharedRoute) {
     const category =
       stop.place.categoryLabel?.trim() ||
       stop.place.categoryName?.trim() ||
-      "기타";
+      text.sharedRouteCard.etcCategory;
 
     if (!name) {
       return;
@@ -229,64 +239,77 @@ export function getDisplayPlaceOptions(route: SharedRoute) {
   return placeOptions;
 }
 
-function getRouteRegionTitle(route: SharedRoute) {
+function getRouteRegionTitle(route: SharedRoute, text: UiText) {
   const regionNames = getDisplayRegionNames(route);
 
   if (regionNames.length === 0) {
-    return "공유";
+    return text.sharedRouteCard.shared;
   }
 
-  const visibleRegionNames = regionNames.slice(0, 2).join("+");
+  const visibleRegionNames = regionNames
+    .slice(0, 2)
+    .map((regionName) => getLocalizedRegionName(regionName, text))
+    .join("+");
 
   return regionNames.length > 2
-    ? `${visibleRegionNames} 외 ${regionNames.length - 2}`
+    ? `${visibleRegionNames} ${text.sharedRouteCard.otherRegions(
+        regionNames.length - 2
+      )}`
     : visibleRegionNames;
 }
 
-function getSharedRouteTitle(route: SharedRoute) {
+function getSharedRouteTitle(route: SharedRoute, text: UiText) {
   const dateTitle = getRouteDateTitle(route);
-  const regionTitle = getRouteRegionTitle(route);
+  const regionTitle = getRouteRegionTitle(route, text);
 
-  return dateTitle ? `${dateTitle} ${regionTitle} 루트` : `${regionTitle} 루트`;
+  return dateTitle
+    ? `${dateTitle} ${regionTitle} ${text.sharedRouteCard.routeSuffix}`
+    : `${regionTitle} ${text.sharedRouteCard.routeSuffix}`;
 }
 
-function getSharedRouteSubtitle(route: RouteSummaryFieldsFragment) {
+function getSharedRouteSubtitle(route: RouteSummaryFieldsFragment, text: UiText) {
   const durationText =
     route.tripDays <= 1
-      ? "당일치기"
-      : `${route.tripDays - 1}박 ${route.tripDays}일`;
+      ? text.sharedRouteCard.dayTrip
+      : text.sharedRouteCard.nightTrip(route.tripDays - 1, route.tripDays);
 
-  return `${durationText} · ${route.completedStopCount}/${route.totalStopCount} 완료`;
+  return `${durationText} · ${text.sharedRouteCard.completed(
+    route.completedStopCount,
+    route.totalStopCount
+  )}`;
 }
 
-function getFallbackShareTags(route: RouteSummaryFieldsFragment) {
+function getFallbackShareTags(route: RouteSummaryFieldsFragment, text: UiText) {
   const tags = [
     route.tripDays <= 1
-      ? "당일치기"
-      : `${route.tripDays - 1}박 ${route.tripDays}일`,
+      ? text.sharedRouteCard.dayTrip
+      : text.sharedRouteCard.nightTrip(route.tripDays - 1, route.tripDays),
   ];
 
   if (route.totalStopCount > 0) {
     tags.push(
       route.totalStopCount / Math.max(1, route.tripDays) >= 4
-        ? "촘촘 플랜"
-        : "여유 플랜"
+        ? text.sharedRouteCard.densePlan
+        : text.sharedRouteCard.relaxedPlan
     );
   }
 
   return tags;
 }
 
-function normalizeShareTag(tag: string) {
-  return LEGACY_SHARE_TAG_LABELS[tag] ?? tag;
+function normalizeShareTag(tag: string, text: UiText) {
+  return getLegacyShareTagLabel(tag, text);
 }
 
-export function getDisplayShareTags(route: RouteSummaryFieldsFragment) {
+export function getDisplayShareTags(
+  route: RouteSummaryFieldsFragment,
+  text = getUiText("ko")
+) {
   const sourceTags = route.shareTags.length
     ? route.shareTags
-    : getFallbackShareTags(route);
+    : getFallbackShareTags(route, text);
   const displayTags = sourceTags
-    .map(normalizeShareTag)
+    .map((tag) => normalizeShareTag(tag, text))
     .filter(
       (tag, index, tags) =>
         !REGION_SHARE_TAGS.has(tag) && tags.indexOf(tag) === index
@@ -294,7 +317,9 @@ export function getDisplayShareTags(route: RouteSummaryFieldsFragment) {
 
   return displayTags.length
     ? displayTags
-    : getFallbackShareTags(route).filter((tag) => !REGION_SHARE_TAGS.has(tag));
+    : getFallbackShareTags(route, text).filter(
+        (tag) => !REGION_SHARE_TAGS.has(tag)
+      );
 }
 
 function SharedRouteCard({
@@ -305,10 +330,11 @@ function SharedRouteCard({
   onOpen,
   onRequestFilter,
 }: SharedRouteCardProps) {
+  const text = useUiText();
   const [isTagExpanded, setIsTagExpanded] = useState(false);
   const [isPlaceExpanded, setIsPlaceExpanded] = useState(false);
   const isMine = route.isMine;
-  const shareTags = getDisplayShareTags(route);
+  const shareTags = getDisplayShareTags(route, text);
   const placeOptions = getDisplayPlaceOptions(route);
   const visibleTags = isTagExpanded
     ? shareTags
@@ -354,14 +380,16 @@ function SharedRouteCard({
           <p className="flex min-w-0 items-center gap-1.5 text-base font-black text-slate-900 dark:text-white">
             {isMine ? (
               <span className="shrink-0 rounded-full border border-brand-200 bg-white px-2 py-0.5 text-[10px] font-black leading-5 text-brand-700 dark:border-brand-400/35 dark:bg-slate-950 dark:text-brand-100">
-                내 공유
+                {text.sharedRouteCard.myShare}
               </span>
             ) : null}
-            <span className="min-w-0 truncate">{getSharedRouteTitle(route)}</span>
+            <span className="min-w-0 truncate">
+              {getSharedRouteTitle(route, text)}
+            </span>
           </p>
           <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-200/80">
             <MdOutlineCalendarToday className="text-sm dark:text-brand-200" />
-            {getSharedRouteSubtitle(route)}
+            {getSharedRouteSubtitle(route, text)}
           </p>
         </div>
         {isMine ? (
@@ -372,7 +400,9 @@ function SharedRouteCard({
         ) : (
           <button
             type="button"
-            aria-label={`${getSharedRouteTitle(route)} 좋아요`}
+            aria-label={text.sharedRouteCard.likeAria(
+              getSharedRouteTitle(route, text)
+            )}
             disabled={isLikePending}
             onClick={(event) => {
               event.stopPropagation();
@@ -427,7 +457,7 @@ function SharedRouteCard({
                     : "bg-slate-50 text-slate-600 ring-1 ring-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
                 }`}
               >
-                +{hiddenTagCount}
+                {text.sharedRouteCard.moreTags(hiddenTagCount)}
               </button>
             ) : null}
             {canCollapseTags ? (
@@ -443,7 +473,7 @@ function SharedRouteCard({
                     : "bg-slate-50 text-slate-600 ring-1 ring-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
                 }`}
               >
-                접기
+                {text.sharedRouteCard.folded}
               </button>
             ) : null}
           </div>
@@ -489,7 +519,7 @@ function SharedRouteCard({
                   }`}
               >
                 <MdAdd className="text-xs" />
-                {hiddenPlaceCount}
+                {text.sharedRouteCard.morePlaces(hiddenPlaceCount)}
               </button>
             ) : null}
             {canCollapsePlaces ? (
@@ -505,7 +535,7 @@ function SharedRouteCard({
                     : "bg-white text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
                 }`}
               >
-                접기
+                {text.sharedRouteCard.folded}
               </button>
             ) : null}
           </div>

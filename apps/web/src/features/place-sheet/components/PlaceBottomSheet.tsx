@@ -37,12 +37,16 @@ import {
   getPlaceCategoryIcon,
   getPlaceCategoryLabel,
   getReadablePlaceCategoryName,
-  isReadableCategoryName,
   isTouristPlace,
 } from "@/lib/placeCategory";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import { localizeTourPlaces } from "@/lib/placeLocalization";
+import {
+  localizePlaceCategoryLabel,
+  useUiText,
+  type UiText,
+} from "@/lib/uiText";
 import {
   applyNaverMapTheme,
   getNaverMapThemeOptions,
@@ -88,53 +92,55 @@ type PreviewMapOverlay = {
   setMap: (map: null) => void;
 };
 
-function getTopRankBadgeStyle(rank: number) {
+function getTopRankBadgeStyle(rank: number, text: UiText) {
   if (rank === 1) {
     return {
-      label: "🥇 예측 집중률 1위",
+      label: `🥇 ${text.placeSheet.rankBadge(rank)}`,
       className:
         "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-400/60 dark:bg-amber-400/15 dark:text-amber-200",
     };
   }
   if (rank === 2) {
     return {
-      label: "🥈 예측 집중률 2위",
+      label: `🥈 ${text.placeSheet.rankBadge(rank)}`,
       className:
         "border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-500/70 dark:bg-slate-300/10 dark:text-slate-100",
     };
   }
   if (rank === 3) {
     return {
-      label: "🥉 예측 집중률 3위",
+      label: `🥉 ${text.placeSheet.rankBadge(rank)}`,
       className:
         "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-400/60 dark:bg-orange-400/15 dark:text-orange-200",
     };
   }
   return {
-    label: `예측 집중률 ${rank}위`,
+    label: text.placeSheet.rankBadge(rank),
     className:
       "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/60 dark:bg-rose-400/15 dark:text-rose-200",
   };
 }
 
-function formatDurationMinutes(durationMs: number) {
+function formatDurationMinutes(durationMs: number, text: UiText) {
   const minutes = Math.max(1, Math.round(durationMs / 60000));
-  return `${minutes}분`;
+  return text.placeSheet.durationMinutes(minutes);
 }
 
-function formatStayMinutes(minutes: number | null | undefined) {
+function formatStayMinutes(minutes: number | null | undefined, text: UiText) {
   if (!minutes) {
     return null;
   }
 
   if (minutes < 60) {
-    return `${minutes}분`;
+    return text.placeSheet.durationMinutes(minutes);
   }
 
   const hours = Math.floor(minutes / 60);
   const restMinutes = minutes % 60;
 
-  return restMinutes > 0 ? `${hours}시간 ${restMinutes}분` : `${hours}시간`;
+  return restMinutes > 0
+    ? text.placeSheet.durationHoursMinutes(hours, restMinutes)
+    : text.placeSheet.durationHours(hours);
 }
 
 function formatDistance(distanceM: number) {
@@ -144,8 +150,17 @@ function formatDistance(distanceM: number) {
 function preloadImage(url: string) {
   return new Promise<boolean>((resolve) => {
     const image = new Image();
-    image.onload = () => resolve(true);
-    image.onerror = () => resolve(false);
+    const timeoutId = window.setTimeout(() => {
+      resolve(false);
+    }, 4_000);
+
+    const finish = (loaded: boolean) => {
+      window.clearTimeout(timeoutId);
+      resolve(loaded);
+    };
+
+    image.onerror = () => finish(false);
+    image.onload = () => finish(true);
     image.src = url;
   });
 }
@@ -188,13 +203,49 @@ function PlacePhotoThumbnail({
   );
 }
 
-function buildGoogleImageSearchUrl(keyword: string) {
-  const query = `${keyword} 사진`;
+function buildGoogleImageSearchUrl(keyword: string, text: UiText) {
+  const query = text.placeSheet.googleImageQuery(keyword);
   const params = new URLSearchParams({
     tbm: "isch",
     q: query,
   });
   return `https://www.google.com/search?${params.toString()}`;
+}
+
+function localizeTourDetailValue(value: string, text: UiText) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  const translations = Object.entries(
+    text.placeSheet.detailValueTranslations
+  ).sort(([sourceA], [sourceB]) => sourceB.length - sourceA.length);
+  const exactValue = text.placeSheet.detailValueTranslations[trimmedValue];
+
+  if (exactValue) {
+    return exactValue;
+  }
+
+  const compactValue = trimmedValue.replace(/\s+/g, "");
+  const compactMatch = translations.find(
+    ([source]) => source.replace(/\s+/g, "") === compactValue
+  );
+
+  if (compactMatch) {
+    return compactMatch[1];
+  }
+
+  return translations.reduce(
+    (result, [source, target]) => result.replaceAll(source, target),
+    trimmedValue
+  );
+}
+
+function getOfficialEnglishDetailValue(value: string | undefined) {
+  const trimmedValue = value?.trim() ?? "";
+  return trimmedValue && !/[가-힣]/u.test(trimmedValue) ? trimmedValue : "";
 }
 
 const EXCLUDED_NEARBY_PLACE_PATTERN =
@@ -377,12 +428,13 @@ function createMapSheetPlaceFromNearbyPlace({
     contentTypeLabel: categoryLabel,
     categoryName,
     icon: categoryIcon,
-    images: [place.firstImage].filter(Boolean),
+    images: [place.firstImage, place.secondImage].filter(Boolean),
   };
 }
 
 function PlaceBottomSheet() {
   const appLanguage = useAppLanguageStore((state) => state.language);
+  const text = useUiText();
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const {
     isOpen,
@@ -390,6 +442,7 @@ function PlaceBottomSheet() {
     sheetResetVersion,
     selectedPlace,
     openSheet,
+    updateSelectedPlace,
     resetSheet,
   } = useMapSheetStore();
   const { savedPlaceIds, toggleSavedPlace } = usePlaceCartStore();
@@ -419,6 +472,64 @@ function PlaceBottomSheet() {
     ? savedPlaceIds.includes(selectedPlace.id)
     : false;
 
+  useEffect(() => {
+    if (!isOpen || appLanguage !== "en" || !selectedPlace) {
+      return;
+    }
+
+    if (!/[가-힣]/u.test(`${selectedPlace.title} ${selectedPlace.address}`)) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    void placeLocalizationApi
+      .localizeTourPlaces([
+        {
+          contentId: selectedPlace.contentId,
+          contentTypeId: selectedPlace.contentTypeId,
+          title: selectedPlace.title,
+          address: selectedPlace.address,
+        },
+      ])
+      .then((response) => {
+        if (isCancelled) {
+          return;
+        }
+
+        const localizedPlace = response.localizeTourPlaces[0];
+        if (!localizedPlace) {
+          return;
+        }
+
+        if (
+          localizedPlace.title === selectedPlace.title &&
+          localizedPlace.address === selectedPlace.address
+        ) {
+          return;
+        }
+
+        updateSelectedPlace({
+          ...selectedPlace,
+          title: localizedPlace.title || selectedPlace.title,
+          address: localizedPlace.address || selectedPlace.address,
+        });
+      })
+      .catch((error) => {
+        console.warn(text.placeSheet.localizationFallbackWarn, error);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    appLanguage,
+    isOpen,
+    selectedPlace,
+    text.placeSheet.localizationFallbackWarn,
+    updateSelectedPlace,
+  ]);
+
   const {
     isSheetExpanded,
     isDraggingSheet,
@@ -434,40 +545,83 @@ function PlaceBottomSheet() {
   });
 
   const detailQuery = useQuery({
-    queryKey: ["place-detail", selectedPlaceKey, appLanguage],
+    queryKey: ["place-detail", "localized-detail-v3", selectedPlaceKey, appLanguage],
     enabled: isOpen && Boolean(selectedPlace) && hasTourApiServiceKey,
     queryFn: async () => {
       if (!selectedPlace) {
-        throw new Error("선택된 장소가 없습니다.");
+        throw new Error(text.placeSheet.selectedPlaceMissing);
       }
-      const detail = await fetchTourPlaceDetail(
-        TOUR_API_SERVICE_KEY,
-        selectedPlace.contentId,
-        selectedPlace.contentTypeId,
-        "ko"
+      const [detail, officialEnglishDetail] = await Promise.all([
+        fetchTourPlaceDetail(
+          TOUR_API_SERVICE_KEY,
+          selectedPlace.contentId,
+          selectedPlace.contentTypeId,
+          "ko"
+        ),
+        appLanguage === "en"
+          ? fetchTourPlaceDetail(
+              TOUR_API_SERVICE_KEY,
+              selectedPlace.contentId,
+              selectedPlace.contentTypeId,
+              "en"
+            ).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      const officialOverview = getOfficialEnglishDetailValue(
+        officialEnglishDetail?.overview
       );
-      let overview = detail.overview;
-      if (appLanguage === "en" && overview) {
+      const officialOperatingHours = getOfficialEnglishDetailValue(
+        officialEnglishDetail?.operatingHours
+      );
+      const officialRestDate = getOfficialEnglishDetailValue(
+        officialEnglishDetail?.restDate
+      );
+      const officialInfoCenter = getOfficialEnglishDetailValue(
+        officialEnglishDetail?.infoCenter
+      );
+      let overview = officialOverview || detail.overview;
+      let operatingHours = officialOperatingHours || detail.operatingHours;
+      let restDate = officialRestDate || detail.restDate;
+      let infoCenter = officialInfoCenter || detail.infoCenter;
+      const shouldLocalizeMissingDetail =
+        appLanguage === "en" &&
+        ((detail.overview && !officialOverview) ||
+          (detail.operatingHours && !officialOperatingHours) ||
+          (detail.restDate && !officialRestDate) ||
+          (detail.infoCenter && !officialInfoCenter));
+
+      if (shouldLocalizeMissingDetail) {
         try {
           const localized = await placeLocalizationApi.localizeTourPlaceOverview({
             contentId: selectedPlace.contentId,
-            overview,
+            overview: detail.overview,
+            operatingHours: detail.operatingHours,
+            restDate: detail.restDate,
+            infoCenter: detail.infoCenter,
           });
-          overview = localized.localizeTourPlaceOverview.overview;
+          const localizedDetail = localized.localizeTourPlaceOverview;
+          overview = officialOverview || localizedDetail.overview || detail.overview;
+          operatingHours =
+            officialOperatingHours ||
+            localizedDetail.operatingHours ||
+            detail.operatingHours;
+          restDate =
+            officialRestDate || localizedDetail.restDate || detail.restDate;
+          infoCenter =
+            officialInfoCenter ||
+            localizedDetail.infoCenter ||
+            detail.infoCenter;
         } catch (error) {
-          console.warn(
-            "장소 설명 영문 현지화에 실패해 한국어 원문을 사용합니다.",
-            error
-          );
+          console.warn(text.placeSheet.localizationFallbackWarn, error);
         }
       }
       const loadedImages = await preloadImageUrls(detail.images);
       return {
         overview,
         images: loadedImages,
-        operatingHours: detail.operatingHours,
-        restDate: detail.restDate,
-        infoCenter: detail.infoCenter,
+        operatingHours,
+        restDate,
+        infoCenter,
       };
     },
     staleTime: 1000 * 60 * 60 * 24,
@@ -480,17 +634,19 @@ function PlaceBottomSheet() {
       selectedPlaceKey,
       currentLocation.lat,
       currentLocation.lng,
+      appLanguage,
     ],
     enabled: isOpen && Boolean(selectedPlace),
     queryFn: async () => {
       if (!selectedPlace) {
-        throw new Error("선택된 장소가 없습니다.");
+        throw new Error(text.placeSheet.selectedPlaceMissing);
       }
       return fetchDrivingRouteFromCurrentLocation({
         startLat: currentLocation.lat,
         startLng: currentLocation.lng,
         goalLat: selectedPlace.lat,
         goalLng: selectedPlace.lng,
+        language: appLanguage,
       });
     },
     staleTime: 1000 * 60 * 5,
@@ -501,7 +657,7 @@ function PlaceBottomSheet() {
     enabled: isOpen && Boolean(selectedPlace),
     queryFn: async () => {
       if (!selectedPlace) {
-        throw new Error("선택된 장소가 없습니다.");
+        throw new Error(text.placeSheet.selectedPlaceMissing);
       }
 
       const result = await routeApi.placeStaySummary(
@@ -517,7 +673,7 @@ function PlaceBottomSheet() {
     enabled: isOpen && Boolean(selectedPlace),
     queryFn: async () => {
       if (!selectedPlace) {
-        throw new Error("선택된 장소가 없습니다.");
+        throw new Error(text.placeSheet.selectedPlaceMissing);
       }
 
       const result = await routeApi.placePhotos(
@@ -545,7 +701,7 @@ function PlaceBottomSheet() {
       Boolean(selectedPlace?.signguCode),
     queryFn: async () => {
       if (!selectedPlace) {
-        throw new Error("선택된 장소가 없습니다.");
+        throw new Error(text.placeSheet.selectedPlaceMissing);
       }
 
       return fetchTouristConcentrationPoints(TOUR_API_SERVICE_KEY, {
@@ -582,7 +738,7 @@ function PlaceBottomSheet() {
       Number.isFinite(selectedPlace?.lng),
     queryFn: async () => {
       if (!selectedPlace) {
-        throw new Error("선택된 장소가 없습니다.");
+        throw new Error(text.placeSheet.selectedPlaceMissing);
       }
 
       const nearbyPlaces = await fetchNearbyTouristPlaces(TOUR_API_SERVICE_KEY, {
@@ -604,9 +760,19 @@ function PlaceBottomSheet() {
     () => detailQuery.data?.images ?? [],
     [detailQuery.data]
   );
-  const detailOperatingHours = detailQuery.data?.operatingHours ?? "";
-  const detailRestDate = detailQuery.data?.restDate ?? "";
-  const detailInfoCenter = detailQuery.data?.infoCenter ?? "";
+  const detailOperatingHours = localizeTourDetailValue(
+    detailQuery.data?.operatingHours ?? "",
+    text
+  );
+  const detailRestDate = localizeTourDetailValue(
+    detailQuery.data?.restDate ?? "",
+    text
+  );
+  const detailInfoCenter = localizeTourDetailValue(
+    detailQuery.data?.infoCenter ?? "",
+    text
+  );
+  const detailHoursBadgeValue = detailOperatingHours || detailRestDate;
   const isSelectedPlaceDetailReady =
     !hasTourApiServiceKey ||
     (Boolean(selectedPlaceKey) &&
@@ -625,7 +791,7 @@ function PlaceBottomSheet() {
     [userPlacePhotos]
   );
   const routeDurationText = routeQuery.data
-    ? formatDurationMinutes(routeQuery.data.durationMs)
+    ? formatDurationMinutes(routeQuery.data.durationMs, text)
     : null;
   const routeDistanceText = routeQuery.data
     ? formatDistance(routeQuery.data.distanceM)
@@ -638,18 +804,24 @@ function PlaceBottomSheet() {
     ? resolvePlaceStaySummaryForDisplay(selectedPlace, placeStaySummaryQuery.data)
     : null;
   const averageStayLabel = formatStayMinutes(
-    displayPlaceStaySummary?.averageActualStayMinutes
+    displayPlaceStaySummary?.averageActualStayMinutes,
+    text
   );
   const placeStaySummaryVisitCount = displayPlaceStaySummary?.visitCount ?? 0;
   const placeStaySummaryLabel = placeStaySummaryQuery.isFetching
-    ? "감자가 체류 데이터를 확인 중이에요."
+    ? text.placeSheet.stayChecking
     : placeStaySummaryVisitCount === 0
-      ? "아직 사용자 체류 데이터가 없어요."
+      ? text.placeSheet.stayEmpty
       : placeStaySummaryVisitCount < MIN_PLACE_STAY_SUMMARY_VISIT_COUNT
-        ? `표본이 아직 적어요. ${MIN_PLACE_STAY_SUMMARY_VISIT_COUNT}회 이상 쌓이면 평균을 보여줘요.`
+        ? text.placeSheet.staySamplePending(
+            MIN_PLACE_STAY_SUMMARY_VISIT_COUNT
+          )
         : averageStayLabel
-          ? `${averageStayLabel} · ${placeStaySummaryVisitCount}회 방문 기준`
-          : "아직 사용자 체류 데이터가 없어요.";
+          ? text.placeSheet.stayAverage(
+              averageStayLabel,
+              placeStaySummaryVisitCount
+            )
+          : text.placeSheet.stayEmpty;
   const isRouteLoading = routeQuery.isFetching;
   const routeError =
     routeQuery.error instanceof Error ? routeQuery.error.message : null;
@@ -664,12 +836,24 @@ function PlaceBottomSheet() {
   const shouldShowOverviewPanel = isFullPopupMode || showOverviewPanel;
   const shouldShowExpandedSection = isFullPopupMode || isSheetExpanded;
   const isTouristAttraction = selectedPlace ? isTouristPlace(selectedPlace) : false;
-  const topRankBadge = selectedPlace?.topRank
-    ? getTopRankBadgeStyle(selectedPlace.topRank)
+  const selectedTopRank = selectedPlace?.topRank ?? null;
+  const topRankBadge = selectedTopRank
+    ? getTopRankBadgeStyle(selectedTopRank, text)
     : null;
+  const topRankButtonLabel = selectedTopRank
+    ? text.placeSheet.predictionTop(selectedTopRank)
+    : "";
+  const selectedPlaceContentTypeLabel = localizePlaceCategoryLabel(
+    selectedPlace?.contentTypeLabel,
+    text
+  );
+  const selectedPlaceCategoryName = localizePlaceCategoryLabel(
+    selectedPlace?.categoryName,
+    text
+  );
   const shouldShowCategoryName =
-    isReadableCategoryName(selectedPlace?.categoryName) &&
-    selectedPlace?.categoryName !== selectedPlace?.contentTypeLabel;
+    Boolean(selectedPlace?.categoryName?.trim()) &&
+    selectedPlaceCategoryName !== selectedPlaceContentTypeLabel;
   const selectedPlaceTitle = selectedPlace?.title.trim().toLowerCase() ?? "";
   const nearbyTouristPlaces = useMemo(
     () =>
@@ -699,10 +883,10 @@ function PlaceBottomSheet() {
     const params = new URLSearchParams({
       slat: `${origin.lat}`,
       slng: `${origin.lng}`,
-      sname: "현재 위치",
+      sname: text.placeSheet.currentLocation,
       dlat: `${destination.lat}`,
       dlng: `${destination.lng}`,
-      dname: selectedPlace?.title ?? "목적지",
+      dname: selectedPlace?.title ?? text.placeSheet.destination,
       appname: NAVER_MAP_SCHEME_APP_NAME,
     });
     window.location.href = `nmap://route/car?${params.toString()}`;
@@ -726,7 +910,7 @@ function PlaceBottomSheet() {
 
     const targetKeyword = `${selectedPlace.title} ${selectedPlace.address}`;
     window.open(
-      buildGoogleImageSearchUrl(targetKeyword),
+      buildGoogleImageSearchUrl(targetKeyword, text),
       "_blank",
       "noopener,noreferrer"
     );
@@ -836,6 +1020,12 @@ function PlaceBottomSheet() {
 
       setIsPreviewMapSdkReady(false);
       setPreviewMapError(null);
+      clearPreviewOverlays();
+      previewMapInstanceRef.current = null;
+      if (previewMapContainerRef.current) {
+        previewMapContainerRef.current.innerHTML = "";
+      }
+      previewMapContainerRef.current = null;
     };
 
     queueMicrotask(resetPreviewMapState);
@@ -846,7 +1036,7 @@ function PlaceBottomSheet() {
       };
     }
 
-    loadNaverMapSdk(NCP_KEY_ID)
+    loadNaverMapSdk(NCP_KEY_ID, appLanguage)
       .then(() => {
         if (isActive) {
           setIsPreviewMapSdkReady(true);
@@ -854,14 +1044,21 @@ function PlaceBottomSheet() {
       })
       .catch(() => {
         if (isActive) {
-          setPreviewMapError("지도를 불러오지 못했습니다.");
+          setPreviewMapError(text.placeSheet.mapLoadError);
         }
       });
 
     return () => {
       isActive = false;
     };
-  }, [isOpen, selectedPlace, selectedPlaceKey, shouldShowExpandedSection]);
+  }, [
+    appLanguage,
+    isOpen,
+    selectedPlace,
+    selectedPlaceKey,
+    shouldShowExpandedSection,
+    text.placeSheet.mapLoadError,
+  ]);
 
   useEffect(() => {
     if (!isOpen || !selectedPlace) {
@@ -940,7 +1137,7 @@ function PlaceBottomSheet() {
       const originMarker = new naverMaps.Marker({
         map: previewMap,
         position: originLatLng,
-        title: "현재 위치",
+        title: text.placeSheet.currentLocation,
       });
       previewOverlaysRef.current.push(originMarker);
     }
@@ -987,6 +1184,7 @@ function PlaceBottomSheet() {
     routePathPoints,
     selectedPlace,
     shouldShowExpandedSection,
+    text.placeSheet.currentLocation,
   ]);
 
   useEffect(() => {
@@ -1026,7 +1224,7 @@ function PlaceBottomSheet() {
       <button
         type="button"
         onClick={resetSheet}
-        aria-label="바텀시트 닫기"
+        aria-label={text.placeSheet.bottomSheetCloseAria}
         className="fixed inset-0 z-[1800] bg-slate-900/25"
       />
 
@@ -1071,7 +1269,7 @@ function PlaceBottomSheet() {
               {isSheetExpanded || isFullPopupMode ? (
                 <button
                   type="button"
-                  aria-label="시트 닫기"
+                  aria-label={text.placeSheet.sheetCloseAria}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={resetSheet}
                   className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
@@ -1105,17 +1303,17 @@ function PlaceBottomSheet() {
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-brand-700">
-                      {selectedPlace.icon} {selectedPlace.contentTypeLabel}
+                      {selectedPlace.icon} {selectedPlaceContentTypeLabel}
                     </p>
                     {isSelectedPlaceDetailReady ? (
-                      <CompactHoursBadge value={detailOperatingHours} />
+                      <CompactHoursBadge value={detailHoursBadgeValue} />
                     ) : (
                       <SkeletonBar className="h-7 w-28" />
                     )}
                   </div>
                   {shouldShowCategoryName ? (
                     <p className="mt-1 text-sm text-slate-600">
-                      {selectedPlace.categoryName}
+                      {selectedPlaceCategoryName}
                     </p>
                   ) : null}
                 </div>
@@ -1126,19 +1324,19 @@ function PlaceBottomSheet() {
                       onClick={() => setIsTopRankInfoOpen(true)}
                       className={`inline-flex h-10 items-center gap-1 rounded-full border px-3 text-xs font-bold ${topRankBadge.className}`}
                     >
-                      예측 TOP {selectedPlace.topRank}
+                      {topRankButtonLabel}
                       <IoInformationCircleOutline className="text-sm" />
                     </button>
                   ) : null}
                   <button
                     type="button"
-                    aria-label="내 루트 담기"
+                    aria-label={text.placeSheet.addToRouteAria}
                     onClick={() => {
                       if (selectedPlace) {
                         const willAddToCart = !isCurrentPlaceSaved;
                         toggleSavedPlace(selectedPlace, activeImageList[0] ?? "");
                         if (willAddToCart) {
-                          showToast("여행지 카트에 담았습니다");
+                          showToast(text.placeSheet.addToCartToast);
                         }
                       }
                     }}
@@ -1159,7 +1357,7 @@ function PlaceBottomSheet() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="font-black text-brand-700 dark:text-brand-200">
-                    유저 평균 체류
+                    {text.placeSheet.userAverageStay}
                   </p>
                   <p className="mt-1 line-clamp-2 leading-5 text-slate-600 dark:text-slate-300">
                     {placeStaySummaryLabel}
@@ -1177,7 +1375,10 @@ function PlaceBottomSheet() {
                         <img
                           key={`${imageUrl}-${index}`}
                           src={imageUrl}
-                          alt={`${selectedPlace.title} 이미지 ${index + 1}`}
+                          alt={text.placeSheet.placeImageAlt(
+                            selectedPlace.title,
+                            index + 1
+                          )}
                           role="button"
                           tabIndex={0}
                           onClick={() =>
@@ -1204,14 +1405,14 @@ function PlaceBottomSheet() {
                           {selectedPlace.icon}
                         </div>
                         <p className="mt-3 text-xs font-semibold text-slate-600">
-                          더 찾아보기
+                          {text.placeSheet.searchMore}
                         </p>
                         <button
                           type="button"
                           onClick={handleOpenGoogleImageSearch}
                           className="pointer-events-auto mt-3 rounded-full border border-brand-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-brand-700"
                         >
-                          구글에서 보기
+                          {text.placeSheet.viewOnGoogle}
                         </button>
                       </div>
                     </>
@@ -1221,17 +1422,17 @@ function PlaceBottomSheet() {
                         {selectedPlace.icon}
                       </div>
                       <p className="mt-4 text-sm font-semibold text-slate-700">
-                        이미지 없음
+                        {text.placeSheet.imageMissingTitle}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
-                        등록된 대표 이미지가 아직 없습니다.
+                        {text.placeSheet.imageMissingDescription}
                       </p>
                       <button
                         type="button"
                         onClick={handleOpenGoogleImageSearch}
                         className="pointer-events-auto mt-4 rounded-full border border-brand-300 bg-white px-4 py-2 text-xs font-semibold text-brand-700"
                       >
-                        구글에서 보기
+                        {text.placeSheet.viewOnGoogle}
                       </button>
                     </div>
                   )}
@@ -1242,10 +1443,10 @@ function PlaceBottomSheet() {
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-black text-slate-900 dark:text-white">
-                      사용자들이 올린 사진
+                      {text.placeSheet.userPhotosTitle}
                     </p>
                     <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-300">
-                      사진 인증과 기록으로 공유된 방문 사진이에요.
+                      {text.placeSheet.userPhotosDescription}
                     </p>
                   </div>
                   {userPlacePhotos.length > 0 ? (
@@ -1266,7 +1467,9 @@ function PlaceBottomSheet() {
                           openImageViewer(
                             userPlacePhotoViewerUrls,
                             index,
-                            `${selectedPlace.title} 사용자 사진`
+                            text.placeSheet.userPhotoViewerTitle(
+                              selectedPlace.title
+                            )
                           )
                         }
                         className="group relative h-44 w-40 shrink-0 snap-start overflow-hidden rounded-2xl border border-brand-100 bg-brand-50 text-left shadow-sm"
@@ -1274,10 +1477,13 @@ function PlaceBottomSheet() {
                         <PlacePhotoThumbnail
                           thumbnailUrl={photo.thumbnailUrl}
                           imageUrl={photo.imageUrl}
-                          alt={`${selectedPlace.title} 사용자 사진 ${index + 1}`}
+                          alt={text.placeSheet.userPhotoAlt(
+                            selectedPlace.title,
+                            index + 1
+                          )}
                         />
                         <span className="absolute bottom-2 left-2 rounded-full bg-slate-950/60 px-2 py-1 text-[10px] font-black text-white backdrop-blur">
-                          방문 사진
+                          {text.placeSheet.visitPhoto}
                         </span>
                       </button>
                     ))
@@ -1287,10 +1493,10 @@ function PlaceBottomSheet() {
                         {selectedPlace.icon}
                       </div>
                       <p className="mt-3 text-sm font-black text-slate-700 dark:text-slate-100">
-                        아직 올라온 사진이 없어요.
+                        {text.placeSheet.noUserPhotosTitle}
                       </p>
                       <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">
-                        이 장소를 사진 인증하면 여기에 모여요.
+                        {text.placeSheet.noUserPhotosDescription}
                       </p>
                     </div>
                   )}
@@ -1312,7 +1518,7 @@ function PlaceBottomSheet() {
                       PLACE OVERVIEW
                     </p>
                     <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700 dark:bg-brand-400/15 dark:text-brand-200">
-                      상세 정보
+                      {text.placeSheet.detailTitle}
                     </span>
                   </div>
                   {!isSelectedPlaceDetailReady ? (
@@ -1323,18 +1529,23 @@ function PlaceBottomSheet() {
                     </p>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-brand-200 bg-white/75 px-3 py-4 text-center text-sm text-slate-500 dark:border-brand-400/30 dark:bg-slate-950/35 dark:text-slate-300">
-                      관광공사 오픈 API에서 제공하는 상세 설명이 아직 없습니다.
+                      {text.placeSheet.noOverview}
                     </div>
                   )}
-                  {detailRestDate || detailInfoCenter ? (
+                  {detailOperatingHours || detailRestDate || detailInfoCenter ? (
                     <div className="mt-3 grid gap-2">
                       <PlaceInfoRow
-                        label="휴무일"
+                        label={text.placeSheet.operatingHours}
+                        value={detailOperatingHours}
+                        icon="time"
+                      />
+                      <PlaceInfoRow
+                        label={text.placeSheet.closedDays}
                         value={detailRestDate}
                         icon="calendar"
                       />
                       <PlaceInfoRow
-                        label="문의"
+                        label={text.placeSheet.contact}
                         value={detailInfoCenter}
                         icon="call"
                       />
@@ -1366,7 +1577,7 @@ function PlaceBottomSheet() {
                         <div className="absolute inset-0 flex items-center justify-center bg-white/70 px-6 backdrop-blur-[1px] dark:bg-slate-950/45">
                           <div className="flex items-center gap-2 rounded-2xl border border-brand-100 bg-white/90 px-4 py-3 text-xs font-bold text-brand-700 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/80 dark:text-brand-100">
                             <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" />
-                            지도 준비 중
+                            {text.placeSheet.mapPreparing}
                           </div>
                         </div>
                       ) : previewMapError ? (
@@ -1387,7 +1598,9 @@ function PlaceBottomSheet() {
                     </div>
 
                     <div className="mt-3 rounded-2xl border border-brand-100 bg-brand-50/60 px-3 py-3 text-sm text-slate-700">
-                      <p className="font-semibold text-slate-900">주소</p>
+                      <p className="font-semibold text-slate-900">
+                        {text.placeSheet.address}
+                      </p>
                       <p className="mt-1">{selectedPlace.address}</p>
                     </div>
 
@@ -1398,14 +1611,16 @@ function PlaceBottomSheet() {
                         <div className="flex items-center gap-2 text-sm">
                           <IoCarSportOutline className="text-brand-600" />
                           <p className="font-semibold text-slate-900">
-                            내 위치(강릉 중심) 기준 차로 {routeDurationText}
+                            {text.placeSheet.routeFromCurrentLocation(
+                              routeDurationText
+                            )}
                           </p>
                           <span className="text-slate-400">·</span>
                           <p className="text-slate-600">{routeDistanceText}</p>
                         </div>
                       ) : (
                         <p className="text-sm text-slate-500">
-                          {routeError ?? "길찾기 정보를 가져오지 못했습니다."}
+                          {routeError ?? text.placeSheet.routeLoadError}
                         </p>
                       )}
                     </div>
@@ -1416,16 +1631,18 @@ function PlaceBottomSheet() {
                       className="mt-3 flex w-full items-center justify-center rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-sm"
                     >
                       <IoNavigate className="mr-2 text-base" />
-                      길찾기
+                      {text.placeSheet.directions}
                     </button>
                   </section>
                 ) : null}
 
                 <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/30 dark:bg-slate-900/70">
                   <div className="mb-3 flex items-center justify-between">
-                    <p className="font-trip text-sm text-brand-700">이런 곳도 좋아요</p>
+                    <p className="font-trip text-sm text-brand-700">
+                      {text.placeSheet.nearbyTitle}
+                    </p>
                     <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700 dark:bg-brand-400/15 dark:text-brand-200">
-                      주변 추천
+                      {text.placeSheet.nearbyBadge}
                     </span>
                   </div>
 
@@ -1436,7 +1653,10 @@ function PlaceBottomSheet() {
                       {nearbyTouristPlaces.map((place) => {
                         const thumbnailUrl = place.firstImage || place.secondImage;
                         const distanceLabel = formatNearbyDistance(place.distanceM);
-                        const categoryLabel = getNearbyPlaceCategoryLabel(place);
+                        const categoryLabel = localizePlaceCategoryLabel(
+                          getNearbyPlaceCategoryLabel(place),
+                          text
+                        );
                         const categoryIcon = getNearbyPlaceCategoryIcon(place);
 
                         return (
@@ -1444,7 +1664,7 @@ function PlaceBottomSheet() {
                             key={`${place.id}-${place.contentTypeId}`}
                             title={place.title}
                             address={place.address}
-                            categoryLabel={categoryLabel ?? "장소"}
+                            categoryLabel={categoryLabel}
                             thumbnailUrl={thumbnailUrl}
                             fallbackIcon={categoryIcon}
                             distanceLabel={distanceLabel}
@@ -1456,11 +1676,11 @@ function PlaceBottomSheet() {
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm text-slate-500 dark:border-brand-400/30 dark:bg-slate-950/35 dark:text-slate-300">
-                      {nearbyTouristError ?? "주변 추천 데이터가 아직 없습니다."}
+                      {nearbyTouristError ?? text.placeSheet.nearbyEmpty}
                     </div>
                   )}
                   <p className="mt-3 text-xs leading-5 text-slate-500">
-                    locationBasedList2 기준 반경 6km 내 관광지, 음식점, 카페 추천 데이터입니다.
+                    {text.placeSheet.nearbyFootnote}
                   </p>
                 </section>
               </div>
@@ -1473,21 +1693,23 @@ function PlaceBottomSheet() {
         <div className="fixed inset-0 z-[2600] flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button
             type="button"
-            aria-label="예측 집중률 안내 닫기"
+            aria-label={text.placeSheet.topRankInfoCloseAria}
             onClick={() => setIsTopRankInfoOpen(false)}
             className="absolute inset-0"
           />
           <section className="relative w-full max-w-md rounded-3xl border border-brand-200 bg-white px-5 py-5 shadow-[0_20px_60px_rgba(15,23,42,0.25)]">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-trip text-sm text-brand-700">예측 순위</p>
+                <p className="font-trip text-sm text-brand-700">
+                  {text.placeSheet.topRankInfoTitle}
+                </p>
                 <p className="mt-1 text-xl font-semibold text-slate-900">
                   {topRankBadge.label}
                 </p>
               </div>
               <button
                 type="button"
-                aria-label="예측 집중률 안내 닫기"
+                aria-label={text.placeSheet.topRankInfoCloseAria}
                 onClick={() => setIsTopRankInfoOpen(false)}
                 className="rounded-full border border-slate-200 bg-white p-2 text-slate-600"
               >
@@ -1495,12 +1717,10 @@ function PlaceBottomSheet() {
               </button>
             </div>
             <p className="mt-4 text-sm leading-6 text-slate-600">
-              한국관광공사 이동통신 기반 방문자 집계 데이터를 바탕으로 산출한
-              집중률 예측값 기준 순위입니다. 같은 지역의 관광지 중 상대적으로
-              관심도가 높은 장소를 표시합니다.
+              {text.placeSheet.topRankInfoDescription}
             </p>
             <p className="mt-3 text-xs leading-5 text-slate-500">
-              실제 혼잡도나 실시간 방문자 수와는 다를 수 있어요.
+              {text.placeSheet.topRankInfoNote}
             </p>
           </section>
         </div>
@@ -1511,7 +1731,7 @@ function PlaceBottomSheet() {
         <section className="fixed inset-0 z-[2700] flex items-center justify-center bg-white/35 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
           <button
             type="button"
-            aria-label="이미지 보기 닫기"
+            aria-label={text.placeSheet.imageViewerCloseAria}
             onClick={closeImageViewer}
             className="absolute inset-0 cursor-zoom-out"
           />
@@ -1553,7 +1773,7 @@ function PlaceBottomSheet() {
 
           <button
             type="button"
-            aria-label="이전 이미지"
+            aria-label={text.placeSheet.previousImageAria}
             onClick={showPreviousImage}
             className="absolute left-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/65 text-2xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80"
           >
@@ -1561,7 +1781,7 @@ function PlaceBottomSheet() {
           </button>
           <button
             type="button"
-            aria-label="다음 이미지"
+            aria-label={text.placeSheet.nextImageAria}
             onClick={showNextImage}
             className="absolute right-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/65 text-2xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80"
           >
@@ -1569,7 +1789,7 @@ function PlaceBottomSheet() {
           </button>
           <button
             type="button"
-            aria-label="이미지 보기 닫기"
+            aria-label={text.placeSheet.imageViewerCloseAria}
             onClick={closeImageViewer}
             className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex size-10 items-center justify-center rounded-full bg-white/65 text-xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80"
           >

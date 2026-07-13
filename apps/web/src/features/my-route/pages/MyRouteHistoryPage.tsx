@@ -33,6 +33,7 @@ import {
 } from "@/features/my-route/routeDisplay";
 import type { MyRoute, MyRouteDay } from "@/features/my-route/types";
 import type { MyRouteHistoryConnectionQuery } from "@/generated/graphql";
+import { useUiText } from "@/lib/uiText";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 type RoutePosterPreview = {
@@ -86,6 +87,7 @@ function RoutePosterPreviewModal({
   onDownload: () => void;
   onShare: () => void;
 }) {
+  const text = useUiText();
   const currentCard =
     preview.cards[preview.currentIndex] ?? preview.cards[0] ?? null;
 
@@ -101,14 +103,16 @@ function RoutePosterPreviewModal({
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-900/10 bg-[#fff7df]/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm">
         <div className="min-w-0">
-          <p className="text-xs font-black text-brand-700">DAY 포스터</p>
+          <p className="text-xs font-black text-brand-700">
+            {text.routeHistory.posterTitle}
+          </p>
           <h2 className="truncate text-base font-black text-slate-900">
             {getRouteTitle(preview.route)} · {currentCard.label}
           </h2>
         </div>
         <button
           type="button"
-          aria-label="닫기"
+          aria-label={text.routeHistory.closeAria}
           onClick={onClose}
           className="flex size-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-slate-700 shadow-sm transition active:scale-95"
         >
@@ -143,7 +147,7 @@ function RoutePosterPreviewModal({
         <div className="mx-auto flex max-w-[440px] justify-center">
           <img
             src={currentCard.dataUrl}
-            alt={`${currentCard.label} 포스터 미리보기`}
+            alt={text.routeHistory.posterAlt(currentCard.label)}
             className="h-auto w-full rounded-[18px] border border-amber-950/15 bg-white shadow-[0_20px_48px_rgba(84,52,10,0.25)]"
           />
         </div>
@@ -156,7 +160,7 @@ function RoutePosterPreviewModal({
           className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full border border-brand-200 bg-white text-sm font-black text-brand-700 shadow-sm transition active:scale-95"
         >
           <MdShare className="text-lg" />
-          공유
+          {text.routeHistory.share}
         </button>
         <button
           type="button"
@@ -164,7 +168,7 @@ function RoutePosterPreviewModal({
           className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-brand-600 text-sm font-black text-white shadow-sm transition active:scale-95"
         >
           <MdDownload className="text-lg" />
-          저장
+          {text.routeHistory.save}
         </button>
       </footer>
     </div>,
@@ -173,6 +177,8 @@ function RoutePosterPreviewModal({
 }
 
 function RoutePosterGeneratingModal() {
+  const text = useUiText();
+
   return createPortal(
     <div
       role="dialog"
@@ -181,9 +187,9 @@ function RoutePosterGeneratingModal() {
       className="fixed inset-0 z-[3300] flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-[2px]"
     >
       <PotatoLoadingCard
-        title="감자가 DAY 카드를 변환 중..."
-        description="폴라로이드 사진을 PNG로 굽고 있어요."
-        footerText="잠시만 기다려주세요"
+        title={text.routeHistory.generatingTitle}
+        description={text.routeHistory.generatingDescription}
+        footerText={text.routeHistory.generatingFooter}
         animation="map-rendering"
       />
     </div>,
@@ -192,6 +198,7 @@ function RoutePosterGeneratingModal() {
 }
 
 function MyRouteHistoryPage() {
+  const text = useUiText();
   const navigate = useNavigate();
   const showToast = useUiToastStore((state) => state.showToast);
   const [selectedHistoryRoute, setSelectedHistoryRoute] = useState<{
@@ -322,11 +329,11 @@ function MyRouteHistoryPage() {
       });
 
       if (missingPhotoCount > 0) {
-        showToast(`사진 ${missingPhotoCount}장을 카드에 넣지 못했어요.`);
+        showToast(text.routeHistory.missingPhotoToast(missingPhotoCount));
       }
     } catch (error) {
       console.error(error);
-      showToast("DAY 포스터를 만들지 못했어요.");
+      showToast(text.routeHistory.createErrorToast);
     } finally {
       setPosterGeneratingRouteId(null);
     }
@@ -367,12 +374,12 @@ function MyRouteHistoryPage() {
 
       showToast(
         saveResult.mode === "native"
-          ? "포토카드 저장/공유를 완료했어요."
-          : `${selectedPosterCard.label} PNG 다운로드를 시작했어요.`
+          ? text.routeHistory.saveDoneToast
+          : text.routeHistory.downloadStartedToast(selectedPosterCard.label)
       );
     } catch (error) {
       console.error(error);
-      showToast("포토카드를 저장하지 못했어요.");
+      showToast(text.routeHistory.saveErrorToast);
     }
   };
 
@@ -401,8 +408,8 @@ function MyRouteHistoryPage() {
 
         showToast(
           saveResult.mode === "native"
-            ? "포토카드 저장/공유를 완료했어요."
-            : "공유를 지원하지 않아 PNG 다운로드를 시작했어요."
+            ? text.routeHistory.saveDoneToast
+            : text.routeHistory.shareDownloadToast
         );
       }
     } catch (error) {
@@ -411,7 +418,7 @@ function MyRouteHistoryPage() {
       }
 
       console.error(error);
-      showToast("포스터 공유를 완료하지 못했어요.");
+      showToast(text.routeHistory.shareErrorToast);
     }
   };
 
@@ -420,7 +427,7 @@ function MyRouteHistoryPage() {
       <header className="flex items-center gap-3">
         <button
           type="button"
-          aria-label="내 정보로 돌아가기"
+          aria-label={text.common.backToMyInfo}
           onClick={() => navigate("/me")}
           className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
         >
@@ -428,10 +435,10 @@ function MyRouteHistoryPage() {
         </button>
         <div className="min-w-0">
           <p className="text-xs font-black text-brand-700 dark:text-brand-200">
-            내 정보
+            {text.routeHistory.eyebrow}
           </p>
           <h1 className="truncate text-lg font-bold text-slate-900 dark:text-white">
-            다녀온 루트
+            {text.routeHistory.title}
           </h1>
         </div>
       </header>
@@ -443,10 +450,10 @@ function MyRouteHistoryPage() {
           </span>
           <div className="min-w-0">
             <p className="text-sm font-bold text-slate-900 dark:text-white">
-              완료했거나 지난 일정
+              {text.routeHistory.description}
             </p>
             <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-200/75">
-              불러온 {historyRoutes.length}개 루트 · 종료 후 7일 보정 가능
+              {text.routeHistory.loadedCount(historyRoutes.length)}
             </p>
           </div>
         </div>
@@ -454,14 +461,14 @@ function MyRouteHistoryPage() {
 
       {historyRoutesQuery.isError ? (
         <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
-          다녀온 루트를 불러오지 못했어요.
+          {text.routeHistory.loadError}
         </div>
       ) : null}
 
       {historyRoutesQuery.isLoading ? (
         <div className="flex min-h-[calc(100dvh-18rem)] flex-col justify-center">
           <PotatoLoadingCard
-            title="기록 찾는 중"
+            title={text.routeHistory.loadingTitle}
             animation="running"
             compact
             className="shadow-sm"
@@ -474,9 +481,9 @@ function MyRouteHistoryPage() {
       historyRoutes.length === 0 ? (
         <div className="flex min-h-[calc(100dvh-18rem)] flex-col justify-center">
           <PotatoLoadingCard
-            title="아직 다녀온 루트가 없어요."
-            description="감자가 빈 여행 기록을 보고 있어요."
-            footerText="일정을 완료하면 여기에 모여요."
+            title={text.routeHistory.emptyTitle}
+            description={text.routeHistory.emptyDescription}
+            footerText={text.routeHistory.emptyFooter}
             animation="empty"
             compact
             className="shadow-sm"
@@ -503,7 +510,7 @@ function MyRouteHistoryPage() {
           {historyRoutesQuery.isFetchingNextPage ? (
             <div className="py-2">
               <PotatoLoadingCard
-                title="다음 기록 찾는 중"
+                title={text.routeHistory.nextLoadingTitle}
                 animation="running"
                 compact
                 className="shadow-sm"
@@ -527,11 +534,11 @@ function MyRouteHistoryPage() {
               ? {
                   label:
                     posterGeneratingRouteId === selectedRouteDay.route.id
-                      ? "제작 중"
-                      : "DAY 카드",
+                      ? text.routeHistory.making
+                      : text.routeHistory.dayCard,
                   ariaLabel: `${getRouteTitle(
                     selectedRouteDay.route
-                  )} DAY 포스터 만들기`,
+                  )} ${text.routeHistory.posterTitle}`,
                   disabled: posterGeneratingRouteId === selectedRouteDay.route.id,
                   onClick: () => handleCreatePoster(selectedRouteDay.route),
                 }

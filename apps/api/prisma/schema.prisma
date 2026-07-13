@@ -211,10 +211,34 @@ model PlaceOverviewLocalization {
   overview       String
   overviewSource PlaceLocalizationOverviewSource
 
+  sourceOperatingHours String?
+  sourceRestDate       String?
+  sourceInfoCenter     String?
+  operatingHours       String?
+  restDate             String?
+  infoCenter           String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([provider, externalId, locale])
+  @@index([locale, updatedAt])
+}
+
+model TourCategoryLocalization {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  provider PlaceProvider @default(TOUR_API)
+  code     String
+  locale   String
+
+  label       String
+  sourceLabel String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, code, locale])
   @@index([locale, updatedAt])
 }
 
@@ -363,6 +387,7 @@ enum PlacePhotoStatus {
 
 enum PlaceLocalizationTitleSource {
   OPENAI
+  OVERRIDE
   SOURCE
 }
 

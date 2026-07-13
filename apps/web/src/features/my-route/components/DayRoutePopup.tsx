@@ -51,6 +51,12 @@ import {
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
+import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import {
+  localizePlaceCategoryLabel,
+  useUiText,
+  type UiText,
+} from "@/lib/uiText";
 import type {
   MyRoutesQuery,
   RouteStopVisitVerificationInput,
@@ -60,9 +66,8 @@ import {
   addDaysToDateKey,
   getDateKeyDiffInDays,
   getDayDateLabel,
-  getDaySummary,
   getRouteDateKey,
-  getRouteTitle,
+  formatRouteDate,
   getTodayDateKey,
   getSortedRouteDays,
   isVisitedStop,
@@ -215,7 +220,7 @@ type RouteStopSchedule = {
 
 const DEFAULT_ROUTE_DAY_START_MINUTES = 9 * 60;
 
-function formatClock(totalMinutes: number) {
+function formatClock(totalMinutes: number, text: UiText) {
   const normalizedMinutes = Math.max(0, Math.round(totalMinutes));
   const dayOffset = Math.floor(normalizedMinutes / (24 * 60));
   const minutesInDay = normalizedMinutes % (24 * 60);
@@ -227,33 +232,37 @@ function formatClock(totalMinutes: number) {
     return clockText;
   }
 
-  return dayOffset === 1 ? `다음날 ${clockText}` : `+${dayOffset}일 ${clockText}`;
+  return dayOffset === 1
+    ? text.dayRoute.nextDayClock(clockText)
+    : text.dayRoute.dayOffsetClock(dayOffset, clockText);
 }
 
-function formatStayMinutes(value: number | null) {
+function formatStayMinutes(value: number | null, text: UiText) {
   if (!value || value <= 0) {
-    return "시간 미정";
+    return text.dayRoute.noTime;
   }
 
   const hour = Math.floor(value / 60);
   const minute = value % 60;
-  const timeText =
-    hour > 0
-      ? `${hour}시간${minute > 0 ? ` ${minute}분` : ""}`
-      : `${minute}분`;
 
-  return timeText;
+  if (hour > 0 && minute > 0) {
+    return text.dayRoute.hoursMinutes(hour, minute);
+  }
+
+  return hour > 0 ? text.dayRoute.hours(hour) : text.dayRoute.minutes(minute);
 }
 
-function formatTravelMinutes(value: number) {
+function formatTravelMinutes(value: number, text: UiText) {
   if (value < 60) {
-    return `${value}분`;
+    return text.dayRoute.minutes(value);
   }
 
   const hour = Math.floor(value / 60);
   const minute = value % 60;
 
-  return minute > 0 ? `${hour}시간 ${minute}분` : `${hour}시간`;
+  return minute > 0
+    ? text.dayRoute.hoursMinutes(hour, minute)
+    : text.dayRoute.hours(hour);
 }
 
 function getRouteStopVerificationBadge(stop: MyRouteStop) {
@@ -540,18 +549,20 @@ function createTravelSegmentRequest(
   };
 }
 
-function getTravelSegmentLabel(segment: TravelSegmentState | null) {
+function getTravelSegmentLabel(segment: TravelSegmentState | null, text: UiText) {
   if (!segment || segment.status === "loading") {
-    return "이동 시간 계산 중";
+    return text.dayRoute.travelLoading;
   }
 
   if (segment.status === "error") {
-    return "이동 시간 확인 불가";
+    return text.dayRoute.travelError;
   }
 
-  const prefix = segment.status === "success" ? "차량 약" : "차량 추정";
+  const duration = formatTravelMinutes(segment.minutes, text);
 
-  return `${prefix} ${formatTravelMinutes(segment.minutes)}`;
+  return segment.status === "success"
+    ? text.dayRoute.travelByCar(duration)
+    : text.dayRoute.travelEstimatedByCar(duration);
 }
 
 function getStoredTravelSegment(stop: MyRouteStop | null | undefined) {
@@ -601,12 +612,15 @@ function buildRouteStopSchedules(
   });
 }
 
-function formatRouteStopSchedule(schedule: RouteStopSchedule) {
-  return `${formatClock(schedule.startMinutes)}-${formatClock(schedule.endMinutes)}`;
+function formatRouteStopSchedule(schedule: RouteStopSchedule, text: UiText) {
+  return `${formatClock(schedule.startMinutes, text)}-${formatClock(
+    schedule.endMinutes,
+    text
+  )}`;
 }
 
-function formatScheduleDuration(totalMinutes: number) {
-  return formatTravelMinutes(Math.max(0, totalMinutes));
+function formatScheduleDuration(totalMinutes: number, text: UiText) {
+  return formatTravelMinutes(Math.max(0, totalMinutes), text);
 }
 
 function clampStayMinutes(value: number) {
@@ -615,29 +629,59 @@ function clampStayMinutes(value: number) {
 
 function getDayStartTitle(
   dayStops: MyRouteStop[],
-  startLocation: MyRoute["startLocation"]
+  startLocation: MyRoute["startLocation"],
+  text: UiText
 ) {
   if (startLocation) {
-    return "저장한 출발 위치";
+    return text.dayRoute.savedStartLocation;
   }
 
-  return dayStops[0]?.place.title ?? "출발 장소 없음";
+  return dayStops[0]?.place.title ?? text.dayRoute.noStartPlace;
 }
 
 function getDayStartDescription(
   routeDay: MyRouteDay,
   dayStops: MyRouteStop[],
-  startLocation: MyRoute["startLocation"]
+  startLocation: MyRoute["startLocation"],
+  text: UiText
 ) {
   if (startLocation) {
-    return `DAY ${routeDay.dayIndex} 루트 지도에서 START로 표시돼요.`;
+    return text.dayRoute.startFromMapDescription(routeDay.dayIndex);
   }
 
   if (dayStops[0]) {
-    return `별도 출발지 없이 첫 장소부터 DAY ${routeDay.dayIndex}를 시작해요.`;
+    return text.dayRoute.startFromFirstPlaceDescription(routeDay.dayIndex);
   }
 
-  return "장소를 추가하면 첫 장소가 출발 기준으로 표시돼요.";
+  return text.dayRoute.emptyStartDescription;
+}
+
+function getLocalizedRouteTitle(route: MyRoute, text: UiText) {
+  const startDate = formatRouteDate(route.travelStartDate);
+  const endDate = formatRouteDate(route.travelEndDate);
+
+  if (!startDate) {
+    return text.dayRoute.undatedRouteTitle;
+  }
+
+  return text.dayRoute.routeTitle(startDate, endDate);
+}
+
+function getLocalizedDayDateLabel(day: MyRouteDay, text: UiText) {
+  return formatRouteDate(day.date) ?? text.dayRoute.dateUnknown;
+}
+
+function getLocalizedDaySummary(day: MyRouteDay, text: UiText) {
+  const firstPlace = day.stops[0]?.place.title;
+  const stopCount = day.stops.length;
+
+  if (!firstPlace || stopCount === 0) {
+    return text.dayRoute.daySummaryEmpty;
+  }
+
+  return stopCount > 1
+    ? text.dayRoute.daySummaryMore(firstPlace, stopCount - 1)
+    : firstPlace;
 }
 
 function isSameStopOrder(left: MyRouteStop[], rightIds: string[]) {
@@ -712,9 +756,12 @@ function RouteStopNode({
   onOpenPlace: (stop: MyRouteStop) => void;
   onOpenVerificationPhoto: (stop: MyRouteStop) => void;
 }) {
+  const text = useUiText();
   const isVisited = isVisitedStop(stop);
   const stayMinutes = stop.stayMinutes ?? 60;
-  const statusLabel = isVisited ? "완료됨" : "방문 전";
+  const statusLabel = isVisited
+    ? text.dayRoute.visited
+    : text.dayRoute.notVisited;
   const verificationBadge = isVisited
     ? getRouteStopVerificationBadge(stop)
     : null;
@@ -821,7 +868,10 @@ function RouteStopNode({
                   canOpenVerificationPhoto ? (
                     <button
                       type="button"
-                      aria-label={`${stop.place.title} ${verificationBadge.previewLabel} 보기`}
+                      aria-label={text.dayRoute.viewVerificationPhotoAria(
+                        stop.place.title,
+                        verificationBadge.previewLabel
+                      )}
                       onClick={(event) => {
                         event.stopPropagation();
                         onOpenVerificationPhoto(stop);
@@ -857,7 +907,10 @@ function RouteStopNode({
                   )
                 ) : null}
                 <span className="min-w-0 truncate text-xs font-semibold text-slate-500 dark:text-slate-300">
-                  {stop.place.categoryLabel ?? stop.place.categoryName ?? "장소"}
+                  {localizePlaceCategoryLabel(
+                    stop.place.categoryLabel ?? stop.place.categoryName,
+                    text
+                  )}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -871,7 +924,7 @@ function RouteStopNode({
                   <span className={stayTimeClass}>
                     <MdAccessTime className="text-sm" />
                     <span className="whitespace-nowrap">
-                      {formatStayMinutes(stayMinutes)}
+                      {formatStayMinutes(stayMinutes, text)}
                     </span>
                   </span>
                 ) : (
@@ -890,7 +943,7 @@ function RouteStopNode({
                       <MdAccessTime className="text-sm" />
                     )}
                     <span className="whitespace-nowrap">
-                      {formatStayMinutes(stayMinutes)}
+                      {formatStayMinutes(stayMinutes, text)}
                     </span>
                   </button>
                 )}
@@ -910,7 +963,7 @@ function RouteStopNode({
             {isOrderEditing ? (
               <button
                 type="button"
-                aria-label={`${stop.place.title} 순서 이동`}
+                aria-label={text.dayRoute.moveOrderAria(stop.place.title)}
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   onStartDrag(event);
@@ -925,15 +978,19 @@ function RouteStopNode({
                 type="button"
                 aria-label={
                   isVisited
-                    ? `${stop.place.title} 완료 취소`
-                    : `${stop.place.title} 완료 처리`
+                    ? text.dayRoute.cancelVisitAria(stop.place.title)
+                    : text.dayRoute.markVisitAria(stop.place.title)
                 }
                 onClick={(event) => {
                   event.stopPropagation();
                   onToggleVisited(stop);
                 }}
                 disabled={isVisitSaving}
-                title={isVisited ? "완료 취소" : "완료 처리"}
+                title={
+                  isVisited
+                    ? text.dayRoute.cancelVisitTitle
+                    : text.dayRoute.markVisitTitle
+                }
                 className={`flex size-8 shrink-0 items-center justify-center rounded-full border text-base transition active:scale-95 disabled:opacity-40 ${
                   isVisited
                     ? "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
@@ -954,7 +1011,9 @@ function RouteStopNode({
         {!isLast ? (
           <div className="ml-1 mt-2 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700 dark:bg-brand-400/10 dark:text-brand-100">
             <MdDirectionsCar className="text-sm" />
-            다음 장소까지 {getTravelSegmentLabel(travelSegmentToNext)}
+            {text.dayRoute.nextPlaceTravel(
+              getTravelSegmentLabel(travelSegmentToNext, text)
+            )}
           </div>
         ) : null}
       </div>
@@ -971,6 +1030,7 @@ function StayMinutesPopup({
   onClose: () => void;
   onApply: (target: StayMinutesEditTarget, stayMinutes: number) => void;
 }) {
+  const text = useUiText();
   const [draftMinutes, setDraftMinutes] = useState(
     target.stop.stayMinutes ?? 60
   );
@@ -1044,7 +1104,7 @@ function StayMinutesPopup({
         </div>
 
         <p className="mt-3 text-center text-sm font-black text-brand-700">
-          {formatStayMinutes(draftMinutes)}
+          {formatStayMinutes(draftMinutes, text)}
         </p>
 
         <div className="mt-5 grid grid-cols-2 gap-2">
@@ -1082,6 +1142,7 @@ function ActualStayMinutesPopup({
   onSkip: (target: ActualStayMinutesTarget) => void;
   onApply: (target: ActualStayMinutesTarget, actualStayMinutes: number) => void;
 }) {
+  const text = useUiText();
   const [draftMinutes, setDraftMinutes] = useState(
     target.stop.stayMinutes ?? 60
   );
@@ -1155,7 +1216,7 @@ function ActualStayMinutesPopup({
         </div>
 
         <p className="mt-3 text-center text-sm font-black text-brand-700">
-          {formatStayMinutes(draftMinutes)}
+          {formatStayMinutes(draftMinutes, text)}
         </p>
 
         <div className="mt-5 grid grid-cols-2 gap-2">
@@ -1645,6 +1706,7 @@ function DayRouteAccordionItem({
   onOpenPlace: (stop: MyRouteStop) => void;
   onOpenVerificationPhoto: (target: VerificationPhotoPreviewTarget) => void;
 }) {
+  const text = useUiText();
   const dayStops = orderedStops;
   const hasDayStops = dayStops.length > 0;
   const stopSchedules = useMemo(
@@ -1656,11 +1718,12 @@ function DayRouteAccordionItem({
   const totalScheduleMinutes = lastStopSchedule
     ? lastStopSchedule.endMinutes - DEFAULT_ROUTE_DAY_START_MINUTES
     : 0;
-  const dayStartTitle = getDayStartTitle(dayStops, startLocation);
+  const dayStartTitle = getDayStartTitle(dayStops, startLocation, text);
   const dayStartDescription = getDayStartDescription(
     routeDay,
     dayStops,
-    startLocation
+    startLocation,
+    text
   );
   const firstStop = dayStops[0] ?? null;
   const getFallbackTravelSegment = (
@@ -1675,8 +1738,8 @@ function DayRouteAccordionItem({
     getStoredTravelSegment(firstStop) ??
     (firstStop ? getFallbackTravelSegment(startLocation, firstStop.place) : null);
   const completedStopCount = dayStops.filter(isVisitedStop).length;
-  const startLabel = startLocation ? "출발" : "첫 장소";
-  const startTitlePrefix = startLocation ? "START" : "첫 장소";
+  const startLabel = startLocation ? text.dayRoute.start : text.dayRoute.firstPlace;
+  const startTitlePrefix = startLocation ? "START" : text.dayRoute.firstPlace;
   const progressPercent = hasDayStops
     ? Math.round((completedStopCount / dayStops.length) * 100)
     : 0;
@@ -1718,7 +1781,8 @@ function DayRouteAccordionItem({
                 DAY {routeDay.dayIndex}
               </p>
               <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
-                {getDayDateLabel(routeDay)} · {getDaySummary(routeDay)}
+                {getLocalizedDayDateLabel(routeDay, text)} ·{" "}
+                {getLocalizedDaySummary(routeDay, text)}
               </p>
               <p className="mt-1 flex items-center gap-1 truncate text-[11px] font-bold text-brand-700">
                 <MdMyLocation className="shrink-0 text-sm" />
@@ -1764,12 +1828,14 @@ function DayRouteAccordionItem({
                 {firstTravelSegment ? (
                   <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-brand-700">
                     <MdDirectionsCar className="text-sm" />
-                    첫 장소까지 {getTravelSegmentLabel(firstTravelSegment)}
+                    {text.dayRoute.firstPlaceTravel(
+                      getTravelSegmentLabel(firstTravelSegment, text)
+                    )}
                   </p>
                 ) : startLocation || !hasDayStops ? null : (
                   <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-slate-500">
                     <MdDirectionsCar className="text-sm" />
-                    출발 GPS 없음
+                    {text.dayRoute.noStartGps}
                   </p>
                 )}
               </div>
@@ -1796,8 +1862,10 @@ function DayRouteAccordionItem({
                       }`}
                     >
                       {isDayCleared
-                        ? "모든 장소 완료"
-                        : `${dayStops.length - completedStopCount}곳 남음`}
+                        ? text.dayRoute.allPlacesCompleted
+                        : text.dayRoute.remainingPlaces(
+                            dayStops.length - completedStopCount
+                          )}
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-black text-brand-700">
@@ -1820,33 +1888,33 @@ function DayRouteAccordionItem({
 
               {isOrderEditing ? (
                 <div className="mb-3 rounded-2xl border border-brand-100 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700">
-                  오른쪽 핸들을 잡고 원하는 위치로 옮겨 주세요.
+                  {text.dayRoute.dragGuide}
                 </div>
               ) : null}
               {firstStopSchedule && lastStopSchedule ? (
                 <div className="mb-4 grid grid-cols-3 gap-2">
                   <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400">
-                      예상 출발
+                      {text.dayRoute.expectedStart}
                     </p>
                     <p className="mt-0.5 text-sm font-black text-slate-900">
-                      {formatClock(DEFAULT_ROUTE_DAY_START_MINUTES)}
+                      {formatClock(DEFAULT_ROUTE_DAY_START_MINUTES, text)}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400">
-                      예상 종료
+                      {text.dayRoute.expectedEnd}
                     </p>
                     <p className="mt-0.5 text-sm font-black text-slate-900">
-                      {formatClock(lastStopSchedule.endMinutes)}
+                      {formatClock(lastStopSchedule.endMinutes, text)}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400">
-                      총 소요
+                      {text.dayRoute.totalDuration}
                     </p>
                     <p className="mt-0.5 text-sm font-black text-slate-900">
-                      {formatScheduleDuration(totalScheduleMinutes)}
+                      {formatScheduleDuration(totalScheduleMinutes, text)}
                     </p>
                   </div>
                 </div>
@@ -1859,7 +1927,7 @@ function DayRouteAccordionItem({
                 >
                   {isOrderEditing && activeDropIndex === index ? (
                     <div className="mb-2 rounded-2xl border border-dashed border-brand-500 bg-brand-50 px-3 py-2 text-center text-xs font-black text-brand-700">
-                      여기에 놓기
+                      {text.dayRoute.dropHere}
                     </div>
                   ) : null}
                   <RouteStopNode
@@ -1886,7 +1954,7 @@ function DayRouteAccordionItem({
                     }
                     scheduleLabel={
                       stopSchedules[index]
-                        ? formatRouteStopSchedule(stopSchedules[index])
+                        ? formatRouteStopSchedule(stopSchedules[index], text)
                         : null
                     }
                     onStartDrag={(event) => onStartDrag(stop, index, event)}
@@ -1904,14 +1972,14 @@ function DayRouteAccordionItem({
               ))}
               {isOrderEditing && activeDropIndex === dayStops.length ? (
                 <div className="rounded-2xl border border-dashed border-brand-500 bg-brand-50 px-3 py-2 text-center text-xs font-black text-brand-700">
-                  맨 뒤에 놓기
+                  {text.dayRoute.dropToEnd}
                 </div>
               ) : null}
             </>
           ) : (
             <PotatoLoadingCard
-              title="이 날은 아직 비어 있어요"
-              description="장소를 추가하면 이동 순서를 볼 수 있어요."
+              title={text.dayRoute.emptyDayTitle}
+              description={text.dayRoute.emptyDayDescription}
               animation="empty"
               compact
               className="shadow-sm"
@@ -1938,6 +2006,8 @@ function DayRoutePopup({
   readOnlyFooterAction,
   readOnlyPosterAction,
 }: DayRoutePopupProps) {
+  const appLanguage = useAppLanguageStore((state) => state.language);
+  const text = useUiText();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const openModal = useUiModalStore((state) => state.openModal);
@@ -2017,12 +2087,12 @@ function DayRoutePopup({
   const readOnlyActionLabel =
     readOnlyFooterAction?.label ??
     (isSharingRoute
-      ? "공유 중"
+      ? text.dayRoute.sharing
       : isRouteShared
-        ? "공유됨"
+        ? text.dayRoute.shared
         : isRouteCompleted
-          ? "공유하기"
-          : "완료 후 공유");
+          ? text.dayRoute.share
+          : text.dayRoute.shareAfterComplete);
   const readOnlyActionIcon = readOnlyFooterAction?.icon ?? (
     <MdShare className="text-lg" />
   );
@@ -2050,7 +2120,9 @@ function DayRoutePopup({
         return {
           id: routeDay.id,
           label: `DAY ${routeDay.dayIndex}`,
-          summary: `${getDayDateLabel(routeDay)} · ${stops.length}곳`,
+          summary: `${getLocalizedDayDateLabel(routeDay, text)} · ${text.dayRoute.placeCount(
+            stops.length
+          )}`,
           day: createPlannedRouteDay(routeDay, stops, route.startLocation),
           completedItemIds: stops
             .filter((stop) => isVisitedStop(stop))
@@ -2065,6 +2137,7 @@ function DayRoutePopup({
       orderedStops,
       route.startLocation,
       sortedDays,
+      text,
     ]
   );
   const firstRouteMapDayWithStops =
@@ -3037,6 +3110,7 @@ function DayRoutePopup({
         startLng: request.from.lng,
         goalLat: request.to.lat,
         goalLng: request.to.lng,
+        language: appLanguage,
       })
         .then((routeResult) => {
           if (isCancelled) {
@@ -3079,7 +3153,7 @@ function DayRoutePopup({
     return () => {
       isCancelled = true;
     };
-  }, [travelSegmentRequests]);
+  }, [appLanguage, travelSegmentRequests]);
 
   useEffect(() => {
     return () => {
@@ -3101,24 +3175,30 @@ function DayRoutePopup({
               ) : null}
               {isRouteShared && shouldShowSharedStatusText ? (
                 <span className="inline-flex items-center rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 dark:border-brand-400/35 dark:bg-slate-950 dark:text-brand-100">
-                  공유됨
+                  {text.dayRoute.routeShared}
                 </span>
               ) : null}
             </div>
             <h2 className="mt-0.5 truncate text-lg font-bold text-slate-900">
-              {getRouteTitle(route)}
+              {getLocalizedRouteTitle(route, text)}
             </h2>
             <p className="mt-0.5 text-xs font-semibold text-slate-500">
-              {route.tripDays}일 일정 · 전체 루트 {routeCompletedStopCount}/
-              {routeStopCount} 완료
+              {text.dayRoute.daySchedule(route.tripDays)} ·{" "}
+              {text.dayRoute.fullRouteProgress(
+                routeCompletedStopCount,
+                routeStopCount
+              )}
             </p>
             <p className="mt-0.5 text-[11px] font-bold text-brand-700">
-              DAY {activeDay.dayIndex} 선택됨 · {getDayDateLabel(activeDay)}
+              {text.dayRoute.selectedDay(
+                activeDay.dayIndex,
+                getLocalizedDayDateLabel(activeDay, text)
+              )}
             </p>
           </div>
           <button
             type="button"
-            aria-label="일차 경로 닫기"
+            aria-label={text.dayRoute.closeAria}
             onClick={onClose}
             className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
           >
@@ -3202,7 +3282,7 @@ function DayRoutePopup({
                 aria-label={
                   readOnlyFooterAction?.ariaLabel ??
                   (isRouteShared
-                    ? `하트 ${route.likeCount}개 받은 공유 루트`
+                    ? text.dayRoute.sharedRouteHeartAria(route.likeCount)
                     : readOnlyActionLabel)
                 }
                 onClick={readOnlyFooterAction?.onClick ?? handleRequestShareRoute}
@@ -3235,7 +3315,7 @@ function DayRoutePopup({
                 className="flex items-center justify-center gap-1.5 rounded-2xl bg-brand-600 px-3 py-3 text-sm font-bold text-white disabled:opacity-40"
               >
                 <MdMap className="text-lg" />
-                루트 지도
+                {text.dayRoute.routeMap}
               </button>
             </div>
           ) : isOrderEditing ? (
@@ -3295,7 +3375,7 @@ function DayRoutePopup({
                 className="flex items-center justify-center gap-1.5 rounded-2xl bg-brand-600 px-2 py-3 text-xs font-bold text-white disabled:opacity-40"
               >
                 <MdMap className="text-lg" />
-                루트 지도
+                {text.dayRoute.routeMap}
               </button>
             </div>
           )}

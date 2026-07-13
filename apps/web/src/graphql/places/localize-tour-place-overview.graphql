@@ -2,6 +2,9 @@ mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) 
   localizeTourPlaceOverview(input: $input) {
     contentId
     overview
+    operatingHours
+    restDate
+    infoCenter
     overviewSource
     cached
   }

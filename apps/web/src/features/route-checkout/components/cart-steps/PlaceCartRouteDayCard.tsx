@@ -18,6 +18,11 @@ import {
 import PlaceCartRouteMapPopup from "./PlaceCartRouteMapPopup";
 import PlaceCartRouteInsertSheet from "./PlaceCartRouteInsertSheet";
 import { MIN_PLACE_STAY_SUMMARY_VISIT_COUNT } from "@/lib/routePlaceSnapshot";
+import {
+  localizePlaceCategoryLabel,
+  useUiText,
+  type UiText,
+} from "@/lib/uiText";
 import type { MapSheetPlace } from "@/types/place";
 import type {
   PlannedRouteDay,
@@ -242,7 +247,7 @@ function moveDayItem(
   return nextItems;
 }
 
-function buildRouteStations(day: PlannedRouteDay): RouteStation[] {
+function buildRouteStations(day: PlannedRouteDay, text: UiText): RouteStation[] {
   const stations: RouteStation[] = day.startsFromCurrentLocation
     ? [
         {
@@ -266,15 +271,20 @@ function buildRouteStations(day: PlannedRouteDay): RouteStation[] {
     : [];
 
   day.items.forEach((item, itemIndex) => {
+    const categoryLabel = localizePlaceCategoryLabel(
+      item.place.contentTypeLabel,
+      text
+    );
+
     stations.push({
       id: item.id,
       type: "place",
       icon: item.place.icon,
       title: item.place.title,
-      subtitle: item.place.contentTypeLabel,
+      subtitle: categoryLabel,
       location: {
         title: item.place.title,
-        subtitle: item.place.contentTypeLabel,
+        subtitle: categoryLabel,
         lat: item.place.lat,
         lng: item.place.lng,
       },
@@ -990,7 +1000,16 @@ function PlaceCartRouteItemSheet({
     position: "first" | "last"
   ) => void;
 }) {
+  const text = useUiText();
   const movableDays = routePlan.filter((day) => day.day !== currentDay);
+  const contentTypeLabel = localizePlaceCategoryLabel(
+    item.place.contentTypeLabel,
+    text
+  );
+  const categoryName = localizePlaceCategoryLabel(
+    item.place.categoryName,
+    text
+  );
   const averageStayMinutesLabel = averageStaySummary?.averageActualStayMinutes
     && averageStaySummary.visitCount >= MIN_PLACE_STAY_SUMMARY_VISIT_COUNT
     ? getDurationText(averageStaySummary.averageActualStayMinutes)
@@ -1019,9 +1038,9 @@ function PlaceCartRouteItemSheet({
               {item.place.title}
             </h3>
             <p className="mt-1 text-sm font-semibold text-brand-700 dark:text-brand-100">
-              {item.place.icon} {item.place.contentTypeLabel}
+              {item.place.icon} {contentTypeLabel}
               {item.place.categoryName !== item.place.contentTypeLabel
-                ? ` · ${item.place.categoryName}`
+                ? ` · ${categoryName}`
                 : ""}
             </p>
           </div>
@@ -1156,6 +1175,7 @@ function PlaceCartRouteDayCard({
   onFinishOrderEditing,
   onRequestSearchPlace,
 }: PlaceCartRouteDayCardProps) {
+  const text = useUiText();
   const [isRouteMapOpen, setIsRouteMapOpen] = useState(false);
   const [dragState, dispatchDrag] = useReducer(
     routeDragReducer,
@@ -1174,7 +1194,7 @@ function PlaceCartRouteDayCard({
   );
   const [stayMinutesItem, setStayMinutesItem] =
     useState<PlannedRouteItem | null>(null);
-  const routeStations = buildRouteStations(day);
+  const routeStations = buildRouteStations(day, text);
   const routeRows = splitRouteRows(routeStations);
   const currentDayIndex = routePlan.findIndex(
     (routeDay) => routeDay.day === day.day

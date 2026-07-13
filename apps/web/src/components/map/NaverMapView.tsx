@@ -11,6 +11,8 @@ import {
   applyNaverMapTheme,
   getNaverMapThemeOptions,
 } from "@/lib/naverMapTheme";
+import { useUiText } from "@/lib/uiText";
+import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 
 export type NaverMapPoint = {
@@ -110,7 +112,7 @@ function NaverMapView({
   minZoom = 7,
   className = "relative bg-brand-50",
   mapClassName = "naver-map-root h-full w-full",
-  loadingLabel = "지도 준비 중",
+  loadingLabel,
   controls,
   interactions,
   mapOptions,
@@ -118,6 +120,8 @@ function NaverMapView({
   children,
   onReady,
 }: NaverMapViewProps) {
+  const appLanguage = useAppLanguageStore((state) => state.language);
+  const text = useUiText();
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<NaverMapInstance | null>(null);
@@ -197,6 +201,9 @@ function NaverMapView({
     });
 
     mapInstanceRef.current = null;
+    if (mapNodeRef.current) {
+      mapNodeRef.current.innerHTML = "";
+    }
 
     async function setupMap() {
       if (!mapNodeRef.current) {
@@ -204,7 +211,7 @@ function NaverMapView({
       }
 
       try {
-        await loadNaverMapSdk(NCP_KEY_ID);
+        await loadNaverMapSdk(NCP_KEY_ID, appLanguage);
 
         if (cancelled || !mapNodeRef.current || !window.naver?.maps) {
           return;
@@ -257,8 +264,12 @@ function NaverMapView({
       window.cancelAnimationFrame(resetFrameId);
       readyCleanup?.();
       mapInstanceRef.current = null;
+      if (mapNodeRef.current) {
+        mapNodeRef.current.innerHTML = "";
+      }
     };
   }, [
+    appLanguage,
     canInitializeMap,
     center.lat,
     center.lng,
@@ -291,7 +302,7 @@ function NaverMapView({
         <div className="absolute inset-0 flex items-center justify-center bg-brand-50">
           <div className="flex items-center gap-2 rounded-2xl border border-brand-100 bg-white px-4 py-3 text-xs font-bold text-brand-700 shadow-sm">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" />
-            {loadingLabel}
+            {loadingLabel ?? text.dayRoute.mapPreparing}
           </div>
         </div>
       ) : null}

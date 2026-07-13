@@ -16,6 +16,7 @@ import {
   toWeeklyAndMonthlySeries,
   type TouristConcentrationPoint,
 } from "@/lib/visitKoreaTourApi";
+import { useUiText } from "@/lib/uiText";
 
 type TrendTabType = "weekly" | "monthly";
 
@@ -46,12 +47,15 @@ function formatYmdLabel(ymd: string) {
   return `${month}.${day}`;
 }
 
-function buildTrendChartData(points: TouristConcentrationPoint[]) {
+function buildTrendChartData(
+  points: TouristConcentrationPoint[],
+  trendLabel: string
+) {
   return {
     labels: points.map((point) => formatYmdLabel(point.baseYmd)),
     datasets: [
       {
-        label: "예측 집중률",
+        label: trendLabel,
         data: points.map((point) => point.concentrationRate),
         borderColor: "#0d9488",
         backgroundColor: "rgba(13, 148, 136, 0.14)",
@@ -107,6 +111,7 @@ function PlaceTrendChart({
   errorMessage,
   isTouristAttraction,
 }: PlaceTrendChartProps) {
+  const text = useUiText();
   const [trendTab, setTrendTab] = useState<TrendTabType>("monthly");
   const concentrationSeries = useMemo(
     () => toWeeklyAndMonthlySeries(points),
@@ -117,8 +122,8 @@ function PlaceTrendChart({
       ? concentrationSeries.weekly
       : concentrationSeries.monthly;
   const trendChartData = useMemo(
-    () => buildTrendChartData(activeTrendPoints),
-    [activeTrendPoints]
+    () => buildTrendChartData(activeTrendPoints, text.placeSheet.trendLabel),
+    [activeTrendPoints, text.placeSheet.trendLabel]
   );
   const trendChartOptions = useMemo(
     () => ({
@@ -133,7 +138,7 @@ function PlaceTrendChart({
           intersect: false,
           callbacks: {
             label: (context: TooltipItem<"line">) =>
-              `예측 집중률 ${(context.parsed.y ?? 0).toFixed(1)}`,
+              text.placeSheet.trendTooltip(context.parsed.y ?? 0),
           },
         },
       },
@@ -170,13 +175,15 @@ function PlaceTrendChart({
         intersect: false,
       },
     }),
-    [trendTab]
+    [text.placeSheet, trendTab]
   );
 
   return (
     <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/30 dark:bg-slate-900/70">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="font-trip text-sm text-brand-700">예측 집중률 추이</p>
+        <p className="font-trip text-sm text-brand-700">
+          {text.placeSheet.trendTitle}
+        </p>
         <div className="inline-flex rounded-full border border-brand-200 bg-brand-50 p-1 dark:border-brand-400/30 dark:bg-slate-950/45">
           <button
             type="button"
@@ -187,7 +194,7 @@ function PlaceTrendChart({
                 : "text-brand-700"
             }`}
           >
-            주간
+            {text.placeSheet.weekly}
           </button>
           <button
             type="button"
@@ -198,7 +205,7 @@ function PlaceTrendChart({
                 : "text-brand-700"
             }`}
           >
-            월간
+            {text.placeSheet.monthly}
           </button>
         </div>
       </div>
@@ -216,15 +223,14 @@ function PlaceTrendChart({
             <p>
               {errorMessage ??
                 (isTouristAttraction
-                  ? "선택한 관광지의 예측 집중률 데이터가 아직 없습니다."
-                  : "예측 집중률 데이터는 관광지에 한해 제공됩니다.")}
+                  ? text.placeSheet.touristTrendEmpty
+                  : text.placeSheet.nonTouristTrendEmpty)}
             </p>
           </div>
         )}
       </div>
       <p className="mt-3 text-xs leading-5 text-slate-500">
-        이동통신 기반 방문자 집계 데이터를 바탕으로 산출한 관광지 예측 집중률
-        추이입니다.
+        {text.placeSheet.trendDescription}
       </p>
     </section>
   );

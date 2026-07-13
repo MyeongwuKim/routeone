@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
 import { createBadgeMarkerIconHtml } from "@/components/map/NaverMapMarkerIcon";
 import HomeMapControls from "@/components/home/HomeMapControls";
@@ -13,6 +13,7 @@ import {
 } from "@/data/gangwonRegions";
 import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
 import { getCurrentPosition } from "@/lib/currentPosition";
+import { useUiText } from "@/lib/uiText";
 import {
   readRecentPlaceSearches,
   writeRecentPlaceSearches,
@@ -56,7 +57,11 @@ import {
   fetchTouristConcentrationPoints,
   type GangwonAttraction,
 } from "@/lib/visitKoreaTourApi";
-import { localizeTourPlaces } from "@/lib/placeLocalization";
+import {
+  cacheTourCategoryLocalizationMap,
+  localizeTourPlaces,
+  readCachedTourCategoryLocalizationMap,
+} from "@/lib/placeLocalization";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
@@ -71,8 +76,67 @@ import {
 } from "@/pages/HomePage.constants";
 
 const MARKER_RENDER_CHUNK_SIZE = 80;
+const ENGLISH_DISPLAY_DATA_TIMEOUT_MS = 5_000;
+
+type HomeAttractionQueryData = {
+  allAttractions: GangwonAttraction[];
+  sourceAttractions: GangwonAttraction[];
+  topAttractions: Array<{
+    attraction: GangwonAttraction;
+    touristTrendName: string;
+  }>;
+  lclsNameByCode: Record<string, string>;
+  isLocalized: boolean;
+};
+
+function withTimeoutFallback<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: T
+) {
+  let timeoutId: number | undefined;
+
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => {
+      timeoutId = window.setTimeout(() => resolve(fallback), timeoutMs);
+    }),
+  ]).finally(() => {
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+    }
+  });
+}
+
+function mergeAttractionDisplayData(
+  sourceAttractions: GangwonAttraction[],
+  displayAttractions: GangwonAttraction[]
+) {
+  const displayAttractionById = new Map(
+    displayAttractions.map((attraction) => [attraction.id, attraction])
+  );
+
+  return sourceAttractions.map((sourceAttraction) => {
+    const displayAttraction = displayAttractionById.get(sourceAttraction.id);
+
+    if (!displayAttraction) {
+      return sourceAttraction;
+    }
+
+    return {
+      ...sourceAttraction,
+      title: displayAttraction.title || sourceAttraction.title,
+      address: displayAttraction.address || sourceAttraction.address,
+      firstImage: sourceAttraction.firstImage || displayAttraction.firstImage,
+      secondImage:
+        sourceAttraction.secondImage || displayAttraction.secondImage,
+    };
+  });
+}
 
 function HomePage() {
+  const text = useUiText();
+  const queryClient = useQueryClient();
   const appLanguage = useAppLanguageStore((state) => state.language);
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -81,12 +145,12 @@ function HomePage() {
   const boundaryPolygonRefs = useRef<any[]>([]);
   const markerRefs = useRef<any[]>([]);
   const markerListenerRefs = useRef<any[]>([]);
+  const hasRenderedAttractionMarkersRef = useRef(false);
+  const isUpdatingPlaceLabelsRef = useRef(false);
 
-  const {
-    openSheet,
-    closeSheet,
-    resetSheet,
-  } = useMapSheetStore();
+  const openSheet = useMapSheetStore((state) => state.openSheet);
+  const closeSheet = useMapSheetStore((state) => state.closeSheet);
+  const resetSheet = useMapSheetStore((state) => state.resetSheet);
   const {
     savedPlaceIds,
     savedPlaces,
@@ -114,8 +178,6 @@ function HomePage() {
   );
   const [attractionLoadingStage, setAttractionLoadingStage] =
     useState<AttractionLoadingStage>("idle");
-  const [hasRenderedAttractionMarkers, setHasRenderedAttractionMarkers] =
-    useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>(
     readRecentPlaceSearches
   );
@@ -123,6 +185,43 @@ function HomePage() {
   const [mapReady, setMapReady] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const updateHasRenderedAttractionMarkers = useCallback(
+    (hasRendered: boolean) => {
+      hasRenderedAttractionMarkersRef.current = hasRendered;
+    },
+    []
+  );
+
+  const loadLclsNameByCode = useCallback(async () => {
+    try {
+      const codeNameMap = await fetchLclsSystemNameMap(
+        TOUR_API_SERVICE_KEY,
+        appLanguage
+      );
+      void cacheTourCategoryLocalizationMap(codeNameMap, appLanguage);
+      return codeNameMap;
+    } catch (error) {
+      const cachedCodeNameMap =
+        await readCachedTourCategoryLocalizationMap(appLanguage);
+
+      if (Object.keys(cachedCodeNameMap).length > 0) {
+        return cachedCodeNameMap;
+      }
+
+      throw error;
+    }
+  }, [appLanguage]);
+
+  const attractionQueryKey = useMemo(
+    () =>
+      [
+        "gangwon-attractions",
+        "source-first-v2",
+        selectedSigunguCode,
+        appLanguage,
+      ] as const,
+    [appLanguage, selectedSigunguCode]
+  );
 
   const boundaryQuery = useQuery({
     queryKey: ["gangwon-boundary"],
@@ -138,8 +237,8 @@ function HomePage() {
     gcTime: Infinity,
   });
 
-  const attractionsQuery = useQuery({
-    queryKey: ["gangwon-attractions", selectedSigunguCode, appLanguage],
+  const attractionsQuery = useQuery<HomeAttractionQueryData>({
+    queryKey: attractionQueryKey,
     enabled: Boolean(TOUR_API_SERVICE_KEY),
     queryFn: async () => {
       setAttractionLoadingStage("fetching-places");
@@ -150,7 +249,7 @@ function HomePage() {
         festivals,
         concentrationPoints,
       ] = await Promise.all([
-        fetchLclsSystemNameMap(TOUR_API_SERVICE_KEY, "ko"),
+        loadLclsNameByCode(),
         fetchGangwonAttractions(TOUR_API_SERVICE_KEY, {
           sigunguCode: selectedSigunguCode || undefined,
           contentTypeIds: ["12", "39"],
@@ -172,6 +271,10 @@ function HomePage() {
           lclsNameByCode[CAFE_LCLS_CODE] ||
           (appLanguage === "en" ? "Cafe" : "카페"),
       };
+      void cacheTourCategoryLocalizationMap(
+        resolvedLclsNameByCode,
+        appLanguage
+      );
       setAttractionLoadingStage("ranking");
       const attractionsWithFestivals = [...attractions, ...festivals];
       const dedupedAttractions = attractionsWithFestivals.filter(
@@ -233,13 +336,33 @@ function HomePage() {
         });
       });
 
-      if (appLanguage === "en") {
-        setAttractionLoadingStage("localizing");
-      }
-      const displayAttractions = await localizeTourPlaces(
-        filteredAttractions,
-        appLanguage
-      );
+      const englishDisplayAttractions =
+        appLanguage === "en"
+          ? await withTimeoutFallback(
+              Promise.all([
+                fetchGangwonAttractions(TOUR_API_SERVICE_KEY, {
+                  sigunguCode: selectedSigunguCode || undefined,
+                  contentTypeIds: ["12", "39"],
+                }, "en").catch(() => [] as GangwonAttraction[]),
+                fetchGangwonFestivals(TOUR_API_SERVICE_KEY, {
+                  sigunguCode: selectedSigunguCode || undefined,
+                  lookAheadDays: 90,
+                }, "en").catch(() => [] as GangwonAttraction[]),
+              ]).then(([englishAttractions, englishFestivals]) => [
+                ...englishAttractions,
+                ...englishFestivals,
+              ]),
+              ENGLISH_DISPLAY_DATA_TIMEOUT_MS,
+              [] as GangwonAttraction[]
+            )
+          : [];
+      const displayAttractions =
+        englishDisplayAttractions.length > 0
+          ? mergeAttractionDisplayData(
+              filteredAttractions,
+              englishDisplayAttractions
+            )
+          : filteredAttractions;
       const displayAttractionByKey = new Map(
         displayAttractions.map((attraction) => [
           `${attraction.id}-${attraction.contentTypeId}`,
@@ -249,6 +372,7 @@ function HomePage() {
 
       return {
         allAttractions: displayAttractions,
+        sourceAttractions: filteredAttractions,
         topAttractions: topAttractions.map((item) => ({
           ...item,
           attraction:
@@ -257,11 +381,129 @@ function HomePage() {
             ) ?? item.attraction,
         })),
         lclsNameByCode: resolvedLclsNameByCode,
+        isLocalized: appLanguage !== "en",
       };
     },
     staleTime: 1000 * 60 * 60 * 12,
     gcTime: 1000 * 60 * 60 * 24,
   });
+
+  useEffect(() => {
+    const attractionData = attractionsQuery.data;
+
+    if (
+      appLanguage !== "en" ||
+      !attractionData ||
+      attractionData.isLocalized ||
+      attractionData.allAttractions.length === 0 ||
+      attractionsQuery.isFetching
+    ) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const sourceAttractions =
+      attractionData.sourceAttractions ?? attractionData.allAttractions;
+
+    void localizeTourPlaces(sourceAttractions, appLanguage)
+      .then((localizedAttractions) => {
+        if (isCancelled) {
+          return;
+        }
+
+        const sourceAttractionByKey = new Map(
+          sourceAttractions.map((attraction) => [
+            `${attraction.id}-${attraction.contentTypeId}`,
+            attraction,
+          ])
+        );
+        const hasLocalizedText = localizedAttractions.some((attraction) => {
+          const sourceAttraction = sourceAttractionByKey.get(
+            `${attraction.id}-${attraction.contentTypeId}`
+          );
+
+          return (
+            sourceAttraction &&
+            (attraction.title !== sourceAttraction.title ||
+              attraction.address !== sourceAttraction.address)
+          );
+        });
+
+        if (!hasLocalizedText) {
+          return;
+        }
+
+        const localizedAttractionByKey = new Map(
+          localizedAttractions.map((attraction) => [
+            `${attraction.id}-${attraction.contentTypeId}`,
+            attraction,
+          ])
+        );
+
+        isUpdatingPlaceLabelsRef.current = true;
+        queryClient.setQueryData<HomeAttractionQueryData>(
+          attractionQueryKey,
+          (currentData) => {
+            if (!currentData || currentData.isLocalized) {
+              isUpdatingPlaceLabelsRef.current = false;
+              return currentData;
+            }
+
+            const currentAttractionByKey = new Map(
+              currentData.allAttractions.map((attraction) => [
+                `${attraction.id}-${attraction.contentTypeId}`,
+                attraction,
+              ])
+            );
+            const nextAttractions = localizedAttractions.map((attraction) => {
+              const currentAttraction = currentAttractionByKey.get(
+                `${attraction.id}-${attraction.contentTypeId}`
+              );
+
+              if (!currentAttraction) {
+                return attraction;
+              }
+
+              return {
+                ...attraction,
+                firstImage:
+                  currentAttraction.firstImage || attraction.firstImage,
+                secondImage:
+                  currentAttraction.secondImage || attraction.secondImage,
+              };
+            });
+
+            return {
+              ...currentData,
+              allAttractions: nextAttractions,
+              sourceAttractions,
+              topAttractions: currentData.topAttractions.map((item) => ({
+                ...item,
+                attraction:
+                  localizedAttractionByKey.get(
+                    `${item.attraction.id}-${item.attraction.contentTypeId}`
+                  ) ?? item.attraction,
+              })),
+              isLocalized: true,
+            };
+          }
+        );
+      })
+      .catch((error) => {
+        console.warn("홈 장소 영문 현지화에 실패해 원문을 유지합니다.", error);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    appLanguage,
+    attractionQueryKey,
+    attractionsQuery.data,
+    attractionsQuery.isFetching,
+    queryClient,
+  ]);
 
   const festivalsQuery = useQuery({
     queryKey: ["gangwon-festivals", "90-days", appLanguage],
@@ -280,17 +522,17 @@ function HomePage() {
   const isBoundaryDataReady = boundaryQuery.isSuccess || boundaryQuery.isError;
   const isAttractionLoading = attractionsQuery.isFetching;
   const attractionError = !TOUR_API_SERVICE_KEY
-    ? "VITE_VISITKOREA_SERVICE_KEY가 비어있습니다."
+    ? text.home.missingTourKey
     : attractionsQuery.error instanceof Error
       ? attractionsQuery.error.message
       : null;
   const shouldShowAttractionLoader =
     Boolean(TOUR_API_SERVICE_KEY) &&
     !mapError &&
+    !attractionsQuery.data &&
     (attractionLoadingStage !== "idle" ||
       !mapReady ||
-      (attractionsQuery.isFetching && !hasRenderedAttractionMarkers) ||
-      Boolean(attractionsQuery.data && !hasRenderedAttractionMarkers));
+      attractionsQuery.isFetching);
   const festivalCountBySigunguCode = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -322,6 +564,14 @@ function HomePage() {
     GANGWON_REGIONS.find((region) => region.sigunguCode === selectedSigunguCode) ??
     GANGWON_REGIONS[0];
   const routeStartLocation = currentLocation ?? selectedRegion.center;
+  const placeSearchFilters = useMemo(
+    () =>
+      PLACE_SEARCH_FILTERS.map((filter) => ({
+        ...filter,
+        label: text.search.filters[filter.key],
+      })),
+    [text]
+  );
 
   const topRankByAttractionId = useMemo(() => {
     const map = new Map<string, number>();
@@ -544,9 +794,9 @@ function HomePage() {
 
     if (!mapReady) {
       showLoading({
-        title: "지도를 준비하고 있어요",
-        description: "지도를 다시 연결하는 중",
-        footerText: "감자 분석 모드 진행 중",
+        title: text.home.loadingMapTitle,
+        description: text.home.loadingMapDescription,
+        footerText: text.home.loadingFooter,
         animation: "map-rendering",
       });
       return;
@@ -559,9 +809,9 @@ function HomePage() {
         !attractionsQuery.data)
     ) {
       showLoading({
-        title: "장소 데이터를 찾고 있어요",
-        description: "지도를 보면서 장소 후보를 찾는 중",
-        footerText: "감자 분석 모드 진행 중",
+        title: text.home.loadingPlacesTitle,
+        description: text.home.loadingPlacesDescription,
+        footerText: text.home.loadingFooter,
         animation: "map-thinking",
       });
       return;
@@ -570,27 +820,27 @@ function HomePage() {
     if (attractionLoadingStage === "ranking" || attractionsQuery.isFetching) {
       if (attractionLoadingStage === "localizing") {
         showLoading({
-          title: "영문 장소 정보를 준비하고 있어요",
-          description: "공식 영문주소와 장소명을 저장하는 중",
-          footerText: "다음부터는 저장된 정보를 바로 불러와요",
+          title: text.home.loadingEnglishTitle,
+          description: text.home.loadingEnglishDescription,
+          footerText: text.home.loadingEnglishFooter,
           animation: "searching",
         });
         return;
       }
 
       showLoading({
-        title: "순위를 매기고 있어요",
-        description: "방문자 집중률 예측 데이터를 정리하는 중",
-        footerText: "감자 분석 모드 진행 중",
+        title: text.home.loadingRankingTitle,
+        description: text.home.loadingRankingDescription,
+        footerText: text.home.loadingFooter,
         animation: "ranking",
       });
       return;
     }
 
     showLoading({
-      title: "지도를 그리고 있어요",
-      description: "지도 위에 핀을 배치하는 중",
-      footerText: "감자 분석 모드 진행 중",
+      title: text.home.loadingMarkersTitle,
+      description: text.home.loadingMarkersDescription,
+      footerText: text.home.loadingFooter,
       animation: "map-rendering",
     });
   }, [
@@ -602,6 +852,7 @@ function HomePage() {
     mapReady,
     shouldShowAttractionLoader,
     showLoading,
+    text,
   ]);
 
   useEffect(() => {
@@ -897,7 +1148,7 @@ function HomePage() {
     }
 
     if (!NCP_KEY_ID) {
-      setMapError("VITE_NCP_MAPS_KEY_ID가 설정되지 않았습니다.");
+      setMapError(text.home.mapMissingKey);
       return;
     }
 
@@ -905,15 +1156,17 @@ function HomePage() {
     let resizeObserver: ResizeObserver | null = null;
     let handleResize: (() => void) | null = null;
 
+    setMapReady(false);
+    setMapError(null);
+    container.innerHTML = "";
+
     window.navermap_authFailure = () => {
-      setMapError(
-        "네이버 지도 인증에 실패했습니다. Web 서비스 URL(localhost/127.0.0.1)을 확인해 주세요."
-      );
+      setMapError(text.home.mapAuthError);
     };
 
     const initializeMap = async () => {
       try {
-        await loadNaverMapSdk(NCP_KEY_ID);
+        await loadNaverMapSdk(NCP_KEY_ID, appLanguage);
 
         if (isDisposed) {
           return;
@@ -922,7 +1175,7 @@ function HomePage() {
         const naverMaps = window.naver?.maps;
 
         if (!naverMaps) {
-          setMapError("Naver Maps SDK를 찾을 수 없습니다.");
+          setMapError(text.home.mapSdkMissing);
           return;
         }
 
@@ -978,7 +1231,9 @@ function HomePage() {
         });
         resizeObserver.observe(container);
       } catch {
-        setMapError("지도 로드에 실패했습니다. 키와 도메인 등록을 확인해 주세요.");
+        if (!isDisposed) {
+          setMapError(text.home.mapLoadError);
+        }
       }
     };
 
@@ -1000,7 +1255,7 @@ function HomePage() {
       window.navermap_authFailure = undefined;
       container.innerHTML = "";
     };
-  }, [closeSheet]);
+  }, [appLanguage, closeSheet, text]);
 
   useEffect(() => {
     applyNaverMapTheme(mapInstanceRef.current, isDarkMode);
@@ -1021,9 +1276,14 @@ function HomePage() {
     }
 
     closeSheet();
-    setHasRenderedAttractionMarkers(false);
+    updateHasRenderedAttractionMarkers(false);
     clearMarkers();
-  }, [closeSheet, mapReady, selectedSigunguCode]);
+  }, [
+    closeSheet,
+    mapReady,
+    selectedSigunguCode,
+    updateHasRenderedAttractionMarkers,
+  ]);
 
   useEffect(() => {
     const mapInstance = mapInstanceRef.current;
@@ -1034,8 +1294,14 @@ function HomePage() {
       return;
     }
 
-    setAttractionLoadingStage("rendering-markers");
-    setHasRenderedAttractionMarkers(false);
+    const isPlaceLabelUpdate =
+      isUpdatingPlaceLabelsRef.current &&
+      hasRenderedAttractionMarkersRef.current;
+
+    if (!isPlaceLabelUpdate) {
+      setAttractionLoadingStage("rendering-markers");
+      updateHasRenderedAttractionMarkers(false);
+    }
     clearMarkers();
     const markerBounds = new naverMaps.LatLngBounds();
     let visibleMarkerCount = 0;
@@ -1061,12 +1327,15 @@ function HomePage() {
         return;
       }
 
-      fitMapToSelectedRegion({
-        smooth: true,
-        fallbackBounds: visibleMarkerCount > 0 ? markerBounds : null,
-      });
-      setHasRenderedAttractionMarkers(true);
+      if (!isPlaceLabelUpdate) {
+        fitMapToSelectedRegion({
+          smooth: true,
+          fallbackBounds: visibleMarkerCount > 0 ? markerBounds : null,
+        });
+      }
+      updateHasRenderedAttractionMarkers(true);
       setAttractionLoadingStage("idle");
+      isUpdatingPlaceLabelsRef.current = false;
     };
 
     let markerIndex = 0;
@@ -1117,7 +1386,7 @@ function HomePage() {
               rank ? `${rank}` : undefined,
               {
                 highlighted: isTodayFestival,
-                highlightLabel: "오늘",
+                highlightLabel: text.home.today,
               }
             ),
             anchor: new naverMaps.Point(markerAnchor, markerAnchor),
@@ -1150,6 +1419,9 @@ function HomePage() {
 
     return () => {
       isCancelled = true;
+      if (isPlaceLabelUpdate) {
+        isUpdatingPlaceLabelsRef.current = false;
+      }
 
       if (frameId != null) {
         window.cancelAnimationFrame(frameId);
@@ -1162,6 +1434,8 @@ function HomePage() {
     selectedSigunguCode,
     topRankByAttractionId,
     trendNameByAttractionId,
+    updateHasRenderedAttractionMarkers,
+    text,
   ]);
 
   useEffect(() => {
@@ -1182,7 +1456,7 @@ function HomePage() {
         regions={orderedRegions}
         selectedSigunguCode={selectedSigunguCode}
         festivalCountBySigunguCode={festivalCountBySigunguCode}
-        filters={PLACE_SEARCH_FILTERS}
+        filters={placeSearchFilters}
         selectedFilter={searchFilter}
         savedPlaceCount={savedPlaceIds.length}
         isSavedPlaceCountLoading={isAttractionLoading}
@@ -1206,10 +1480,10 @@ function HomePage() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-black text-slate-900">
-                {appendTarget.routeTitle}에 DAY 추가 중
+                {text.home.appendDayTitle(appendTarget.routeTitle)}
               </p>
               <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                장소를 담고 체크아웃에서 추가할 일정을 확인해요
+                {text.home.appendDayDescription}
               </p>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <button
@@ -1220,14 +1494,14 @@ function HomePage() {
                   }}
                   className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-bold text-white"
                 >
-                  체크아웃
+                  {text.home.checkout}
                 </button>
                 <button
                   type="button"
                   onClick={clearAppendTarget}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500"
                 >
-                  취소
+                  {text.common.cancel}
                 </button>
               </div>
             </div>
@@ -1257,7 +1531,7 @@ function HomePage() {
       {isSearchPopupOpen ? (
         <PlaceSearchPopup
           searchInputRef={searchInputRef}
-          filters={PLACE_SEARCH_FILTERS}
+          filters={placeSearchFilters}
           searchKeyword={searchKeyword}
           searchFilter={searchFilter}
           searchResults={searchResults}

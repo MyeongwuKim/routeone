@@ -23,6 +23,7 @@ import {
   SHARED_ROUTES_QUERY_KEY,
 } from "@/features/my-route/myRouteCache";
 import { clearAuthToken } from "@/lib/authToken";
+import { useUiText } from "@/lib/uiText";
 import {
   getAuthUserLabel,
   useAuthUserStore,
@@ -125,6 +126,7 @@ function MyInfoToggleRow({
 }
 
 function MyInfoPage() {
+  const text = useUiText();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
@@ -143,7 +145,9 @@ function MyInfoPage() {
   const user = authUser ?? meQuery.data?.me ?? null;
   const activeAccountLabel =
     getAuthUserLabel(user) ??
-    (meQuery.isLoading ? "계정 확인 중" : "로컬 테스트 계정");
+    (meQuery.isLoading
+      ? text.myInfo.accountChecking
+      : text.myInfo.localTestAccount);
 
   useEffect(() => {
     if (meQuery.data?.me) {
@@ -166,7 +170,7 @@ function MyInfoPage() {
     queryClient.removeQueries({
       queryKey: LIKED_SHARED_ROUTES_QUERY_KEY,
     });
-    showToast("로그아웃했어요.");
+    showToast(text.myInfo.logoutToast);
     navigate("/login", {
       replace: true,
     });
@@ -176,12 +180,14 @@ function MyInfoPage() {
     <section className="space-y-4 text-slate-900">
       <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm">
         <div className="border-b border-brand-50 px-4 py-3">
-          <p className="text-xs font-black text-brand-700">내 정보 메뉴</p>
+          <p className="text-xs font-black text-brand-700">
+            {text.myInfo.menuSection}
+          </p>
         </div>
 
         <MyInfoMenuRow
           icon={<MdOutlineAccountCircle />}
-          title="아이디 정보"
+          title={text.myInfo.accountInfo}
           description={activeAccountLabel}
           onClick={() => navigate("/me/account")}
         />
@@ -190,8 +196,8 @@ function MyInfoPage() {
 
         <MyInfoMenuRow
           icon={<MdHistory />}
-          title="다녀온 루트"
-          description="완료했거나 지난 일정 모아보기"
+          title={text.myInfo.visitedRoutes}
+          description={text.myInfo.visitedRoutesDescription}
           onClick={() => navigate("/me/routes")}
         />
 
@@ -199,21 +205,23 @@ function MyInfoPage() {
 
         <MyInfoMenuRow
           icon={<FaHeart />}
-          title="좋아요한 공유 루트"
-          description="내가 좋아요한 공유 루트 모아보기"
+          title={text.myInfo.likedRoutes}
+          description={text.myInfo.likedRoutesDescription}
           onClick={() => navigate("/me/liked-routes")}
         />
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm">
         <div className="border-b border-brand-50 px-4 py-3">
-          <p className="text-xs font-black text-brand-700">앱 설정</p>
+          <p className="text-xs font-black text-brand-700">
+            {text.myInfo.settingsSection}
+          </p>
         </div>
 
         <MyInfoToggleRow
           icon={isDarkMode ? <MdDarkMode /> : <MdLightMode />}
-          title="다크 모드"
-          description={isDarkMode ? "어두운 화면으로 보기" : "밝은 화면으로 보기"}
+          title={text.myInfo.darkMode}
+          description={isDarkMode ? text.myInfo.darkModeOn : text.myInfo.darkModeOff}
           checked={isDarkMode}
           onToggle={toggleDarkMode}
         />
@@ -222,8 +230,8 @@ function MyInfoPage() {
 
         <MyInfoMenuRow
           icon={<MdLanguage />}
-          title="언어 설정"
-          description={language === "ko" ? "한국어" : "English"}
+          title={text.myInfo.language}
+          description={language === "ko" ? text.myInfo.korean : text.myInfo.english}
           onClick={() => navigate("/me/language")}
         />
 
@@ -231,8 +239,8 @@ function MyInfoPage() {
 
         <MyInfoMenuRow
           icon={<MdInfoOutline />}
-          title="버전 정보"
-          description="iOS, Android 앱 버전 확인"
+          title={text.myInfo.appInfo}
+          description={text.myInfo.appInfoDescription}
           onClick={() => navigate("/me/app-info")}
         />
 
@@ -240,8 +248,8 @@ function MyInfoPage() {
 
         <MyInfoMenuRow
           icon={<MdLogout />}
-          title="로그아웃"
-          description="현재 계정에서 나가기"
+          title={text.myInfo.logout}
+          description={text.myInfo.logoutDescription}
           tone="danger"
           onClick={handleLogout}
         />

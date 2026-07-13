@@ -14,6 +14,7 @@ import {
   getNextRouteStop,
   getRouteDayState,
 } from "../routeDisplay";
+import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
 import type { MyRouteDay } from "../types";
 
 type RouteDayState = ReturnType<typeof getRouteDayState>;
@@ -182,6 +183,7 @@ function TodayRoutePreview({ day }: { day: MyRouteDay }) {
 }
 
 function TodayNextStopCard({ day }: { day: MyRouteDay }) {
+  const text = useUiText();
   const nextStop = getNextRouteStop(day);
 
   if (!nextStop) {
@@ -223,7 +225,10 @@ function TodayNextStopCard({ day }: { day: MyRouteDay }) {
           {nextStop.place.title}
         </p>
         <p className="mt-0.5 truncate text-[11px] font-semibold text-white/70">
-          {nextStop.place.categoryLabel ?? nextStop.place.categoryName ?? "장소"}
+          {localizePlaceCategoryLabel(
+            nextStop.place.categoryLabel ?? nextStop.place.categoryName,
+            text
+          )}
         </p>
       </div>
       <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-lg text-white shadow-sm">

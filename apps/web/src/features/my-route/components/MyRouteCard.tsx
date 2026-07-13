@@ -28,6 +28,7 @@ import {
   getTodayRouteDay,
 } from "../routeDisplay";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
+import { useUiText, type UiText } from "@/lib/uiText";
 
 type MyRouteCardProps = {
   route: MyRoute;
@@ -83,26 +84,30 @@ function getAverageActualStayMinutes(stops: MyRouteStop[]) {
   return Math.round(totalMinutes / actualStayMinutes.length);
 }
 
-function formatStayMinutes(minutes: number | null) {
+function formatStayMinutes(minutes: number | null, text: UiText) {
   if (!minutes) {
     return null;
   }
 
   if (minutes < 60) {
-    return `${minutes}분`;
+    return text.myRouteCard.durationMinutes(minutes);
   }
 
   const hours = Math.floor(minutes / 60);
   const restMinutes = minutes % 60;
 
-  return restMinutes > 0 ? `${hours}시간 ${restMinutes}분` : `${hours}시간`;
+  return restMinutes > 0
+    ? text.myRouteCard.durationHoursMinutes(hours, restMinutes)
+    : text.myRouteCard.durationHours(hours);
 }
 
 function SharedRouteStatusBadge() {
+  const text = useUiText();
+
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-black text-brand-700 dark:border-brand-400/35 dark:bg-brand-400/15 dark:text-brand-100">
       <MdShare className="text-xs" />
-      공유됨
+      {text.myRouteCard.shared}
     </span>
   );
 }
@@ -116,6 +121,7 @@ function MyRouteHistoryCard({
   todayKey: string;
   onSelectDay: (route: MyRoute, day: MyRouteDay) => void;
 }) {
+  const text = useUiText();
   const [isStopExpanded, setIsStopExpanded] = useState(false);
   const sortedDays = getSortedRouteDays(route);
   const selectableDay = getSelectableRouteDay(route, todayKey);
@@ -130,14 +136,18 @@ function MyRouteHistoryCard({
   const photoRecordStopCount = getPhotoRecordRouteStopCount(visitedStops);
   const verificationSummaryText =
     photoRecordStopCount > 0
-      ? `GPS ${verifiedStopCount} · 기록 ${photoRecordStopCount}`
-      : `${verifiedStopCount}곳`;
+      ? `GPS ${verifiedStopCount} · ${text.myRouteCard.photoRecord} ${photoRecordStopCount}`
+      : text.myRouteCard.placeCount(verifiedStopCount);
   const averageStayLabel = formatStayMinutes(
-    getAverageActualStayMinutes(visitedStops)
+    getAverageActualStayMinutes(visitedStops),
+    text
   );
   const visibleDays = sortedDays.slice(0, 3);
   const hiddenDayCount = Math.max(0, sortedDays.length - visibleDays.length);
-  const completionText = `${visitedStops.length}/${route.totalStopCount}곳 방문`;
+  const completionText = text.myRouteCard.visitedCount(
+    visitedStops.length,
+    route.totalStopCount
+  );
 
   return (
     <article className="relative w-full overflow-hidden rounded-2xl border border-transparent bg-white bg-clip-padding text-left shadow-sm transition after:pointer-events-none after:absolute after:inset-0 after:rounded-2xl after:border after:border-brand-100 after:content-[''] hover:after:border-brand-200 dark:bg-[#071f1d] dark:shadow-[0_16px_34px_rgba(0,0,0,0.28)] dark:after:border-brand-300/50 dark:hover:after:border-brand-200/70">
@@ -155,12 +165,15 @@ function MyRouteHistoryCard({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
-                지난 루트
+                {text.myRouteCard.pastRoute}
               </span>
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600 dark:bg-slate-900/80 dark:text-slate-100">
                 {route.tripDays <= 1
-                  ? "당일치기"
-                  : `${route.tripDays - 1}박 ${route.tripDays}일`}
+                  ? text.myRouteCard.dayTrip
+                  : text.myRouteCard.nightTrip(
+                      route.tripDays - 1,
+                      route.tripDays
+                    )}
               </span>
               {isRouteShared(route) ? <SharedRouteStatusBadge /> : null}
             </div>
@@ -180,7 +193,7 @@ function MyRouteHistoryCard({
         <div className="mt-3 grid grid-cols-3 gap-2">
           <div className="min-w-0 rounded-xl bg-brand-50 px-3 py-2 dark:bg-brand-400/15">
             <p className="text-[10px] font-black text-brand-700 dark:text-brand-100">
-              완료
+              {text.myRouteCard.completed}
             </p>
             <p className="mt-0.5 truncate text-xs font-black text-slate-900 dark:text-white">
               {completionText}
@@ -189,7 +202,7 @@ function MyRouteHistoryCard({
           <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-950/50">
             <p className="flex items-center gap-1 whitespace-nowrap text-[10px] font-black text-slate-500 dark:text-slate-200/80">
               <MdVerified className="text-xs text-brand-600 dark:text-brand-200" />
-              증빙
+              {text.myRouteCard.proof}
             </p>
             <p className="mt-0.5 truncate text-xs font-black text-slate-900 dark:text-white">
               {verificationSummaryText}
@@ -198,7 +211,7 @@ function MyRouteHistoryCard({
           <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-950/50">
             <p className="flex items-center gap-1 text-[10px] font-black text-slate-500 dark:text-slate-200/80">
               <MdTimer className="text-xs text-brand-600 dark:text-brand-200" />
-              평균
+              {text.myRouteCard.average}
             </p>
             <p className="mt-0.5 truncate text-xs font-black text-slate-900 dark:text-white">
               {averageStayLabel ?? "-"}
@@ -247,7 +260,7 @@ function MyRouteHistoryCard({
                 onClick={() => setIsStopExpanded(true)}
                 className="inline-flex min-w-0 items-center justify-center rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100 transition active:scale-95 dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-300/30"
               >
-                +{hiddenStopCount}곳
+                +{text.myRouteCard.placeCount(hiddenStopCount)}
               </button>
             ) : null}
             {canToggleStops && isStopExpanded ? (
@@ -257,7 +270,7 @@ function MyRouteHistoryCard({
                 onClick={() => setIsStopExpanded(false)}
                 className="inline-flex min-w-0 items-center justify-center rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-slate-500 ring-1 ring-slate-200 transition active:scale-95 dark:bg-[#061b19] dark:text-slate-200 dark:ring-brand-200/45"
               >
-                접기
+                {text.myRouteCard.folded}
               </button>
             ) : null}
           </div>
@@ -281,14 +294,15 @@ function MyRouteHistoryCard({
                 </span>
                 <span className="h-1 w-1 shrink-0 rounded-full bg-slate-300 dark:bg-slate-500" />
                 <span className="truncate">
-                  {completedStopCount}/{day.stops.length}곳
+                  {text.myRouteCard.placeCount(completedStopCount)}/
+                  {text.myRouteCard.placeCount(day.stops.length)}
                 </span>
               </button>
             );
           })}
           {hiddenDayCount > 0 ? (
             <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-slate-500 ring-1 ring-slate-200 dark:bg-[#061b19] dark:text-slate-200 dark:ring-brand-200/45">
-              +{hiddenDayCount}일
+              +{text.myRouteCard.dayCount(hiddenDayCount)}
             </span>
           ) : null}
         </div>
@@ -310,8 +324,10 @@ function MyRouteUpcomingCard({
   onRequestStartRoute?: (route: MyRoute) => void;
   onRequestDeleteRoute?: (route: MyRoute) => void;
 }) {
+  const text = useUiText();
   const selectableDay = getSelectableRouteDay(route, todayKey);
-  const startDateLabel = formatRouteDate(route.travelStartDate) ?? "미정";
+  const startDateLabel =
+    formatRouteDate(route.travelStartDate) ?? text.myRoute.unknownDate;
   const shouldShowStartAction =
     onRequestStartRoute && canRequestRouteStart(route);
 
@@ -347,7 +363,7 @@ function MyRouteUpcomingCard({
         {onRequestDeleteRoute ? (
           <button
             type="button"
-            aria-label={`${getRouteTitle(route)} 삭제`}
+            aria-label={`${getRouteTitle(route)} ${text.myRoute.delete}`}
             onClick={() => onRequestDeleteRoute(route)}
             className="flex size-9 shrink-0 items-center justify-center rounded-full border border-rose-100 bg-white text-lg text-rose-500 transition hover:bg-rose-50 active:scale-95"
           >
@@ -369,7 +385,7 @@ function MyRouteUpcomingCard({
             className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-brand-600 px-3 text-[11px] font-black text-white shadow-sm transition active:scale-95"
           >
             <MdPlayArrow className="text-sm" />
-            여행 시작
+            {text.myRouteCard.startTravel}
           </button>
         ) : null}
       </div>
@@ -392,6 +408,7 @@ function MyRouteCompactCard({
   onRequestStartRoute?: (route: MyRoute) => void;
   onRequestDeleteRoute?: (route: MyRoute) => void;
 }) {
+  const text = useUiText();
   const selectableDay = getSelectableRouteDay(route, todayKey);
   const shouldShowStartAction =
     onRequestStartRoute && canRequestRouteStart(route);
@@ -424,7 +441,7 @@ function MyRouteCompactCard({
                 </span>
               )}
               <span className="text-xs font-bold text-slate-400">
-                {route.totalStopCount}곳
+                {text.myRouteCard.placeCount(route.totalStopCount)}
               </span>
               {isRouteShared(route) ? <SharedRouteStatusBadge /> : null}
             </div>
@@ -444,13 +461,13 @@ function MyRouteCompactCard({
             className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-brand-600 px-3 text-xs font-black text-white shadow-sm transition active:scale-95"
           >
             <MdPlayArrow className="text-base" />
-            시작
+            {text.myRouteCard.start}
           </button>
         ) : null}
         {onRequestDeleteRoute ? (
           <button
             type="button"
-            aria-label={`${getRouteTitle(route)} 삭제`}
+            aria-label={`${getRouteTitle(route)} ${text.myRoute.delete}`}
             onClick={() => onRequestDeleteRoute(route)}
             className="flex size-9 shrink-0 items-center justify-center rounded-full border border-rose-100 bg-white text-lg text-rose-500 transition hover:bg-rose-50 active:scale-95"
           >
@@ -478,6 +495,7 @@ function MyRouteCard({
   onRequestAppendDay,
   onRequestDeleteRoute,
 }: MyRouteCardProps) {
+  const text = useUiText();
   const todayKey = getTodayDateKey();
 
   if (variant === "upcoming") {
@@ -549,7 +567,7 @@ function MyRouteCard({
               </span>
             )}
             <span className="text-xs font-semibold text-slate-400">
-              {route.totalStopCount}곳
+              {text.myRouteCard.placeCount(route.totalStopCount)}
             </span>
             {isRouteShared(route) ? <SharedRouteStatusBadge /> : null}
           </div>
@@ -569,13 +587,13 @@ function MyRouteCard({
               className="inline-flex h-9 items-center gap-1 rounded-full bg-brand-600 px-3 text-xs font-black text-white shadow-sm transition active:scale-95"
             >
               <MdPlayArrow className="text-base" />
-              여행 시작
+              {text.myRouteCard.startTravel}
             </button>
           ) : null}
           {onRequestDeleteRoute ? (
             <button
               type="button"
-              aria-label={`${getRouteTitle(route)} 삭제`}
+              aria-label={`${getRouteTitle(route)} ${text.myRoute.delete}`}
               onClick={() => onRequestDeleteRoute(route)}
               className="flex size-9 items-center justify-center rounded-full border border-rose-100 bg-white text-lg text-rose-500 transition hover:bg-rose-50 active:scale-95"
             >
@@ -596,9 +614,11 @@ function MyRouteCard({
         {todayRouteDay && (visibleDays.length > 0 || onRequestAppendDay) ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1 pt-1">
-              <p className="text-xs font-black text-slate-500">나머지 Day</p>
+              <p className="text-xs font-black text-slate-500">
+                {text.myRouteCard.remainingDays}
+              </p>
               <p className="text-[11px] font-bold text-slate-400">
-                좌우로 넘겨보기
+                {text.myRouteCard.swipeDays}
               </p>
             </div>
             <div className="scrollbar-hide -mx-1 overflow-x-auto px-1">
@@ -618,7 +638,7 @@ function MyRouteCard({
                     className="flex w-36 shrink-0 flex-col items-center justify-center rounded-2xl border border-dashed border-brand-300 bg-brand-50 px-3 py-3 text-xs font-black text-brand-700 transition hover:bg-brand-100 active:scale-[0.99]"
                   >
                     <MdAdd className="text-xl" />
-                    DAY 추가
+                    {text.myRouteCard.addDay}
                   </button>
                 ) : null}
               </div>
@@ -639,7 +659,7 @@ function MyRouteCard({
         {extraDayCount > 0 ? (
           <div className="flex h-10 items-center gap-2 rounded-xl bg-brand-50 px-3 text-xs font-bold text-brand-700">
             <MdOutlinePlace className="text-base" />
-            +{extraDayCount}일 더 있음
+            {text.myRouteCard.moreDays(extraDayCount)}
           </div>
         ) : null}
         {!todayRouteDay && onRequestAppendDay ? (
@@ -649,7 +669,7 @@ function MyRouteCard({
             className="flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-brand-300 bg-brand-50 text-xs font-black text-brand-700 transition hover:bg-brand-100 active:scale-[0.99]"
           >
             <MdAdd className="text-lg" />
-            DAY 추가
+            {text.myRouteCard.addDay}
           </button>
         ) : null}
       </div>

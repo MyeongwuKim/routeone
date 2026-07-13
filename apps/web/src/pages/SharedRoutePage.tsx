@@ -51,7 +51,11 @@ import {
   fetchLclsSystemNameMap,
   type GangwonAttraction,
 } from "@/lib/visitKoreaTourApi";
-import { localizeTourPlaces } from "@/lib/placeLocalization";
+import {
+  cacheTourCategoryLocalizationMap,
+  localizeTourPlaces,
+  readCachedTourCategoryLocalizationMap,
+} from "@/lib/placeLocalization";
 import type {
   LikedSharedRouteConnectionQuery,
   RouteByIdQuery,
@@ -64,6 +68,11 @@ import {
   type AppLanguage,
 } from "@/stores/appLanguageStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
+import {
+  localizePlaceCategoryLabel,
+  useUiText,
+  type UiText,
+} from "@/lib/uiText";
 
 const getRouteDetailQueryKey = (routeId: string) =>
   ["route-detail", routeId] as const;
@@ -99,30 +108,32 @@ const EMPTY_SHARED_ROUTE_FILTERS: SharedRouteFilters = {
   tags: [],
   places: [],
 };
-const SHARED_ROUTE_SORT_OPTIONS: ReadonlyArray<
-  DropdownSelectOption<SharedRouteSortKey>
-> = [
-  {
-    value: "shared-desc",
-    label: "최근 공유순",
-    description: "최근 공유된 루트 먼저",
-  },
-  {
-    value: "shared-asc",
-    label: "오래된 공유순",
-    description: "오래전에 공유된 루트 먼저",
-  },
-  {
-    value: "likes-desc",
-    label: "하트 많은순",
-    description: "하트가 많은 루트 먼저",
-  },
-  {
-    value: "likes-asc",
-    label: "하트 적은순",
-    description: "하트가 적은 루트 먼저",
-  },
-];
+function getSharedRouteSortOptions(
+  text: UiText
+): ReadonlyArray<DropdownSelectOption<SharedRouteSortKey>> {
+  return [
+    {
+      value: "shared-desc",
+      label: text.sharedRoute.sortSharedDescLabel,
+      description: text.sharedRoute.sortSharedDescDescription,
+    },
+    {
+      value: "shared-asc",
+      label: text.sharedRoute.sortSharedAscLabel,
+      description: text.sharedRoute.sortSharedAscDescription,
+    },
+    {
+      value: "likes-desc",
+      label: text.sharedRoute.sortLikesDescLabel,
+      description: text.sharedRoute.sortLikesDescDescription,
+    },
+    {
+      value: "likes-asc",
+      label: text.sharedRoute.sortLikesAscLabel,
+      description: text.sharedRoute.sortLikesAscDescription,
+    },
+  ];
+}
 const DEFAULT_FILTER_REGION: (typeof GANGWON_REGION_LABELS)[number] = "강릉";
 const SHARED_ROUTE_PAGE_SIZE = 20;
 const GANGWON_REGION_CENTERS: Record<
@@ -182,28 +193,21 @@ const PLACE_CATEGORY_ORDER = [
   "기타",
 ] as const;
 
-const PAGE_COPY: Record<
-  SharedRoutePageMode,
-  {
-    title: string;
-    description: string;
-    error: string;
-    empty: string;
-  }
-> = {
-  feed: {
-    title: "공유 루트",
-    description: "완료한 여행 루트를 모아보는 피드",
-    error: "공유 루트를 불러오지 못했어요.",
-    empty: "아직 공유된 루트가 없어요.",
-  },
-  liked: {
-    title: "좋아요한 공유 루트",
-    description: "내가 좋아요한 공유 루트 모아보기",
-    error: "좋아요한 공유 루트를 불러오지 못했어요.",
-    empty: "아직 좋아요한 공유 루트가 없어요.",
-  },
-};
+function getSharedRoutePageCopy(text: UiText, mode: SharedRoutePageMode) {
+  return mode === "liked"
+    ? {
+        title: text.sharedRoute.likedTitle,
+        description: text.sharedRoute.likedDescription,
+        error: text.sharedRoute.likedError,
+        empty: text.sharedRoute.likedEmpty,
+      }
+    : {
+        title: text.sharedRoute.feedTitle,
+        description: text.sharedRoute.feedDescription,
+        error: text.sharedRoute.feedError,
+        empty: text.sharedRoute.feedEmpty,
+      };
+}
 
 type SharedRouteConnectionPage =
   | SharedRouteConnectionQuery
@@ -579,10 +583,25 @@ async function fetchRegionFilterPlaceCategories(
 
   const lclsNameByCode = await fetchLclsSystemNameMap(
     TOUR_API_SERVICE_KEY,
-    "ko"
-  );
+    language
+  )
+    .then((codeNameMap) => {
+      void cacheTourCategoryLocalizationMap(codeNameMap, language);
+      return codeNameMap;
+    })
+    .catch(async (error) => {
+      const cachedCodeNameMap =
+        await readCachedTourCategoryLocalizationMap(language);
+
+      if (Object.keys(cachedCodeNameMap).length > 0) {
+        return cachedCodeNameMap;
+      }
+
+      throw error;
+    });
   lclsNameByCode[CAFE_LCLS_CODE] =
     lclsNameByCode[CAFE_LCLS_CODE] || (language === "en" ? "Cafe" : "카페");
+  void cacheTourCategoryLocalizationMap(lclsNameByCode, language);
 
   const [attractions, festivals] = await Promise.all([
     fetchGangwonAttractions(TOUR_API_SERVICE_KEY, {
@@ -617,12 +636,20 @@ async function fetchRegionFilterPlaceCategories(
   );
 }
 
-function getFilterLabel(filter: SharedRouteFilterCandidate) {
+function getFilterLabel(filter: SharedRouteFilterCandidate, text: UiText) {
   if (filter.type === "tag") {
-    return `태그: ${filter.value}`;
+    return text.sharedRoute.filterTagLabel(filter.value);
   }
 
-  return `장소: ${filter.value}`;
+  return text.sharedRoute.filterPlaceLabel(filter.value);
+}
+
+function getLocalizedRegionName(regionName: string, text: UiText) {
+  return text.labels.regions[regionName] ?? regionName;
+}
+
+function getLocalizedPlaceCategory(category: string, text: UiText) {
+  return localizePlaceCategoryLabel(category, text);
 }
 
 function isSamePlaceFilter(
@@ -710,13 +737,14 @@ function getActiveFilterCount(filters: SharedRouteFilters) {
 
 function routeMatchesFilters(
   route: SharedRoute,
-  filters: SharedRouteFilters
+  filters: SharedRouteFilters,
+  text: UiText
 ) {
   if (getActiveFilterCount(filters) === 0) {
     return true;
   }
 
-  const routeTags = getDisplayShareTags(route);
+  const routeTags = getDisplayShareTags(route, text);
   const routePlaces = getDisplayPlaceOptions(route);
   const matchesTags =
     filters.tags.length === 0 ||
@@ -730,12 +758,15 @@ function routeMatchesFilters(
   return matchesTags && matchesPlaces;
 }
 
-function getSharedRouteFilterOptions(routes: SharedRoute[]): SharedRouteFilterOptions {
+function getSharedRouteFilterOptions(
+  routes: SharedRoute[],
+  text: UiText
+): SharedRouteFilterOptions {
   const tagOptions = new Set<string>();
   const placeOptionsByRegion = new Map<string, Map<string, Set<string>>>();
 
   routes.forEach((route) => {
-    getDisplayShareTags(route).forEach((tag) => tagOptions.add(tag));
+    getDisplayShareTags(route, text).forEach((tag) => tagOptions.add(tag));
     getDisplayPlaceOptions(route).forEach((place) => {
       const categoryOptionsByRegion =
         placeOptionsByRegion.get(place.region) ?? new Map<string, Set<string>>();
@@ -805,6 +836,7 @@ function SharedRouteFilterDialog({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const text = useUiText();
   const appLanguage = useAppLanguageStore((state) => state.language);
   const activeFilterCount = getActiveFilterCount(filters);
   const getInitialFocusedRegion = () =>
@@ -916,16 +948,16 @@ function SharedRouteFilterDialog({
                 id="shared-route-filter-title"
                 className="text-base font-bold text-slate-900 dark:text-white"
               >
-                필터 옵션
+                {text.sharedRoute.filterTitle}
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                태그를 고르거나, 지역을 누른 뒤 해당 지역의 장소를 선택해요.
+                {text.sharedRoute.filterDescription}
               </p>
             </div>
           </div>
           <button
             type="button"
-            aria-label="필터 닫기"
+            aria-label={text.sharedRoute.filterClose}
             onClick={onClose}
             className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-200"
           >
@@ -937,10 +969,10 @@ function SharedRouteFilterDialog({
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-sm font-black text-slate-800 dark:text-white">
-                태그 필터
+                {text.sharedRoute.tagFilter}
               </p>
               <p className="text-xs font-bold text-slate-400">
-                {filters.tags.length}개
+                {text.myRoute.count(filters.tags.length)}
               </p>
             </div>
             {tagOptions.length > 0 ? (
@@ -951,7 +983,7 @@ function SharedRouteFilterDialog({
               </div>
             ) : (
               <p className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 text-xs font-semibold text-slate-500 dark:border-brand-400/20 dark:bg-[#0b211f] dark:text-slate-300">
-                선택할 태그가 없어요.
+                {text.sharedRoute.noTags}
               </p>
             )}
           </div>
@@ -959,10 +991,10 @@ function SharedRouteFilterDialog({
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-sm font-black text-slate-800 dark:text-white">
-                장소 필터
+                {text.sharedRoute.placeFilter}
               </p>
               <p className="text-xs font-bold text-slate-400">
-                {filters.places.length}개
+                {text.myRoute.count(filters.places.length)}
               </p>
             </div>
             {placeRegions.length > 0 ? (
@@ -984,7 +1016,9 @@ function SharedRouteFilterDialog({
                         }`}
                       >
                         <MdOutlinePlace className="shrink-0 text-sm" />
-                        <span className="min-w-0 truncate">{region}</span>
+                        <span className="min-w-0 truncate">
+                          {getLocalizedRegionName(region, text)}
+                        </span>
                       </button>
                     );
                   })}
@@ -993,10 +1027,16 @@ function SharedRouteFilterDialog({
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 dark:border-brand-400/20 dark:bg-[#0b211f]">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <p className="min-w-0 truncate text-xs font-black text-slate-700 dark:text-slate-100">
-                      {focusedRegion ? `${focusedRegion} 장소` : "지역 선택"}
+                      {focusedRegion
+                        ? text.sharedRoute.regionPlaces(
+                            getLocalizedRegionName(focusedRegion, text)
+                          )
+                        : text.sharedRoute.chooseRegion}
                     </p>
                     <p className="text-[11px] font-bold text-slate-400">
-                      {focusedRegionSelectedCount}개 선택
+                      {text.sharedRoute.selectedCount(
+                        focusedRegionSelectedCount
+                      )}
                     </p>
                   </div>
                   {focusedRegion && focusedRegionCategories.length > 0 ? (
@@ -1005,11 +1045,11 @@ function SharedRouteFilterDialog({
                         <div key={`${focusedRegion}:${category}`} className="space-y-2">
                           <div className="flex items-center gap-2">
                             <p className="shrink-0 text-xs font-black text-slate-700 dark:text-slate-100">
-                              {category}
+                              {getLocalizedPlaceCategory(category, text)}
                             </p>
                             <span className="h-px flex-1 bg-slate-200 dark:bg-brand-400/20" />
                             <p className="shrink-0 text-[11px] font-bold text-slate-400">
-                              {places.length}곳
+                              {text.sharedRoute.placeCount(places.length)}
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -1026,14 +1066,14 @@ function SharedRouteFilterDialog({
                     </div>
                   ) : shouldShowFocusedRegionLoading ? null : (
                     <p className="px-1 py-2 text-xs font-semibold text-slate-500 dark:text-slate-300">
-                      이 지역의 명소를 찾지 못했어요.
+                      {text.sharedRoute.noRegionPlaces}
                     </p>
                   )}
                 </div>
               </div>
             ) : (
               <p className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 text-xs font-semibold text-slate-500 dark:border-brand-400/20 dark:bg-[#0b211f] dark:text-slate-300">
-                선택할 장소가 없어요.
+                {text.sharedRoute.noPlaces}
               </p>
             )}
           </div>
@@ -1046,14 +1086,14 @@ function SharedRouteFilterDialog({
             disabled={activeFilterCount === 0}
             className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-500 disabled:opacity-40 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-200"
           >
-            초기화
+            {text.common.reset}
           </button>
           <button
             type="button"
             onClick={onConfirm}
             className="rounded-2xl border border-brand-500 bg-brand-600 px-4 py-3 text-sm font-bold text-white"
           >
-            확인{activeFilterCount > 0 ? ` ${activeFilterCount}` : ""}
+            {text.sharedRoute.apply(activeFilterCount)}
           </button>
         </div>
       </section>
@@ -1062,6 +1102,8 @@ function SharedRouteFilterDialog({
 }
 
 function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
+  const text = useUiText();
+  const appLanguage = useAppLanguageStore((state) => state.language);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
@@ -1087,7 +1129,8 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const [pendingLikeRouteIds, setPendingLikeRouteIds] = useState<Set<string>>(
     new Set()
   );
-  const pageCopy = PAGE_COPY[mode];
+  const pageCopy = getSharedRoutePageCopy(text, mode);
+  const sortOptions = useMemo(() => getSharedRouteSortOptions(text), [text]);
   const routeListQueryKey =
     mode === "liked" ? LIKED_SHARED_ROUTES_QUERY_KEY : SHARED_ROUTES_QUERY_KEY;
   const routeListQuery = useInfiniteQuery({
@@ -1118,13 +1161,13 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     [routeListQuery.data, mode]
   );
   const filterOptions = useMemo(
-    () => getSharedRouteFilterOptions(routes),
-    [routes]
+    () => getSharedRouteFilterOptions(routes, text),
+    [routes, text]
   );
   const activeFilterCount = getActiveFilterCount(activeFilters);
   const filteredRoutes = useMemo(() => {
     return routes
-      .filter((route) => routeMatchesFilters(route, activeFilters))
+      .filter((route) => routeMatchesFilters(route, activeFilters, text))
       .sort((left, right) => {
         if (sortKey === "likes-desc" || sortKey === "likes-asc") {
           const likeCountDifference =
@@ -1145,7 +1188,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
 
         return sharedTimeDifference || right.likeCount - left.likeCount;
       });
-  }, [activeFilters, routes, sortKey]);
+  }, [activeFilters, routes, sortKey, text]);
   const canShowEmptyRoutes =
     !routeListQuery.isLoading &&
     !routeListQuery.isError &&
@@ -1165,13 +1208,13 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     enabled: Boolean(selectedRouteId),
     queryFn: async () => {
       if (!selectedRouteId) {
-        throw new Error("선택한 공유 루트가 없습니다.");
+        throw new Error(text.sharedRoute.selectedRouteMissing);
       }
 
       const result = await routeApi.routeById(selectedRouteId);
 
       if (!result.route) {
-        throw new Error("공유 루트를 찾지 못했어요.");
+        throw new Error(text.sharedRoute.routeNotFound);
       }
 
       return result;
@@ -1224,6 +1267,12 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    setActiveFilters(EMPTY_SHARED_ROUTE_FILTERS);
+    setDraftFilters(EMPTY_SHARED_ROUTE_FILTERS);
+    setIsFilterDialogOpen(false);
+  }, [appLanguage]);
 
   useEffect(() => {
     if (!routeListQuery.data) {
@@ -1482,7 +1531,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
             : currentData
       );
       showToast(
-        error instanceof Error ? error.message : "좋아요를 반영하지 못했어요.",
+        error instanceof Error ? error.message : text.sharedRoute.likeError,
         2400
       );
     } finally {
@@ -1534,16 +1583,18 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         <header className="flex items-center gap-3">
           <button
             type="button"
-            aria-label="내 정보로 돌아가기"
+            aria-label={text.sharedRoute.likedBackAria}
             onClick={() => navigate("/me")}
             className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
           >
             <MdArrowBack />
           </button>
           <div className="min-w-0">
-            <p className="text-xs font-black text-brand-700">내 정보</p>
+            <p className="text-xs font-black text-brand-700">
+              {text.routeShell.myInfoTitle}
+            </p>
             <h1 className="truncate text-lg font-bold text-slate-900">
-              좋아요한 공유 루트
+              {text.sharedRoute.likedTitle}
             </h1>
           </div>
         </header>
@@ -1570,8 +1621,8 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <DropdownSelect
-            ariaLabel="공유 루트 정렬"
-            options={SHARED_ROUTE_SORT_OPTIONS}
+            ariaLabel={text.sharedRoute.sortAria}
+            options={sortOptions}
             value={sortKey}
             onChange={setSortKey}
             className="w-40 shrink-0"
@@ -1589,7 +1640,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           >
             <MdFilterAlt className="shrink-0 text-sm" />
             <span className="truncate">
-              필터{activeFilterCount > 0 ? ` ${activeFilterCount}` : ""}
+              {text.sharedRoute.filterButton(activeFilterCount)}
             </span>
           </button>
         </div>
@@ -1607,7 +1658,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
               >
                 <MdSell className="shrink-0 text-xs" />
                 <span className="min-w-0 truncate">
-                  {getFilterLabel({ type: "tag", value: tag })}
+                  {getFilterLabel({ type: "tag", value: tag }, text)}
                 </span>
                 <MdClose className="shrink-0 text-xs" />
               </button>
@@ -1627,11 +1678,14 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
               >
                 <MdOutlinePlace className="shrink-0 text-xs" />
                 <span className="min-w-0 truncate">
-                  {getFilterLabel({
-                    type: "place",
-                    value: place.name,
-                    region: place.region,
-                  })}
+                  {getFilterLabel(
+                    {
+                      type: "place",
+                      value: place.name,
+                      region: place.region,
+                    },
+                    text
+                  )}
                 </span>
                 <MdClose className="shrink-0 text-xs" />
               </button>
@@ -1641,7 +1695,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
               onClick={handleClearActiveFilters}
               className="inline-flex items-center rounded-full px-2.5 py-1.5 text-[11px] font-black text-slate-400 transition hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-200"
             >
-              전체 해제
+              {text.sharedRoute.clearActiveFilters}
             </button>
           </div>
         ) : null}
@@ -1660,7 +1714,11 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         {routeListQuery.isLoading && routes.length === 0 ? (
           <div className="flex min-h-full flex-col justify-center">
             <PotatoLoadingCard
-              title={mode === "liked" ? "하트 루트 찾는 중" : "공유 루트 찾는 중"}
+              title={
+                mode === "liked"
+                  ? text.sharedRoute.loadingLiked
+                  : text.sharedRoute.loadingFeed
+              }
               animation="running"
               compact
               className="shadow-sm"
@@ -1674,13 +1732,13 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
               title={pageCopy.empty}
               description={
                 mode === "liked"
-                  ? "마음에 드는 공유 루트에 하트를 누르면 여기에 모여요."
-                  : "감자가 공개된 여행 가방을 살펴보고 있어요."
+                  ? text.sharedRoute.emptyLikedDescription
+                  : text.sharedRoute.emptyFeedDescription
               }
               footerText={
                 mode === "liked"
-                  ? "마음에 드는 루트를 찾으면 하트로 모아둘 수 있어요."
-                  : "완료한 루트가 공유되면 여기에 모여요."
+                  ? text.sharedRoute.emptyLikedFooter
+                  : text.sharedRoute.emptyFeedFooter
               }
               animation="empty"
               compact
@@ -1692,9 +1750,9 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         {canShowEmptyRoutes && routes.length > 0 && filteredRoutes.length === 0 ? (
           <div className="flex min-h-full flex-col justify-center">
             <PotatoLoadingCard
-              title="조건에 맞는 공유 루트가 없어요."
-              description="감자가 필터 안을 다시 살펴보고 있어요."
-              footerText="필터를 줄이면 더 많은 루트가 보여요."
+              title={text.sharedRoute.noFilteredTitle}
+              description={text.sharedRoute.noFilteredDescription}
+              footerText={text.sharedRoute.noFilteredFooter}
               animation="empty"
               compact
               className="shadow-sm"
@@ -1723,8 +1781,8 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
             <PotatoLoadingCard
               title={
                 activeFilterCount > 0 && filteredRoutes.length === 0
-                  ? "조건 찾는 중"
-                  : "다음 루트 찾는 중"
+                  ? text.sharedRoute.searchingConditions
+                  : text.sharedRoute.loadingNext
               }
               animation="running"
               compact
@@ -1752,14 +1810,14 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         <div className="fixed inset-0 z-[2300] flex items-center justify-center bg-white px-4 dark:bg-[#071718]">
           <div className="w-full max-w-sm rounded-2xl border border-rose-100 bg-rose-50 p-4 text-center shadow-sm dark:border-rose-400/30 dark:bg-rose-950/30">
             <p className="text-sm font-bold text-rose-700 dark:text-rose-200">
-              공유 루트 상세를 불러오지 못했어요.
+              {text.sharedRoute.detailError}
             </p>
             <button
               type="button"
               onClick={() => setSelectedRouteId(null)}
               className="mt-3 rounded-full bg-brand-600 px-4 py-2 text-xs font-bold text-white"
             >
-              닫기
+              {text.common.close}
             </button>
           </div>
         </div>
@@ -1770,7 +1828,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           day={selectedRouteDay}
           isReadOnly
           headerLabel="SHARED ROUTE"
-          headerBadge={selectedRoute.isMine ? "내 공유 루트" : undefined}
+          headerBadge={selectedRoute.isMine ? text.sharedRoute.mineBadge : undefined}
           enableStartPreview
           enableVerificationPhotoPreview
           onRequestCheckout={handleRequestCheckoutFromSharedRoute}
@@ -1778,7 +1836,9 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
             selectedRoute.isMine
               ? {
                   label: String(selectedRoute.likeCount),
-                  ariaLabel: `내가 공유한 루트, 하트 ${selectedRoute.likeCount}개`,
+                  ariaLabel: text.sharedRoute.ownRouteLikeAria(
+                    selectedRoute.likeCount
+                  ),
                   icon: <FaHeart className="text-lg" />,
                   isActive: true,
                   disabled: true,
@@ -1789,8 +1849,8 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
                   ariaLabel:
                     likedRouteIds.has(selectedRoute.id) ||
                     selectedRoute.likedByMe
-                      ? `좋아요 취소, 하트 ${selectedRoute.likeCount}개`
-                      : `좋아요, 하트 ${selectedRoute.likeCount}개`,
+                      ? text.sharedRoute.unlikeAria(selectedRoute.likeCount)
+                      : text.sharedRoute.likeAria(selectedRoute.likeCount),
                   icon:
                     likedRouteIds.has(selectedRoute.id) ||
                     selectedRoute.likedByMe ? (

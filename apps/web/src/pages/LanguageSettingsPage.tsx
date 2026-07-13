@@ -1,6 +1,7 @@
 import { MdArrowBack, MdCheck, MdLanguage } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { useUiText } from "@/lib/uiText";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import {
   useAppLanguageStore,
@@ -8,27 +9,10 @@ import {
 } from "@/stores/appLanguageStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
-const LANGUAGE_OPTIONS: Array<{
-  value: AppLanguage;
-  label: string;
-  nativeLabel: string;
-  description: string;
-}> = [
-  {
-    value: "ko",
-    label: "한국어",
-    nativeLabel: "Korean",
-    description: "지도와 관광 정보를 한국어로 표시",
-  },
-  {
-    value: "en",
-    label: "English",
-    nativeLabel: "영어",
-    description: "Show maps and travel information in English",
-  },
-];
+const LANGUAGE_OPTION_VALUES: AppLanguage[] = ["ko", "en"];
 
 function LanguageSettingsPage() {
+  const text = useUiText();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const language = useAppLanguageStore((state) => state.language);
@@ -52,8 +36,8 @@ function LanguageSettingsPage() {
     });
     showToast(
       nextLanguage === "ko"
-        ? "관광 정보 언어를 한국어로 변경했어요."
-        : "Travel information is now shown in English."
+        ? text.language.changedToKoToast
+        : text.language.changedToEnToast
     );
   };
 
@@ -62,7 +46,7 @@ function LanguageSettingsPage() {
       <header className="flex items-center gap-3">
         <button
           type="button"
-          aria-label="내 정보로 돌아가기"
+          aria-label={text.common.backToMyInfo}
           onClick={() => navigate("/me")}
           className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
         >
@@ -70,16 +54,30 @@ function LanguageSettingsPage() {
         </button>
         <div className="min-w-0">
           <p className="text-xs font-black text-brand-700 dark:text-brand-200">
-            앱 설정
+            {text.routeShell.appSettings}
           </p>
           <h1 className="truncate text-lg font-bold text-slate-900 dark:text-white">
-            언어 설정
+            {text.routeShell.languageTitle}
           </h1>
         </div>
       </header>
 
-      <section className="space-y-3" aria-label="표시 언어 선택">
-        {LANGUAGE_OPTIONS.map((option) => {
+      <section className="space-y-3" aria-label={text.language.selectLanguageAria}>
+        {LANGUAGE_OPTION_VALUES.map((value) => {
+          const option =
+            value === "ko"
+              ? {
+                  value,
+                  label: text.language.koLabel,
+                  nativeLabel: text.language.koNativeLabel,
+                  description: text.language.koDescription,
+                }
+              : {
+                  value,
+                  label: text.language.enLabel,
+                  nativeLabel: text.language.enNativeLabel,
+                  description: text.language.enDescription,
+                };
           const isSelected = language === option.value;
 
           return (
@@ -132,8 +130,7 @@ function LanguageSettingsPage() {
       </section>
 
       <p className="px-1 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">
-        선택한 언어는 지도, 장소 검색과 관광 정보에 적용돼요. 계정과 루트에
-        저장된 기존 내용은 바뀌지 않아요.
+        {text.language.note}
       </p>
     </section>
   );

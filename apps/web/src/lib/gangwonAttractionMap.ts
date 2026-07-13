@@ -354,7 +354,7 @@ export function createMapSheetPlaceFromAttraction({
     contentTypeLabel: markerType.contentTypeLabel,
     categoryName: markerType.typeName,
     icon: markerType.badge.icon,
-    images: [attraction.firstImage].filter(Boolean),
+    images: [attraction.firstImage, attraction.secondImage].filter(Boolean),
   };
 }
 
