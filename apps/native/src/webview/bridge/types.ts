@@ -18,6 +18,9 @@ export type NativeFetchRequest = {
 export type NativeBridgeReadyMessage = {
   type: "routeone:native-bridge-ready";
   graphqlEndpoint?: string;
+  appVariant?: string;
+  webBundleChannel?: string;
+  webBundleManifestUrl?: string | null;
 };
 
 export type NativeAuthTokenMessage = {

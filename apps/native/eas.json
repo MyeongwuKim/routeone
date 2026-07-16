@@ -8,7 +8,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "APP_VARIANT": "dev"
+        "APP_VARIANT": "dev",
+        "EXPO_PUBLIC_APP_VARIANT": "dev"
       },
       "ios": {
         "simulator": false
@@ -17,7 +18,8 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "APP_VARIANT": "dev"
+        "APP_VARIANT": "dev",
+        "EXPO_PUBLIC_APP_VARIANT": "dev"
       },
       "ios": {
         "simulator": false
@@ -27,7 +29,8 @@
       "autoIncrement": true,
       "distribution": "store",
       "env": {
-        "APP_VARIANT": "dev"
+        "APP_VARIANT": "dev",
+        "EXPO_PUBLIC_APP_VARIANT": "dev"
       },
       "ios": {
         "image": "latest"
@@ -37,7 +40,8 @@
       "autoIncrement": true,
       "distribution": "store",
       "env": {
-        "APP_VARIANT": "prod"
+        "APP_VARIANT": "prod",
+        "EXPO_PUBLIC_APP_VARIANT": "prod"
       },
       "ios": {
         "image": "latest"

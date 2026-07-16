@@ -39,7 +39,7 @@ export async function handleNativeBridgeMessage(
 
   if (isNativeBridgeReadyMessage(message)) {
     console.log(
-      `[routeone-native-bridge] ready graphql=${message.graphqlEndpoint ?? "/graphql"} target=${NATIVE_GRAPHQL_ENDPOINT}`
+      `[routeone-native-bridge] ready graphql=${message.graphqlEndpoint ?? "/graphql"} target=${NATIVE_GRAPHQL_ENDPOINT} variant=${message.appVariant ?? "dev"} webBundleChannel=${message.webBundleChannel ?? "dev"} manifest=${message.webBundleManifestUrl ?? "none"}`
     );
     return;
   }

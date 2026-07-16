@@ -1,0 +1,96 @@
+name: Publish web bundle to R2
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "apps/web/**"
+      - ".github/workflows/publish-web-bundle-r2.yml"
+      - "scripts/publish-web-bundle-r2.mjs"
+      - "package.json"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Bundle channel"
+        required: false
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  publish:
+    name: Build and publish web bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve channel
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ inputs.channel }}" ]]; then
+            CHANNEL="${{ inputs.channel }}"
+          elif [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            CHANNEL="prod"
+          else
+            CHANNEL="dev"
+          fi
+
+          if [[ "${CHANNEL}" == "prod" ]]; then
+            APP_VARIANT="prod"
+          else
+            APP_VARIANT="dev"
+          fi
+
+          echo "APP_VARIANT=${APP_VARIANT}" >> "${GITHUB_ENV}"
+          echo "ROUTEONE_WEB_BUNDLE_CHANNEL=${CHANNEL}" >> "${GITHUB_ENV}"
+          echo "ROUTEONE_WEB_BUNDLE_BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "${GITHUB_ENV}"
+          echo "ROUTEONE_WEB_BUNDLE_VERSION=${CHANNEL}-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "${GITHUB_ENV}"
+
+      - name: Build web
+        run: pnpm build:web
+
+      - name: Export native version config
+        env:
+          EXPO_PUBLIC_APP_VARIANT: ${{ env.APP_VARIANT }}
+          EXPO_PUBLIC_WEB_BUNDLE_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          EXPO_PUBLIC_WEB_BUNDLE_PREFIX: ${{ vars.ROUTEONE_WEB_BUNDLE_PREFIX }}
+          ROUTEONE_APP_VERSION: ${{ vars.ROUTEONE_APP_VERSION }}
+          ROUTEONE_IOS_BUILD_NUMBER: ${{ vars.ROUTEONE_IOS_BUILD_NUMBER }}
+          ROUTEONE_ANDROID_VERSION_CODE: ${{ vars.ROUTEONE_ANDROID_VERSION_CODE }}
+        run: pnpm --filter native exec expo config --type public --json > native-config.json
+
+      - name: Publish to R2
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          ROUTEONE_APP_VERSION: ${{ vars.ROUTEONE_APP_VERSION }}
+          ROUTEONE_IOS_BUILD_NUMBER: ${{ vars.ROUTEONE_IOS_BUILD_NUMBER }}
+          ROUTEONE_ANDROID_VERSION_CODE: ${{ vars.ROUTEONE_ANDROID_VERSION_CODE }}
+          ROUTEONE_NATIVE_CONFIG_PATH: native-config.json
+          ROUTEONE_WEB_BUNDLE_PREFIX: ${{ vars.ROUTEONE_WEB_BUNDLE_PREFIX }}
+          ROUTEONE_WEB_BUNDLE_RETENTION: "5"
+        run: pnpm publish:web-bundle:r2

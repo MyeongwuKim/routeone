@@ -1,3 +1,14 @@
+import { WEB_BUNDLE_UPDATE_CONFIG } from "../../config/webBundleUpdateConfig";
+
+const ROUTEONE_RUNTIME_CONFIG = {
+  graphqlEndpoint: "/graphql",
+  routerMode: "hash",
+  nativeAppVariant: WEB_BUNDLE_UPDATE_CONFIG.appVariant,
+  webBundleChannel: WEB_BUNDLE_UPDATE_CONFIG.channel,
+  webBundleManifestUrl: WEB_BUNDLE_UPDATE_CONFIG.manifestUrl,
+  webBundleVersionsUrl: WEB_BUNDLE_UPDATE_CONFIG.versionsUrl
+};
+
 export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 (function installRouteOneNativeBridge() {
   if (window.__ROUTEONE_NATIVE_BRIDGE_INSTALLED__) {
@@ -6,10 +17,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 
   window.__ROUTEONE_NATIVE_BRIDGE_INSTALLED__ = true;
   window.RouteOneRuntimeConfig = Object.assign({}, window.RouteOneRuntimeConfig, ${JSON.stringify(
-    {
-      graphqlEndpoint: "/graphql",
-      routerMode: "hash"
-    }
+    ROUTEONE_RUNTIME_CONFIG
   )});
 
   var didPostBridgeReady = false;
@@ -23,7 +31,10 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     window.ReactNativeWebView.postMessage(
       JSON.stringify({
         type: "routeone:native-bridge-ready",
-        graphqlEndpoint: window.RouteOneRuntimeConfig.graphqlEndpoint
+        graphqlEndpoint: window.RouteOneRuntimeConfig.graphqlEndpoint,
+        appVariant: window.RouteOneRuntimeConfig.nativeAppVariant,
+        webBundleChannel: window.RouteOneRuntimeConfig.webBundleChannel,
+        webBundleManifestUrl: window.RouteOneRuntimeConfig.webBundleManifestUrl
       })
     );
   }

@@ -86,4 +86,51 @@ EXPO_PUBLIC_NCP_MAPS_KEY=...
 
 `APP_VARIANT=dev`는 테스트 앱 식별자 `com.routeone.app.dev`와 앱 이름 `RouteOne(T)`를 사용해요. `APP_VARIANT=prod`는 운영 앱 식별자 `com.routeone.app`과 앱 이름 `RouteOne`을 사용해요. Google OAuth iOS 클라이언트의 번들 ID도 이 값과 정확히 맞아야 해요.
 
+네이티브 버전 비교에 쓰는 값은 아래 환경변수로 고정할 수 있어요. 값을 넣지 않으면 앱 버전은 `0.1.0`, iOS build number와 Android version code는 `1`로 잡혀요.
+
+```bash
+ROUTEONE_APP_VERSION=0.1.0
+ROUTEONE_IOS_BUILD_NUMBER=1
+ROUTEONE_ANDROID_VERSION_CODE=1
+```
+
+원격 웹 번들 manifest 주소는 앱 variant에 따라 나뉘어요. 아래처럼 base URL만 넣으면 `dev` 앱은 `routeone-web-bundles/dev/manifest.json`, `prod` 앱은 `routeone-web-bundles/prod/manifest.json`을 봐요.
+
+```bash
+EXPO_PUBLIC_WEB_BUNDLE_BASE_URL=https://cdn.example.com
+EXPO_PUBLIC_WEB_BUNDLE_PREFIX=routeone-web-bundles
+```
+
+채널별 주소를 직접 지정해야 하면 아래 값을 사용할 수 있어요.
+
+```bash
+EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV=https://cdn.example.com/routeone-web-bundles/dev/manifest.json
+EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD=https://cdn.example.com/routeone-web-bundles/prod/manifest.json
+```
+
+## 웹 번들 R2 배포
+
+`main` 브랜치에 push하면 `prod`, `develop` 브랜치에 push하면 `dev` 채널 웹 번들을 GitHub Actions에서 빌드하고 R2에 업로드해요.
+
+업로드 경로는 기본적으로 아래처럼 나뉘어요.
+
+```text
+routeone-web-bundles/dev/bundles/web-dev-123-abcdef0.zip
+routeone-web-bundles/dev/manifest.json
+routeone-web-bundles/dev/versions.json
+
+routeone-web-bundles/prod/bundles/web-prod-123-abcdef0.zip
+routeone-web-bundles/prod/manifest.json
+routeone-web-bundles/prod/versions.json
+```
+
+`manifest.json`은 최신 번들만 가리키고, `versions.json`은 최근 5개 번들 이력을 보관해요. 스크립트가 채널별 zip 파일도 최대 5개까지만 남기고 오래된 파일을 삭제해요.
+
+GitHub에는 아래 값을 등록해야 해요.
+
+- Secrets: `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
+- Variables: `R2_PUBLIC_BASE_URL`, `ROUTEONE_APP_VERSION`, `ROUTEONE_IOS_BUILD_NUMBER`, `ROUTEONE_ANDROID_VERSION_CODE`, `ROUTEONE_WEB_BUNDLE_PREFIX`
+
+`R2_PUBLIC_BASE_URL`은 네이티브 앱이 zip을 내려받을 공개 URL이 필요할 때 넣어요. 비워두면 JSON에는 `bundleKey`만 들어가고 `bundleUrl`은 `null`로 남아요.
+
 클라이언트 앱에 API secret이 들어가는 구조라, 실제 배포에서는 별도 백엔드 프록시로 옮기는 게 좋아요.

@@ -32,12 +32,64 @@ function getAppVariant(): AppVariant {
   throw new Error(`APP_VARIANT must be "dev" or "prod". Received "${variant}".`);
 }
 
+function trimSlashes(value: string) {
+  return value.replace(/^\/+|\/+$/g, "");
+}
+
+function trimTrailingSlashes(value: string) {
+  return value.replace(/\/+$/g, "");
+}
+
+function getWebBundleManifestUrl(variant: AppVariant) {
+  const explicitUrl =
+    variant === "prod"
+      ? process.env.EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD?.trim()
+      : process.env.EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV?.trim();
+
+  if (explicitUrl) {
+    return explicitUrl;
+  }
+
+  if (!webBundlePublicBaseUrl) {
+    return null;
+  }
+
+  return `${trimTrailingSlashes(
+    webBundlePublicBaseUrl
+  )}/${webBundlePrefix}/${variant}/manifest.json`;
+}
+
 const appVariant = getAppVariant();
 const appVariantConfig = APP_VARIANT_CONFIG[appVariant];
 const appDisplayName = appVariantConfig.displayName;
 const appSlug = appVariantConfig.slug;
 const appScheme = appVariantConfig.scheme;
 const appBundleIdentifier = appVariantConfig.bundleIdentifier;
+const appVersion = process.env.ROUTEONE_APP_VERSION?.trim() || "0.1.0";
+const iosBuildNumber = process.env.ROUTEONE_IOS_BUILD_NUMBER?.trim() || "1";
+const androidVersionCode = Number.parseInt(
+  process.env.ROUTEONE_ANDROID_VERSION_CODE?.trim() || "1",
+  10
+);
+const webBundleChannel = appVariant;
+const webBundlePublicBaseUrl =
+  process.env.EXPO_PUBLIC_WEB_BUNDLE_BASE_URL?.trim() ||
+  process.env.R2_PUBLIC_BASE_URL?.trim() ||
+  "";
+const webBundlePrefix = trimSlashes(
+  process.env.EXPO_PUBLIC_WEB_BUNDLE_PREFIX?.trim() ||
+    process.env.ROUTEONE_WEB_BUNDLE_PREFIX?.trim() ||
+    "routeone-web-bundles"
+);
+const webBundleManifestUrl = getWebBundleManifestUrl(appVariant);
+const webBundleVersionsUrl = webBundleManifestUrl
+  ? webBundleManifestUrl.replace(/\/manifest\.json$/, "/versions.json")
+  : null;
+
+if (!Number.isInteger(androidVersionCode) || androidVersionCode < 1) {
+  throw new Error("ROUTEONE_ANDROID_VERSION_CODE must be a positive integer.");
+}
+
 const enableAppleSignIn =
   process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim().toLowerCase() ===
     "true" || process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim() === "1";
@@ -104,15 +156,24 @@ export default {
   expo: {
     name: appDisplayName,
     slug: appSlug,
-    version: "0.1.0",
+    version: appVersion,
     orientation: "portrait",
     scheme: appScheme,
     userInterfaceStyle: "light",
     jsEngine: "hermes",
     platforms: ["ios", "android"],
     plugins,
+    extra: {
+      routeone: {
+        appVariant,
+        webBundleChannel,
+        webBundleManifestUrl,
+        webBundleVersionsUrl
+      }
+    },
     ios: {
       bundleIdentifier: appBundleIdentifier,
+      buildNumber: iosBuildNumber,
       supportsTablet: false,
       usesAppleSignIn: enableAppleSignIn,
       infoPlist: {
@@ -135,6 +196,7 @@ export default {
     },
     android: {
       package: appBundleIdentifier,
+      versionCode: androidVersionCode,
       edgeToEdgeEnabled: true,
       permissions: [
         "ACCESS_COARSE_LOCATION",

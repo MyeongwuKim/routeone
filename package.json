@@ -22,6 +22,7 @@
     "native:ios": "pnpm --filter native ios",
     "native:typecheck": "pnpm --filter native typecheck",
     "native:sync:web": "pnpm --filter native sync:web",
-    "native:build:webview": "pnpm --filter native build:webview"
+    "native:build:webview": "pnpm --filter native build:webview",
+    "publish:web-bundle:r2": "node scripts/publish-web-bundle-r2.mjs"
   }
 }
