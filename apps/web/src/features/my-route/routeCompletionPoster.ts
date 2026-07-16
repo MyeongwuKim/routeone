@@ -32,6 +32,10 @@ type EmbeddedStopImage = {
 
 const routeStopVerificationPhotoDataUrlCache = new Map<string, string>();
 const routeStopVerificationPhotoUrlCache = new Map<string, string>();
+const posterImageDataUrlCache = new Map<string, string>();
+const posterImageRequestCache = new Map<string, Promise<string | null>>();
+const POSTER_IMAGE_RETRY_DELAYS_MS = [450, 1_200, 2_000];
+const MAX_POSTER_IMAGE_CACHE_ENTRIES = 24;
 
 export type RouteCompletionPosterCard = {
   dayIndex: number;
@@ -1236,6 +1240,27 @@ function blobToDataUrl(blob: Blob) {
   });
 }
 
+function waitForPosterImageRetry(ms: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function setPosterImageDataUrlCache(url: string, dataUrl: string) {
+  posterImageDataUrlCache.delete(url);
+  posterImageDataUrlCache.set(url, dataUrl);
+
+  while (posterImageDataUrlCache.size > MAX_POSTER_IMAGE_CACHE_ENTRIES) {
+    const oldestUrl = posterImageDataUrlCache.keys().next().value;
+
+    if (!oldestUrl) {
+      break;
+    }
+
+    posterImageDataUrlCache.delete(oldestUrl);
+  }
+}
+
 function isCloudflareImageDeliveryUrl(url: string) {
   try {
     return new URL(url, window.location.href).hostname === "imagedelivery.net";
@@ -1287,6 +1312,56 @@ async function fetchCloudflareImageAsDataUrl(url: string) {
   }
 }
 
+async function fetchImageAsDataUrlOnce(
+  normalizedUrl: string,
+  bypassBrowserCache: boolean
+) {
+  try {
+    const response = await fetch(normalizedUrl, {
+      cache: bypassBrowserCache ? "reload" : "default",
+    });
+
+    if (!response.ok) {
+      return fetchCloudflareImageAsDataUrl(normalizedUrl);
+    }
+
+    const blob = await response.blob();
+
+    if (!blob.type.startsWith("image/")) {
+      return fetchCloudflareImageAsDataUrl(normalizedUrl);
+    }
+
+    return await blobToDataUrl(blob);
+  } catch {
+    return fetchCloudflareImageAsDataUrl(normalizedUrl);
+  }
+}
+
+async function fetchImageAsDataUrlWithRetry(normalizedUrl: string) {
+  const retryDelays = isCloudflareImageDeliveryUrl(normalizedUrl)
+    ? POSTER_IMAGE_RETRY_DELAYS_MS
+    : POSTER_IMAGE_RETRY_DELAYS_MS.slice(0, 1);
+
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+    const dataUrl = await fetchImageAsDataUrlOnce(
+      normalizedUrl,
+      attempt > 0
+    );
+
+    if (dataUrl?.startsWith("data:image/")) {
+      return dataUrl;
+    }
+
+    const retryDelay = retryDelays[attempt];
+
+    if (retryDelay !== undefined) {
+      await waitForPosterImageRetry(retryDelay);
+    }
+  }
+
+  return null;
+}
+
 async function fetchImageAsDataUrl(url: string) {
   if (url.startsWith("data:image/")) {
     return url;
@@ -1306,17 +1381,34 @@ async function fetchImageAsDataUrl(url: string) {
     return null;
   }
 
-  try {
-    const response = await fetch(normalizedUrl);
+  const cachedDataUrl = posterImageDataUrlCache.get(normalizedUrl);
 
-    if (!response.ok) {
-      return fetchCloudflareImageAsDataUrl(normalizedUrl);
-    }
-
-    return await blobToDataUrl(await response.blob());
-  } catch {
-    return fetchCloudflareImageAsDataUrl(normalizedUrl);
+  if (cachedDataUrl) {
+    setPosterImageDataUrlCache(normalizedUrl, cachedDataUrl);
+    return cachedDataUrl;
   }
+
+  const inFlightRequest = posterImageRequestCache.get(normalizedUrl);
+
+  if (inFlightRequest) {
+    return inFlightRequest;
+  }
+
+  const request = fetchImageAsDataUrlWithRetry(normalizedUrl)
+    .then((dataUrl) => {
+      if (dataUrl) {
+        setPosterImageDataUrlCache(normalizedUrl, dataUrl);
+      }
+
+      return dataUrl;
+    })
+    .finally(() => {
+      posterImageRequestCache.delete(normalizedUrl);
+    });
+
+  posterImageRequestCache.set(normalizedUrl, request);
+
+  return request;
 }
 
 async function getEmbeddedPhotoData(route: MyRoute) {

@@ -21,16 +21,19 @@ import {
   resolvePlaceStaySummaryForDisplay,
   type PlaceStaySummaryPreview,
 } from "@/lib/routePlaceSnapshot";
-import { useRouteCheckout } from "../RouteCheckoutContext";
+import { useUiText, type UiText } from "@/lib/uiText";
+import { useRouteCheckout } from "../../hooks/useRouteCheckout";
 import PlaceCartRouteDayCard from "./PlaceCartRouteDayCard";
 import StartLocationPickerPopup from "./StartLocationPickerPopup";
-import type { TravelTempo } from "./PlaceCartTempoStep";
-import { useRouteResultEditor } from "./useRouteResultEditor";
+import { useRouteResultEditor } from "../../hooks/useRouteResultEditor";
 import { findRouteDateConflict } from "../../utils/routeDateConflict";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
 import type { MyRoutesQuery } from "@/generated/graphql";
-import type { PlannedRouteDay, RouteStartLocation } from "./routePlanTypes";
+import type {
+  PlannedRouteDay,
+  RouteStartLocation,
+} from "../../models/routePlanTypes";
 
 type PlaceCartRouteResultStepProps = {
   savedPlaces: SavedPlaceItem[];
@@ -42,12 +45,6 @@ type PlaceCartRouteResultStepProps = {
   onRequestSearchPlace: () => void;
 };
 
-const TEMPO_LABEL: Record<TravelTempo, string> = {
-  relaxed: "여유롭게",
-  balanced: "보통",
-  packed: "촘촘하게",
-};
-
 function formatClock(totalMinutes: number) {
   const normalizedMinutes = Math.max(0, Math.round(totalMinutes));
   const hour = Math.floor(normalizedMinutes / 60);
@@ -55,16 +52,18 @@ function formatClock(totalMinutes: number) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function formatDurationText(totalMinutes: number) {
+function formatDurationText(totalMinutes: number, text: UiText) {
   const normalizedMinutes = Math.max(0, Math.round(totalMinutes));
 
   if (normalizedMinutes < 60) {
-    return `${normalizedMinutes}분`;
+    return text.dayRoute.minutes(normalizedMinutes);
   }
 
   const hour = Math.floor(normalizedMinutes / 60);
   const minute = normalizedMinutes % 60;
-  return minute > 0 ? `${hour}시간 ${minute}분` : `${hour}시간`;
+  return minute > 0
+    ? text.dayRoute.hoursMinutes(hour, minute)
+    : text.dayRoute.hours(hour);
 }
 
 function isSameRouteDay(left: PlannedRouteDay, right: PlannedRouteDay) {
@@ -81,10 +80,10 @@ function isSameRouteDay(left: PlannedRouteDay, right: PlannedRouteDay) {
   );
 }
 
-function getRouteSaveErrorMessage(error: unknown) {
+function getRouteSaveErrorMessage(error: unknown, text: UiText) {
   return error instanceof Error
     ? error.message
-    : "루트 저장에 실패했어요. 잠시 후 다시 시도해 주세요.";
+    : text.cart.saveRouteFallbackError;
 }
 
 function PlaceCartRouteResultStep({
@@ -96,6 +95,7 @@ function PlaceCartRouteResultStep({
   onClearPlaces,
   onRequestSearchPlace,
 }: PlaceCartRouteResultStepProps) {
+  const text = useUiText();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
@@ -294,7 +294,7 @@ function PlaceCartRouteResultStep({
     }
 
     if (!hasEditableRoute) {
-      showToast("저장할 장소가 없어요.");
+      showToast(text.cart.noPlacesToSaveToast);
       return;
     }
 
@@ -317,12 +317,15 @@ function PlaceCartRouteResultStep({
 
       if (conflict) {
         openModal({
-          title: "이미 일정이 있어요",
-          description: `${conflict.requestedRangeLabel} 일정이 기존 ${conflict.existingRangeLabel} 일정과 겹쳐서 저장할 수 없어요.`,
-          detail: "내 루트에서 기존 일정을 확인하거나 여행 날짜를 다시 선택해 주세요.",
+          title: text.cart.dateConflictTitle,
+          description: text.cart.dateConflictDescription(
+            conflict.requestedRangeLabel,
+            conflict.existingRangeLabel
+          ),
+          detail: text.cart.dateConflictDetail,
           actions: [
             {
-              label: "내 루트 보기",
+              label: text.cart.viewMyRoutes,
               variant: "secondary",
               onClick: () => {
                 onClose();
@@ -330,7 +333,7 @@ function PlaceCartRouteResultStep({
               },
             },
             {
-              label: "날짜 다시 선택",
+              label: text.cart.chooseDateAgain,
               variant: "primary",
               onClick: () => {
                 setStep("schedule");
@@ -369,17 +372,17 @@ function PlaceCartRouteResultStep({
           (currentData) => upsertMyRouteCache(currentData, route.createRoute)
         );
 
-        showToast(`${route.createRoute.totalStopCount}개 장소로 루트를 저장했어요.`);
+        showToast(text.cart.routeSavedToast(route.createRoute.totalStopCount));
       }
 
       if (appendTarget) {
-        showToast(`${appendTarget.routeTitle}에 DAY를 추가했어요.`);
+        showToast(text.cart.appendDaySavedToast(appendTarget.routeTitle));
       }
       clearAppendTarget();
       onClearPlaces();
       onClose();
     } catch (error) {
-      showToast(getRouteSaveErrorMessage(error), 2600);
+      showToast(getRouteSaveErrorMessage(error, text), 2600);
       setIsSavingRoute(false);
     }
   };
@@ -394,25 +397,30 @@ function PlaceCartRouteResultStep({
                 <p className="font-trip text-sm text-brand-700">ROUTE RESULT</p>
                 {isRouteEditDirty ? (
                   <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
-                    수정 중
+                    {text.cart.editingBadge}
                   </span>
                 ) : null}
               </div>
             </div>
             <p className="mt-1 text-xl font-semibold text-slate-900">
-              {appendTarget ? "추가할 DAY를 만들었어요" : "추천 루트를 만들었어요"}
+              {appendTarget ? text.cart.appendResultTitle : text.cart.resultTitle}
             </p>
             <p className="mt-2 text-xs leading-5 text-slate-500">
               {appendTarget
-                ? `${appendTarget.routeTitle}에 붙일 새 DAY입니다. 체류시간과 순서를 확인한 뒤 추가해요.`
-                : `${TEMPO_LABEL[tempo]} 템포 기준 추천 체류시간과 거리 기반 차량 이동 추정치로 배치한 일정입니다. 체류시간은 역 카드에서 직접 수정할 수 있어요.`}
+                ? text.cart.appendResultDescription(appendTarget.routeTitle)
+                : text.cart.resultDescription(
+                    tempo === "relaxed"
+                      ? text.cart.tempoRelaxedTitle
+                      : tempo === "packed"
+                        ? text.cart.tempoPackedTitle
+                        : text.cart.tempoBalancedTitle
+                  )}
             </p>
           </div>
 
           {hasOverSchedule ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
-              담은 장소가 많아 일부 일정이 희망 종료 시간 {formatClock(scheduleEndMinutes)}을
-              넘습니다. 여행 일수를 늘리거나 체류시간을 줄여 주세요.
+              {text.cart.overScheduleWarning(formatClock(scheduleEndMinutes))}
             </div>
           ) : null}
 
@@ -423,12 +431,14 @@ function PlaceCartRouteResultStep({
                   <div className="min-w-0">
                     <p className="flex items-center gap-1 text-xs font-black text-brand-700">
                       <IoLocationSharp className="text-sm" />
-                      출발 위치
+                      {text.cart.startLocationLabel}
                     </p>
                     <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">
                       {firstTravelMinutes != null && firstTravelMinutes >= 60
-                        ? `첫 장소까지 약 ${formatDurationText(firstTravelMinutes)} 걸려요. 실제 출발지가 다르면 지도에서 위치를 바꿔요.`
-                        : "현재 위치와 여행 지역이 다르면 지도에서 출발 위치를 바꿔 다시 계산해요."}
+                        ? text.cart.firstPlaceTravelWarning(
+                            formatDurationText(firstTravelMinutes, text)
+                          )
+                        : text.cart.startLocationRecalculateDescription}
                     </p>
                   </div>
                   <button
@@ -436,7 +446,7 @@ function PlaceCartRouteResultStep({
                     onClick={() => setIsStartLocationPickerOpen(true)}
                     className="shrink-0 rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700"
                   >
-                    지도에서 변경
+                    {text.cart.changeOnMap}
                   </button>
                 </div>
               </section>
@@ -473,7 +483,7 @@ function PlaceCartRouteResultStep({
             disabled
             className="w-full rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-700 opacity-80"
           >
-            순서 변경을 완료해 주세요
+            {text.cart.finishOrderEditing}
           </button>
         ) : isRouteEditDirty ? (
           <div className="grid grid-cols-2 gap-2">
@@ -482,14 +492,14 @@ function PlaceCartRouteResultStep({
               onClick={handleCancelResultEdits}
               className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600"
             >
-              변경 취소
+              {text.cart.cancelChanges}
             </button>
             <button
               type="button"
               onClick={handleApplyResultEdits}
               className="rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
             >
-              변경 적용
+              {text.cart.applyChanges}
             </button>
           </div>
         ) : (
@@ -500,10 +510,10 @@ function PlaceCartRouteResultStep({
             className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
           >
             {isSavingRoute
-              ? "저장 중..."
+              ? text.cart.saving
               : appendTarget
-                ? "DAY 추가"
-                : "완료"}
+                ? text.cart.addDay
+                : text.cart.done}
           </button>
         )}
       </footer>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import {
   MdAdd,
@@ -6,117 +6,19 @@ import {
   MdOutlinePlace,
   MdSell,
 } from "react-icons/md";
-import type {
-  LikedSharedRouteConnectionQuery,
-  LikedSharedRoutesQuery,
-  RouteSummaryFieldsFragment,
-  SharedRouteConnectionQuery,
-  SharedRoutesQuery,
-} from "@/generated/graphql";
-import { getUiText, useUiText, type UiText } from "@/lib/uiText";
+import type { RouteSummaryFieldsFragment } from "@/generated/graphql";
+import { useUiText } from "@/lib/uiText";
+import {
+  getDisplayPlaceOptions,
+  getDisplayShareTags,
+  getSharedRouteSubtitle,
+  getSharedRouteTitle,
+  type SharedRoute,
+  type SharedRouteFilterCandidate,
+} from "../sharedRouteCardModel";
 
 const VISIBLE_SHARE_TAG_COUNT = 3;
 const VISIBLE_PLACE_CHIP_COUNT = 3;
-export const GANGWON_REGION_LABELS = [
-  "강릉",
-  "고성",
-  "동해",
-  "삼척",
-  "속초",
-  "양구",
-  "양양",
-  "영월",
-  "원주",
-  "인제",
-  "정선",
-  "철원",
-  "춘천",
-  "태백",
-  "평창",
-  "홍천",
-  "화천",
-  "횡성",
-] as const;
-
-const GANGWON_REGION_LABEL_BY_CODE: Record<string, string> = {
-  "1": "강릉",
-  "2": "고성",
-  "3": "동해",
-  "4": "삼척",
-  "5": "속초",
-  "6": "양구",
-  "7": "양양",
-  "8": "영월",
-  "9": "원주",
-  "10": "인제",
-  "11": "정선",
-  "12": "철원",
-  "13": "춘천",
-  "14": "태백",
-  "15": "평창",
-  "16": "홍천",
-  "17": "화천",
-  "18": "횡성",
-  "51150": "강릉",
-  "51820": "고성",
-  "51170": "동해",
-  "51230": "삼척",
-  "51210": "속초",
-  "51800": "양구",
-  "51830": "양양",
-  "51750": "영월",
-  "51130": "원주",
-  "51810": "인제",
-  "51770": "정선",
-  "51780": "철원",
-  "51110": "춘천",
-  "51190": "태백",
-  "51760": "평창",
-  "51720": "홍천",
-  "51790": "화천",
-  "51730": "횡성",
-};
-const REGION_SHARE_TAGS = new Set([
-  "강원",
-  ...GANGWON_REGION_LABELS,
-]);
-function getLegacyShareTagLabel(tag: string, text: UiText) {
-  const legacyShareTagLabels: Record<string, string> = {
-    "가볍게 보기": text.sharedRouteCard.lightPlan,
-    "촘촘한 루트": text.sharedRouteCard.densePlan,
-    "여유로운 루트": text.sharedRouteCard.relaxedPlan,
-    "균형 잡힌 루트": text.sharedRouteCard.balancedPlan,
-  };
-
-  return legacyShareTagLabels[tag] ?? tag;
-}
-
-function getLocalizedRegionName(regionName: string, text: UiText) {
-  return text.labels.regions[regionName] ?? regionName;
-}
-
-export type SharedRoute =
-  | SharedRoutesQuery["sharedRoutes"][number]
-  | LikedSharedRoutesQuery["likedRoutes"][number]
-  | SharedRouteConnectionQuery["sharedRouteConnection"]["nodes"][number]
-  | LikedSharedRouteConnectionQuery["likedRouteConnection"]["nodes"][number];
-
-export type SharedRouteFilterCandidate =
-  | {
-      type: "tag";
-      value: string;
-    }
-  | {
-      type: "place";
-      value: string;
-      region: string;
-    };
-
-export type SharedRoutePlaceFilterOption = {
-  name: string;
-  region: string;
-  category: string;
-};
 
 type SharedRouteCardProps = {
   route: SharedRoute;
@@ -127,202 +29,7 @@ type SharedRouteCardProps = {
   onRequestFilter?: (filter: SharedRouteFilterCandidate) => void;
 };
 
-function formatRouteDate(value: string | null) {
-  const dateKey = value?.slice(0, 10);
-
-  if (!dateKey) {
-    return null;
-  }
-
-  const [, month, day] = dateKey.split("-");
-  return `${Number(month)}.${Number(day)}`;
-}
-
-function getRouteDateTitle(route: RouteSummaryFieldsFragment) {
-  const startDate = formatRouteDate(route.travelStartDate);
-  const endDate = formatRouteDate(route.travelEndDate);
-
-  if (!startDate) {
-    return null;
-  }
-
-  if (!endDate || startDate === endDate) {
-    return startDate;
-  }
-
-  return `${startDate} ~ ${endDate}`;
-}
-
-function getRegionCode(
-  regionLabelKey?: string | null,
-  regionCode?: string | null
-) {
-  const [areaCodeOrSigunguCode, sigunguCode] = regionLabelKey?.split(":") ?? [];
-
-  return (
-    sigunguCode ??
-    regionCode ??
-    (areaCodeOrSigunguCode &&
-    GANGWON_REGION_LABEL_BY_CODE[areaCodeOrSigunguCode]
-      ? areaCodeOrSigunguCode
-      : null)
-  );
-}
-
-function getRegionName(
-  regionLabelKey?: string | null,
-  regionCode?: string | null
-) {
-  const code = getRegionCode(regionLabelKey, regionCode);
-
-  return code ? GANGWON_REGION_LABEL_BY_CODE[code] : null;
-}
-
-export function getDisplayRegionNames(route: SharedRoute) {
-  const regionNames: string[] = [];
-  const appendRegionName = (regionName: string | null) => {
-    if (regionName && !regionNames.includes(regionName)) {
-      regionNames.push(regionName);
-    }
-  };
-
-  (route.stops ?? []).forEach((stop) => {
-    appendRegionName(
-      getRegionName(stop.place.regionLabelKey, stop.place.regionCode)
-    );
-  });
-
-  if (regionNames.length === 0) {
-    appendRegionName(
-      getRegionName(route.primaryRegionLabelKey, route.primaryRegionCode)
-    );
-  }
-
-  return regionNames;
-}
-
-export function getDisplayPlaceOptions(route: SharedRoute) {
-  const text = getUiText("ko");
-  const placeOptions: SharedRoutePlaceFilterOption[] = [];
-  const fallbackRegionName =
-    getRegionName(route.primaryRegionLabelKey, route.primaryRegionCode) ??
-    text.sharedRouteCard.unknownRegion;
-
-  (route.stops ?? []).forEach((stop) => {
-    const name = stop.place.title?.trim();
-    const region =
-      getRegionName(stop.place.regionLabelKey, stop.place.regionCode) ??
-      fallbackRegionName;
-    const category =
-      stop.place.categoryLabel?.trim() ||
-      stop.place.categoryName?.trim() ||
-      text.sharedRouteCard.etcCategory;
-
-    if (!name) {
-      return;
-    }
-
-    const hasPlace = placeOptions.some(
-      (placeOption) =>
-        placeOption.name === name && placeOption.region === region
-    );
-
-    if (!hasPlace) {
-      placeOptions.push({
-        name,
-        region,
-        category,
-      });
-    }
-  });
-
-  return placeOptions;
-}
-
-function getRouteRegionTitle(route: SharedRoute, text: UiText) {
-  const regionNames = getDisplayRegionNames(route);
-
-  if (regionNames.length === 0) {
-    return text.sharedRouteCard.shared;
-  }
-
-  const visibleRegionNames = regionNames
-    .slice(0, 2)
-    .map((regionName) => getLocalizedRegionName(regionName, text))
-    .join("+");
-
-  return regionNames.length > 2
-    ? `${visibleRegionNames} ${text.sharedRouteCard.otherRegions(
-        regionNames.length - 2
-      )}`
-    : visibleRegionNames;
-}
-
-function getSharedRouteTitle(route: SharedRoute, text: UiText) {
-  const dateTitle = getRouteDateTitle(route);
-  const regionTitle = getRouteRegionTitle(route, text);
-
-  return dateTitle
-    ? `${dateTitle} ${regionTitle} ${text.sharedRouteCard.routeSuffix}`
-    : `${regionTitle} ${text.sharedRouteCard.routeSuffix}`;
-}
-
-function getSharedRouteSubtitle(route: RouteSummaryFieldsFragment, text: UiText) {
-  const durationText =
-    route.tripDays <= 1
-      ? text.sharedRouteCard.dayTrip
-      : text.sharedRouteCard.nightTrip(route.tripDays - 1, route.tripDays);
-
-  return `${durationText} · ${text.sharedRouteCard.completed(
-    route.completedStopCount,
-    route.totalStopCount
-  )}`;
-}
-
-function getFallbackShareTags(route: RouteSummaryFieldsFragment, text: UiText) {
-  const tags = [
-    route.tripDays <= 1
-      ? text.sharedRouteCard.dayTrip
-      : text.sharedRouteCard.nightTrip(route.tripDays - 1, route.tripDays),
-  ];
-
-  if (route.totalStopCount > 0) {
-    tags.push(
-      route.totalStopCount / Math.max(1, route.tripDays) >= 4
-        ? text.sharedRouteCard.densePlan
-        : text.sharedRouteCard.relaxedPlan
-    );
-  }
-
-  return tags;
-}
-
-function normalizeShareTag(tag: string, text: UiText) {
-  return getLegacyShareTagLabel(tag, text);
-}
-
-export function getDisplayShareTags(
-  route: RouteSummaryFieldsFragment,
-  text = getUiText("ko")
-) {
-  const sourceTags = route.shareTags.length
-    ? route.shareTags
-    : getFallbackShareTags(route, text);
-  const displayTags = sourceTags
-    .map((tag) => normalizeShareTag(tag, text))
-    .filter(
-      (tag, index, tags) =>
-        !REGION_SHARE_TAGS.has(tag) && tags.indexOf(tag) === index
-    );
-
-  return displayTags.length
-    ? displayTags
-    : getFallbackShareTags(route, text).filter(
-        (tag) => !REGION_SHARE_TAGS.has(tag)
-      );
-}
-
-function SharedRouteCard({
+const SharedRouteCard = memo(function SharedRouteCard({
   route,
   isLiked,
   isLikePending = false,
@@ -335,7 +42,7 @@ function SharedRouteCard({
   const [isPlaceExpanded, setIsPlaceExpanded] = useState(false);
   const isMine = route.isMine;
   const shareTags = getDisplayShareTags(route, text);
-  const placeOptions = getDisplayPlaceOptions(route);
+  const placeOptions = getDisplayPlaceOptions(route, text);
   const visibleTags = isTagExpanded
     ? shareTags
     : shareTags.slice(0, VISIBLE_SHARE_TAG_COUNT);
@@ -550,6 +257,6 @@ function SharedRouteCard({
       </div>
     </article>
   );
-}
+});
 
 export default SharedRouteCard;

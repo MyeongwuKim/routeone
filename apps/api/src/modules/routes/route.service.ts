@@ -120,10 +120,11 @@ export type RouteStopVisitVerificationInput = {
 };
 
 const VERIFIED_ROUTE_STOP_STATUSES = new Set<RouteStopVerificationStatus>([
+  "GPS",
   "GPS_PHOTO",
 ]);
 const GPS_VERIFICATION_MAX_DISTANCE_METERS = 100;
-const BYPASS_GPS_PHOTO_LOCATION_VERIFICATION = false;
+const BYPASS_GPS_LOCATION_VERIFICATION = false;
 const EARTH_RADIUS_METERS = 6_371_000;
 const DEFAULT_PLACE_PHOTO_LIMIT = 30;
 const MAX_PLACE_PHOTO_LIMIT = 60;
@@ -1068,10 +1069,6 @@ function getVisitVerificationStatus(
 ) {
   const status = verification?.status ?? "MANUAL";
 
-  if (status === "GPS") {
-    throw new Error("사진 인증은 위치와 사진을 함께 확인해야 해요.");
-  }
-
   return status === "NONE" ? "MANUAL" : status;
 }
 
@@ -1080,7 +1077,7 @@ function assertRouteStopGpsVerification(
   verification: RouteStopVisitVerificationInput | null | undefined,
   verificationStatus: RouteStopVerificationStatus
 ) {
-  if (verificationStatus !== "GPS_PHOTO") {
+  if (verificationStatus !== "GPS" && verificationStatus !== "GPS_PHOTO") {
     return;
   }
 
@@ -1088,7 +1085,7 @@ function assertRouteStopGpsVerification(
     return;
   }
 
-  if (BYPASS_GPS_PHOTO_LOCATION_VERIFICATION) {
+  if (BYPASS_GPS_LOCATION_VERIFICATION) {
     return;
   }
 
@@ -1166,7 +1163,7 @@ function buildRouteStopVisitData(
 
   const visitedAt = new Date();
   const verificationStatus = getVisitVerificationStatus(verification);
-  const isPhotoVerified = VERIFIED_ROUTE_STOP_STATUSES.has(verificationStatus);
+  const isGpsVerified = VERIFIED_ROUTE_STOP_STATUSES.has(verificationStatus);
   const photoUrl = nullableString(verification?.photoUrl);
   const hasPhotoRecord =
     Boolean(photoUrl) &&
@@ -1174,7 +1171,7 @@ function buildRouteStopVisitData(
 
   assertRouteStopGpsVerification(stop, verification, verificationStatus);
 
-  const checkedInAt = stop.checkedInAt ?? (isPhotoVerified ? visitedAt : null);
+  const checkedInAt = stop.checkedInAt ?? (isGpsVerified ? visitedAt : null);
   const checkedOutAt = stop.checkedInAt ? visitedAt : null;
   const normalizedActualStayMinutes =
     normalizeActualStayMinutes(actualStayMinutes);
@@ -1183,14 +1180,16 @@ function buildRouteStopVisitData(
     visitStatus: "VISITED" as VisitStatus,
     visitedAt,
     verificationStatus,
-    verifiedAt: isPhotoVerified ? visitedAt : null,
-    verificationPhotoImageId: isPhotoVerified || hasPhotoRecord
-      ? nullableString(verification?.photoImageId)
-      : null,
-    verificationPhotoUrl: isPhotoVerified || hasPhotoRecord ? photoUrl : null,
-    verificationLat: isPhotoVerified ? (verification?.lat ?? null) : null,
-    verificationLng: isPhotoVerified ? (verification?.lng ?? null) : null,
-    verificationAccuracyMeters: isPhotoVerified
+    verifiedAt: isGpsVerified ? visitedAt : null,
+    verificationPhotoImageId:
+      verificationStatus === "GPS_PHOTO" || hasPhotoRecord
+        ? nullableString(verification?.photoImageId)
+        : null,
+    verificationPhotoUrl:
+      verificationStatus === "GPS_PHOTO" || hasPhotoRecord ? photoUrl : null,
+    verificationLat: isGpsVerified ? (verification?.lat ?? null) : null,
+    verificationLng: isGpsVerified ? (verification?.lng ?? null) : null,
+    verificationAccuracyMeters: isGpsVerified
       ? (verification?.accuracyMeters ?? null)
       : null,
     checkedInAt,

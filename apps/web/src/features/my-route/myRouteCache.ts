@@ -1,9 +1,7 @@
 import type {
-  LikedSharedRoutesQuery,
   MyRoutesQuery,
   RouteSummaryFieldsFragment,
   RouteStopVerificationStatus,
-  SharedRoutesQuery,
 } from "@/generated/graphql";
 import {
   addDaysToDateKey,
@@ -14,8 +12,6 @@ import type { MyRoute, MyRouteStop } from "./types";
 
 export const MY_ROUTES_QUERY_KEY = ["my-routes"] as const;
 export const MY_ROUTE_HISTORY_QUERY_KEY = ["my-route-history"] as const;
-export const SHARED_ROUTES_QUERY_KEY = ["shared-routes"] as const;
-export const LIKED_SHARED_ROUTES_QUERY_KEY = ["liked-shared-routes"] as const;
 
 function getRouteStopCounts(route: MyRoute) {
   const stops = route.days.flatMap((day) => day.stops);
@@ -124,147 +120,6 @@ export function mergeMyRouteSummaryCache(
   };
 }
 
-export function upsertSharedRouteSummaryCache(
-  data: SharedRoutesQuery | undefined,
-  nextRoute: RouteSummaryFieldsFragment
-) {
-  if (!data || nextRoute.visibility !== "PUBLIC") {
-    return data;
-  }
-
-  const hasRoute = data.sharedRoutes.some((route) => route.id === nextRoute.id);
-
-  return {
-    ...data,
-    sharedRoutes: hasRoute
-      ? data.sharedRoutes.map((route) =>
-          route.id === nextRoute.id ? { ...route, ...nextRoute } : route
-        )
-      : [{ ...nextRoute, stops: [] }, ...data.sharedRoutes],
-  };
-}
-
-export function optimisticUpdateSharedRouteLikeCache({
-  data,
-  routeId,
-  liked,
-  likeCount,
-}: {
-  data: SharedRoutesQuery | undefined;
-  routeId: string;
-  liked: boolean;
-  likeCount?: number;
-}) {
-  if (!data) {
-    return data;
-  }
-
-  return {
-    ...data,
-    sharedRoutes: data.sharedRoutes.map((route) =>
-      route.id === routeId
-        ? {
-            ...route,
-            likedByMe: liked,
-            likeCount:
-              likeCount ?? Math.max(0, route.likeCount + (liked ? 1 : -1)),
-          }
-        : route
-    ),
-  };
-}
-
-export function upsertLikedSharedRouteSummaryCache(
-  data: LikedSharedRoutesQuery | undefined,
-  nextRoute: RouteSummaryFieldsFragment,
-  liked: boolean,
-  options: {
-    keepUnlikedRoute?: boolean;
-    likeCount?: number;
-  } = {}
-) {
-  if (!data) {
-    return data;
-  }
-
-  if (nextRoute.visibility !== "PUBLIC") {
-    return {
-      ...data,
-      likedRoutes: data.likedRoutes.filter((route) => route.id !== nextRoute.id),
-    };
-  }
-
-  const hasRoute = data.likedRoutes.some((route) => route.id === nextRoute.id);
-  const routeForCache = {
-    ...nextRoute,
-    likedByMe: liked,
-    likeCount: options.likeCount ?? nextRoute.likeCount,
-  };
-
-  if (!liked && !options.keepUnlikedRoute) {
-    return {
-      ...data,
-      likedRoutes: data.likedRoutes.filter((route) => route.id !== nextRoute.id),
-    };
-  }
-
-  return {
-    ...data,
-    likedRoutes: hasRoute
-      ? data.likedRoutes.map((route) =>
-          route.id === nextRoute.id
-            ? { ...route, ...routeForCache }
-            : route
-        )
-      : [{ ...routeForCache, stops: [] }, ...data.likedRoutes],
-  };
-}
-
-export function optimisticUpdateLikedSharedRouteLikeCache({
-  data,
-  route,
-  liked,
-  likeCount,
-  keepUnlikedRoute = false,
-}: {
-  data: LikedSharedRoutesQuery | undefined;
-  route: RouteSummaryFieldsFragment;
-  liked: boolean;
-  likeCount?: number;
-  keepUnlikedRoute?: boolean;
-}) {
-  if (!data) {
-    return data;
-  }
-
-  if (!liked && !keepUnlikedRoute) {
-    return {
-      ...data,
-      likedRoutes: data.likedRoutes.filter(
-        (likedRoute) => likedRoute.id !== route.id
-      ),
-    };
-  }
-
-  const nextLikeCount =
-    likeCount ??
-    Math.max(0, route.likeCount + (liked ? (route.likedByMe ? 0 : 1) : -1));
-
-  return upsertLikedSharedRouteSummaryCache(
-    data,
-    {
-      ...route,
-      likedByMe: liked,
-      likeCount: nextLikeCount,
-    },
-    liked,
-    {
-      keepUnlikedRoute,
-      likeCount: nextLikeCount,
-    }
-  );
-}
-
 export function optimisticReorderRouteStopsCache({
   data,
   routeId,
@@ -341,7 +196,9 @@ export function optimisticVisitRouteStopCache({
     const nextVerificationStatus: RouteStopVerificationStatus = visited
       ? (verificationStatus ?? "MANUAL")
       : "NONE";
-    const isPhotoVerified = nextVerificationStatus === "GPS_PHOTO";
+    const isGpsPhotoVerified = nextVerificationStatus === "GPS_PHOTO";
+    const isGpsVerified =
+      nextVerificationStatus === "GPS" || isGpsPhotoVerified;
     const hasPhotoRecord = visited && Boolean(verificationPhotoUrl);
     const nextDays = route.days.map((day) => ({
       ...day,
@@ -352,19 +209,19 @@ export function optimisticVisitRouteStopCache({
               visitStatus: nextVisitStatus,
               visitedAt: visited ? visitedAt : null,
               verificationStatus: nextVerificationStatus,
-              verifiedAt: isPhotoVerified ? visitedAt : null,
-              verificationPhotoImageId: isPhotoVerified || hasPhotoRecord
+              verifiedAt: isGpsVerified ? visitedAt : null,
+              verificationPhotoImageId: isGpsPhotoVerified || hasPhotoRecord
                 ? (verificationPhotoImageId ?? null)
                 : null,
-              verificationPhotoUrl: isPhotoVerified || hasPhotoRecord
+              verificationPhotoUrl: isGpsPhotoVerified || hasPhotoRecord
                 ? (verificationPhotoUrl ?? null)
                 : null,
-              verificationLat: isPhotoVerified ? (verificationLat ?? null) : null,
-              verificationLng: isPhotoVerified ? (verificationLng ?? null) : null,
-              verificationAccuracyMeters: isPhotoVerified
+              verificationLat: isGpsVerified ? (verificationLat ?? null) : null,
+              verificationLng: isGpsVerified ? (verificationLng ?? null) : null,
+              verificationAccuracyMeters: isGpsVerified
                 ? (verificationAccuracyMeters ?? null)
                 : null,
-              checkedInAt: isPhotoVerified
+              checkedInAt: isGpsVerified
                 ? (stop.checkedInAt ?? visitedAt)
                 : null,
               checkedOutAt: null,

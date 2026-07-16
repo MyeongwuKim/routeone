@@ -52,6 +52,25 @@ export type NativePhotoUploadRequest = {
   uploadTarget: NativePhotoUploadTarget;
 };
 
+export type NativeRouteArrivalNotificationPlace = {
+  id: string;
+  routeId: string;
+  routeTitle?: string | null;
+  dayId: string;
+  dayIndex: number;
+  stopId: string;
+  title: string;
+  lat: number;
+  lng: number;
+};
+
+export type NativeRouteArrivalNotificationSyncRequest = {
+  type: "routeone:native-route-arrival-notifications-sync";
+  id: string;
+  places: NativeRouteArrivalNotificationPlace[];
+  radiusMeters?: number | null;
+};
+
 export type NativeExternalUrlRequest = {
   type: "routeone:native-open-url";
   url: string;
@@ -117,6 +136,18 @@ export type NativePhotoUploadResponse =
       ok: true;
       uploadedImageId?: string | null;
       uploadedImageUrl?: string | null;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type NativeRouteArrivalNotificationSyncResponse =
+  | {
+      ok: true;
+      activeCount: number;
+      backgroundLocationStatus: string;
+      notificationStatus: string;
     }
   | {
       ok: false;

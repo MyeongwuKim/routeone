@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import * as Notifications from "expo-notifications";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   StatusBar,
@@ -28,10 +29,62 @@ type WebViewNavigationRequest = {
 
 const AUTH_TOKEN_STORAGE_KEY = "routeone.authToken";
 
+function getRouteArrivalNotificationWebPath(
+  response: Notifications.NotificationResponse | null
+) {
+  if (
+    !response ||
+    response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER
+  ) {
+    return null;
+  }
+
+  const data = response.notification.request.content.data ?? {};
+  const routeId = typeof data.routeId === "string" ? data.routeId : null;
+  const dayId = typeof data.dayId === "string" ? data.dayId : null;
+  const stopId = typeof data.stopId === "string" ? data.stopId : null;
+  const type = typeof data.type === "string" ? data.type : null;
+
+  if (type !== "route-arrival" || !routeId || !dayId) {
+    return null;
+  }
+
+  const searchParams = new URLSearchParams({
+    routeId,
+    dayId,
+    source: "route-arrival"
+  });
+
+  if (stopId) {
+    searchParams.set("stopId", stopId);
+  }
+
+  return `/my-route?${searchParams.toString()}`;
+}
+
+function createWebViewNavigationScript(path: string) {
+  return `
+    (function () {
+      var path = ${JSON.stringify(path)};
+      var routerMode = window.RouteOneRuntimeConfig && window.RouteOneRuntimeConfig.routerMode;
+
+      if (routerMode === "hash") {
+        window.location.hash = path;
+        return;
+      }
+
+      window.history.pushState({}, "", path);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    })();
+    true;
+  `;
+}
+
 export default function NativeWebViewScreen({
   nativeAuthToken
 }: NativeWebViewScreenProps) {
   const webViewRef = useRef<WebView>(null);
+  const pendingNavigationPathRef = useRef<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const injectedScript = useMemo(() => {
@@ -47,6 +100,54 @@ export default function NativeWebViewScreen({
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
     void handleNativeBridgeMessage(event, webViewRef);
   }, []);
+
+  const injectNavigationPath = useCallback((path: string) => {
+    webViewRef.current?.injectJavaScript(createWebViewNavigationScript(path));
+  }, []);
+
+  const navigateWebViewToPath = useCallback(
+    (path: string) => {
+      pendingNavigationPathRef.current = path;
+
+      if (!isLoading) {
+        pendingNavigationPathRef.current = null;
+        injectNavigationPath(path);
+      }
+    },
+    [injectNavigationPath, isLoading]
+  );
+
+  useEffect(() => {
+    if (isLoading || !pendingNavigationPathRef.current) {
+      return;
+    }
+
+    const path = pendingNavigationPathRef.current;
+    pendingNavigationPathRef.current = null;
+    injectNavigationPath(path);
+  }, [injectNavigationPath, isLoading]);
+
+  useEffect(() => {
+    const handleNotificationResponse = (
+      response: Notifications.NotificationResponse | null
+    ) => {
+      const webPath = getRouteArrivalNotificationWebPath(response);
+
+      if (webPath) {
+        navigateWebViewToPath(webPath);
+      }
+    };
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      handleNotificationResponse
+    );
+    handleNotificationResponse(Notifications.getLastNotificationResponse());
+    Notifications.clearLastNotificationResponse();
+
+    return () => {
+      subscription.remove();
+    };
+  }, [navigateWebViewToPath]);
 
   const handleShouldStartLoadWithRequest = useCallback(
     (request: WebViewNavigationRequest) => {

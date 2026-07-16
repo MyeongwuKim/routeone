@@ -17,11 +17,11 @@ import {
   ME_QUERY_KEY,
   ME_QUERY_STALE_TIME_MS,
 } from "@/api/authApi";
+import { MY_ROUTES_QUERY_KEY } from "@/features/my-route/myRouteCache";
 import {
   LIKED_SHARED_ROUTES_QUERY_KEY,
-  MY_ROUTES_QUERY_KEY,
   SHARED_ROUTES_QUERY_KEY,
-} from "@/features/my-route/myRouteCache";
+} from "@/features/shared-route/queries/sharedRouteQueryKeys";
 import { clearAuthToken } from "@/lib/authToken";
 import { useUiText } from "@/lib/uiText";
 import {

@@ -1,5 +1,9 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import {
+  DEFAULT_GANGWON_REGION,
+  GANGWON_AREA_CODE,
+} from "@/data/gangwonRegions";
 import { isSamePlaceDuplicate } from "@/lib/placeDuplicate";
 import type { MapSheetPlace } from "@/types/place";
 
@@ -53,8 +57,8 @@ const createSeedPlace = (
 ): MapSheetPlace => ({
   id: place.id,
   contentId: place.id,
-  areaCode: "32",
-  signguCode: "1",
+  areaCode: GANGWON_AREA_CODE,
+  signguCode: DEFAULT_GANGWON_REGION.sigunguCode,
   touristTrendName: place.title,
   topRank: null,
   images: place.images ?? [],

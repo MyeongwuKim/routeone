@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DateInput, TimeWheelInput } from "@/components/inputs";
-import { useRouteCheckout } from "../RouteCheckoutContext";
+import { useUiText } from "@/lib/uiText";
+import { useRouteCheckout } from "../../hooks/useRouteCheckout";
 
 function toDateValue(date: Date) {
   const year = date.getFullYear();
@@ -56,6 +57,7 @@ function formatDateLabel(value: string) {
 }
 
 function PlaceCartScheduleStep() {
+  const text = useUiText();
   const {
     travelStartDate,
     setTravelStartDate,
@@ -95,16 +97,22 @@ function PlaceCartScheduleStep() {
       <div className="space-y-4">
         <div>
           <p className="font-trip text-sm text-brand-700">TRAVEL SCHEDULE</p>
-          <p className="mt-1 text-xl font-semibold text-slate-900">여행 일정 정보를 정해주세요</p>
+          <p className="mt-1 text-xl font-semibold text-slate-900">
+            {text.cart.scheduleTitle}
+          </p>
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-semibold text-slate-700">여행 시작일</p>
+          <p className="mb-2 text-sm font-semibold text-slate-700">
+            {text.cart.startDateLabel}
+          </p>
           <DateInput value={travelStartDate} onChange={setTravelStartDate} />
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-semibold text-slate-700">여행 일수</p>
+          <p className="mb-2 text-sm font-semibold text-slate-700">
+            {text.cart.tripDaysLabel}
+          </p>
           <div className="grid grid-cols-4 gap-2">
             {[1, 2, 3, 4, 5, 6, 7].map((dayCount) => (
               <button
@@ -117,7 +125,7 @@ function PlaceCartScheduleStep() {
                     : "border-brand-200 bg-white text-slate-600"
                 }`}
               >
-                {dayCount}일
+                {text.cart.dayCount(dayCount)}
               </button>
             ))}
             <button
@@ -132,41 +140,48 @@ function PlaceCartScheduleStep() {
                   : "border-brand-200 bg-white text-slate-600"
               }`}
             >
-              직접 입력
+              {text.cart.customTripDaysButton}
             </button>
           </div>
           {travelStartDate ? (
             <p className="mt-2 text-xs text-slate-500">
-              일정 범위: {formatDateLabel(travelStartDate)} ~ {formatDateLabel(endDate)}
+              {text.cart.scheduleRange(
+                formatDateLabel(travelStartDate),
+                formatDateLabel(endDate)
+              )}
             </p>
           ) : null}
           {isTodayStartTrip ? (
             <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">
               {isPastTodayStartTime
-                ? "선택한 출발시간이 이미 지난 시간이에요. 오늘 일정이라면 출발시간을 한 번 더 확인해주세요."
+                ? text.cart.todayPastWarning
                 : isOneDayTrip
-                  ? "오늘 시작해서 오늘 끝나는 당일 일정이에요. 다음 단계로 가기 전에 한 번 더 확인해주세요."
-                  : `오늘 바로 시작하는 ${tripDays}일 일정이에요. 다음 단계로 가기 전에 한 번 더 확인해주세요.`}
+                  ? text.cart.todayOneDayWarning
+                  : text.cart.todayMultiDayWarning(tripDays)}
             </div>
           ) : null}
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-semibold text-slate-700">매일 출발시간</p>
+          <p className="mb-2 text-sm font-semibold text-slate-700">
+            {text.cart.dailyStartTimeLabel}
+          </p>
           <TimeWheelInput
             value={dailyStartTime}
-            title="매일 출발시간 설정"
-            description="여행하는 날마다 이 시간에 일정을 시작해요."
+            title={text.cart.dailyStartTimeTitle}
+            description={text.cart.dailyStartTimeDescription}
             onChange={setDailyStartTime}
           />
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-semibold text-slate-700">일정 종료 희망시간</p>
+          <p className="mb-2 text-sm font-semibold text-slate-700">
+            {text.cart.scheduleEndTimeLabel}
+          </p>
           <TimeWheelInput
             value={scheduleEndTime}
-            title="일정 종료 희망시간 설정"
-            description="하루 일정을 마무리하고 싶은 시각이에요."
+            title={text.cart.scheduleEndTimeTitle}
+            description={text.cart.scheduleEndTimeDescription}
             onChange={setScheduleEndTime}
           />
         </div>
@@ -177,8 +192,12 @@ function PlaceCartScheduleStep() {
       {isCustomTripDaysOpen ? (
         <div className="center-modal-backdrop-enter fixed inset-0 z-[1800] flex items-center justify-center bg-slate-900/45 px-4">
           <div className="center-modal-panel-enter w-full max-w-[340px] rounded-3xl border border-brand-200 bg-white p-4 shadow-2xl">
-            <p className="text-lg font-bold text-slate-900">여행 일수 입력</p>
-            <p className="mt-1 text-sm text-slate-500">1일 이상 숫자를 입력해 주세요.</p>
+            <p className="text-lg font-bold text-slate-900">
+              {text.cart.customTripDaysTitle}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              {text.cart.customTripDaysDescription}
+            </p>
 
             <input
               type="number"
@@ -187,7 +206,7 @@ function PlaceCartScheduleStep() {
               value={customTripDaysInput}
               onChange={(event) => setCustomTripDaysInput(event.target.value)}
               className="mt-3 w-full rounded-2xl border border-brand-200 px-3 py-2.5 text-base text-slate-800 outline-none"
-              placeholder="예: 10"
+              placeholder={text.cart.customTripDaysPlaceholder}
             />
 
             <div className="mt-4 grid grid-cols-2 gap-2">
@@ -196,7 +215,7 @@ function PlaceCartScheduleStep() {
                 onClick={() => setIsCustomTripDaysOpen(false)}
                 className="rounded-2xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600"
               >
-                취소
+                {text.common.cancel}
               </button>
               <button
                 type="button"
@@ -210,7 +229,7 @@ function PlaceCartScheduleStep() {
                 }}
                 className="rounded-2xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"
               >
-                적용
+                {text.cart.apply}
               </button>
             </div>
           </div>

@@ -8,8 +8,44 @@ type LocalizableTourPlace = {
   address: string;
 };
 
+type LocalizablePlaceIdentity = {
+  provider?: string | null;
+  externalId?: string | null;
+  contentId?: string | null;
+  title: string;
+  address?: string | null;
+};
+
+type LocalizeTourPlacesOptions = {
+  retryUncached?: boolean;
+  retryAttempts?: number;
+  retryDelayMs?: number;
+};
+
 const LOCALIZATION_REQUEST_BATCH_SIZE = 200;
 const CATEGORY_CACHE_BATCH_SIZE = 500;
+
+export function getPlaceLocalizationId(place: LocalizablePlaceIdentity) {
+  const contentId = place.contentId?.trim();
+
+  if (contentId) {
+    return contentId;
+  }
+
+  const title = place.title.trim();
+  const address = place.address?.trim() ?? "";
+  const externalId = place.externalId?.trim();
+
+  if (!title) {
+    return null;
+  }
+
+  return [
+    "route-place",
+    place.provider?.trim() || "UNKNOWN",
+    externalId || `${title}|${address}`,
+  ].join(":");
+}
 
 function chunk<T>(items: T[], size: number) {
   const chunks: T[][] = [];
@@ -19,9 +55,14 @@ function chunk<T>(items: T[], size: number) {
   return chunks;
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
+}
+
 export async function localizeTourPlaces<T extends LocalizableTourPlace>(
   places: T[],
-  language: AppLanguage
+  language: AppLanguage,
+  options: LocalizeTourPlacesOptions = {}
 ) {
   if (language !== "en" || places.length === 0) {
     return places;
@@ -35,8 +76,10 @@ export async function localizeTourPlaces<T extends LocalizableTourPlace>(
   });
 
   try {
-    const responses = await Promise.all(
-      chunk([...uniqueById.values()], LOCALIZATION_REQUEST_BATCH_SIZE).map(
+    const uniquePlaces = [...uniqueById.values()];
+    const requestLocalizations = async () =>
+      Promise.all(
+        chunk(uniquePlaces, LOCALIZATION_REQUEST_BATCH_SIZE).map(
         (batch) =>
           placeLocalizationApi.localizeTourPlaces(
             batch.map((place) => ({
@@ -46,8 +89,25 @@ export async function localizeTourPlaces<T extends LocalizableTourPlace>(
               address: place.address,
             }))
           )
-      )
-    );
+        )
+      );
+    let responses = await requestLocalizations();
+    const retryAttempts = options.retryAttempts ?? 2;
+    const retryDelayMs = options.retryDelayMs ?? 1200;
+
+    for (let attempt = 0; options.retryUncached && attempt < retryAttempts; attempt += 1) {
+      const hasUncachedLocalization = responses
+        .flatMap((response) => response.localizeTourPlaces)
+        .some((localization) => !localization.cached);
+
+      if (!hasUncachedLocalization) {
+        break;
+      }
+
+      await delay(retryDelayMs);
+      responses = await requestLocalizations();
+    }
+
     const localizedById = new Map(
       responses
         .flatMap((response) => response.localizeTourPlaces)

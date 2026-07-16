@@ -12,8 +12,10 @@ import {
   isNativeLocationRequest,
   isNativePhotoUploadRequest,
   isNativePhotoRequest,
+  isNativeRouteArrivalNotificationSyncRequest,
   isNativeSaveImageRequest,
 } from "./messageGuards";
+import { handleNativeRouteArrivalNotificationSyncRequest } from "./routeArrivalNotificationBridge";
 import { handleNativeSaveImageRequest } from "./saveImageBridge";
 import type { WebViewRef } from "./types";
 import {
@@ -59,6 +61,11 @@ export async function handleNativeBridgeMessage(
 
   if (isNativePhotoUploadRequest(message)) {
     await handleNativePhotoUploadRequest(message, webViewRef);
+    return;
+  }
+
+  if (isNativeRouteArrivalNotificationSyncRequest(message)) {
+    await handleNativeRouteArrivalNotificationSyncRequest(message, webViewRef);
     return;
   }
 

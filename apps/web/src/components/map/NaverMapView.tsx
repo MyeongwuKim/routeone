@@ -183,6 +183,12 @@ function NaverMapView({
   }, []);
 
   useEffect(() => {
+    const mapNode = mapNodeRef.current;
+
+    if (!mapNode) {
+      return;
+    }
+
     if (
       !canInitializeMap ||
       mapContainerSize.width < 40 ||
@@ -201,25 +207,19 @@ function NaverMapView({
     });
 
     mapInstanceRef.current = null;
-    if (mapNodeRef.current) {
-      mapNodeRef.current.innerHTML = "";
-    }
+    mapNode.innerHTML = "";
 
-    async function setupMap() {
-      if (!mapNodeRef.current) {
-        return;
-      }
-
+    async function setupMap(container: HTMLDivElement) {
       try {
         await loadNaverMapSdk(NCP_KEY_ID, appLanguage);
 
-        if (cancelled || !mapNodeRef.current || !window.naver?.maps) {
+        if (cancelled || !window.naver?.maps) {
           return;
         }
 
         const naverMaps = window.naver.maps;
         const mapCenter = new naverMaps.LatLng(center.lat, center.lng);
-        const map = new naverMaps.Map(mapNodeRef.current, {
+        const map = new naverMaps.Map(container, {
           center: mapCenter,
           zoom,
           minZoom,
@@ -237,7 +237,7 @@ function NaverMapView({
           map,
           naverMaps,
           center: mapCenter,
-          container: mapNodeRef.current,
+          container,
         });
 
         requestAnimationFrame(() => {
@@ -257,16 +257,14 @@ function NaverMapView({
       }
     }
 
-    void setupMap();
+    void setupMap(mapNode);
 
     return () => {
       cancelled = true;
       window.cancelAnimationFrame(resetFrameId);
       readyCleanup?.();
       mapInstanceRef.current = null;
-      if (mapNodeRef.current) {
-        mapNodeRef.current.innerHTML = "";
-      }
+      mapNode.innerHTML = "";
     };
   }, [
     appLanguage,

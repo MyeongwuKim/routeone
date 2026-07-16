@@ -1,20 +1,20 @@
 import { useMemo, useReducer } from "react";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
-import type { TravelTempo } from "./PlaceCartTempoStep";
 import { isSamePlaceDuplicate } from "@/lib/placeDuplicate";
 import {
   buildRoutePlan,
   getRecommendedStayMinutes,
   recalculateRouteDay,
   recalculateRoutePlanDays,
-} from "./routePlanBuilder";
+} from "../utils/routePlanBuilder";
 import type {
   ManualRouteInsertion,
   PlannedRouteDay,
   RouteInsertRequest,
   RouteStartLocation,
-} from "./routePlanTypes";
+  TravelTempo,
+} from "../models/routePlanTypes";
 
 type UseRouteResultEditorParams = {
   savedPlaces: SavedPlaceItem[];

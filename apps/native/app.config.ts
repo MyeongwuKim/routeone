@@ -1,5 +1,27 @@
 type AppVariant = "dev" | "prod";
 
+type AppVariantConfig = {
+  displayName: string;
+  slug: string;
+  scheme: string;
+  bundleIdentifier: string;
+};
+
+const APP_VARIANT_CONFIG: Record<AppVariant, AppVariantConfig> = {
+  dev: {
+    displayName: "RouteOne(T)",
+    slug: "routeone-native-dev",
+    scheme: "routeone-dev",
+    bundleIdentifier: "com.routeone.app.dev"
+  },
+  prod: {
+    displayName: "RouteOne",
+    slug: "routeone-native",
+    scheme: "routeone",
+    bundleIdentifier: "com.routeone.app"
+  }
+};
+
 function getAppVariant(): AppVariant {
   const variant = process.env.APP_VARIANT?.trim().toLowerCase() ?? "dev";
 
@@ -11,13 +33,11 @@ function getAppVariant(): AppVariant {
 }
 
 const appVariant = getAppVariant();
-const isDevVariant = appVariant === "dev";
-const appDisplayName = isDevVariant ? "RouteOneDev" : "RouteOne";
-const appSlug = isDevVariant ? "routeone-native-dev" : "routeone-native";
-const appScheme = isDevVariant ? "routeone-dev" : "routeone";
-const appBundleIdentifier = isDevVariant
-  ? "com.routeone.app.dev"
-  : "com.routeone.app";
+const appVariantConfig = APP_VARIANT_CONFIG[appVariant];
+const appDisplayName = appVariantConfig.displayName;
+const appSlug = appVariantConfig.slug;
+const appScheme = appVariantConfig.scheme;
+const appBundleIdentifier = appVariantConfig.bundleIdentifier;
 const enableAppleSignIn =
   process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim().toLowerCase() ===
     "true" || process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim() === "1";
@@ -38,8 +58,21 @@ const plugins: unknown[] = [
   [
     "expo-location",
     {
+      isAndroidBackgroundLocationEnabled: true,
+      isAndroidForegroundServiceEnabled: true,
+      isIosBackgroundLocationEnabled: true,
+      locationAlwaysAndWhenInUsePermission:
+        "RouteOne이 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
       locationWhenInUsePermission:
         "RouteOne이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다."
+    }
+  ],
+  [
+    "expo-notifications",
+    {
+      color: "#0f766e",
+      defaultChannel: "route-arrivals",
+      enableBackgroundRemoteNotifications: false
     }
   ],
   [
@@ -89,16 +122,29 @@ export default {
         },
         NSLocationWhenInUseUsageDescription:
           "RouteOne이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
+        NSLocationAlwaysAndWhenInUseUsageDescription:
+          "RouteOne이 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
+        NSLocationAlwaysUsageDescription:
+          "RouteOne이 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
         NSCameraUsageDescription:
           "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
         NSPhotoLibraryUsageDescription:
-          "RouteOne이 지난 방문 사진 인증을 위해 선택한 사진을 사용합니다."
+          "RouteOne이 지난 방문 사진 인증을 위해 선택한 사진을 사용합니다.",
+        UIBackgroundModes: ["location"]
       }
     },
     android: {
       package: appBundleIdentifier,
       edgeToEdgeEnabled: true,
-      permissions: ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "CAMERA"]
+      permissions: [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "CAMERA"
+      ]
     }
   }
 };

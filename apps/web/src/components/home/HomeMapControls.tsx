@@ -24,6 +24,7 @@ type SearchFilterOption = {
 type HomeMapControlsProps = {
   regions: ReadonlyArray<RegionOption>;
   selectedSigunguCode: string;
+  selectedRegionLabel: string;
   festivalCountBySigunguCode: Map<string, number>;
   filters: ReadonlyArray<SearchFilterOption>;
   selectedFilter: SearchFilter;
@@ -58,6 +59,7 @@ function SearchFilterIcon({ filter }: { filter: SearchFilter }) {
 function HomeMapControls({
   regions,
   selectedSigunguCode,
+  selectedRegionLabel,
   festivalCountBySigunguCode,
   filters,
   selectedFilter,
@@ -83,7 +85,7 @@ function HomeMapControls({
             <IoSearch />
           </span>
           <span className="ml-2 w-full truncate text-sm font-semibold text-slate-400">
-            {text.home.searchPrompt}
+            {text.home.searchPrompt(selectedRegionLabel)}
           </span>
         </button>
         <button

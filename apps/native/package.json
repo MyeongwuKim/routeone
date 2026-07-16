@@ -17,6 +17,19 @@
     "sync:ios-permissions": "node scripts/sync-ios-permissions.mjs",
     "android": "pnpm run build:webview && expo run:android",
     "ios": "pnpm run build:webview && expo run:ios",
+    "prebuild:ios:dev": "APP_VARIANT=dev expo prebuild --platform ios && pnpm run sync:ios-permissions",
+    "prebuild:ios:dev:clean": "APP_VARIANT=dev expo prebuild --platform ios --clean && pnpm run sync:ios-permissions",
+    "prebuild:ios:test": "pnpm run prebuild:ios:dev",
+    "prebuild:ios:test:clean": "pnpm run prebuild:ios:dev:clean",
+    "prebuild:ios:prod": "APP_VARIANT=prod expo prebuild --platform ios && pnpm run sync:ios-permissions",
+    "prebuild:ios:prod:clean": "APP_VARIANT=prod expo prebuild --platform ios --clean && pnpm run sync:ios-permissions",
+    "eas:build:ios": "APP_VARIANT=prod eas build --platform ios --profile production",
+    "eas:build:ios:dev": "APP_VARIANT=dev eas build --platform ios --profile testflight-dev",
+    "eas:build:ios:test": "pnpm run eas:build:ios:dev",
+    "eas:build:ios:local": "APP_VARIANT=prod eas build --platform ios --profile production --local",
+    "eas:submit:ios": "APP_VARIANT=prod eas submit --platform ios --profile production",
+    "eas:submit:ios:dev": "APP_VARIANT=dev eas submit --platform ios --profile testflight-dev",
+    "eas:submit:ios:test": "pnpm run eas:submit:ios:dev",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -28,6 +41,8 @@
     "expo-image-manipulator": "^56.0.20",
     "expo-image-picker": "^56.0.18",
     "expo-location": "^56.0.18",
+    "expo-notifications": "~56.0.21",
+    "expo-task-manager": "~56.0.22",
     "react": "19.2.3",
     "react-native": "0.85.0",
     "react-native-webview": "13.16.1"

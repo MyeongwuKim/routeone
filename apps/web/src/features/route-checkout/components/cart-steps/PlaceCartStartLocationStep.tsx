@@ -6,32 +6,17 @@ import {
   type NaverMarkerInstance,
 } from "@/components/map/NaverMapView";
 import NaverMapView from "@/components/map/NaverMapView";
+import { calculateDistanceMeters } from "@/lib/gangwonBoundaryUtils";
+import { useUiText } from "@/lib/uiText";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
-import { useRouteCheckout } from "../RouteCheckoutContext";
-import type { RouteStartLocation } from "./routePlanTypes";
+import { useRouteCheckout } from "../../hooks/useRouteCheckout";
+import type { RouteStartLocation } from "../../models/routePlanTypes";
 
 type PlaceCartStartLocationStepProps = {
   savedPlaces: SavedPlaceItem[];
 };
 
 const FAR_START_DISTANCE_METERS = 30_000;
-
-function calculateDistanceMeters(
-  from: RouteStartLocation,
-  to: RouteStartLocation
-) {
-  const earthRadiusMeters = 6_371_000;
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const dLat = toRadians(to.lat - from.lat);
-  const dLng = toRadians(to.lng - from.lng);
-  const lat1 = toRadians(from.lat);
-  const lat2 = toRadians(to.lat);
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 function formatDistance(meters: number) {
   if (meters < 1000) {
@@ -127,6 +112,7 @@ function createPlaceMarkerIconHtml(index: number) {
 function PlaceCartStartLocationStep({
   savedPlaces,
 }: PlaceCartStartLocationStepProps) {
+  const text = useUiText();
   const { startLocation, setStartLocation } = useRouteCheckout();
   const mapInstanceRef = useRef<NaverMapInstance | null>(null);
   const startMarkerRef = useRef<NaverMarkerInstance | null>(null);
@@ -310,11 +296,10 @@ function PlaceCartStartLocationStep({
       <div>
         <p className="font-trip text-sm text-brand-700">START POINT</p>
         <h2 className="mt-1 text-xl font-semibold text-slate-900">
-          출발 위치가 맞나요?
+          {text.cart.startLocationTitle}
         </h2>
         <p className="mt-2 text-xs leading-5 text-slate-500">
-          여행을 실제로 시작할 위치로 마커를 옮기면 그 지점 기준으로 루트를
-          계산해요.
+          {text.cart.startLocationDescription}
         </p>
       </div>
 
@@ -327,12 +312,12 @@ function PlaceCartStartLocationStep({
             onReady={handleMapReady}
           >
             <div className="pointer-events-none absolute inset-x-4 top-4 rounded-2xl border border-brand-100 bg-white/95 px-4 py-3 text-xs font-semibold leading-5 text-slate-600 shadow-sm backdrop-blur">
-              지도를 탭하거나 출발 마커를 드래그해서 위치를 맞춰요.
+              {text.cart.startLocationGuide}
             </div>
           </NaverMapView>
         ) : (
           <div className="flex h-[390px] items-center justify-center bg-brand-50 px-4 text-center text-xs font-bold text-brand-700">
-            출발 위치를 준비하고 있어요.
+            {text.cart.startLocationPreparing}
           </div>
         )}
 
@@ -341,12 +326,12 @@ function PlaceCartStartLocationStep({
             <div className="min-w-0">
               <p className="flex items-center gap-1 text-xs font-black text-brand-700">
                 <IoLocationSharp className="text-sm" />
-                선택한 출발 위치
+                {text.cart.selectedStartLocation}
               </p>
               <p className="mt-1 text-[11px] font-semibold text-slate-500">
                 {draftLocation
                   ? `${draftLocation.lat.toFixed(5)}, ${draftLocation.lng.toFixed(5)}`
-                  : "출발 위치를 확인할 수 없어요."}
+                  : text.cart.startLocationUnavailable}
               </p>
             </div>
 
@@ -361,7 +346,7 @@ function PlaceCartStartLocationStep({
                 className="flex shrink-0 items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700"
               >
                 <IoLocateOutline className="text-sm" />
-                장소 근처
+                {text.cart.nearSavedPlaces}
               </button>
             ) : null}
           </div>
@@ -374,11 +359,9 @@ function PlaceCartStartLocationStep({
                   : "bg-brand-50 text-brand-700"
               }`}
             >
-              담은 장소 중심까지 약 {formatDistance(distanceFromPlaces)}
-              입니다.
               {isFarFromPlaces
-                ? " 실제 출발지가 여행 지역 안이라면 마커를 옮겨 주세요."
-                : " 이 위치로 시작해도 괜찮아 보여요."}
+                ? text.cart.startDistanceFar(formatDistance(distanceFromPlaces))
+                : text.cart.startDistanceOk(formatDistance(distanceFromPlaces))}
             </div>
           ) : null}
         </div>

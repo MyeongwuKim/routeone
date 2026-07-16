@@ -4,7 +4,10 @@ query SharedRoutes($regionCode: String, $limit: Int) {
     stops {
       id
       place {
+        contentId
+        contentTypeId
         title
+        address
         categoryLabel
         categoryName
         regionCode

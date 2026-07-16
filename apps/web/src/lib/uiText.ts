@@ -10,11 +10,30 @@ export type UiText = {
     clearAll: string;
     close: string;
     confirm: string;
+    retry: string;
     reset: string;
     unknown: string;
     back: string;
     backToMyInfo: string;
     selectedCount: (count: number) => string;
+  };
+  inputs: {
+    datePlaceholder: string;
+    weekdayLabels: string[];
+    formatDateLabel: (
+      year: number,
+      month: number,
+      day: number,
+      weekday: string
+    ) => string;
+    formatMonthTitle: (year: number, month: number) => string;
+    previousMonthAria: string;
+    nextMonthAria: string;
+    selectToday: string;
+    timePlaceholder: string;
+    am: string;
+    pm: string;
+    save: string;
   };
   labels: {
     regions: Record<string, string>;
@@ -88,7 +107,7 @@ export type UiText = {
   };
   search: {
     filters: Record<SearchFilter, string>;
-    placeholder: string;
+    placeholder: (region: string) => string;
     clearKeyword: string;
     close: string;
     todayFestival: string;
@@ -127,7 +146,7 @@ export type UiText = {
     appendDayDescription: string;
     checkout: string;
     openSearchAria: string;
-    searchPrompt: string;
+    searchPrompt: (region: string) => string;
     savedPlacesAria: string;
   };
   myRoute: {
@@ -306,6 +325,13 @@ export type UiText = {
     relaxedPlan: string;
     balancedPlan: string;
     lightPlan: string;
+    beachRoute: string;
+    cafeWalk: string;
+    verificationTag: (completed: number, total: number) => string;
+    unverifiedRoute: string;
+    mixedRoute: string;
+    focusedRoute: (focus: string) => string;
+    focusCategories: Record<string, string>;
     myShare: string;
     likeAria: (title: string) => string;
     folded: string;
@@ -376,6 +402,13 @@ export type UiText = {
     visited: string;
     notVisited: string;
     placeFallback: string;
+    gpsVerification: string;
+    gpsVerificationPhoto: string;
+    photoRecord: string;
+    manualCompletion: string;
+    noGps: string;
+    closeImageAria: (label: string) => string;
+    verificationImageAlt: (title: string, label: string) => string;
     viewVerificationPhotoAria: (title: string, label: string) => string;
     moveOrderAria: (title: string) => string;
     cancelVisitAria: (title: string) => string;
@@ -467,6 +500,134 @@ export type UiText = {
     emptyFooter: string;
     thumbnailAlt: (title: string) => string;
     removeAria: (title: string) => string;
+    validationStartDateRequired: string;
+    validationStartDateFuture: string;
+    validationTripDaysRequired: string;
+    validationTimeInvalid: string;
+    validationTimeOrder: string;
+    apply: string;
+    next: string;
+    buildRoute: string;
+    backAria: string;
+    restartCheckout: string;
+    restartCheckoutAria: string;
+    appendRouteBanner: (title: string) => string;
+    todayPastTitle: string;
+    todayOneDayTitle: string;
+    todayStartTitle: string;
+    todayPastDescription: string;
+    todayOneDayDescription: string;
+    todayMultiDayDescription: (days: number) => string;
+    useCurrentTime: string;
+    continueAnyway: string;
+    chooseAgain: string;
+    continueToday: string;
+    changeToTwoDays: string;
+    scheduleTitle: string;
+    startDateLabel: string;
+    tripDaysLabel: string;
+    dayCount: (days: number) => string;
+    customTripDaysButton: string;
+    scheduleRange: (start: string, end: string) => string;
+    todayPastWarning: string;
+    todayOneDayWarning: string;
+    todayMultiDayWarning: (days: number) => string;
+    dailyStartTimeLabel: string;
+    dailyStartTimeTitle: string;
+    dailyStartTimeDescription: string;
+    scheduleEndTimeLabel: string;
+    scheduleEndTimeTitle: string;
+    scheduleEndTimeDescription: string;
+    customTripDaysTitle: string;
+    customTripDaysDescription: string;
+    customTripDaysPlaceholder: string;
+    tempoTitle: string;
+    tempoRelaxedTitle: string;
+    tempoRelaxedDescription: string;
+    tempoBalancedTitle: string;
+    tempoBalancedDescription: string;
+    tempoPackedTitle: string;
+    tempoPackedDescription: string;
+    startLocationTitle: string;
+    startLocationDescription: string;
+    startLocationGuide: string;
+    startLocationPreparing: string;
+    selectedStartLocation: string;
+    startLocationUnavailable: string;
+    nearSavedPlaces: string;
+    startDistanceFar: (distance: string) => string;
+    startDistanceOk: (distance: string) => string;
+    startLocationPickerTitle: string;
+    startLocationPickerCloseAria: string;
+    startLocationPickerGuide: string;
+    saveRouteFallbackError: string;
+    noPlacesToSaveToast: string;
+    dateConflictTitle: string;
+    dateConflictDescription: (requested: string, existing: string) => string;
+    dateConflictDetail: string;
+    viewMyRoutes: string;
+    chooseDateAgain: string;
+    routeSavedToast: (count: number) => string;
+    appendDaySavedToast: (title: string) => string;
+    editingBadge: string;
+    appendResultTitle: string;
+    resultTitle: string;
+    appendResultDescription: (title: string) => string;
+    resultDescription: (tempoLabel: string) => string;
+    overScheduleWarning: (clock: string) => string;
+    startLocationLabel: string;
+    firstPlaceTravelWarning: (duration: string) => string;
+    startLocationRecalculateDescription: string;
+    changeOnMap: string;
+    finishOrderEditing: string;
+    cancelChanges: string;
+    applyChanges: string;
+    saving: string;
+    addDay: string;
+    done: string;
+    addSegmentAria: string;
+    drag: string;
+    minuteUnit: string;
+    stayEditCloseAria: string;
+    stayMinuteInputAria: string;
+    stayTimeDescription: string;
+    averageStaySummary: (visits: number, duration: string) => string;
+    placeEditCloseAria: string;
+    placeEditTitle: string;
+    noAddress: string;
+    arrivalTime: string;
+    travelTime: string;
+    userAverageStay: string;
+    averageStayLabel: (duration: string) => string;
+    averageStayVisitBasis: (visits: number) => string;
+    moveToAnotherDay: string;
+    moveFirst: string;
+    moveLast: string;
+    removeFromRoute: string;
+    routeCompare: string;
+    routeView: string;
+    placeCount: (count: number) => string;
+    moveToPreviousDayEnd: (day: number) => string;
+    moveToNextDayStart: (day: number) => string;
+    dropToEnd: string;
+    sOrder: string;
+    carTravelEstimate: string;
+    noPlacedPlaces: string;
+    routeOriginal: string;
+    routeCurrent: string;
+    routeAll: string;
+    routeViewModeAria: string;
+    routeDayViewAria: (label: string) => string;
+    segmentHighlighted: string;
+    viewAll: string;
+    insertSheetCloseAria: string;
+    insertSheetTitle: string;
+    insertSheetDescription: string;
+    insertSearchPlaceholder: string;
+    detour: string;
+    insertEmptyTitle: string;
+    insertEmptyDescription: string;
+    searchDirectly: string;
   };
 };
 
@@ -477,11 +638,26 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       clearAll: "전체 해제",
       close: "닫기",
       confirm: "확인",
+      retry: "다시 시도",
       reset: "초기화",
       unknown: "미정",
       back: "이전 화면으로 돌아가기",
       backToMyInfo: "내 정보로 돌아가기",
       selectedCount: (count) => `${count}개 선택`,
+    },
+    inputs: {
+      datePlaceholder: "날짜 선택",
+      weekdayLabels: ["일", "월", "화", "수", "목", "금", "토"],
+      formatDateLabel: (year, month, day, weekday) =>
+        `${year}년 ${month}월 ${day}일 (${weekday})`,
+      formatMonthTitle: (year, month) => `${year}년 ${month}월`,
+      previousMonthAria: "이전 달",
+      nextMonthAria: "다음 달",
+      selectToday: "오늘 선택",
+      timePlaceholder: "시간 선택",
+      am: "오전",
+      pm: "오후",
+      save: "저장",
     },
     labels: {
       regions: {
@@ -668,7 +844,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         cafe: "카페",
         festival: "축제",
       },
-      placeholder: "강원도 명소, 카페, 음식점, 축제 검색",
+      placeholder: (region) => `${region} 명소, 카페, 음식점, 축제 검색`,
       clearKeyword: "검색어 지우기",
       close: "검색 닫기",
       todayFestival: "오늘 진행 중",
@@ -708,7 +884,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       appendDayDescription: "장소를 담고 체크아웃에서 추가할 일정을 확인해요",
       checkout: "체크아웃",
       openSearchAria: "장소 검색 열기",
-      searchPrompt: "강원도 명소 검색",
+      searchPrompt: (region) => `${region} 명소 검색`,
       savedPlacesAria: "담은 장소",
     },
     myRoute: {
@@ -888,6 +1064,22 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       relaxedPlan: "여유 플랜",
       balancedPlan: "균형 플랜",
       lightPlan: "가벼운 플랜",
+      beachRoute: "해변 루트",
+      cafeWalk: "카페 산책",
+      verificationTag: (completed, total) => `인증 ${completed}/${total}곳`,
+      unverifiedRoute: "미인증 루트",
+      mixedRoute: "골고루 담은 루트",
+      focusedRoute: (focus) => `${focus} 위주`,
+      focusCategories: {
+        카페: "카페",
+        음식점: "음식점",
+        관광지: "관광지",
+        해변: "해변",
+        공원: "공원",
+        동굴: "동굴",
+        시장: "시장",
+        장소: "장소",
+      },
       myShare: "내 공유",
       likeAria: (title) => `${title} 좋아요`,
       folded: "접기",
@@ -964,6 +1156,13 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       visited: "완료됨",
       notVisited: "방문 전",
       placeFallback: "장소",
+      gpsVerification: "GPS 인증",
+      gpsVerificationPhoto: "GPS 인증 사진",
+      photoRecord: "사진 기록",
+      manualCompletion: "수동",
+      noGps: "GPS 없음",
+      closeImageAria: (label) => `${label} 이미지 닫기`,
+      verificationImageAlt: (title, label) => `${title} ${label} 이미지`,
       viewVerificationPhotoAria: (title, label) => `${title} ${label} 보기`,
       moveOrderAria: (title) => `${title} 순서 이동`,
       cancelVisitAria: (title) => `${title} 완료 취소`,
@@ -1091,6 +1290,152 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       emptyFooter: "지도에서 가고 싶은 장소를 담아주세요.",
       thumbnailAlt: (title) => `${title} 썸네일`,
       removeAria: (title) => `${title} 삭제`,
+      validationStartDateRequired: "여행 시작일을 선택해야 해요.",
+      validationStartDateFuture: "여행 시작일은 오늘 또는 이후로 선택해야 해요.",
+      validationTripDaysRequired: "여행 일수는 1일 이상이어야 해요.",
+      validationTimeInvalid: "출발/종료 시간을 다시 확인해요.",
+      validationTimeOrder: "하루 일정의 종료 시간은 출발 시간보다 늦어야 해요.",
+      apply: "적용",
+      next: "다음",
+      buildRoute: "루트 짜기",
+      backAria: "뒤로가기",
+      restartCheckout: "1단계로",
+      restartCheckoutAria: "체크아웃 1단계로 돌아가기",
+      appendRouteBanner: (title) => `${title}에 새 DAY를 추가하는 중`,
+      todayPastTitle: "출발시간이 이미 지난 시간이에요",
+      todayOneDayTitle: "오늘 당일 일정이 맞나요?",
+      todayStartTitle: "오늘 바로 시작하는 일정인가요?",
+      todayPastDescription:
+        "선택한 출발시간이 현재 시간보다 이전이에요. 오늘 일정으로 진행하려면 출발시간을 한 번 더 확인해주세요.",
+      todayOneDayDescription:
+        "오늘 시작해서 오늘 끝나는 1일 일정으로 저장돼요. 실제로 당일 여행이 맞는지 한 번 더 확인해주세요.",
+      todayMultiDayDescription: (days) =>
+        `${days}일 일정이지만 시작일이 오늘이에요. 실제로 오늘부터 시작하는 여행이 맞는지 한 번 더 확인해주세요.`,
+      useCurrentTime: "현재 시간으로 변경",
+      continueAnyway: "그대로 계속",
+      chooseAgain: "다시 선택",
+      continueToday: "오늘 시작으로 계속",
+      changeToTwoDays: "2일로 변경",
+      scheduleTitle: "여행 일정 정보를 정해주세요",
+      startDateLabel: "여행 시작일",
+      tripDaysLabel: "여행 일수",
+      dayCount: (days) => `${days}일`,
+      customTripDaysButton: "직접 입력",
+      scheduleRange: (start, end) => `일정 범위: ${start} ~ ${end}`,
+      todayPastWarning:
+        "선택한 출발시간이 이미 지난 시간이에요. 오늘 일정이라면 출발시간을 한 번 더 확인해주세요.",
+      todayOneDayWarning:
+        "오늘 시작해서 오늘 끝나는 당일 일정이에요. 다음 단계로 가기 전에 한 번 더 확인해주세요.",
+      todayMultiDayWarning: (days) =>
+        `오늘 바로 시작하는 ${days}일 일정이에요. 다음 단계로 가기 전에 한 번 더 확인해주세요.`,
+      dailyStartTimeLabel: "매일 출발시간",
+      dailyStartTimeTitle: "매일 출발시간 설정",
+      dailyStartTimeDescription: "여행하는 날마다 이 시간에 일정을 시작해요.",
+      scheduleEndTimeLabel: "일정 종료 희망시간",
+      scheduleEndTimeTitle: "일정 종료 희망시간 설정",
+      scheduleEndTimeDescription: "하루 일정을 마무리하고 싶은 시각이에요.",
+      customTripDaysTitle: "여행 일수 입력",
+      customTripDaysDescription: "1일 이상 숫자를 입력해 주세요.",
+      customTripDaysPlaceholder: "예: 10",
+      tempoTitle: "여행 템포를 골라주세요",
+      tempoRelaxedTitle: "여유롭게",
+      tempoRelaxedDescription: "장소당 체류시간을 길게 배치",
+      tempoBalancedTitle: "보통",
+      tempoBalancedDescription: "체류시간을 적당하게 배치",
+      tempoPackedTitle: "촘촘하게",
+      tempoPackedDescription: "많이 둘러보는 밀도 높은 일정",
+      startLocationTitle: "출발 위치가 맞나요?",
+      startLocationDescription:
+        "여행을 실제로 시작할 위치로 마커를 옮기면 그 지점 기준으로 루트를 계산해요.",
+      startLocationGuide: "지도를 탭하거나 출발 마커를 드래그해서 위치를 맞춰요.",
+      startLocationPreparing: "출발 위치를 준비하고 있어요.",
+      selectedStartLocation: "선택한 출발 위치",
+      startLocationUnavailable: "출발 위치를 확인할 수 없어요.",
+      nearSavedPlaces: "장소 근처",
+      startDistanceFar: (distance) =>
+        `담은 장소 중심까지 약 ${distance}입니다. 실제 출발지가 여행 지역 안이라면 마커를 옮겨 주세요.`,
+      startDistanceOk: (distance) =>
+        `담은 장소 중심까지 약 ${distance}입니다. 이 위치로 시작해도 괜찮아 보여요.`,
+      startLocationPickerTitle: "출발 위치 선택",
+      startLocationPickerCloseAria: "출발 위치 선택 닫기",
+      startLocationPickerGuide:
+        "지도를 탭하거나 시작 마커를 드래그해서 출발 위치를 맞춰요.",
+      saveRouteFallbackError: "루트 저장에 실패했어요. 잠시 후 다시 시도해 주세요.",
+      noPlacesToSaveToast: "저장할 장소가 없어요.",
+      dateConflictTitle: "이미 일정이 있어요",
+      dateConflictDescription: (requested, existing) =>
+        `${requested} 일정이 기존 ${existing} 일정과 겹쳐서 저장할 수 없어요.`,
+      dateConflictDetail:
+        "내 루트에서 기존 일정을 확인하거나 여행 날짜를 다시 선택해 주세요.",
+      viewMyRoutes: "내 루트 보기",
+      chooseDateAgain: "날짜 다시 선택",
+      routeSavedToast: (count) => `${count}개 장소로 루트를 저장했어요.`,
+      appendDaySavedToast: (title) => `${title}에 DAY를 추가했어요.`,
+      editingBadge: "수정 중",
+      appendResultTitle: "추가할 DAY를 만들었어요",
+      resultTitle: "추천 루트를 만들었어요",
+      appendResultDescription: (title) =>
+        `${title}에 붙일 새 DAY입니다. 체류시간과 순서를 확인한 뒤 추가해요.`,
+      resultDescription: (tempoLabel) =>
+        `${tempoLabel} 템포 기준 추천 체류시간과 거리 기반 차량 이동 추정치로 배치한 일정입니다. 체류시간은 역 카드에서 직접 수정할 수 있어요.`,
+      overScheduleWarning: (clock) =>
+        `담은 장소가 많아 일부 일정이 희망 종료 시간 ${clock}을 넘습니다. 여행 일수를 늘리거나 체류시간을 줄여 주세요.`,
+      startLocationLabel: "출발 위치",
+      firstPlaceTravelWarning: (duration) =>
+        `첫 장소까지 약 ${duration} 걸려요. 실제 출발지가 다르면 지도에서 위치를 바꿔요.`,
+      startLocationRecalculateDescription:
+        "현재 위치와 여행 지역이 다르면 지도에서 출발 위치를 바꿔 다시 계산해요.",
+      changeOnMap: "지도에서 변경",
+      finishOrderEditing: "순서 변경을 완료해 주세요",
+      cancelChanges: "변경 취소",
+      applyChanges: "변경 적용",
+      saving: "저장 중...",
+      addDay: "DAY 추가",
+      done: "완료",
+      addSegmentAria: "이 구간에 장소 추가",
+      drag: "드래그",
+      minuteUnit: "분",
+      stayEditCloseAria: "체류 시간 수정 닫기",
+      stayMinuteInputAria: "체류 시간(분)",
+      stayTimeDescription: "장소에서 머무는 시간을 조정해요",
+      averageStaySummary: (visits, duration) => `${visits}회 평균 ${duration}`,
+      placeEditCloseAria: "장소 편집 닫기",
+      placeEditTitle: "장소 편집",
+      noAddress: "주소 정보가 없습니다",
+      arrivalTime: "도착 시간",
+      travelTime: "이동 시간",
+      userAverageStay: "사용자 평균 체류",
+      averageStayLabel: (duration) => `평균 ${duration}`,
+      averageStayVisitBasis: (visits) => `${visits}회 방문 기록 기준`,
+      moveToAnotherDay: "다른 날짜로 이동",
+      moveFirst: "맨 앞",
+      moveLast: "맨 뒤",
+      removeFromRoute: "이 루트에서 빼기",
+      routeCompare: "루트비교",
+      routeView: "루트보기",
+      placeCount: (count) => `${count}곳`,
+      moveToPreviousDayEnd: (day) => `DAY ${day} 맨 뒤로 이동`,
+      moveToNextDayStart: (day) => `DAY ${day} 맨 앞으로 이동`,
+      dropToEnd: "맨 뒤로 옮기려면 여기에 놓기",
+      sOrder: "S자 순서",
+      carTravelEstimate: "차량 이동 추정",
+      noPlacedPlaces: "배치된 장소가 없습니다",
+      routeOriginal: "기존 경로",
+      routeCurrent: "재계산 경로",
+      routeAll: "전체",
+      routeViewModeAria: "경로 표시 방식",
+      routeDayViewAria: (label) => `${label} 경로 보기`,
+      segmentHighlighted: "구간 하이라이트 중",
+      viewAll: "전체 보기",
+      insertSheetCloseAria: "구간 장소 추가 닫기",
+      insertSheetTitle: "이 구간에 장소 추가",
+      insertSheetDescription: "경로에서 크게 벗어나지 않는 후보를 먼저 보여줘요.",
+      insertSearchPlaceholder: "이 구간에 넣을 장소 검색",
+      detour: "우회",
+      insertEmptyTitle: "이 조건에 맞는 추천 후보가 없어요",
+      insertEmptyDescription:
+        "검색어를 바꾸거나 전체 검색에서 직접 찾아볼 수 있어요.",
+      searchDirectly: "전체 검색에서 직접 찾기",
     },
   },
   en: {
@@ -1099,11 +1444,34 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       clearAll: "Clear all",
       close: "Close",
       confirm: "OK",
+      retry: "Try again",
       reset: "Reset",
       unknown: "TBD",
       back: "Go back",
       backToMyInfo: "Back to My Info",
       selectedCount: (count) => `${count} selected`,
+    },
+    inputs: {
+      datePlaceholder: "Select date",
+      weekdayLabels: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      formatDateLabel: (year, month, day, weekday) =>
+        `${new Date(year, month - 1, day).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })} (${weekday})`,
+      formatMonthTitle: (year, month) =>
+        new Date(year, month - 1, 1).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+        }),
+      previousMonthAria: "Previous month",
+      nextMonthAria: "Next month",
+      selectToday: "Select today",
+      timePlaceholder: "Select time",
+      am: "AM",
+      pm: "PM",
+      save: "Save",
     },
     labels: {
       regions: {
@@ -1290,7 +1658,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         cafe: "Cafes",
         festival: "Festivals",
       },
-      placeholder: "Search Gangwon attractions, cafes, food, festivals",
+      placeholder: (region) =>
+        `Search ${region} attractions, cafes, food, festivals`,
       clearKeyword: "Clear search keyword",
       close: "Close search",
       todayFestival: "Happening today",
@@ -1330,7 +1699,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       appendDayDescription: "Pick places and review the added schedule at checkout",
       checkout: "Checkout",
       openSearchAria: "Open place search",
-      searchPrompt: "Search Gangwon places",
+      searchPrompt: (region) => `Search ${region} places`,
       savedPlacesAria: "Saved places",
     },
     myRoute: {
@@ -1510,6 +1879,22 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       relaxedPlan: "Relaxed Plan",
       balancedPlan: "Balanced Plan",
       lightPlan: "Light Plan",
+      beachRoute: "Beach Route",
+      cafeWalk: "Cafe Walk",
+      verificationTag: (completed, total) => `Verified ${completed}/${total}`,
+      unverifiedRoute: "Unverified Route",
+      mixedRoute: "Mixed Route",
+      focusedRoute: (focus) => `${focus}-focused`,
+      focusCategories: {
+        카페: "Cafe",
+        음식점: "Restaurant",
+        관광지: "Attraction",
+        해변: "Beach",
+        공원: "Park",
+        동굴: "Cave",
+        시장: "Market",
+        장소: "Place",
+      },
       myShare: "Mine",
       likeAria: (title) => `Like ${title}`,
       folded: "Fold",
@@ -1586,6 +1971,13 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       visited: "Done",
       notVisited: "Not visited",
       placeFallback: "Place",
+      gpsVerification: "GPS verified",
+      gpsVerificationPhoto: "GPS verification photo",
+      photoRecord: "Photo record",
+      manualCompletion: "Manual",
+      noGps: "No GPS",
+      closeImageAria: (label) => `Close ${label}`,
+      verificationImageAlt: (title, label) => `${title} ${label}`,
       viewVerificationPhotoAria: (title, label) => `View ${label} for ${title}`,
       moveOrderAria: (title) => `Move ${title}`,
       cancelVisitAria: (title) => `Mark ${title} incomplete`,
@@ -1716,6 +2108,152 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       emptyFooter: "Add places from the map.",
       thumbnailAlt: (title) => `${title} thumbnail`,
       removeAria: (title) => `Remove ${title}`,
+      validationStartDateRequired: "Choose a trip start date.",
+      validationStartDateFuture: "Choose today or a later date.",
+      validationTripDaysRequired: "Trip length must be at least 1 day.",
+      validationTimeInvalid: "Check the start and end times again.",
+      validationTimeOrder: "The daily end time must be later than the start time.",
+      apply: "Apply",
+      next: "Next",
+      buildRoute: "Build route",
+      backAria: "Go back",
+      restartCheckout: "Step 1",
+      restartCheckoutAria: "Go back to checkout step 1",
+      appendRouteBanner: (title) => `Adding a new DAY to ${title}`,
+      todayPastTitle: "The start time has already passed",
+      todayOneDayTitle: "Is this a same-day trip?",
+      todayStartTitle: "Does this trip start today?",
+      todayPastDescription:
+        "The selected start time is earlier than the current time. Please check it once more before continuing with today's trip.",
+      todayOneDayDescription:
+        "This will be saved as a 1-day trip that starts and ends today. Please confirm that it is a same-day trip.",
+      todayMultiDayDescription: (days) =>
+        `This is a ${days}-day trip, but the start date is today. Please confirm that the trip really starts today.`,
+      useCurrentTime: "Use current time",
+      continueAnyway: "Continue anyway",
+      chooseAgain: "Choose again",
+      continueToday: "Continue from today",
+      changeToTwoDays: "Change to 2 days",
+      scheduleTitle: "Set your trip schedule",
+      startDateLabel: "Trip start date",
+      tripDaysLabel: "Trip length",
+      dayCount: (days) => `${days}D`,
+      customTripDaysButton: "Custom",
+      scheduleRange: (start, end) => `Schedule range: ${start} - ${end}`,
+      todayPastWarning:
+        "The selected start time has already passed. If this is today's trip, please check the start time once more.",
+      todayOneDayWarning:
+        "This is a same-day trip that starts and ends today. Please confirm before moving on.",
+      todayMultiDayWarning: (days) =>
+        `This ${days}-day trip starts today. Please confirm before moving on.`,
+      dailyStartTimeLabel: "Daily start time",
+      dailyStartTimeTitle: "Set daily start time",
+      dailyStartTimeDescription: "Each travel day starts at this time.",
+      scheduleEndTimeLabel: "Preferred end time",
+      scheduleEndTimeTitle: "Set preferred end time",
+      scheduleEndTimeDescription: "The time you want to wrap up each day.",
+      customTripDaysTitle: "Enter trip length",
+      customTripDaysDescription: "Enter a number of 1 day or more.",
+      customTripDaysPlaceholder: "e.g. 10",
+      tempoTitle: "Choose your travel tempo",
+      tempoRelaxedTitle: "Relaxed",
+      tempoRelaxedDescription: "Longer stay time at each place",
+      tempoBalancedTitle: "Balanced",
+      tempoBalancedDescription: "Moderate stay time at each place",
+      tempoPackedTitle: "Packed",
+      tempoPackedDescription: "A dense plan to see more places",
+      startLocationTitle: "Is this start point right?",
+      startLocationDescription:
+        "Move the marker to where you will actually start, and the route will be calculated from there.",
+      startLocationGuide: "Tap the map or drag the start marker to adjust it.",
+      startLocationPreparing: "Preparing start point.",
+      selectedStartLocation: "Selected start point",
+      startLocationUnavailable: "Could not confirm the start point.",
+      nearSavedPlaces: "Near places",
+      startDistanceFar: (distance) =>
+        `About ${distance} from the center of your saved places. If your real start point is inside the trip area, move the marker.`,
+      startDistanceOk: (distance) =>
+        `About ${distance} from the center of your saved places. This start point looks okay.`,
+      startLocationPickerTitle: "Choose start point",
+      startLocationPickerCloseAria: "Close start point picker",
+      startLocationPickerGuide: "Tap the map or drag the start marker to adjust it.",
+      saveRouteFallbackError: "Could not save the route. Please try again soon.",
+      noPlacesToSaveToast: "There are no places to save.",
+      dateConflictTitle: "You already have a schedule",
+      dateConflictDescription: (requested, existing) =>
+        `${requested} overlaps with your existing ${existing} schedule, so it cannot be saved.`,
+      dateConflictDetail:
+        "Check the existing schedule in My Routes or choose different travel dates.",
+      viewMyRoutes: "View My Routes",
+      chooseDateAgain: "Choose date again",
+      routeSavedToast: (count) => `Saved a route with ${count} places.`,
+      appendDaySavedToast: (title) => `Added a DAY to ${title}.`,
+      editingBadge: "Editing",
+      appendResultTitle: "New DAY is ready",
+      resultTitle: "Recommended route is ready",
+      appendResultDescription: (title) =>
+        `This new DAY will be added to ${title}. Review the stay times and order before adding it.`,
+      resultDescription: (tempoLabel) =>
+        `This schedule uses the ${tempoLabel} tempo, recommended stay times, and car travel estimates based on distance. You can edit stay time from each station card.`,
+      overScheduleWarning: (clock) =>
+        `Some stops go past your preferred end time of ${clock}. Add more trip days or shorten stay times.`,
+      startLocationLabel: "Start point",
+      firstPlaceTravelWarning: (duration) =>
+        `It takes about ${duration} to the first place. If your real start point is different, change it on the map.`,
+      startLocationRecalculateDescription:
+        "If your current location is away from the trip area, change the start point on the map and recalculate.",
+      changeOnMap: "Change on map",
+      finishOrderEditing: "Finish changing the order",
+      cancelChanges: "Cancel changes",
+      applyChanges: "Apply changes",
+      saving: "Saving...",
+      addDay: "Add DAY",
+      done: "Done",
+      addSegmentAria: "Add a place to this segment",
+      drag: "Drag",
+      minuteUnit: "m",
+      stayEditCloseAria: "Close stay time editor",
+      stayMinuteInputAria: "Stay time in minutes",
+      stayTimeDescription: "Adjust how long you will stay at this place.",
+      averageStaySummary: (visits, duration) => `${visits}-visit avg ${duration}`,
+      placeEditCloseAria: "Close place editor",
+      placeEditTitle: "Edit place",
+      noAddress: "No address available",
+      arrivalTime: "Arrival time",
+      travelTime: "Travel time",
+      userAverageStay: "Average User Stay",
+      averageStayLabel: (duration) => `Avg ${duration}`,
+      averageStayVisitBasis: (visits) => `Based on ${visits} visits`,
+      moveToAnotherDay: "Move to another day",
+      moveFirst: "First",
+      moveLast: "Last",
+      removeFromRoute: "Remove from this route",
+      routeCompare: "Compare",
+      routeView: "View route",
+      placeCount: (count) => `${count} places`,
+      moveToPreviousDayEnd: (day) => `Move to end of DAY ${day}`,
+      moveToNextDayStart: (day) => `Move to start of DAY ${day}`,
+      dropToEnd: "Drop here to move to the end",
+      sOrder: "S-order",
+      carTravelEstimate: "Estimated car travel",
+      noPlacedPlaces: "No places arranged",
+      routeOriginal: "Original route",
+      routeCurrent: "Recalculated route",
+      routeAll: "All",
+      routeViewModeAria: "Route display mode",
+      routeDayViewAria: (label) => `View route for ${label}`,
+      segmentHighlighted: "Segment highlighted",
+      viewAll: "View all",
+      insertSheetCloseAria: "Close segment place add",
+      insertSheetTitle: "Add a place to this segment",
+      insertSheetDescription:
+        "Candidates that stay close to this route segment are shown first.",
+      insertSearchPlaceholder: "Search places for this segment",
+      detour: "Detour",
+      insertEmptyTitle: "No recommended candidates match this condition",
+      insertEmptyDescription:
+        "Try another keyword or find a place from full search.",
+      searchDirectly: "Find from full search",
     },
   },
 };

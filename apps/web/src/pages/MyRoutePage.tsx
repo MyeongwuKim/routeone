@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { routeApi } from "@/api/routeApi";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
 import MyRouteCard from "@/features/my-route/components/MyRouteCard";
 import MyRouteEmptyState from "@/features/my-route/components/MyRouteEmptyState";
+import { useLocalizedMyRoutes } from "@/features/my-route/hooks/useLocalizedMyRoutes";
 import {
   MY_ROUTES_QUERY_KEY,
   removeMyRouteCache,
@@ -23,6 +30,7 @@ import {
   getTodayRouteDay,
   isDateKeyInRouteRange,
 } from "@/features/my-route/routeDisplay";
+import { syncTodayRouteArrivalNotifications } from "@/features/my-route/services/routeArrivalNotificationService";
 import type { MyRoute, MyRouteDay } from "@/features/my-route/types";
 import { useUiText, type UiText } from "@/lib/uiText";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
@@ -41,6 +49,13 @@ type StartRouteDatePickerTarget = {
   route: MyRoute;
   startedAt: string;
 };
+
+const ROUTE_DEEP_LINK_SEARCH_PARAM_KEYS = [
+  "routeId",
+  "dayId",
+  "stopId",
+  "source",
+] as const;
 
 function RouteSection({ title, count, children }: RouteSectionProps) {
   const text = useUiText();
@@ -192,6 +207,7 @@ function StartRouteDatePickerModal({
 function MyRoutePage() {
   const text = useUiText();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [selectedDayRoute, setSelectedDayRoute] = useState<{
     routeId: string;
@@ -209,6 +225,31 @@ function MyRoutePage() {
     queryKey: MY_ROUTES_QUERY_KEY,
     queryFn: () => routeApi.myRoutes(),
   });
+  const sourceMyRoutes = useMemo(
+    () => myRoutesQuery.data?.myRoutes ?? [],
+    [myRoutesQuery.data]
+  );
+  const {
+    routes: localizedMyRoutes,
+    isLoading: isMyRouteLocalizationLoading,
+  } = useLocalizedMyRoutes(sourceMyRoutes);
+  const deepLinkRouteId = searchParams.get("routeId")?.trim() ?? "";
+  const deepLinkDayId = searchParams.get("dayId")?.trim() ?? "";
+  const clearRouteDeepLinkSearchParams = useCallback(() => {
+    if (
+      !ROUTE_DEEP_LINK_SEARCH_PARAM_KEYS.some((key) => searchParams.has(key))
+    ) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+
+    for (const key of ROUTE_DEEP_LINK_SEARCH_PARAM_KEYS) {
+      nextSearchParams.delete(key);
+    }
+
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [searchParams, setSearchParams]);
   const deleteRouteMutation = useMutation({
     mutationFn: (routeId: string) => routeApi.deleteRoute(routeId),
     onMutate: async (routeId) => {
@@ -273,7 +314,7 @@ function MyRoutePage() {
     const upcomingRoutes: MyRoute[] = [];
     const undatedRoutes: MyRoute[] = [];
 
-    for (const route of myRoutesQuery.data?.myRoutes ?? []) {
+    for (const route of localizedMyRoutes) {
       const state = getRouteTimelineState(route, todayKey);
 
       if (state === "current") {
@@ -322,13 +363,72 @@ function MyRoutePage() {
         upcomingRoutes.length +
         undatedRoutes.length,
     };
-  }, [myRoutesQuery.data]);
+  }, [localizedMyRoutes]);
+  useEffect(() => {
+    if (
+      myRoutesQuery.isLoading ||
+      isMyRouteLocalizationLoading ||
+      myRoutesQuery.isError
+    ) {
+      return;
+    }
+
+    void syncTodayRouteArrivalNotifications(localizedMyRoutes);
+  }, [
+    isMyRouteLocalizationLoading,
+    localizedMyRoutes,
+    myRoutesQuery.isError,
+    myRoutesQuery.isLoading,
+  ]);
+  useEffect(() => {
+    if (
+      !deepLinkRouteId ||
+      !deepLinkDayId ||
+      myRoutesQuery.isLoading ||
+      isMyRouteLocalizationLoading ||
+      myRoutesQuery.isError
+    ) {
+      return;
+    }
+
+    const route = localizedMyRoutes.find(
+      (candidateRoute) => candidateRoute.id === deepLinkRouteId
+    );
+    const day = route?.days.find(
+      (candidateDay) => candidateDay.id === deepLinkDayId
+    );
+
+    if (!route || !day) {
+      return;
+    }
+
+    setSelectedDayRoute((currentRoute) => {
+      if (
+        currentRoute?.routeId === deepLinkRouteId &&
+        currentRoute.dayId === deepLinkDayId
+      ) {
+        return currentRoute;
+      }
+
+      return {
+        routeId: deepLinkRouteId,
+        dayId: deepLinkDayId,
+      };
+    });
+  }, [
+    deepLinkDayId,
+    deepLinkRouteId,
+    isMyRouteLocalizationLoading,
+    localizedMyRoutes,
+    myRoutesQuery.isError,
+    myRoutesQuery.isLoading,
+  ]);
   const selectedRouteDay = useMemo(() => {
     if (!selectedDayRoute) {
       return null;
     }
 
-    const route = myRoutesQuery.data?.myRoutes.find(
+    const route = localizedMyRoutes.find(
       (candidateRoute) => candidateRoute.id === selectedDayRoute.routeId
     );
 
@@ -346,22 +446,21 @@ function MyRoutePage() {
           day,
         }
       : null;
-  }, [myRoutesQuery.data, selectedDayRoute]);
-  useEffect(() => {
-    if (selectedDayRoute && myRoutesQuery.data && !selectedRouteDay) {
-      setSelectedDayRoute(null);
-    }
-  }, [myRoutesQuery.data, selectedDayRoute, selectedRouteDay]);
+  }, [localizedMyRoutes, selectedDayRoute]);
   const hasRoutes = routeGroups.totalCount > 0;
   const handleSelectDay = (selectedRoute: MyRoute, day: MyRouteDay) =>
     setSelectedDayRoute({
       routeId: selectedRoute.id,
       dayId: day.id,
     });
+  const handleCloseSelectedDayRoute = () => {
+    setSelectedDayRoute(null);
+    clearRouteDeepLinkSearchParams();
+  };
   const handleRequestAppendDay = (route: MyRoute) => {
     const nextDateKey = getNextRouteDayDateKey(route);
     const conflictingRoute = nextDateKey
-      ? (myRoutesQuery.data?.myRoutes ?? []).find(
+      ? sourceMyRoutes.find(
           (candidateRoute) =>
             candidateRoute.id !== route.id &&
             candidateRoute.status !== "COMPLETED" &&
@@ -550,23 +649,26 @@ function MyRoutePage() {
     <section className="space-y-4 text-slate-900">
       {myRoutesQuery.isError ? (
         <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
-          {text.myRoute.loadError}
+          <p>{text.myRoute.loadError}</p>
+          <button
+            type="button"
+            onClick={() => void myRoutesQuery.refetch()}
+            className="mt-3 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-wait disabled:opacity-60"
+            disabled={myRoutesQuery.isFetching}
+          >
+            {text.common.retry}
+          </button>
         </div>
       ) : null}
 
-      {myRoutesQuery.isLoading ? (
-        <div className="flex min-h-[calc(100dvh-18rem)] flex-col justify-center">
-          <PotatoLoadingCard
-            title={text.myRoute.loadingTitle}
-            description={text.myRoute.loadingDescription}
-            animation="running"
-            compact
-            className="shadow-sm"
-          />
-        </div>
+      {myRoutesQuery.isLoading || isMyRouteLocalizationLoading ? (
+        <RouteListSkeleton variant="my-route" />
       ) : null}
 
-      {!myRoutesQuery.isLoading && !myRoutesQuery.isError && !hasRoutes ? (
+      {!myRoutesQuery.isLoading &&
+      !isMyRouteLocalizationLoading &&
+      !myRoutesQuery.isError &&
+      !hasRoutes ? (
         <MyRouteEmptyState />
       ) : null}
 
@@ -657,7 +759,7 @@ function MyRoutePage() {
         <DayRoutePopup
           route={selectedRouteDay.route}
           day={selectedRouteDay.day}
-          onClose={() => setSelectedDayRoute(null)}
+          onClose={handleCloseSelectedDayRoute}
           enableVerificationPhotoPreview
         />
       ) : null}

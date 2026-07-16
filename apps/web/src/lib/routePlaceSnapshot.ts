@@ -1,4 +1,5 @@
 import type { PlaceProvider, PlaceSnapshotInput } from "@/generated/graphql";
+import { DEFAULT_GANGWON_REGION } from "@/data/gangwonRegions";
 import type { MapSheetPlace } from "@/types/place";
 
 const ROUTE_PLACE_PROVIDER: PlaceProvider = "TOUR_API";
@@ -10,7 +11,6 @@ export type PlaceStaySummaryPreview = {
   lastVisitedAt?: string | null;
 };
 
-const GANGNEUNG_SIGUNGU_CODE = "1";
 const GANGNEUNG_TOP_PLACE_STAY_SUMMARY_BY_RANK: Record<
   number,
   PlaceStaySummaryPreview
@@ -53,7 +53,10 @@ export function getMapSheetPlaceStaySummaryKey(place: MapSheetPlace) {
 export function getMockGangneungTopPlaceStaySummary(
   place: MapSheetPlace
 ): PlaceStaySummaryPreview | null {
-  if (place.signguCode !== GANGNEUNG_SIGUNGU_CODE || !place.topRank) {
+  if (
+    place.signguCode !== DEFAULT_GANGWON_REGION.sigunguCode ||
+    !place.topRank
+  ) {
     return null;
   }
 

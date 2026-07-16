@@ -1,5 +1,10 @@
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import {
+  GANGWON_AREA_CODE,
+  GANGWON_REGION_LABELS,
+  GANGWON_SIGUNGU_CODE_BY_LABEL,
+} from "@/data/gangwonRegions";
+import {
   getDefaultTourContentTypeIds,
   getTourContentTypeId,
   isTourContentTypeId,
@@ -19,8 +24,6 @@ const TOUR_SERVICE_NAME_BY_LANGUAGE: Record<AppLanguage, string> = {
 function getTourApiUrl(language: AppLanguage, operation: string) {
   return `/tour-api/B551011/${TOUR_SERVICE_NAME_BY_LANGUAGE[language]}/${operation}`;
 }
-
-export const GANGWON_AREA_CODE = "32";
 
 type TourApiItem = {
   title?: string;
@@ -417,37 +420,16 @@ function isYmdInRange(ymd: string, startYmd: string, endYmd: string) {
   return startYmd <= ymd && ymd <= resolvedEndYmd;
 }
 
-const GANGWON_SIGUNGU_CODE_BY_NAME: Record<string, string> = {
-  강릉: "1",
-  고성: "2",
-  동해: "3",
-  삼척: "4",
-  속초: "5",
-  양구: "6",
-  양양: "7",
-  영월: "8",
-  원주: "9",
-  인제: "10",
-  정선: "11",
-  철원: "12",
-  춘천: "13",
-  태백: "14",
-  평창: "15",
-  홍천: "16",
-  화천: "17",
-  횡성: "18",
-};
-
 function inferGangwonSigunguCode(address?: string) {
   if (!address || !/강원/.test(address)) {
     return "";
   }
 
-  const matchedName = Object.keys(GANGWON_SIGUNGU_CODE_BY_NAME).find((name) =>
+  const matchedName = GANGWON_REGION_LABELS.find((name) =>
     new RegExp(`${name}(시|군)`).test(address)
   );
 
-  return matchedName ? GANGWON_SIGUNGU_CODE_BY_NAME[matchedName] : "";
+  return matchedName ? GANGWON_SIGUNGU_CODE_BY_LABEL[matchedName] : "";
 }
 
 function isGangwonTourApiItem(item: TourApiItem) {

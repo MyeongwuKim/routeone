@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useUiText, type UiText } from "@/lib/uiText";
 
 type TimeWheelInputProps = {
   value: string;
@@ -15,7 +16,7 @@ type TimeWheelInputProps = {
   onChange: (value: string) => void;
 };
 
-type WheelValue = "오전" | "오후";
+type WheelValue = "am" | "pm";
 
 const ROW_HEIGHT = 46;
 const WHEEL_CENTER_OFFSET = ROW_HEIGHT / 2;
@@ -27,7 +28,7 @@ const WHEEL_MAX_VELOCITY = ROW_HEIGHT * 2.4;
 const TAP_STEP_MAX_DISTANCE = 8;
 const TAP_STEP_MAX_SCROLL_DISTANCE = 2;
 
-const PERIOD_OPTIONS: WheelValue[] = ["오전", "오후"];
+const PERIOD_OPTIONS: WheelValue[] = ["am", "pm"];
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => String(index + 1));
 const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
 
@@ -37,10 +38,10 @@ function parseTimeValue(timeValue: string) {
   const minute = Number(minuteText);
 
   if (!Number.isFinite(hour24) || !Number.isFinite(minute)) {
-    return { period: "오전" as WheelValue, hour12: "9", minute: "00" };
+    return { period: "am" as WheelValue, hour12: "9", minute: "00" };
   }
 
-  const period: WheelValue = hour24 < 12 ? "오전" : "오후";
+  const period: WheelValue = hour24 < 12 ? "am" : "pm";
   const normalizedHour = hour24 % 12 === 0 ? 12 : hour24 % 12;
 
   return {
@@ -59,16 +60,16 @@ function toTimeValue(period: WheelValue, hour12Text: string, minuteText: string)
   }
 
   let hour24 = hour12 % 12;
-  if (period === "오후") {
+  if (period === "pm") {
     hour24 += 12;
   }
 
   return `${String(hour24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function formatTimeLabel(timeValue: string) {
+function formatTimeLabel(timeValue: string, text: UiText) {
   const { period, hour12, minute } = parseTimeValue(timeValue);
-  return `${period} ${hour12}:${minute}`;
+  return `${period === "pm" ? text.inputs.pm : text.inputs.am} ${hour12}:${minute}`;
 }
 
 function clampWheelVelocity(value: number) {
@@ -86,6 +87,7 @@ type WheelColumnProps = {
   options: string[];
   selectedValue: string;
   onSelect: (value: string) => void;
+  getOptionLabel?: (value: string) => string;
   loop?: boolean;
 };
 
@@ -96,7 +98,13 @@ type PointerStart = {
   scrollTop: number;
 };
 
-function WheelColumn({ options, selectedValue, onSelect, loop = true }: WheelColumnProps) {
+function WheelColumn({
+  options,
+  selectedValue,
+  onSelect,
+  getOptionLabel,
+  loop = true,
+}: WheelColumnProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollEndTimerRef = useRef<number | null>(null);
   const wheelMomentumFrameRef = useRef<number | null>(null);
@@ -424,7 +432,7 @@ function WheelColumn({ options, selectedValue, onSelect, loop = true }: WheelCol
             key={option.key}
             className="flex h-[46px] items-center justify-center text-[26px] font-bold leading-none text-slate-500"
           >
-            {option.value}
+            {getOptionLabel ? getOptionLabel(option.value) : option.value}
           </div>
         ))}
       </div>
@@ -434,15 +442,18 @@ function WheelColumn({ options, selectedValue, onSelect, loop = true }: WheelCol
 
 function TimeWheelInput({
   value,
-  placeholder = "시간 선택",
+  placeholder,
   title,
   description,
   onChange,
 }: TimeWheelInputProps) {
+  const text = useUiText();
   const [isOpen, setIsOpen] = useState(false);
-  const [draftPeriod, setDraftPeriod] = useState<WheelValue>("오전");
+  const [draftPeriod, setDraftPeriod] = useState<WheelValue>("am");
   const [draftHour, setDraftHour] = useState("9");
   const [draftMinute, setDraftMinute] = useState("00");
+  const getPeriodLabel = (period: string) =>
+    period === "pm" ? text.inputs.pm : text.inputs.am;
 
   const openTimePicker = () => {
     const parsed = parseTimeValue(value);
@@ -477,7 +488,13 @@ function TimeWheelInput({
         onClick={openTimePicker}
         className="w-full rounded-2xl border border-brand-200 bg-white px-3 py-3 text-left text-sm text-slate-700"
       >
-        {hasValue ? formatTimeLabel(value) : <span className="text-slate-400">{placeholder}</span>}
+        {hasValue ? (
+          formatTimeLabel(value, text)
+        ) : (
+          <span className="text-slate-400">
+            {placeholder ?? text.inputs.timePlaceholder}
+          </span>
+        )}
       </button>
 
       {isOpen ? (
@@ -498,6 +515,7 @@ function TimeWheelInput({
                   options={PERIOD_OPTIONS}
                   selectedValue={draftPeriod}
                   onSelect={(next) => setDraftPeriod(next as WheelValue)}
+                  getOptionLabel={getPeriodLabel}
                   loop={false}
                 />
                 <WheelColumn options={HOUR_OPTIONS} selectedValue={draftHour} onSelect={setDraftHour} />
@@ -511,7 +529,7 @@ function TimeWheelInput({
                 onClick={() => setIsOpen(false)}
                 className="rounded-2xl border border-brand-200 bg-white px-4 py-2.5 text-base font-semibold text-slate-600"
               >
-                취소
+                {text.common.cancel}
               </button>
               <button
                 type="button"
@@ -521,7 +539,7 @@ function TimeWheelInput({
                 }}
                 className="rounded-2xl bg-brand-600 px-4 py-2.5 text-base font-bold text-white"
               >
-                저장
+                {text.inputs.save}
               </button>
             </div>
           </div>

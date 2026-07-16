@@ -4,7 +4,10 @@ query LikedSharedRoutes {
     stops {
       id
       place {
+        contentId
+        contentTypeId
         title
+        address
         categoryLabel
         categoryName
         regionCode

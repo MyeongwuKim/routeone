@@ -6,7 +6,11 @@ import {
   type NaverMarkerInstance,
 } from "@/components/map/NaverMapView";
 import NaverMapView from "@/components/map/NaverMapView";
-import type { PlannedRouteDay, RouteStartLocation } from "./routePlanTypes";
+import { useUiText } from "@/lib/uiText";
+import type {
+  PlannedRouteDay,
+  RouteStartLocation,
+} from "../../models/routePlanTypes";
 
 type StartLocationPickerPopupProps = {
   routePlan: PlannedRouteDay[];
@@ -85,6 +89,7 @@ function StartLocationPickerPopup({
   onClose,
   onApply,
 }: StartLocationPickerPopupProps) {
+  const text = useUiText();
   const mapInstanceRef = useRef<NaverMapInstance | null>(null);
   const startMarkerRef = useRef<NaverMarkerInstance | null>(null);
   const [draftLocation, setDraftLocation] = useState(initialLocation);
@@ -244,12 +249,12 @@ function StartLocationPickerPopup({
           <div className="min-w-0">
             <p className="font-trip text-sm text-brand-700">START POINT</p>
             <h2 className="mt-0.5 text-lg font-bold text-slate-900">
-              출발 위치 선택
+              {text.cart.startLocationPickerTitle}
             </h2>
           </div>
           <button
             type="button"
-            aria-label="출발 위치 선택 닫기"
+            aria-label={text.cart.startLocationPickerCloseAria}
             onClick={onClose}
             className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
           >
@@ -264,7 +269,7 @@ function StartLocationPickerPopup({
           onReady={handleMapReady}
         >
           <div className="pointer-events-none absolute inset-x-4 top-4 rounded-2xl border border-brand-100 bg-white/95 px-4 py-3 text-xs font-semibold leading-5 text-slate-600 shadow-sm backdrop-blur">
-            지도를 탭하거나 시작 마커를 드래그해서 출발 위치를 맞춰요.
+            {text.cart.startLocationPickerGuide}
           </div>
         </NaverMapView>
 
@@ -281,7 +286,7 @@ function StartLocationPickerPopup({
               onClick={onClose}
               className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600"
             >
-              취소
+              {text.common.cancel}
             </button>
             <button
               type="button"
@@ -291,7 +296,7 @@ function StartLocationPickerPopup({
               }}
               className="rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
             >
-              적용
+              {text.cart.apply}
             </button>
           </div>
         </footer>

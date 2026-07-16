@@ -94,6 +94,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   var pendingLocationRequests = Object.create(null);
   var pendingPhotoRequests = Object.create(null);
   var pendingPhotoUploadRequests = Object.create(null);
+  var pendingRouteArrivalNotificationSyncRequests = Object.create(null);
   var pendingSaveImageRequests = Object.create(null);
   var requestSeq = 0;
 
@@ -305,6 +306,27 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     });
   };
 
+  window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_SYNC_RESPONSE__ = function handleNativeRouteArrivalNotificationsSyncResponse(id, payload) {
+    var handlers = pendingRouteArrivalNotificationSyncRequests[id];
+
+    if (!handlers) {
+      return;
+    }
+
+    delete pendingRouteArrivalNotificationSyncRequests[id];
+
+    if (!payload || !payload.ok) {
+      handlers.reject(new Error((payload && payload.error) || "Native route arrival notification sync failed"));
+      return;
+    }
+
+    handlers.resolve({
+      activeCount: payload.activeCount,
+      backgroundLocationStatus: payload.backgroundLocationStatus,
+      notificationStatus: payload.notificationStatus
+    });
+  };
+
   window.__ROUTEONE_NATIVE_SAVE_IMAGE_RESPONSE__ = function handleNativeSaveImageResponse(id, payload) {
     var handlers = pendingSaveImageRequests[id];
 
@@ -384,6 +406,28 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
             id: requestId,
             photoUri: photoUri,
             uploadTarget: uploadTarget
+          })
+        );
+      });
+    },
+    syncRouteArrivalNotifications: function syncRouteArrivalNotifications(options) {
+      if (!window.ReactNativeWebView) {
+        return Promise.reject(new Error("Native bridge is not available"));
+      }
+
+      var requestId = "native-route-arrival-notifications-" + Date.now() + "-" + requestSeq++;
+      var places = options && Array.isArray(options.places) ? options.places : [];
+      var radiusMeters = options && typeof options.radiusMeters === "number" ? options.radiusMeters : null;
+
+      return new Promise(function routeOneNativeRouteArrivalNotifications(resolve, reject) {
+        pendingRouteArrivalNotificationSyncRequests[requestId] = { resolve: resolve, reject: reject };
+
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: "routeone:native-route-arrival-notifications-sync",
+            id: requestId,
+            places: places,
+            radiusMeters: radiusMeters
           })
         );
       });

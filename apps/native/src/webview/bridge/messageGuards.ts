@@ -6,6 +6,8 @@ import type {
   NativeLocationRequest,
   NativePhotoUploadRequest,
   NativePhotoRequest,
+  NativeRouteArrivalNotificationPlace,
+  NativeRouteArrivalNotificationSyncRequest,
   NativeSaveImageRequest,
 } from "./types";
 
@@ -92,6 +94,48 @@ export function isNativePhotoUploadRequest(
     typeof maybeRequest.photoUri === "string" &&
     typeof maybeRequest.uploadTarget === "object" &&
     maybeRequest.uploadTarget !== null
+  );
+}
+
+function isNativeRouteArrivalNotificationPlace(
+  value: unknown
+): value is NativeRouteArrivalNotificationPlace {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybePlace = value as Partial<NativeRouteArrivalNotificationPlace>;
+
+  return (
+    typeof maybePlace.id === "string" &&
+    typeof maybePlace.routeId === "string" &&
+    typeof maybePlace.dayId === "string" &&
+    typeof maybePlace.dayIndex === "number" &&
+    typeof maybePlace.stopId === "string" &&
+    typeof maybePlace.title === "string" &&
+    typeof maybePlace.lat === "number" &&
+    Number.isFinite(maybePlace.lat) &&
+    typeof maybePlace.lng === "number" &&
+    Number.isFinite(maybePlace.lng)
+  );
+}
+
+export function isNativeRouteArrivalNotificationSyncRequest(
+  value: unknown
+): value is NativeRouteArrivalNotificationSyncRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeRequest =
+    value as Partial<NativeRouteArrivalNotificationSyncRequest>;
+
+  return (
+    maybeRequest.type ===
+      "routeone:native-route-arrival-notifications-sync" &&
+    typeof maybeRequest.id === "string" &&
+    Array.isArray(maybeRequest.places) &&
+    maybeRequest.places.every(isNativeRouteArrivalNotificationPlace)
   );
 }
 

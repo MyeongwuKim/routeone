@@ -9,7 +9,10 @@ query SharedRouteConnection($regionCode: String, $limit: Int, $cursor: String) {
       stops {
         id
         place {
+          contentId
+          contentTypeId
           title
+          address
           categoryLabel
           categoryName
           regionCode

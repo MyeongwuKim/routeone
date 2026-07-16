@@ -8,6 +8,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { routeApi } from "@/api/routeApi";
 import { placeLocalizationApi } from "@/api/placeLocalizationApi";
+import { DEFAULT_GANGWON_REGION } from "@/data/gangwonRegions";
 import {
   IoBagAdd,
   IoBagAddOutline,
@@ -61,10 +62,6 @@ import type { MapSheetPlace } from "@/types/place";
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
 const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 const NAVER_MAP_SCHEME_APP_NAME = "routeone.web";
-const GANGNEUNG_CENTER_LOCATION = {
-  lat: 37.7519,
-  lng: 128.8761,
-};
 
 const SHEET_HEADER_HEIGHT_PX = 64;
 const SHEET_HEADLINE_MIN_HEIGHT_PX = 108;
@@ -174,6 +171,41 @@ async function preloadImageUrls(urls: string[]) {
   );
 
   return results.filter((result) => result.loaded).map((result) => result.url);
+}
+
+function getPlaceImageDedupeKey(rawUrl: string) {
+  const normalizePath = (path: string) =>
+    path
+      .split("?")[0]
+      .split("#")[0]
+      .replace(/_image[23]_(\d+)(?=\.[^./]+$)/i, "_image_$1");
+
+  try {
+    const url = new URL(rawUrl);
+    return `${url.hostname}${normalizePath(url.pathname)}`;
+  } catch {
+    return normalizePath(rawUrl);
+  }
+}
+
+function dedupePlaceImageUrls(urls: string[]) {
+  const uniqueUrls = new Map<string, string>();
+
+  urls.forEach((url) => {
+    const trimmedUrl = url.trim();
+
+    if (!trimmedUrl) {
+      return;
+    }
+
+    const key = getPlaceImageDedupeKey(trimmedUrl);
+
+    if (!uniqueUrls.has(key)) {
+      uniqueUrls.set(key, trimmedUrl);
+    }
+  });
+
+  return [...uniqueUrls.values()];
 }
 
 function PlacePhotoThumbnail({
@@ -428,7 +460,7 @@ function createMapSheetPlaceFromNearbyPlace({
     contentTypeLabel: categoryLabel,
     categoryName,
     icon: categoryIcon,
-    images: [place.firstImage, place.secondImage].filter(Boolean),
+    images: dedupePlaceImageUrls([place.firstImage, place.secondImage]),
   };
 }
 
@@ -460,7 +492,7 @@ function PlaceBottomSheet() {
   const previewOverlaysRef = useRef<PreviewMapOverlay[]>([]);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const currentLocation: CurrentLocation = GANGNEUNG_CENTER_LOCATION;
+  const currentLocation: CurrentLocation = DEFAULT_GANGWON_REGION.center;
 
   const hasTourApiServiceKey = Boolean(TOUR_API_SERVICE_KEY);
   const isFullPopupMode = sheetMode === "full-popup";
@@ -778,14 +810,13 @@ function PlaceBottomSheet() {
     (Boolean(selectedPlaceKey) &&
       (detailQuery.isSuccess || detailQuery.isError));
   const activeImageList = useMemo(
-    () => [
-      ...new Set(
-        [...(selectedPlace?.images ?? []), ...detailImages].filter(Boolean)
-      ),
-    ],
+    () => dedupePlaceImageUrls([...(selectedPlace?.images ?? []), ...detailImages]),
     [detailImages, selectedPlace?.images]
   );
-  const userPlacePhotos = placePhotosQuery.data ?? [];
+  const userPlacePhotos = useMemo(
+    () => placePhotosQuery.data ?? [],
+    [placePhotosQuery.data]
+  );
   const userPlacePhotoViewerUrls = useMemo(
     () => userPlacePhotos.map((photo) => photo.imageUrl),
     [userPlacePhotos]
@@ -1728,7 +1759,7 @@ function PlaceBottomSheet() {
 
       {imageViewerTarget &&
       imageViewerTarget.imageUrls[imageViewerTarget.index] ? (
-        <section className="fixed inset-0 z-[2700] flex items-center justify-center bg-white/35 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
+        <section className="fixed inset-0 z-[3600] flex items-center justify-center bg-white/35 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
           <button
             type="button"
             aria-label={text.placeSheet.imageViewerCloseAria}

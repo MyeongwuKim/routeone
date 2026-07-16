@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   IoCafeOutline,
   IoClose,
@@ -7,14 +8,17 @@ import {
   IoSearch,
 } from "react-icons/io5";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
+import { calculateDistanceMeters } from "@/lib/gangwonBoundaryUtils";
 import {
   getRoutePlaceCategory,
   type RoutePlaceCategory,
 } from "@/lib/placeCategory";
+import { localizeTourPlaces } from "@/lib/placeLocalization";
 import { hasDuplicatePlace } from "@/lib/placeDuplicate";
 import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
+import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import type { MapSheetPlace } from "@/types/place";
-import type { RouteInsertRequest } from "./routePlanTypes";
+import type { RouteInsertRequest } from "../../models/routePlanTypes";
 
 type InsertFilter = "all" | RoutePlaceCategory;
 
@@ -34,6 +38,13 @@ const FILTERS: Array<{ key: InsertFilter }> = [
   { key: "cafe" },
 ];
 
+type InsertCandidateLocalizationSource = {
+  id: string;
+  contentTypeId: string;
+  title: string;
+  address: string;
+};
+
 function getFilterIcon(filter: InsertFilter) {
   if (filter === "food") {
     return <IoRestaurantOutline />;
@@ -50,17 +61,7 @@ function calculateDistanceKm(
   from: { lat: number; lng: number },
   to: { lat: number; lng: number }
 ) {
-  const earthRadiusKm = 6371;
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const dLat = toRadians(to.lat - from.lat);
-  const dLng = toRadians(to.lng - from.lng);
-  const fromLat = toRadians(from.lat);
-  const toLat = toRadians(to.lat);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(dLng / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return earthRadiusKm * c;
+  return calculateDistanceMeters(from, to) / 1000;
 }
 
 function formatDistance(distanceKm: number) {
@@ -85,6 +86,76 @@ function getSegmentFitScore(place: MapSheetPlace, request: RouteInsertRequest) {
   };
 }
 
+function getCandidateLocalizationSources(candidatePlaces: MapSheetPlace[]) {
+  const sourceByContentId = new Map<string, InsertCandidateLocalizationSource>();
+
+  candidatePlaces.forEach((place) => {
+    const contentId = place.contentId.trim();
+    const contentTypeId = place.contentTypeId.trim();
+    const title = place.title.trim();
+
+    if (!contentId || !contentTypeId || !title || sourceByContentId.has(contentId)) {
+      return;
+    }
+
+    sourceByContentId.set(contentId, {
+      id: contentId,
+      contentTypeId,
+      title,
+      address: place.address.trim(),
+    });
+  });
+
+  return [...sourceByContentId.values()];
+}
+
+function getCandidateLocalizationKey(
+  sources: InsertCandidateLocalizationSource[]
+) {
+  return sources
+    .map(
+      (source) =>
+        `${source.id}:${source.contentTypeId}:${source.title}:${source.address}`
+    )
+    .join("|");
+}
+
+function localizeCandidatePlaces(
+  candidatePlaces: MapSheetPlace[],
+  localizedSources: InsertCandidateLocalizationSource[]
+) {
+  if (localizedSources.length === 0) {
+    return candidatePlaces;
+  }
+
+  const localizedByContentId = new Map(
+    localizedSources.map((source) => [source.id, source])
+  );
+
+  return candidatePlaces.map((place) => {
+    const localized = localizedByContentId.get(place.contentId);
+
+    if (!localized) {
+      return place;
+    }
+
+    const title = localized.title || place.title;
+    const address = localized.address || place.address;
+
+    if (title === place.title && address === place.address) {
+      return place;
+    }
+
+    return {
+      ...place,
+      title,
+      address,
+      touristTrendName:
+        place.touristTrendName === place.title ? title : place.touristTrendName,
+    };
+  });
+}
+
 function PlaceCartRouteInsertSheet({
   request,
   candidatePlaces,
@@ -94,6 +165,7 @@ function PlaceCartRouteInsertSheet({
   onRequestSearchPlace,
 }: PlaceCartRouteInsertSheetProps) {
   const text = useUiText();
+  const appLanguage = useAppLanguageStore((state) => state.language);
   const [activeFilter, setActiveFilter] = useState<InsertFilter>("all");
   const [keyword, setKeyword] = useState("");
   const excludedKeySet = useMemo(
@@ -101,9 +173,33 @@ function PlaceCartRouteInsertSheet({
     [excludedPlaceKeys]
   );
   const keywordText = keyword.trim().toLowerCase();
+  const localizationSources = useMemo(
+    () => getCandidateLocalizationSources(candidatePlaces),
+    [candidatePlaces]
+  );
+  const localizationKey = useMemo(
+    () => getCandidateLocalizationKey(localizationSources),
+    [localizationSources]
+  );
+  const localizationQuery = useQuery({
+    queryKey: ["route-insert-candidate-localizations", appLanguage, localizationKey],
+    enabled: appLanguage === "en" && localizationSources.length > 0,
+    queryFn: () =>
+      localizeTourPlaces(localizationSources, appLanguage, {
+        retryUncached: true,
+        retryAttempts: 3,
+      }),
+  });
+  const displayCandidatePlaces = useMemo(
+    () =>
+      appLanguage === "en"
+        ? localizeCandidatePlaces(candidatePlaces, localizationQuery.data ?? [])
+        : candidatePlaces,
+    [appLanguage, candidatePlaces, localizationQuery.data]
+  );
   const recommendedPlaces = useMemo(
     () =>
-      candidatePlaces
+      displayCandidatePlaces
         .filter((place) => !hasDuplicatePlace(place, excludedKeySet))
         .filter((place) => {
           if (activeFilter === "all") {
@@ -127,14 +223,14 @@ function PlaceCartRouteInsertSheet({
         }))
         .sort((a, b) => a.fit.score - b.fit.score)
         .slice(0, 8),
-    [activeFilter, candidatePlaces, excludedKeySet, keywordText, request]
+    [activeFilter, displayCandidatePlaces, excludedKeySet, keywordText, request]
   );
 
   return (
     <div className="fixed inset-0 z-[2600] flex items-end bg-slate-950/30">
       <button
         type="button"
-        aria-label="구간 장소 추가 닫기"
+        aria-label={text.cart.insertSheetCloseAria}
         className="absolute inset-0 cursor-default"
         onClick={onClose}
       />
@@ -143,7 +239,7 @@ function PlaceCartRouteInsertSheet({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="font-trip text-sm text-brand-700 dark:text-brand-200">
-              이 구간에 장소 추가
+              {text.cart.insertSheetTitle}
             </p>
             <div className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
               <span className="min-w-0 truncate">{request.from.title}</span>
@@ -151,12 +247,12 @@ function PlaceCartRouteInsertSheet({
               <span className="min-w-0 truncate">{request.to.title}</span>
             </div>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-              경로에서 크게 벗어나지 않는 후보를 먼저 보여줘요.
+              {text.cart.insertSheetDescription}
             </p>
           </div>
           <button
             type="button"
-            aria-label="닫기"
+            aria-label={text.common.close}
             onClick={onClose}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 dark:border-brand-400/25 dark:bg-[#0b211f] dark:text-slate-200"
           >
@@ -169,7 +265,7 @@ function PlaceCartRouteInsertSheet({
           <input
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            placeholder="이 구간에 넣을 장소 검색"
+            placeholder={text.cart.insertSearchPlaceholder}
             className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
         </div>
@@ -224,7 +320,7 @@ function PlaceCartRouteInsertSheet({
                     +{formatDistance(fit.detourDistance)}
                   </p>
                   <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
-                    우회
+                    {text.cart.detour}
                   </p>
                 </div>
               </button>
@@ -232,10 +328,10 @@ function PlaceCartRouteInsertSheet({
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center dark:border-brand-400/25 dark:bg-slate-950/40">
               <p className="text-sm font-bold text-slate-700 dark:text-slate-100">
-                이 조건에 맞는 추천 후보가 없어요
+                {text.cart.insertEmptyTitle}
               </p>
               <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                검색어를 바꾸거나 전체 검색에서 직접 찾아볼 수 있어요.
+                {text.cart.insertEmptyDescription}
               </p>
             </div>
           )}
@@ -246,7 +342,7 @@ function PlaceCartRouteInsertSheet({
           onClick={onRequestSearchPlace}
           className="mt-2 w-full shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700 dark:border-brand-400/25 dark:bg-[#0b211f] dark:text-slate-100 dark:hover:border-brand-300/60 dark:hover:text-brand-100"
         >
-          전체 검색에서 직접 찾기
+          {text.cart.searchDirectly}
         </button>
       </section>
     </div>

@@ -14,8 +14,10 @@ import {
 } from "react-icons/md";
 import { routeApi } from "@/api/routeApi";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
 import MyRouteCard from "@/features/my-route/components/MyRouteCard";
+import { useLocalizedMyRoutes } from "@/features/my-route/hooks/useLocalizedMyRoutes";
 import { MY_ROUTE_HISTORY_QUERY_KEY } from "@/features/my-route/myRouteCache";
 import {
   createRouteCompletionPosterCards,
@@ -227,13 +229,24 @@ function MyRouteHistoryPage() {
       return pageInfo.hasNextPage ? pageInfo.endCursor : undefined;
     },
   });
-  const historyRoutes = useMemo(
+  const {
+    fetchNextPage: fetchNextHistoryPage,
+    hasNextPage: hasNextHistoryPage,
+    isFetchingNextPage: isFetchingNextHistoryPage,
+    isFetchNextPageError: isNextHistoryPageError,
+  } = historyRoutesQuery;
+  const sourceHistoryRoutes = useMemo(
     () =>
       getHistoryRoutesFromInfiniteData(
         historyRoutesQuery.data as MyRouteHistoryInfiniteData | undefined
       ),
     [historyRoutesQuery.data]
   );
+  const {
+    routes: historyRoutes,
+    isLoading: isHistoryLocalizationLoading,
+    isUpdating: isHistoryLocalizationUpdating,
+  } = useLocalizedMyRoutes(sourceHistoryRoutes);
   const selectedRouteDay = useMemo(() => {
     if (!selectedHistoryRoute) {
       return null;
@@ -266,7 +279,12 @@ function MyRouteHistoryPage() {
   useEffect(() => {
     const target = loadMoreTriggerRef.current;
 
-    if (!target || !historyRoutesQuery.hasNextPage) {
+    if (
+      !target ||
+      !hasNextHistoryPage ||
+      isNextHistoryPageError ||
+      isHistoryLocalizationUpdating
+    ) {
       return;
     }
 
@@ -276,10 +294,12 @@ function MyRouteHistoryPage() {
 
         if (
           isVisible &&
-          historyRoutesQuery.hasNextPage &&
-          !historyRoutesQuery.isFetchingNextPage
+          hasNextHistoryPage &&
+          !isFetchingNextHistoryPage &&
+          !isNextHistoryPageError &&
+          !isHistoryLocalizationUpdating
         ) {
-          void historyRoutesQuery.fetchNextPage();
+          void fetchNextHistoryPage();
         }
       },
       {
@@ -293,9 +313,11 @@ function MyRouteHistoryPage() {
       observer.disconnect();
     };
   }, [
-    historyRoutesQuery.fetchNextPage,
-    historyRoutesQuery.hasNextPage,
-    historyRoutesQuery.isFetchingNextPage,
+    fetchNextHistoryPage,
+    hasNextHistoryPage,
+    isFetchingNextHistoryPage,
+    isHistoryLocalizationUpdating,
+    isNextHistoryPageError,
   ]);
 
   const handleSelectHistoryDay = (route: MyRoute, day: MyRouteDay) => {
@@ -453,32 +475,34 @@ function MyRouteHistoryPage() {
               {text.routeHistory.description}
             </p>
             <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-200/75">
-              {text.routeHistory.loadedCount(historyRoutes.length)}
+              {text.routeHistory.loadedCount(sourceHistoryRoutes.length)}
             </p>
           </div>
         </div>
       </div>
 
-      {historyRoutesQuery.isError ? (
+      {historyRoutesQuery.isError && sourceHistoryRoutes.length === 0 ? (
         <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
-          {text.routeHistory.loadError}
+          <p>{text.routeHistory.loadError}</p>
+          <button
+            type="button"
+            onClick={() => void historyRoutesQuery.refetch()}
+            className="mt-3 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-wait disabled:opacity-60"
+            disabled={historyRoutesQuery.isFetching}
+          >
+            {text.common.retry}
+          </button>
         </div>
       ) : null}
 
-      {historyRoutesQuery.isLoading ? (
-        <div className="flex min-h-[calc(100dvh-18rem)] flex-col justify-center">
-          <PotatoLoadingCard
-            title={text.routeHistory.loadingTitle}
-            animation="running"
-            compact
-            className="shadow-sm"
-          />
-        </div>
+      {historyRoutesQuery.isLoading || isHistoryLocalizationLoading ? (
+        <RouteListSkeleton variant="history" />
       ) : null}
 
       {!historyRoutesQuery.isLoading &&
+      !isHistoryLocalizationLoading &&
       !historyRoutesQuery.isError &&
-      historyRoutes.length === 0 ? (
+      sourceHistoryRoutes.length === 0 ? (
         <div className="flex min-h-[calc(100dvh-18rem)] flex-col justify-center">
           <PotatoLoadingCard
             title={text.routeHistory.emptyTitle}
@@ -503,11 +527,11 @@ function MyRouteHistoryPage() {
             />
           ))}
 
-          {historyRoutesQuery.hasNextPage ? (
+          {hasNextHistoryPage ? (
             <div ref={loadMoreTriggerRef} className="h-8" aria-hidden="true" />
           ) : null}
 
-          {historyRoutesQuery.isFetchingNextPage ? (
+          {isFetchingNextHistoryPage || isHistoryLocalizationUpdating ? (
             <div className="py-2">
               <PotatoLoadingCard
                 title={text.routeHistory.nextLoadingTitle}
@@ -515,6 +539,20 @@ function MyRouteHistoryPage() {
                 compact
                 className="shadow-sm"
               />
+            </div>
+          ) : null}
+
+          {isNextHistoryPageError ? (
+            <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-center text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
+              <p>{text.routeHistory.loadError}</p>
+              <button
+                type="button"
+                onClick={() => void fetchNextHistoryPage()}
+                className="mt-3 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-wait disabled:opacity-60"
+                disabled={isFetchingNextHistoryPage}
+              >
+                {text.common.retry}
+              </button>
             </div>
           ) : null}
         </div>

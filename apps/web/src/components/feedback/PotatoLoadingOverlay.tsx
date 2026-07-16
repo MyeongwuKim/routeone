@@ -463,8 +463,6 @@ function PotatoCharacter({
               strokeWidth="2.6"
               strokeLinecap="round"
             />
-            <circle cx="24.5" cy="57.5" r="2.4" fill="#2A1A13" />
-            <circle cx="95.5" cy="57.5" r="2.4" fill="#2A1A13" />
             <g
               style={{
                 animation: "potatoQuestionTilt 1.35s ease-in-out infinite",

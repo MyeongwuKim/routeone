@@ -41,6 +41,34 @@ pnpm native:start:go
 pnpm native:build:webview
 ```
 
+## TestFlight
+
+TestFlight에 올릴 때는 실제 App Store Connect에 제출되는 store 배포 빌드를 사용해요.
+
+프로덕션 앱은 `APP_VARIANT=prod`로 빌드하고, iOS 번들 ID는 `com.routeone.app`을 사용해요.
+
+```bash
+cd apps/native
+pnpm run eas:build:ios
+pnpm run eas:submit:ios
+```
+
+테스트용 앱은 `APP_VARIANT=dev`와 `testflight-dev` 프로필을 사용해요. 이때 iOS 번들 ID는 `com.routeone.app.dev`, 앱 이름은 `RouteOne(T)`예요.
+
+```bash
+cd apps/native
+pnpm run eas:build:ios:dev
+pnpm run eas:submit:ios:dev
+```
+
+두 앱은 App Store Connect에서도 각각 별도 앱 레코드와 번들 ID가 필요해요. 제출 자동화를 쓰려면 `apps/native/eas.json`의 submit 프로필에 각 앱의 `ascAppId`를 채우면 돼요.
+
+실기기 TestFlight 빌드에서는 로컬 API 주소를 사용할 수 없으니, 빌드 전에 배포용 GraphQL 주소를 환경변수로 넣어야 해요.
+
+```bash
+EXPO_PUBLIC_GRAPHQL_ENDPOINT=https://api.example.com/graphql pnpm run eas:build:ios:dev
+```
+
 ## 환경변수
 
 WebView 안의 `/graphql`, `/tour-api`, `/map-direction` 요청은 기존 Vite dev proxy 대신 native bridge에서 직접 호출해요.
@@ -56,6 +84,6 @@ EXPO_PUBLIC_NCP_MAPS_KEY=...
 
 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`는 현재 Mac의 LAN IP로 맞춰야 실기기에서도 로컬 API에 붙을 수 있어요. iOS 시뮬레이터만 쓸 때는 `http://127.0.0.1:4000/graphql`도 사용할 수 있어요.
 
-`APP_VARIANT=dev`는 iOS/Android 앱 식별자를 `com.routeone.app.dev`로 만들고, `APP_VARIANT=prod`는 `com.routeone.app`을 사용해요. Google OAuth iOS 클라이언트의 번들 ID도 이 값과 정확히 맞아야 해요.
+`APP_VARIANT=dev`는 테스트 앱 식별자 `com.routeone.app.dev`와 앱 이름 `RouteOne(T)`를 사용해요. `APP_VARIANT=prod`는 운영 앱 식별자 `com.routeone.app`과 앱 이름 `RouteOne`을 사용해요. Google OAuth iOS 클라이언트의 번들 ID도 이 값과 정확히 맞아야 해요.
 
 클라이언트 앱에 API secret이 들어가는 구조라, 실제 배포에서는 별도 백엔드 프록시로 옮기는 게 좋아요.

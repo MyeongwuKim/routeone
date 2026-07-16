@@ -4,12 +4,12 @@ import {
 } from "@/lib/placeCategory";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
-import type { TravelTempo } from "./PlaceCartTempoStep";
 import type {
   PlannedRouteDay,
   PlannedRouteItem,
   RouteStartLocation,
-} from "./routePlanTypes";
+  TravelTempo,
+} from "../models/routePlanTypes";
 
 type RoutePlannerPlace = {
   place: MapSheetPlace;

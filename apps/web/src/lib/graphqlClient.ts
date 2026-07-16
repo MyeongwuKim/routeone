@@ -1,14 +1,14 @@
-import { print } from "graphql";
+import { Kind, print, type DocumentNode } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 import { getAuthToken } from "./authToken";
 
 const GRAPHQL_REQUEST_TIMEOUT_MS = getPositiveNumberEnv(
   import.meta.env.VITE_GRAPHQL_REQUEST_TIMEOUT_MS,
-  45_000
+  12_000
 );
-const GRAPHQL_MAX_RETRY_COUNT = getPositiveNumberEnv(
+const GRAPHQL_MAX_RETRY_COUNT = getNonNegativeIntegerEnv(
   import.meta.env.VITE_GRAPHQL_MAX_RETRY_COUNT,
-  5
+  1
 );
 const GRAPHQL_RETRY_BASE_DELAY_MS = 600;
 const GRAPHQL_RETRY_MAX_DELAY_MS = 5_000;
@@ -26,7 +26,7 @@ type GraphQLResponse<TResult> = {
   }>;
 };
 
-class GraphQLRequestError extends Error {
+export class GraphQLRequestError extends Error {
   retryable: boolean;
   status?: number;
 
@@ -43,6 +43,14 @@ function getPositiveNumberEnv(value: string | undefined, fallback: number) {
 
   return Number.isFinite(parsedValue) && parsedValue > 0
     ? parsedValue
+    : fallback;
+}
+
+function getNonNegativeIntegerEnv(value: string | undefined, fallback: number) {
+  const parsedValue = Number(value);
+
+  return Number.isFinite(parsedValue) && parsedValue >= 0
+    ? Math.floor(parsedValue)
     : fallback;
 }
 
@@ -84,12 +92,50 @@ function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
 
+export function isGraphQLRequestError(
+  error: unknown
+): error is GraphQLRequestError {
+  return error instanceof GraphQLRequestError;
+}
+
 function isRetryableGraphQLError(error: unknown) {
-  if (error instanceof GraphQLRequestError) {
+  if (isGraphQLRequestError(error)) {
     return error.retryable;
   }
 
-  return error instanceof TypeError || isAbortError(error);
+  return false;
+}
+
+function normalizeGraphQLRequestError(error: unknown) {
+  if (isGraphQLRequestError(error)) {
+    return error;
+  }
+
+  if (isAbortError(error)) {
+    return new GraphQLRequestError(
+      "서버 응답 시간이 초과됐어요. 잠시 후 다시 시도해 주세요.",
+      { retryable: true }
+    );
+  }
+
+  if (error instanceof TypeError) {
+    return new GraphQLRequestError(
+      "서버에 연결할 수 없어요. 네트워크 연결을 확인해 주세요.",
+      { retryable: true }
+    );
+  }
+
+  return error instanceof Error
+    ? error
+    : new Error("GraphQL 요청에 실패했어요.");
+}
+
+function isMutationDocument(document: DocumentNode) {
+  return document.definitions.some(
+    (definition) =>
+      definition.kind === Kind.OPERATION_DEFINITION &&
+      definition.operation === "mutation"
+  );
 }
 
 async function readGraphQLPayload<TResult>(response: Response) {
@@ -164,6 +210,13 @@ export async function requestGraphQL<TResult, TVariables>(
   variables?: TVariables,
   options?: GraphQLRequestOptions
 ) {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    throw new GraphQLRequestError(
+      "인터넷 연결이 끊어졌어요. 네트워크 연결을 확인해 주세요.",
+      { retryable: false }
+    );
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -184,7 +237,7 @@ export async function requestGraphQL<TResult, TVariables>(
   );
   const maxRetryCount = getNonNegativeIntegerOption(
     options?.maxRetryCount,
-    GRAPHQL_MAX_RETRY_COUNT
+    isMutationDocument(document) ? 0 : GRAPHQL_MAX_RETRY_COUNT
   );
 
   for (let retryCount = 0; retryCount <= maxRetryCount; retryCount += 1) {
@@ -195,14 +248,13 @@ export async function requestGraphQL<TResult, TVariables>(
         timeoutMs,
       });
     } catch (error) {
+      const requestError = normalizeGraphQLRequestError(error);
       const canRetry =
         retryCount < maxRetryCount &&
-        isRetryableGraphQLError(error);
+        isRetryableGraphQLError(requestError);
 
       if (!canRetry) {
-        throw error instanceof Error
-          ? error
-          : new Error("GraphQL 요청에 실패했어요.");
+        throw requestError;
       }
 
       await sleep(getRetryDelayMs(retryCount));

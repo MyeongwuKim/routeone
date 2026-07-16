@@ -23,6 +23,7 @@ export type PlaceSearchResult = {
 
 type PlaceSearchPopupProps = {
   searchInputRef: RefObject<HTMLInputElement | null>;
+  regionLabel: string;
   filters: Array<{
     key: SearchFilter;
     label: string;
@@ -45,6 +46,7 @@ type PlaceSearchPopupProps = {
 
 function PlaceSearchPopup({
   searchInputRef,
+  regionLabel,
   filters,
   searchKeyword,
   searchFilter,
@@ -65,7 +67,7 @@ function PlaceSearchPopup({
   const hasKeyword = Boolean(searchKeyword.trim());
 
   return (
-    <section className="fixed inset-0 z-[2300] bg-slate-50 text-slate-900 dark:bg-[#071718] dark:text-slate-100">
+    <section className="fixed inset-0 z-[3200] bg-slate-50 text-slate-900 dark:bg-[#071718] dark:text-slate-100">
       <div className="flex h-full flex-col">
         <div className="border-b border-slate-200 bg-white/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur dark:border-brand-400/20 dark:bg-[#0b211f]/95">
           <div className="flex items-center gap-2">
@@ -81,7 +83,7 @@ function PlaceSearchPopup({
                 value={searchKeyword}
                 onChange={(event) => onKeywordChange(event.target.value)}
                 enterKeyHint="search"
-                placeholder={text.search.placeholder}
+                placeholder={text.search.placeholder(regionLabel)}
                 className="w-full bg-transparent text-sm font-semibold text-slate-800 placeholder:text-slate-400 outline-none dark:text-slate-100 dark:placeholder:text-slate-500"
               />
               {searchKeyword ? (

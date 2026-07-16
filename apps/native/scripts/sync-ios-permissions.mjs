@@ -26,6 +26,16 @@ const permissionEntries = [
     value:
       "RouteOne이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
   },
+  {
+    key: "NSLocationAlwaysAndWhenInUseUsageDescription",
+    value:
+      "RouteOne이 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
+  },
+  {
+    key: "NSLocationAlwaysUsageDescription",
+    value:
+      "RouteOne이 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
+  },
 ];
 
 function readEnvFile() {
@@ -170,6 +180,37 @@ function syncPermissionEntries(source) {
   };
 }
 
+function syncBackgroundLocationMode(source) {
+  if (source.includes("<string>location</string>")) {
+    return {
+      source,
+      didChange: false,
+    };
+  }
+
+  const backgroundModeEntry = [
+    "\t<key>UIBackgroundModes</key>",
+    "\t<array>",
+    "\t\t<string>location</string>",
+    "\t</array>",
+  ].join("\n");
+
+  if (source.includes("<key>UIBackgroundModes</key>")) {
+    return {
+      source: source.replace(
+        /(<key>UIBackgroundModes<\/key>\s*<array>)/,
+        `$1\n\t\t<string>location</string>`
+      ),
+      didChange: true,
+    };
+  }
+
+  return {
+    source: source.replace("</dict>", `${backgroundModeEntry}\n</dict>`),
+    didChange: true,
+  };
+}
+
 function syncAppleEntitlement() {
   if (!existsSync(entitlementsPath)) {
     console.warn("[sync-ios-permissions] Entitlements not found, skipping.");
@@ -219,14 +260,24 @@ if (!existsSync(infoPlistPath)) {
 
 const source = readFileSync(infoPlistPath, "utf8");
 const permissionResult = syncPermissionEntries(source);
-const googleResult = syncGoogleUrlScheme(permissionResult.source);
+const backgroundLocationResult = syncBackgroundLocationMode(permissionResult.source);
+const googleResult = syncGoogleUrlScheme(backgroundLocationResult.source);
 const appleEntitlementResult = syncAppleEntitlement();
 
-if (permissionResult.count > 0 || googleResult.didChange) {
+if (
+  permissionResult.count > 0 ||
+  backgroundLocationResult.didChange ||
+  googleResult.didChange
+) {
   writeFileSync(infoPlistPath, googleResult.source);
 }
 
-if (!permissionResult.count && !googleResult.didChange && !appleEntitlementResult) {
+if (
+  !permissionResult.count &&
+  !backgroundLocationResult.didChange &&
+  !googleResult.didChange &&
+  !appleEntitlementResult
+) {
   console.log("[sync-ios-permissions] No iOS auth or permission entries needed.");
   process.exit(0);
 }
@@ -236,6 +287,7 @@ const changes = [
     ? `added permission entries: ${permissionResult.count}`
     : null,
   googleResult.didChange ? "added Google URL scheme" : null,
+  backgroundLocationResult.didChange ? "enabled background location mode" : null,
   appleEntitlementResult === "added"
     ? "added Apple Sign In entitlement"
     : null,

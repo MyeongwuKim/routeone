@@ -43,6 +43,7 @@ export function usePlaceSheetLayout({
     getSheetTop(typeof window === "undefined" ? 800 : window.innerHeight, "collapsed")
   );
   const [isDraggingSheet, setIsDraggingSheet] = useState(false);
+  const sheetSnapRef = useRef<SheetSnap>("collapsed");
   const sheetTopRef = useRef(sheetTop);
   const wasSheetOpenRef = useRef(false);
   const lastResetVersionRef = useRef(resetVersion);
@@ -67,7 +68,11 @@ export function usePlaceSheetLayout({
 
   useEffect(() => {
     const onResize = () => {
-      setViewportHeight(window.innerHeight);
+      const nextViewportHeight = window.innerHeight;
+      const nextTop = getSheetTop(nextViewportHeight, sheetSnapRef.current);
+      setViewportHeight(nextViewportHeight);
+      setSheetTop(nextTop);
+      sheetTopRef.current = nextTop;
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -77,6 +82,7 @@ export function usePlaceSheetLayout({
     if (resetVersion !== lastResetVersionRef.current) {
       const nextTop = getSheetTop(viewportHeight, "collapsed");
       setSheetSnap("collapsed");
+      sheetSnapRef.current = "collapsed";
       setIsDraggingSheet(false);
       setSheetTop(nextTop);
       sheetTopRef.current = nextTop;
@@ -88,6 +94,7 @@ export function usePlaceSheetLayout({
     if (isSheetOpen && !wasSheetOpenRef.current) {
       const collapsedTop = getSheetTop(viewportHeight, "collapsed");
       setSheetSnap("collapsed");
+      sheetSnapRef.current = "collapsed";
       setIsDraggingSheet(false);
       setSheetTop(collapsedTop);
       sheetTopRef.current = collapsedTop;
@@ -97,24 +104,19 @@ export function usePlaceSheetLayout({
   }, [isSheetOpen, viewportHeight]);
 
   useEffect(() => {
-    if (!isSheetOpen) {
-      return;
-    }
-    setSheetTop(getSheetTop(viewportHeight, sheetSnap));
-  }, [isSheetOpen, sheetSnap, viewportHeight]);
-
-  useEffect(() => {
     sheetTopRef.current = sheetTop;
   }, [sheetTop]);
 
   const resetSheetLayout = () => {
     setSheetSnap("collapsed");
+    sheetSnapRef.current = "collapsed";
     setIsDraggingSheet(false);
     setSheetTop(getSheetTop(viewportHeight, "collapsed"));
   };
 
   const collapseSheet = () => {
     setSheetSnap("collapsed");
+    sheetSnapRef.current = "collapsed";
     setSheetTop(getSheetTop(viewportHeight, "collapsed"));
   };
 
@@ -191,6 +193,7 @@ export function usePlaceSheetLayout({
     }
 
     setSheetSnap(nextSnap);
+    sheetSnapRef.current = nextSnap;
     setSheetTop(getSheetTop(viewportHeight, nextSnap));
   };
 

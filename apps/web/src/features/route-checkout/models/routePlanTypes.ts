@@ -1,5 +1,7 @@
 import type { MapSheetPlace } from "@/types/place";
 
+export type TravelTempo = "relaxed" | "balanced" | "packed";
+
 export type RouteInsertPoint = {
   title: string;
   subtitle: string;
