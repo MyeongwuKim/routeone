@@ -19,6 +19,10 @@ on:
         options:
           - dev
           - prod
+      version:
+        description: "Web bundle version (optional)"
+        required: false
+        type: string
 
 jobs:
   publish:
@@ -47,6 +51,9 @@ jobs:
 
       - name: Resolve channel
         shell: bash
+        env:
+          REQUESTED_WEB_VERSION: ${{ inputs.version }}
+          WEB_VERSION_PREFIX: ${{ vars.ROUTEONE_WEB_VERSION_PREFIX }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ inputs.channel }}" ]]; then
             CHANNEL="${{ inputs.channel }}"
@@ -62,10 +69,43 @@ jobs:
             APP_VARIANT="dev"
           fi
 
+          if [[ -n "${REQUESTED_WEB_VERSION}" ]]; then
+            WEB_VERSION="${REQUESTED_WEB_VERSION}"
+          else
+            WEB_VERSION_PREFIX="${WEB_VERSION_PREFIX:-1.0}"
+            WEB_VERSION="${WEB_VERSION_PREFIX}.${GITHUB_RUN_NUMBER}"
+          fi
+
           echo "APP_VARIANT=${APP_VARIANT}" >> "${GITHUB_ENV}"
           echo "ROUTEONE_WEB_BUNDLE_CHANNEL=${CHANNEL}" >> "${GITHUB_ENV}"
           echo "ROUTEONE_WEB_BUNDLE_BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "${GITHUB_ENV}"
-          echo "ROUTEONE_WEB_BUNDLE_VERSION=${CHANNEL}-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "${GITHUB_ENV}"
+          echo "ROUTEONE_WEB_BUNDLE_VERSION=${WEB_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Load dev R2 config
+        if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.channel == 'prod') || (github.event_name != 'workflow_dispatch' && github.ref_name == 'main')) }}
+        env:
+          SELECTED_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID_DEV }}
+          SELECTED_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY_DEV }}
+          SELECTED_R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME_DEV }}
+          SELECTED_R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL_DEV }}
+        run: |
+          echo "R2_ACCESS_KEY_ID=${SELECTED_R2_ACCESS_KEY_ID}" >> "${GITHUB_ENV}"
+          echo "R2_SECRET_ACCESS_KEY=${SELECTED_R2_SECRET_ACCESS_KEY}" >> "${GITHUB_ENV}"
+          echo "R2_BUCKET_NAME=${SELECTED_R2_BUCKET_NAME}" >> "${GITHUB_ENV}"
+          echo "R2_PUBLIC_BASE_URL=${SELECTED_R2_PUBLIC_BASE_URL}" >> "${GITHUB_ENV}"
+
+      - name: Load prod R2 config
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.channel == 'prod') || (github.event_name != 'workflow_dispatch' && github.ref_name == 'main') }}
+        env:
+          SELECTED_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID_PROD }}
+          SELECTED_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY_PROD }}
+          SELECTED_R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME_PROD }}
+          SELECTED_R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL_PROD }}
+        run: |
+          echo "R2_ACCESS_KEY_ID=${SELECTED_R2_ACCESS_KEY_ID}" >> "${GITHUB_ENV}"
+          echo "R2_SECRET_ACCESS_KEY=${SELECTED_R2_SECRET_ACCESS_KEY}" >> "${GITHUB_ENV}"
+          echo "R2_BUCKET_NAME=${SELECTED_R2_BUCKET_NAME}" >> "${GITHUB_ENV}"
+          echo "R2_PUBLIC_BASE_URL=${SELECTED_R2_PUBLIC_BASE_URL}" >> "${GITHUB_ENV}"
 
       - name: Build web
         run: pnpm build:web
@@ -73,8 +113,6 @@ jobs:
       - name: Export native version config
         env:
           EXPO_PUBLIC_APP_VARIANT: ${{ env.APP_VARIANT }}
-          EXPO_PUBLIC_WEB_BUNDLE_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
-          EXPO_PUBLIC_WEB_BUNDLE_PREFIX: ${{ vars.ROUTEONE_WEB_BUNDLE_PREFIX }}
           ROUTEONE_APP_VERSION: ${{ vars.ROUTEONE_APP_VERSION }}
           ROUTEONE_IOS_BUILD_NUMBER: ${{ vars.ROUTEONE_IOS_BUILD_NUMBER }}
           ROUTEONE_ANDROID_VERSION_CODE: ${{ vars.ROUTEONE_ANDROID_VERSION_CODE }}
@@ -83,14 +121,9 @@ jobs:
       - name: Publish to R2
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
           ROUTEONE_APP_VERSION: ${{ vars.ROUTEONE_APP_VERSION }}
           ROUTEONE_IOS_BUILD_NUMBER: ${{ vars.ROUTEONE_IOS_BUILD_NUMBER }}
           ROUTEONE_ANDROID_VERSION_CODE: ${{ vars.ROUTEONE_ANDROID_VERSION_CODE }}
           ROUTEONE_NATIVE_CONFIG_PATH: native-config.json
-          ROUTEONE_WEB_BUNDLE_PREFIX: ${{ vars.ROUTEONE_WEB_BUNDLE_PREFIX }}
           ROUTEONE_WEB_BUNDLE_RETENTION: "5"
         run: pnpm publish:web-bundle:r2

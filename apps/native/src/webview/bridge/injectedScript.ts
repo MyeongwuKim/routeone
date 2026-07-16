@@ -5,8 +5,7 @@ const ROUTEONE_RUNTIME_CONFIG = {
   routerMode: "hash",
   nativeAppVariant: WEB_BUNDLE_UPDATE_CONFIG.appVariant,
   webBundleChannel: WEB_BUNDLE_UPDATE_CONFIG.channel,
-  webBundleManifestUrl: WEB_BUNDLE_UPDATE_CONFIG.manifestUrl,
-  webBundleVersionsUrl: WEB_BUNDLE_UPDATE_CONFIG.versionsUrl
+  webBundleManifestUrl: WEB_BUNDLE_UPDATE_CONFIG.manifestUrl
 };
 
 export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `

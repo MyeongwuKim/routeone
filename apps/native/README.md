@@ -94,43 +94,52 @@ ROUTEONE_IOS_BUILD_NUMBER=1
 ROUTEONE_ANDROID_VERSION_CODE=1
 ```
 
-원격 웹 번들 manifest 주소는 앱 variant에 따라 나뉘어요. 아래처럼 base URL만 넣으면 `dev` 앱은 `routeone-web-bundles/dev/manifest.json`, `prod` 앱은 `routeone-web-bundles/prod/manifest.json`을 봐요.
+원격 웹 번들 manifest 주소는 앱 variant별 R2 버킷의 공개 URL을 기준으로 정해져요. base URL을 넣으면 앱은 해당 버킷의 `latest/manifest.json`을 봐요.
 
 ```bash
 EXPO_PUBLIC_WEB_BUNDLE_BASE_URL=https://cdn.example.com
-EXPO_PUBLIC_WEB_BUNDLE_PREFIX=routeone-web-bundles
 ```
 
-채널별 주소를 직접 지정해야 하면 아래 값을 사용할 수 있어요.
+variant별 주소를 직접 지정해야 하면 아래 값을 사용할 수 있어요.
 
 ```bash
-EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV=https://cdn.example.com/routeone-web-bundles/dev/manifest.json
-EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD=https://cdn.example.com/routeone-web-bundles/prod/manifest.json
+EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV=https://dev-cdn.example.com/latest/manifest.json
+EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD=https://cdn.example.com/latest/manifest.json
 ```
 
 ## 웹 번들 R2 배포
 
-`main` 브랜치에 push하면 `prod`, `develop` 브랜치에 push하면 `dev` 채널 웹 번들을 GitHub Actions에서 빌드하고 R2에 업로드해요.
+`main` 브랜치에 push하면 `prod`, `develop` 브랜치에 push하면 `dev` 채널 웹 번들을 GitHub Actions에서 빌드하고 각각의 R2 버킷에 업로드해요.
 
-업로드 경로는 기본적으로 아래처럼 나뉘어요.
+dev와 prod는 서로 다른 R2 버킷을 사용하고, 각 버킷 안에는 아래 구조로 업로드해요.
 
 ```text
-routeone-web-bundles/dev/bundles/web-dev-123-abcdef0.zip
-routeone-web-bundles/dev/manifest.json
-routeone-web-bundles/dev/versions.json
+latest/
+└── manifest.json
 
-routeone-web-bundles/prod/bundles/web-prod-123-abcdef0.zip
-routeone-web-bundles/prod/manifest.json
-routeone-web-bundles/prod/versions.json
+releases/
+├── 1.0.31/
+│   ├── manifest.json
+│   └── web-ui.zip
+└── 1.0.32/
+    ├── manifest.json
+    └── web-ui.zip
 ```
 
-`manifest.json`은 최신 번들만 가리키고, `versions.json`은 최근 5개 번들 이력을 보관해요. 스크립트가 채널별 zip 파일도 최대 5개까지만 남기고 오래된 파일을 삭제해요.
+`latest/manifest.json`은 최신 release의 manifest와 같은 내용을 담고, 네이티브 앱이 최신 웹 버전과 다운로드 주소를 확인할 때 사용해요. release manifest에는 `version`, `bundleUrl`, `entryUrl`, `sha256`, `createdAt`, `minimumNativeVersion`이 들어가요.
 
-GitHub에는 아래 값을 등록해야 해요.
+버전 폴더명은 기본적으로 `1.0.{GitHub Actions 실행번호}` 형식이에요. Repository variable `ROUTEONE_WEB_VERSION_PREFIX`를 바꾸면 `1.1.{실행번호}`처럼 앞자리를 변경할 수 있고, Actions에서 수동 실행할 때는 `version` 입력값으로 정확한 버전을 지정할 수 있어요.
 
-- Secrets: `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
-- Variables: `R2_PUBLIC_BASE_URL`, `ROUTEONE_APP_VERSION`, `ROUTEONE_IOS_BUILD_NUMBER`, `ROUTEONE_ANDROID_VERSION_CODE`, `ROUTEONE_WEB_BUNDLE_PREFIX`
+`releases`에는 최신 버전 폴더 5개만 유지하고, 오래된 버전은 폴더 안의 `manifest.json`과 `web-ui.zip`을 함께 삭제해요.
 
-`R2_PUBLIC_BASE_URL`은 네이티브 앱이 zip을 내려받을 공개 URL이 필요할 때 넣어요. 비워두면 JSON에는 `bundleKey`만 들어가고 `bundleUrl`은 `null`로 남아요.
+GitHub 저장소의 `Settings > Secrets and variables > Actions`에서 아래 Repository secrets를 등록해야 해요.
 
-클라이언트 앱에 API secret이 들어가는 구조라, 실제 배포에서는 별도 백엔드 프록시로 옮기는 게 좋아요.
+- 공통: `CLOUDFLARE_ACCOUNT_ID`
+- dev: `CLOUDFLARE_R2_ACCESS_KEY_ID_DEV`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY_DEV`, `R2_BUCKET_NAME_DEV`, `R2_PUBLIC_BASE_URL_DEV`
+- prod: `CLOUDFLARE_R2_ACCESS_KEY_ID_PROD`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY_PROD`, `R2_BUCKET_NAME_PROD`, `R2_PUBLIC_BASE_URL_PROD`
+
+Repository variables에는 `ROUTEONE_APP_VERSION`, `ROUTEONE_IOS_BUILD_NUMBER`, `ROUTEONE_ANDROID_VERSION_CODE`를 등록해요. `ROUTEONE_WEB_VERSION_PREFIX`는 선택값이며 기본값은 `1.0`이에요.
+
+R2 버킷과 API Token도 dev/prod용으로 각각 만들고, 각 Token의 `Object Read & Write` 권한을 해당 버킷 하나로 제한해요. 워크플로는 `develop`에서 `_DEV`, `main`에서 `_PROD` 시크릿을 선택해요.
+
+`R2_PUBLIC_BASE_URL_DEV`, `R2_PUBLIC_BASE_URL_PROD`에는 각 버킷의 공개 URL을 넣어요. R2 Access Key는 GitHub Actions에서만 사용하고 네이티브 앱에는 포함하지 않아요.

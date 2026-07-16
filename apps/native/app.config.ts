@@ -32,10 +32,6 @@ function getAppVariant(): AppVariant {
   throw new Error(`APP_VARIANT must be "dev" or "prod". Received "${variant}".`);
 }
 
-function trimSlashes(value: string) {
-  return value.replace(/^\/+|\/+$/g, "");
-}
-
 function trimTrailingSlashes(value: string) {
   return value.replace(/\/+$/g, "");
 }
@@ -54,9 +50,7 @@ function getWebBundleManifestUrl(variant: AppVariant) {
     return null;
   }
 
-  return `${trimTrailingSlashes(
-    webBundlePublicBaseUrl
-  )}/${webBundlePrefix}/${variant}/manifest.json`;
+  return `${trimTrailingSlashes(webBundlePublicBaseUrl)}/latest/manifest.json`;
 }
 
 const appVariant = getAppVariant();
@@ -76,15 +70,7 @@ const webBundlePublicBaseUrl =
   process.env.EXPO_PUBLIC_WEB_BUNDLE_BASE_URL?.trim() ||
   process.env.R2_PUBLIC_BASE_URL?.trim() ||
   "";
-const webBundlePrefix = trimSlashes(
-  process.env.EXPO_PUBLIC_WEB_BUNDLE_PREFIX?.trim() ||
-    process.env.ROUTEONE_WEB_BUNDLE_PREFIX?.trim() ||
-    "routeone-web-bundles"
-);
 const webBundleManifestUrl = getWebBundleManifestUrl(appVariant);
-const webBundleVersionsUrl = webBundleManifestUrl
-  ? webBundleManifestUrl.replace(/\/manifest\.json$/, "/versions.json")
-  : null;
 
 if (!Number.isInteger(androidVersionCode) || androidVersionCode < 1) {
   throw new Error("ROUTEONE_ANDROID_VERSION_CODE must be a positive integer.");
@@ -167,8 +153,7 @@ export default {
       routeone: {
         appVariant,
         webBundleChannel,
-        webBundleManifestUrl,
-        webBundleVersionsUrl
+        webBundleManifestUrl
       }
     },
     ios: {

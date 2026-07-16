@@ -1,13 +1,7 @@
 type AppVariant = "dev" | "prod";
 
-const DEFAULT_WEB_BUNDLE_PREFIX = "routeone-web-bundles";
-
 function normalizeAppVariant(value: string | undefined): AppVariant {
   return value?.trim().toLowerCase() === "prod" ? "prod" : "dev";
-}
-
-function trimSlashes(value: string) {
-  return value.replace(/^\/+|\/+$/g, "");
 }
 
 function trimTrailingSlashes(value: string) {
@@ -30,12 +24,7 @@ function readManifestUrl(appVariant: AppVariant) {
     return null;
   }
 
-  const prefix = trimSlashes(
-    process.env.EXPO_PUBLIC_WEB_BUNDLE_PREFIX?.trim() ||
-      DEFAULT_WEB_BUNDLE_PREFIX
-  );
-
-  return `${trimTrailingSlashes(baseUrl)}/${prefix}/${appVariant}/manifest.json`;
+  return `${trimTrailingSlashes(baseUrl)}/latest/manifest.json`;
 }
 
 const appVariant = normalizeAppVariant(process.env.EXPO_PUBLIC_APP_VARIANT);
@@ -44,8 +33,5 @@ const manifestUrl = readManifestUrl(appVariant);
 export const WEB_BUNDLE_UPDATE_CONFIG = {
   appVariant,
   channel: appVariant,
-  manifestUrl,
-  versionsUrl: manifestUrl
-    ? manifestUrl.replace(/\/manifest\.json$/, "/versions.json")
-    : null
+  manifestUrl
 } as const;

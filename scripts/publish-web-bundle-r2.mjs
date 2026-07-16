@@ -27,72 +27,60 @@ if (!accessKeyId || !secretAccessKey) {
   fail("R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are required.");
 }
 
-const channel = readChannel();
 const retention = readPositiveInteger("ROUTEONE_WEB_BUNDLE_RETENTION", 5);
-const prefix = trimSlashes(env.ROUTEONE_WEB_BUNDLE_PREFIX || "routeone-web-bundles");
 const distDir = resolve(env.ROUTEONE_WEB_DIST_DIR || "apps/web/dist");
-const shortSha = (env.GITHUB_SHA || "local").slice(0, 7);
 const buildNumber = readPositiveInteger(
   "ROUTEONE_WEB_BUNDLE_BUILD_NUMBER",
   Number.parseInt(env.GITHUB_RUN_NUMBER || "", 10) || Date.now()
 );
 const version =
   env.ROUTEONE_WEB_BUNDLE_VERSION?.trim() ||
-  `${channel}-${buildNumber}-${shortSha}`;
-const safeVersion = version.replace(/[^a-zA-Z0-9._-]/g, "-");
+  `1.0.${buildNumber}`;
+
+if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(version)) {
+  fail("ROUTEONE_WEB_BUNDLE_VERSION contains unsupported characters.");
+}
+
 const createdAt = new Date().toISOString();
-const publicBaseUrl = trimTrailingSlashes(env.R2_PUBLIC_BASE_URL || "");
+const publicBaseUrl = trimTrailingSlashes(required("R2_PUBLIC_BASE_URL"));
 const tmpRoot = mkdtempSync(join(tmpdir(), "routeone-web-bundle-"));
-const bundleFileName = `web-${safeVersion}.zip`;
+const bundleFileName = "web-ui.zip";
 const bundlePath = join(tmpRoot, bundleFileName);
-const bundleKey = joinKey(prefix, channel, "bundles", bundleFileName);
-const manifestKey = joinKey(prefix, channel, "manifest.json");
-const versionsKey = joinKey(prefix, channel, "versions.json");
-const existingVersionsPath = join(tmpRoot, "versions.json");
+const releasePrefix = joinKey("releases", version);
+const bundleKey = joinKey(releasePrefix, bundleFileName);
+const entryKey = joinKey(releasePrefix, "index.html");
+const releaseManifestKey = joinKey(releasePrefix, "manifest.json");
+const latestManifestKey = joinKey("latest", "manifest.json");
 const manifestPath = join(tmpRoot, "manifest.json");
-const nextVersionsPath = join(tmpRoot, "next-versions.json");
 
 try {
   assertDistDir();
   zipDist();
 
-  const bundleStat = statSync(bundlePath);
+  const minimumNativeVersion = readMinimumNativeVersion();
   const manifest = {
-    schemaVersion: 1,
-    channel,
-    web: {
-      version,
-      buildNumber,
-      bundleKey,
-      bundleUrl: publicBaseUrl ? `${publicBaseUrl}/${bundleKey}` : null,
-      sha256: sha256(bundlePath),
-      sizeBytes: bundleStat.size,
-      createdAt,
-      git: {
-        branch: env.GITHUB_REF_NAME || null,
-        commit: env.GITHUB_SHA || null,
-        runNumber: env.GITHUB_RUN_NUMBER || null,
-        runId: env.GITHUB_RUN_ID || null
-      }
-    },
-    native: readNativeVersions(),
-    retention: {
-      maxBundles: retention
-    }
+    version,
+    bundleUrl: `${publicBaseUrl}/${bundleKey}`,
+    entryUrl: `${publicBaseUrl}/${entryKey}`,
+    sha256: sha256(bundlePath),
+    createdAt,
+    minimumNativeVersion
   };
 
   uploadFile(bundlePath, bundleKey, "application/zip", "public, max-age=31536000, immutable");
-
-  const versions = buildNextVersions(manifest);
   writeJson(manifestPath, manifest);
-  writeJson(nextVersionsPath, versions);
-  uploadFile(manifestPath, manifestKey, "application/json", "no-store");
-  uploadFile(nextVersionsPath, versionsKey, "application/json", "no-store");
-  pruneBundles(versions);
+  uploadFile(
+    manifestPath,
+    releaseManifestKey,
+    "application/json",
+    "public, max-age=31536000, immutable"
+  );
+  uploadFile(manifestPath, latestManifestKey, "application/json", "no-store");
+  pruneReleases();
 
   console.log(`Published ${bundleKey}`);
-  console.log(`Updated ${manifestKey}`);
-  console.log(`Updated ${versionsKey}`);
+  console.log(`Published ${releaseManifestKey}`);
+  console.log(`Updated ${latestManifestKey}`);
 } finally {
   rmSync(tmpRoot, { force: true, recursive: true });
 }
@@ -105,16 +93,6 @@ function required(name, transform = (value) => value) {
   }
 
   return transform(value);
-}
-
-function readChannel() {
-  const value = env.ROUTEONE_WEB_BUNDLE_CHANNEL?.trim().toLowerCase();
-
-  if (value === "dev" || value === "prod") {
-    return value;
-  }
-
-  fail('ROUTEONE_WEB_BUNDLE_CHANNEL must be "dev" or "prod".');
 }
 
 function readPositiveInteger(name, fallback) {
@@ -151,83 +129,34 @@ function uploadFile(sourcePath, key, contentType, cacheControl) {
   ]);
 }
 
-function buildNextVersions(manifest) {
-  const current = readExistingVersions();
-  const nextEntry = {
-    channel: manifest.channel,
-    web: manifest.web,
-    native: manifest.native
-  };
-  const seenKeys = new Set([manifest.web.bundleKey]);
-  const entries = [nextEntry];
+function pruneReleases() {
+  const releases = listReleases();
+  const keepVersions = new Set([version]);
 
-  for (const item of current) {
-    const key = item?.web?.bundleKey;
-
-    if (!key || seenKeys.has(key)) {
-      continue;
-    }
-
-    entries.push(item);
-    seenKeys.add(key);
-
-    if (entries.length >= retention) {
+  for (const release of releases) {
+    if (keepVersions.size >= retention) {
       break;
     }
+
+    keepVersions.add(release.version);
   }
 
-  return {
-    schemaVersion: 1,
-    channel,
-    updatedAt: manifest.web.createdAt,
-    latest: nextEntry,
-    versions: entries
-  };
-}
-
-function readExistingVersions() {
-  const result = runAws(
-    ["s3", "cp", `s3://${bucketName}/${versionsKey}`, existingVersionsPath],
-    { allowFailure: true, capture: true }
-  );
-
-  if (result.status !== 0 || !existsSync(existingVersionsPath)) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(existingVersionsPath, "utf8"));
-    return Array.isArray(parsed?.versions) ? parsed.versions : [];
-  } catch {
-    return [];
-  }
-}
-
-function pruneBundles(versions) {
-  const keepKeys = new Set(
-    versions.versions
-      .map((item) => item?.web?.bundleKey)
-      .filter((key) => typeof key === "string")
-  );
-  const objects = listBundleObjects();
-
-  for (const object of objects) {
-    if (keepKeys.size < retention) {
-      keepKeys.add(object.Key);
-    }
-  }
-
-  for (const object of objects) {
-    if (keepKeys.has(object.Key)) {
+  for (const release of releases) {
+    if (keepVersions.has(release.version)) {
       continue;
     }
 
-    runAws(["s3", "rm", `s3://${bucketName}/${object.Key}`]);
-    console.log(`Deleted old bundle ${object.Key}`);
+    runAws([
+      "s3",
+      "rm",
+      `s3://${bucketName}/${release.prefix}`,
+      "--recursive"
+    ]);
+    console.log(`Deleted old release ${release.prefix}`);
   }
 }
 
-function listBundleObjects() {
+function listReleases() {
   const result = runAws(
     [
       "s3api",
@@ -235,7 +164,7 @@ function listBundleObjects() {
       "--bucket",
       bucketName,
       "--prefix",
-      joinKey(prefix, channel, "bundles/")
+      "releases/"
     ],
     { capture: true, allowFailure: true }
   );
@@ -246,17 +175,38 @@ function listBundleObjects() {
 
   try {
     const parsed = JSON.parse(result.stdout);
-    return (parsed.Contents || [])
-      .filter((item) => typeof item.Key === "string" && item.Key.endsWith(".zip"))
-      .sort((a, b) => {
-        return new Date(b.LastModified || 0).getTime() - new Date(a.LastModified || 0).getTime();
-      });
+    const releases = new Map();
+
+    for (const item of parsed.Contents || []) {
+      if (typeof item.Key !== "string" || !item.Key.startsWith("releases/")) {
+        continue;
+      }
+
+      const releaseVersion = item.Key.slice("releases/".length).split("/")[0];
+
+      if (!releaseVersion) {
+        continue;
+      }
+
+      const modifiedAt = new Date(item.LastModified || 0).getTime();
+      const current = releases.get(releaseVersion);
+
+      if (!current || modifiedAt > current.modifiedAt) {
+        releases.set(releaseVersion, {
+          version: releaseVersion,
+          prefix: `releases/${releaseVersion}/`,
+          modifiedAt
+        });
+      }
+    }
+
+    return [...releases.values()].sort((a, b) => b.modifiedAt - a.modifiedAt);
   } catch {
     return [];
   }
 }
 
-function readNativeVersions() {
+function readMinimumNativeVersion() {
   const configPath = env.ROUTEONE_NATIVE_CONFIG_PATH
     ? resolve(env.ROUTEONE_NATIVE_CONFIG_PATH)
     : null;
@@ -264,24 +214,17 @@ function readNativeVersions() {
     ? readExpoConfig(configPath)
     : {};
   const nativeVersion = env.ROUTEONE_NATIVE_VERSION?.trim() || expoConfig.version || null;
+  const iosVersion = env.ROUTEONE_IOS_NATIVE_VERSION?.trim() || nativeVersion;
+  const androidVersion =
+    env.ROUTEONE_ANDROID_NATIVE_VERSION?.trim() || nativeVersion;
+
+  if (!iosVersion || !androidVersion) {
+    fail("Native iOS and Android versions are required.");
+  }
 
   return {
-    ios: {
-      version: env.ROUTEONE_IOS_NATIVE_VERSION?.trim() || nativeVersion,
-      buildNumber:
-        env.ROUTEONE_IOS_BUILD_NUMBER?.trim() ||
-        expoConfig.ios?.buildNumber ||
-        null,
-      bundleIdentifier: expoConfig.ios?.bundleIdentifier || null
-    },
-    android: {
-      version: env.ROUTEONE_ANDROID_NATIVE_VERSION?.trim() || nativeVersion,
-      versionCode: readOptionalInteger(
-        env.ROUTEONE_ANDROID_VERSION_CODE?.trim(),
-        expoConfig.android?.versionCode ?? null
-      ),
-      package: expoConfig.android?.package || null
-    }
+    ios: iosVersion,
+    android: androidVersion
   };
 }
 
@@ -292,20 +235,6 @@ function readExpoConfig(configPath) {
   } catch {
     fail(`Failed to read native config JSON: ${configPath}`);
   }
-}
-
-function readOptionalInteger(rawValue, fallback) {
-  if (!rawValue) {
-    return fallback;
-  }
-
-  const value = Number.parseInt(rawValue, 10);
-
-  if (!Number.isInteger(value) || value < 1) {
-    fail("ROUTEONE_ANDROID_VERSION_CODE must be a positive integer.");
-  }
-
-  return value;
 }
 
 function runAws(args, options = {}) {
@@ -367,10 +296,6 @@ function joinKey(...segments) {
     .map((segment) => segment.trim())
     .filter(Boolean)
     .join("/");
-}
-
-function trimSlashes(value) {
-  return value.replace(/^\/+|\/+$/g, "");
 }
 
 function trimTrailingSlashes(value) {
