@@ -28,6 +28,18 @@ declare global {
       routerMode?: "browser" | "hash";
     };
     RouteOneNative?: {
+      getAppInfo?: () => Promise<{
+        platform: string;
+        appVersion?: string | null;
+        buildNumber?: string | null;
+        runtimeVersion?: string | null;
+        osVersion?: string | null;
+        bundleIdentifier?: string | null;
+        webBundleVersion?: string | null;
+        webBundleKind?: "embedded" | "installed" | null;
+        webBundleChannel?: string | null;
+        appVariant?: string | null;
+      }>;
       syncRouteArrivalNotifications?: (options: {
         places: RouteOneNativeArrivalNotificationPlace[];
         radiusMeters?: number;

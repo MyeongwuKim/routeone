@@ -48,7 +48,6 @@ const bundleFileName = "web-ui.zip";
 const bundlePath = join(tmpRoot, bundleFileName);
 const releasePrefix = joinKey("releases", version);
 const bundleKey = joinKey(releasePrefix, bundleFileName);
-const entryKey = joinKey(releasePrefix, "index.html");
 const releaseManifestKey = joinKey(releasePrefix, "manifest.json");
 const latestManifestKey = joinKey("latest", "manifest.json");
 const manifestPath = join(tmpRoot, "manifest.json");
@@ -61,9 +60,10 @@ try {
   const manifest = {
     version,
     bundleUrl: `${publicBaseUrl}/${bundleKey}`,
-    entryUrl: `${publicBaseUrl}/${entryKey}`,
+    entryPath: "index.html",
     sha256: sha256(bundlePath),
     createdAt,
+    runtimeReadySignal: true,
     minimumNativeVersion
   };
 

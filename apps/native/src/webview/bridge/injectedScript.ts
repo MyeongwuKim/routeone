@@ -101,6 +101,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 
   var originalFetch = window.fetch.bind(window);
   var pendingRequests = Object.create(null);
+  var pendingAppInfoRequests = Object.create(null);
   var pendingLocationRequests = Object.create(null);
   var pendingPhotoRequests = Object.create(null);
   var pendingPhotoUploadRequests = Object.create(null);
@@ -170,6 +171,14 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
         return false;
       }
 
+      if (
+        url.protocol === "file:" &&
+        window.location.protocol === "file:" &&
+        url.pathname === window.location.pathname
+      ) {
+        return false;
+      }
+
       if (url.protocol !== "http:" && url.protocol !== "https:") {
         return true;
       }
@@ -226,6 +235,34 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 
     return normalized;
   }
+
+  window.__ROUTEONE_NATIVE_APP_INFO_RESPONSE__ = function handleNativeAppInfoResponse(id, payload) {
+    var handlers = pendingAppInfoRequests[id];
+
+    if (!handlers) {
+      return;
+    }
+
+    delete pendingAppInfoRequests[id];
+
+    if (!payload || !payload.ok) {
+      handlers.reject(new Error((payload && payload.error) || "Native app info failed"));
+      return;
+    }
+
+    handlers.resolve({
+      platform: payload.platform,
+      appVersion: payload.appVersion,
+      buildNumber: payload.buildNumber,
+      runtimeVersion: payload.runtimeVersion,
+      osVersion: payload.osVersion,
+      bundleIdentifier: payload.bundleIdentifier,
+      webBundleVersion: payload.webBundleVersion,
+      webBundleKind: payload.webBundleKind,
+      webBundleChannel: payload.webBundleChannel,
+      appVariant: payload.appVariant
+    });
+  };
 
   window.__ROUTEONE_NATIVE_FETCH_RESPONSE__ = function handleNativeFetchResponse(id, payload) {
     var handlers = pendingRequests[id];
@@ -358,6 +395,24 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   };
 
   window.RouteOneNative = Object.assign({}, window.RouteOneNative, {
+    getAppInfo: function getAppInfo() {
+      if (!window.ReactNativeWebView) {
+        return Promise.reject(new Error("Native bridge is not available"));
+      }
+
+      var requestId = "native-app-info-" + Date.now() + "-" + requestSeq++;
+
+      return new Promise(function routeOneNativeAppInfo(resolve, reject) {
+        pendingAppInfoRequests[requestId] = { resolve: resolve, reject: reject };
+
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: "routeone:native-app-info",
+            id: requestId
+          })
+        );
+      });
+    },
     getCurrentPosition: function getCurrentPosition() {
       if (!window.ReactNativeWebView) {
         return Promise.reject(new Error("Native bridge is not available"));

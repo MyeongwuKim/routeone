@@ -1,4 +1,5 @@
 import type {
+  NativeAppInfoResponse,
   NativeFetchResponse,
   NativeLocationResponse,
   NativePhotoUploadResponse,
@@ -7,6 +8,19 @@ import type {
   NativeSaveImageResponse,
   WebViewRef,
 } from "./types";
+
+export function postNativeAppInfoResponse(
+  webViewRef: WebViewRef,
+  id: string,
+  payload: NativeAppInfoResponse
+) {
+  postNativeResponse(
+    webViewRef,
+    "__ROUTEONE_NATIVE_APP_INFO_RESPONSE__",
+    id,
+    payload
+  );
+}
 
 function postNativeResponse(
   webViewRef: WebViewRef,

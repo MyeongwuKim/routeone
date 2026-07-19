@@ -94,6 +94,15 @@ const googleIosUrlScheme =
     : "");
 const plugins: unknown[] = [
   [
+    "expo-splash-screen",
+    {
+      backgroundColor: "#f7faf9",
+      image: "./assets/splash-icon.png",
+      imageWidth: 280,
+      resizeMode: "contain"
+    }
+  ],
+  [
     "expo-location",
     {
       isAndroidBackgroundLocationEnabled: true,
@@ -143,6 +152,7 @@ export default {
     name: appDisplayName,
     slug: appSlug,
     version: appVersion,
+    icon: "./assets/icon.png",
     orientation: "portrait",
     scheme: appScheme,
     userInterfaceStyle: "light",
@@ -183,6 +193,10 @@ export default {
       package: appBundleIdentifier,
       versionCode: androidVersionCode,
       edgeToEdgeEnabled: true,
+      adaptiveIcon: {
+        foregroundImage: "./assets/splash-icon.png",
+        backgroundColor: "#f7faf9"
+      },
       permissions: [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",

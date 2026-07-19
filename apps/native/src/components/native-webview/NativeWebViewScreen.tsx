@@ -1,14 +1,20 @@
 import * as Notifications from "expo-notifications";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   StatusBar,
   StyleSheet,
   Text,
   View
 } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
-import { WEB_BUNDLE_HTML } from "../../generated/webBundle";
+import { INITIAL_WEB_BUNDLE_PROGRESS } from "../../webBundle/webBundleProgress";
+import {
+  markResolvedWebBundleReady,
+  resolveWebBundle,
+  rollbackResolvedWebBundle,
+  type ResolvedWebBundle
+} from "../../webBundle/webBundleLoader";
+import type { WebBundleProgress } from "../../webBundle/webBundleTypes";
 import {
   handleNativeBridgeMessage,
   ROUTEONE_WEBVIEW_BRIDGE_SCRIPT
@@ -17,6 +23,7 @@ import {
   openNativeExternalUrl,
   shouldKeepUrlInWebView
 } from "../../webview/bridge/externalLinkBridge";
+import RouteOneLaunchScreen from "./RouteOneLaunchScreen";
 
 type NativeWebViewScreenProps = {
   nativeAuthToken: string | null;
@@ -85,8 +92,14 @@ export default function NativeWebViewScreen({
 }: NativeWebViewScreenProps) {
   const webViewRef = useRef<WebView>(null);
   const pendingNavigationPathRef = useRef<string | null>(null);
+  const rollbackInProgressRef = useRef(false);
+  const [resolvedBundle, setResolvedBundle] =
+    useState<ResolvedWebBundle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [bundleProgress, setBundleProgress] = useState<WebBundleProgress>(
+    INITIAL_WEB_BUNDLE_PROGRESS
+  );
   const injectedScript = useMemo(() => {
     const authScript = nativeAuthToken
       ? `try { window.localStorage.setItem(${JSON.stringify(
@@ -97,9 +110,36 @@ export default function NativeWebViewScreen({
     return `${authScript}\n${ROUTEONE_WEBVIEW_BRIDGE_SCRIPT}`;
   }, [nativeAuthToken]);
 
-  const handleMessage = useCallback((event: WebViewMessageEvent) => {
-    void handleNativeBridgeMessage(event, webViewRef);
-  }, []);
+  const handleMessage = useCallback(
+    (event: WebViewMessageEvent) => {
+      try {
+        const message = JSON.parse(event.nativeEvent.data) as {
+          type?: unknown;
+        };
+
+        if (message.type === "routeone:web-bundle-ready" && resolvedBundle) {
+          setBundleProgress({
+            stage: "ready",
+            progress: 1,
+            message: "준비가 끝났어요."
+          });
+          setLoadError(null);
+          setIsLoading(false);
+          void markResolvedWebBundleReady(resolvedBundle).catch((error) => {
+            console.warn("[web-bundle] failed to confirm ready bundle", error);
+          });
+        }
+      } catch {
+        // Other bridge handlers perform their own message validation.
+      }
+
+      void handleNativeBridgeMessage(event, webViewRef, {
+        webBundleVersion: resolvedBundle?.version ?? null,
+        webBundleKind: resolvedBundle?.kind ?? "embedded"
+      });
+    },
+    [resolvedBundle]
+  );
 
   const injectNavigationPath = useCallback((path: string) => {
     webViewRef.current?.injectJavaScript(createWebViewNavigationScript(path));
@@ -161,43 +201,162 @@ export default function NativeWebViewScreen({
     []
   );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void resolveWebBundle((progress) => {
+      if (!cancelled) {
+        setBundleProgress(progress);
+      }
+    })
+      .then((bundle) => {
+        if (!cancelled) {
+          setBundleProgress({
+            stage: "loading",
+            progress: 0.93,
+            message: "RouteOne을 불러오고 있어요."
+          });
+          setResolvedBundle(bundle);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLoadError(
+            error instanceof Error ? error.message : "웹 번들을 준비하지 못했어요."
+          );
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleLoadError = useCallback(
+    (description: string) => {
+      if (
+        !resolvedBundle ||
+        resolvedBundle.kind !== "installed" ||
+        rollbackInProgressRef.current
+      ) {
+        setLoadError(description);
+        setIsLoading(false);
+        return;
+      }
+
+      rollbackInProgressRef.current = true;
+      setBundleProgress({
+        stage: "rollback",
+        progress: 0.92,
+        message: "이전 버전으로 복구하고 있어요."
+      });
+      void rollbackResolvedWebBundle(resolvedBundle)
+        .then((fallbackBundle) => {
+          setLoadError(null);
+          setIsLoading(true);
+          setBundleProgress({
+            stage: "loading",
+            progress: 0.94,
+            message: "RouteOne을 다시 불러오고 있어요."
+          });
+          setResolvedBundle(fallbackBundle);
+        })
+        .catch((error) => {
+          setLoadError(
+            error instanceof Error ? error.message : description
+          );
+          setIsLoading(false);
+        })
+        .finally(() => {
+          rollbackInProgressRef.current = false;
+        });
+    },
+    [resolvedBundle]
+  );
+
   return (
     <View style={styles.webViewContainer}>
       <StatusBar barStyle="dark-content" />
-      <WebView
-        ref={webViewRef}
-        source={{
-          html: WEB_BUNDLE_HTML,
-          baseUrl: "https://routeone.native/"
-        }}
-        style={styles.webView}
-        originWhitelist={["*"]}
-        injectedJavaScriptBeforeContentLoaded={injectedScript}
-        javaScriptEnabled
-        domStorageEnabled
-        allowsInlineMediaPlayback
-        allowFileAccess
-        allowUniversalAccessFromFileURLs
-        mixedContentMode="always"
-        setSupportMultipleWindows={false}
-        bounces={false}
-        overScrollMode="never"
-        onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
-        onLoadStart={() => {
-          setIsLoading(true);
-          setLoadError(null);
-        }}
-        onLoadEnd={() => setIsLoading(false)}
-        onError={(event) => {
-          setLoadError(event.nativeEvent.description);
-          setIsLoading(false);
-        }}
-        onMessage={handleMessage}
-      />
-      {isLoading ? (
+      {resolvedBundle ? (
+        <WebView
+          key={resolvedBundle.key}
+          ref={webViewRef}
+          source={resolvedBundle.source}
+          allowingReadAccessToURL={resolvedBundle.allowingReadAccessToUrl}
+          style={styles.webView}
+          originWhitelist={["*"]}
+          injectedJavaScriptBeforeContentLoaded={injectedScript}
+          javaScriptEnabled
+          domStorageEnabled
+          allowsInlineMediaPlayback
+          allowFileAccess
+          allowUniversalAccessFromFileURLs
+          mixedContentMode="always"
+          setSupportMultipleWindows={false}
+          bounces={false}
+          overScrollMode="never"
+          onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+          onLoadStart={() => {
+            setIsLoading(true);
+            setLoadError(null);
+            setBundleProgress({
+              stage: "loading",
+              progress: 0.95,
+              message: "RouteOne을 불러오고 있어요."
+            });
+          }}
+          onLoadProgress={(event) => {
+            setBundleProgress((current) => {
+              if (current.stage === "ready") {
+                return current;
+              }
+
+              return {
+                stage: "loading",
+                progress: Math.max(
+                  current.progress,
+                  0.95 + event.nativeEvent.progress * 0.03
+                ),
+                message: "RouteOne을 불러오고 있어요."
+              };
+            });
+          }}
+          onLoadEnd={() => {
+            if (resolvedBundle.readySignalRequired) {
+              setBundleProgress({
+                stage: "loading",
+                progress: 0.98,
+                message: "화면을 마무리하고 있어요."
+              });
+              return;
+            }
+
+            setBundleProgress({
+              stage: "ready",
+              progress: 1,
+              message: "준비가 끝났어요."
+            });
+            setIsLoading(false);
+            void markResolvedWebBundleReady(resolvedBundle).catch((error) => {
+              console.warn(
+                "[web-bundle] failed to confirm loaded bundle",
+                error
+              );
+            });
+          }}
+          onError={(event) => {
+            handleLoadError(event.nativeEvent.description);
+          }}
+          onMessage={handleMessage}
+        />
+      ) : null}
+      {isLoading || !resolvedBundle ? (
         <View style={styles.overlay}>
-          <ActivityIndicator color="#0f766e" />
-          <Text style={styles.overlayText}>RouteOne 준비 중이에요.</Text>
+          <RouteOneLaunchScreen
+            message={bundleProgress.message}
+            progress={bundleProgress.progress}
+          />
         </View>
       ) : null}
       {loadError ? (
@@ -225,15 +384,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    backgroundColor: "#ffffff"
-  },
-  overlayText: {
-    color: "#0f766e",
-    fontSize: 14,
-    fontWeight: "700"
+    backgroundColor: "#f7faf9"
   },
   errorPanel: {
     position: "absolute",

@@ -5,6 +5,10 @@ export type RouteOneAppInfo = {
   runtimeVersion?: string | null;
   osVersion?: string | null;
   bundleIdentifier?: string | null;
+  webBundleVersion?: string | null;
+  webBundleKind?: "embedded" | "installed" | null;
+  webBundleChannel?: string | null;
+  appVariant?: string | null;
 };
 
 type RouteOneNativeBridge = {
@@ -35,6 +39,8 @@ export async function getRouteOneAppInfo(): Promise<RouteOneAppInfo> {
       platform: "native",
       appVersion: null,
       buildNumber: null,
+      webBundleVersion: null,
+      webBundleKind: null,
     };
   }
 
@@ -42,5 +48,7 @@ export async function getRouteOneAppInfo(): Promise<RouteOneAppInfo> {
     platform: "web",
     appVersion: import.meta.env.VITE_APP_VERSION ?? null,
     buildNumber: null,
+    webBundleVersion: import.meta.env.VITE_APP_VERSION ?? null,
+    webBundleKind: null,
   };
 }

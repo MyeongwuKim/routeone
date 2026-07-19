@@ -7,6 +7,7 @@ on:
       - develop
     paths:
       - "apps/web/**"
+      - "apps/native/app.config.ts"
       - ".github/workflows/publish-web-bundle-r2.yml"
       - "scripts/publish-web-bundle-r2.mjs"
       - "package.json"
@@ -108,6 +109,8 @@ jobs:
           echo "R2_PUBLIC_BASE_URL=${SELECTED_R2_PUBLIC_BASE_URL}" >> "${GITHUB_ENV}"
 
       - name: Build web
+        env:
+          ROUTEONE_NATIVE_WEB_BUNDLE: "1"
         run: pnpm build:web
 
       - name: Export native version config

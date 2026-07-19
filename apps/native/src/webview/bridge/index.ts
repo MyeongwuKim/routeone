@@ -1,10 +1,12 @@
 import type { WebViewMessageEvent } from "react-native-webview";
+import { handleNativeAppInfoRequest } from "./appInfoBridge";
 import { handleNativeAuthTokenMessage } from "./authTokenBridge";
 import { handleNativeExternalUrlRequest } from "./externalLinkBridge";
 import { handleNativeFetchRequest, NATIVE_GRAPHQL_ENDPOINT } from "./fetchBridge";
 import { ROUTEONE_WEBVIEW_BRIDGE_SCRIPT } from "./injectedScript";
 import { handleNativeLocationRequest } from "./locationBridge";
 import {
+  isNativeAppInfoRequest,
   isNativeAuthTokenMessage,
   isNativeBridgeReadyMessage,
   isNativeExternalUrlRequest,
@@ -17,7 +19,7 @@ import {
 } from "./messageGuards";
 import { handleNativeRouteArrivalNotificationSyncRequest } from "./routeArrivalNotificationBridge";
 import { handleNativeSaveImageRequest } from "./saveImageBridge";
-import type { WebViewRef } from "./types";
+import type { NativeAppInfoContext, WebViewRef } from "./types";
 import {
   handleNativePhotoRequest,
   handleNativePhotoUploadRequest,
@@ -27,7 +29,8 @@ export { ROUTEONE_WEBVIEW_BRIDGE_SCRIPT };
 
 export async function handleNativeBridgeMessage(
   event: WebViewMessageEvent,
-  webViewRef: WebViewRef
+  webViewRef: WebViewRef,
+  appInfoContext: NativeAppInfoContext
 ) {
   let message: unknown;
 
@@ -46,6 +49,11 @@ export async function handleNativeBridgeMessage(
 
   if (isNativeAuthTokenMessage(message)) {
     await handleNativeAuthTokenMessage(message);
+    return;
+  }
+
+  if (isNativeAppInfoRequest(message)) {
+    handleNativeAppInfoRequest(message, webViewRef, appInfoContext);
     return;
   }
 

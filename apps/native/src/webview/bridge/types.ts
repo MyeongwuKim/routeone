@@ -28,6 +28,16 @@ export type NativeAuthTokenMessage = {
   token?: string | null;
 };
 
+export type NativeAppInfoRequest = {
+  type: "routeone:native-app-info";
+  id: string;
+};
+
+export type NativeAppInfoContext = {
+  webBundleVersion: string | null;
+  webBundleKind: "embedded" | "installed";
+};
+
 export type NativeLocationRequest = {
   type: "routeone:native-location-current";
   id: string;
@@ -167,3 +177,17 @@ export type NativeSaveImageResponse =
       ok: false;
       error: string;
     };
+
+export type NativeAppInfoResponse = {
+  ok: true;
+  platform: string;
+  appVersion: string | null;
+  buildNumber: string | null;
+  runtimeVersion: string | null;
+  osVersion: string | null;
+  bundleIdentifier: string | null;
+  webBundleVersion: string | null;
+  webBundleKind: NativeAppInfoContext["webBundleKind"];
+  webBundleChannel: string;
+  appVariant: string;
+};

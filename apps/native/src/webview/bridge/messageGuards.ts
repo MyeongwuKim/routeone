@@ -1,4 +1,5 @@
 import type {
+  NativeAppInfoRequest,
   NativeBridgeReadyMessage,
   NativeAuthTokenMessage,
   NativeExternalUrlRequest,
@@ -10,6 +11,21 @@ import type {
   NativeRouteArrivalNotificationSyncRequest,
   NativeSaveImageRequest,
 } from "./types";
+
+export function isNativeAppInfoRequest(
+  value: unknown
+): value is NativeAppInfoRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeRequest = value as Partial<NativeAppInfoRequest>;
+
+  return (
+    maybeRequest.type === "routeone:native-app-info" &&
+    typeof maybeRequest.id === "string"
+  );
+}
 
 export function isNativeFetchRequest(
   value: unknown

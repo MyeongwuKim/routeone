@@ -107,6 +107,16 @@ EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV=https://dev-cdn.example.com/latest/manif
 EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD=https://cdn.example.com/latest/manifest.json
 ```
 
+## 앱 버전 브릿지
+
+WebView에서는 `window.RouteOneNative.getAppInfo()`로 현재 네이티브 앱과 웹 번들 정보를 조회할 수 있어요.
+
+```ts
+const appInfo = await window.RouteOneNative?.getAppInfo?.();
+```
+
+응답에는 `platform`, `osVersion`, `appVersion`, `buildNumber`, `runtimeVersion`, `bundleIdentifier`, `webBundleVersion`, `webBundleKind`, `webBundleChannel`, `appVariant`가 포함돼요. 원격으로 설치한 웹 번들은 manifest의 `version`을 반환하고, 앱 내장 번들은 `webBundleVersion`이 `null`이며 `webBundleKind`가 `embedded`로 반환돼요.
+
 ## 웹 번들 R2 배포
 
 `main` 브랜치에 push하면 `prod`, `develop` 브랜치에 push하면 `dev` 채널 웹 번들을 GitHub Actions에서 빌드하고 각각의 R2 버킷에 업로드해요.
@@ -126,7 +136,9 @@ releases/
     └── web-ui.zip
 ```
 
-`latest/manifest.json`은 최신 release의 manifest와 같은 내용을 담고, 네이티브 앱이 최신 웹 버전과 다운로드 주소를 확인할 때 사용해요. release manifest에는 `version`, `bundleUrl`, `entryUrl`, `sha256`, `createdAt`, `minimumNativeVersion`이 들어가요.
+`latest/manifest.json`은 최신 release의 manifest와 같은 내용을 담고, 네이티브 앱이 최신 웹 버전과 다운로드 주소를 확인할 때 사용해요. release manifest에는 `version`, `bundleUrl`, `entryPath`, `sha256`, `createdAt`, `runtimeReadySignal`, `minimumNativeVersion`이 들어가요.
+
+앱은 시작할 때 manifest 버전과 최소 네이티브 버전을 확인하고, 새 ZIP의 SHA-256을 검증한 뒤 앱 문서 디렉터리에 압축을 풀어요. 새 번들이 처음 로드되지 않으면 직전 로컬 번들로 되돌아가고, 저장된 번들이 없으면 앱에 내장된 웹 번들을 사용해요.
 
 버전 폴더명은 기본적으로 `1.0.{GitHub Actions 실행번호}` 형식이에요. Repository variable `ROUTEONE_WEB_VERSION_PREFIX`를 바꾸면 `1.1.{실행번호}`처럼 앞자리를 변경할 수 있고, Actions에서 수동 실행할 때는 `version` 입력값으로 정확한 버전을 지정할 수 있어요.
 

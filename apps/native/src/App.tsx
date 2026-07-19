@@ -1,9 +1,8 @@
-import { SafeAreaView, StatusBar, StyleSheet } from "react-native";
+import { SafeAreaView, StatusBar, StyleSheet, View } from "react-native";
 import NativeLoginStep from "./components/native-onboarding/NativeLoginStep";
-import NativeOnboardingStep, {
-  NativeOnboardingLoading
-} from "./components/native-onboarding/NativeOnboardingStep";
+import NativeOnboardingStep from "./components/native-onboarding/NativeOnboardingStep";
 import NativeWebViewScreen from "./components/native-webview/NativeWebViewScreen";
+import RouteOneLaunchScreen from "./components/native-webview/RouteOneLaunchScreen";
 import { useNativeBoot } from "./boot/useNativeBoot";
 import { useNativeLogin } from "./auth/useNativeLogin";
 
@@ -22,10 +21,13 @@ export default function App() {
 
   if (bootStep === "checking") {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" />
-        <NativeOnboardingLoading />
-      </SafeAreaView>
+      <View style={styles.launchContainer}>
+        <StatusBar barStyle="dark-content" backgroundColor="#f7faf9" />
+        <RouteOneLaunchScreen
+          message="앱을 준비하고 있어요."
+          progress={0.06}
+        />
+      </View>
     );
   }
 
@@ -88,6 +90,10 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  launchContainer: {
+    flex: 1,
+    backgroundColor: "#f7faf9"
+  },
   container: {
     flex: 1,
     backgroundColor: "#ffffff"

@@ -380,7 +380,7 @@ function MyRoutePage() {
     myRoutesQuery.isError,
     myRoutesQuery.isLoading,
   ]);
-  useEffect(() => {
+  const deepLinkedRouteDay = useMemo(() => {
     if (
       !deepLinkRouteId ||
       !deepLinkDayId ||
@@ -388,7 +388,7 @@ function MyRoutePage() {
       isMyRouteLocalizationLoading ||
       myRoutesQuery.isError
     ) {
-      return;
+      return null;
     }
 
     const route = localizedMyRoutes.find(
@@ -398,23 +398,12 @@ function MyRoutePage() {
       (candidateDay) => candidateDay.id === deepLinkDayId
     );
 
-    if (!route || !day) {
-      return;
-    }
-
-    setSelectedDayRoute((currentRoute) => {
-      if (
-        currentRoute?.routeId === deepLinkRouteId &&
-        currentRoute.dayId === deepLinkDayId
-      ) {
-        return currentRoute;
-      }
-
-      return {
-        routeId: deepLinkRouteId,
-        dayId: deepLinkDayId,
-      };
-    });
+    return route && day
+      ? {
+          route,
+          day,
+        }
+      : null;
   }, [
     deepLinkDayId,
     deepLinkRouteId,
@@ -424,6 +413,10 @@ function MyRoutePage() {
     myRoutesQuery.isLoading,
   ]);
   const selectedRouteDay = useMemo(() => {
+    if (deepLinkedRouteDay) {
+      return deepLinkedRouteDay;
+    }
+
     if (!selectedDayRoute) {
       return null;
     }
@@ -446,13 +439,17 @@ function MyRoutePage() {
           day,
         }
       : null;
-  }, [localizedMyRoutes, selectedDayRoute]);
+  }, [deepLinkedRouteDay, localizedMyRoutes, selectedDayRoute]);
   const hasRoutes = routeGroups.totalCount > 0;
+  const selectDayRoute = useCallback(
+    (routeId: string, dayId: string) => {
+      clearRouteDeepLinkSearchParams();
+      setSelectedDayRoute({ routeId, dayId });
+    },
+    [clearRouteDeepLinkSearchParams]
+  );
   const handleSelectDay = (selectedRoute: MyRoute, day: MyRouteDay) =>
-    setSelectedDayRoute({
-      routeId: selectedRoute.id,
-      dayId: day.id,
-    });
+    selectDayRoute(selectedRoute.id, day.id);
   const handleCloseSelectedDayRoute = () => {
     setSelectedDayRoute(null);
     clearRouteDeepLinkSearchParams();
@@ -476,10 +473,7 @@ function MyRoutePage() {
               label: text.myRoute.viewConflictingRoute,
               variant: "secondary" as const,
               onClick: () =>
-                setSelectedDayRoute({
-                  routeId: conflictingRoute.id,
-                  dayId: selectableDay.id,
-                }),
+                selectDayRoute(conflictingRoute.id, selectableDay.id),
             },
             {
               label: text.myRoute.conflictConfirm,

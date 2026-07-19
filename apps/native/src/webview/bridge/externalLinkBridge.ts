@@ -2,6 +2,7 @@ import { Linking } from "react-native";
 import type { NativeExternalUrlRequest } from "./types";
 
 const WEBVIEW_BASE_ORIGIN = "https://routeone.native";
+const LOCAL_WEB_BUNDLE_PATH = "/routeone-web-bundles/releases/";
 
 export function shouldKeepUrlInWebView(urlValue: string) {
   if (!urlValue) {
@@ -19,6 +20,13 @@ export function shouldKeepUrlInWebView(urlValue: string) {
 
   try {
     const url = new URL(urlValue, WEBVIEW_BASE_ORIGIN);
+
+    if (
+      url.protocol === "file:" &&
+      decodeURIComponent(url.pathname).includes(LOCAL_WEB_BUNDLE_PATH)
+    ) {
+      return true;
+    }
 
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       return false;

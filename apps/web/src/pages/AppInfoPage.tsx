@@ -46,6 +46,18 @@ function formatPlatform(platform: RouteOneAppInfo["platform"]) {
   return platform;
 }
 
+function formatWebBundleVersion(info: RouteOneAppInfo | null) {
+  if (!info) {
+    return null;
+  }
+
+  if (info.webBundleVersion) {
+    return info.webBundleVersion;
+  }
+
+  return info.webBundleKind === "embedded" ? "내장 번들" : null;
+}
+
 function AppInfoRow({
   label,
   value,
@@ -189,6 +201,13 @@ function AppInfoPage() {
         <AppInfoRow label="런타임 버전" value={appInfo?.runtimeVersion} />
         <div className="border-b border-brand-50" />
         <AppInfoRow label="OS 버전" value={appInfo?.osVersion} />
+        <div className="border-b border-brand-50" />
+        <AppInfoRow
+          label="웹 번들 버전"
+          value={formatWebBundleVersion(appInfo)}
+        />
+        <div className="border-b border-brand-50" />
+        <AppInfoRow label="업데이트 채널" value={appInfo?.webBundleChannel} />
         <div className="border-b border-brand-50" />
         <AppInfoRow label="번들 ID" value={appInfo?.bundleIdentifier} />
       </section>

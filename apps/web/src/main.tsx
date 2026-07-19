@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App.tsx";
+import NativeWebBundleReadySignal from "./components/NativeWebBundleReadySignal";
 import { isGraphQLRequestError } from "./lib/graphqlClient";
 import "./index.css";
 
@@ -46,6 +47,7 @@ function renderApp() {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <App />
+        <NativeWebBundleReadySignal />
       </QueryClientProvider>
     </StrictMode>
   );

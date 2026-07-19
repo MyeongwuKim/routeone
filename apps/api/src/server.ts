@@ -6,7 +6,7 @@ import {
   isDevVerificationBypassEnabled,
 } from "./lib/devVerification.js";
 
-const port = Number(process.env.API_PORT ?? 4000);
+const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
 const app = await buildApp();
 
 function getLanGraphqlUrls(port: number) {
