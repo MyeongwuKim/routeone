@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useColorScheme,
   View
 } from "react-native";
 import type { NativeLoginProvider } from "../../auth/nativeLoginTypes";
@@ -26,6 +27,55 @@ type NativeLoginStepProps = {
   onGoogleLogin: () => void;
   onAppleLogin: () => void;
 };
+
+const LOGIN_THEME = {
+  light: {
+    background: "#0f766e",
+    brandText: "#ffffff",
+    mutedText: "rgba(255, 255, 255, 0.76)",
+    buttonBorder: "rgba(255, 255, 255, 0.38)",
+    googleBackground: "#ffffff",
+    googlePressed: "#edf7f4",
+    googleText: "#111827",
+    appleBackground: "#111827",
+    applePressed: "#030712",
+    appleText: "#ffffff",
+    divider: "rgba(255, 255, 255, 0.26)",
+    inputBackground: "rgba(255, 255, 255, 0.94)",
+    inputBorder: "rgba(255, 255, 255, 0.28)",
+    inputText: "#0f172a",
+    placeholder: "#8ba19c",
+    passwordBackground: "#ffffff",
+    passwordPressed: "#def2ed",
+    passwordText: "#0f766e",
+    errorBackground: "#fff1f2",
+    errorBorder: "#fecdd3",
+    errorText: "#be123c"
+  },
+  dark: {
+    background: "#061918",
+    brandText: "#f8fafc",
+    mutedText: "rgba(226, 245, 241, 0.72)",
+    buttonBorder: "rgba(148, 216, 204, 0.18)",
+    googleBackground: "#eef7f4",
+    googlePressed: "#d7ebe5",
+    googleText: "#0f172a",
+    appleBackground: "#f8fafc",
+    applePressed: "#dbe4e1",
+    appleText: "#020617",
+    divider: "rgba(226, 245, 241, 0.2)",
+    inputBackground: "rgba(13, 36, 34, 0.9)",
+    inputBorder: "rgba(148, 216, 204, 0.22)",
+    inputText: "#f8fafc",
+    placeholder: "#78948f",
+    passwordBackground: "#14b8a6",
+    passwordPressed: "#0f9488",
+    passwordText: "#042f2e",
+    errorBackground: "#3a121b",
+    errorBorder: "#7f1d1d",
+    errorText: "#fecdd3"
+  }
+} as const;
 
 function getButtonLabel({
   provider,
@@ -53,7 +103,7 @@ function getAppleButtonLabel({
   }
 
   if (!appleAvailable) {
-    return "Apple 로그인 준비 중";
+    return "Apple 준비 중";
   }
 
   return getButtonLabel({
@@ -93,6 +143,8 @@ export default function NativeLoginStep({
   onGoogleLogin,
   onAppleLogin,
 }: NativeLoginStepProps) {
+  const colorScheme = useColorScheme();
+  const colors = LOGIN_THEME[colorScheme === "dark" ? "dark" : "light"];
   const isBusy = activeProvider !== null;
   const isAppleDisabled = isBusy || Platform.OS !== "ios" || !appleAvailable;
   const friendlyErrorMessage = errorMessage
@@ -102,56 +154,50 @@ export default function NativeLoginStep({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={styles.screen}
+      style={[styles.screen, { backgroundColor: colors.background }]}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <View style={styles.logoRow}>
-            <View style={styles.logoBadge}>
-              <Image
-                accessibilityIgnoresInvertColors
-                source={require("../../../assets/icon.png")}
-                style={styles.logoImage}
-              />
-            </View>
-            <View style={styles.headerText}>
-              <Text style={styles.eyebrow}>ROUTE ONE</Text>
-              <Text style={styles.title}>로그인</Text>
-            </View>
+        <View style={styles.brand}>
+          <View style={styles.logoBadge}>
+            <Image
+              accessibilityIgnoresInvertColors
+              source={require("../../../assets/splash-brand-icon.png")}
+              style={styles.logoImage}
+            />
           </View>
-          <Text style={styles.description}>계정으로 들어가 루트를 이어가세요.</Text>
+          <Text style={[styles.brandName, { color: colors.brandText }]}>
+            RouteOne
+          </Text>
         </View>
 
-        <View style={styles.surface}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>간편 로그인</Text>
-            <Text style={styles.sectionBadge}>권장</Text>
-          </View>
-
+        <View style={styles.authStack}>
           <Pressable
             accessibilityRole="button"
             disabled={isBusy}
             onPress={onGoogleLogin}
             style={({ pressed }) => [
-              styles.loginButton,
-              styles.googleButton,
+              styles.authButton,
+              {
+                backgroundColor: colors.googleBackground,
+                borderColor: colors.buttonBorder
+              },
               isBusy && styles.disabledButton,
-              pressed && styles.buttonPressed
+              pressed && { backgroundColor: colors.googlePressed }
             ]}
           >
             <View style={styles.providerMark}>
               {activeProvider === "google" ? (
-                <ActivityIndicator color="#111827" />
+                <ActivityIndicator color={colors.googleText} />
               ) : (
                 <Text style={styles.googleMark}>G</Text>
               )}
             </View>
             <View style={styles.loginButtonContent}>
-              <Text style={styles.googleButtonText}>
+              <Text style={[styles.buttonText, { color: colors.googleText }]}>
                 {getButtonLabel({
                   provider: "google",
                   activeProvider,
@@ -167,57 +213,89 @@ export default function NativeLoginStep({
             disabled={isAppleDisabled}
             onPress={onAppleLogin}
             style={({ pressed }) => [
-              styles.loginButton,
-              styles.appleButton,
+              styles.authButton,
+              {
+                backgroundColor: colors.appleBackground,
+                borderColor: colors.buttonBorder
+              },
               isAppleDisabled && styles.disabledButton,
-              pressed && styles.appleButtonPressed
+              pressed && { backgroundColor: colors.applePressed }
             ]}
           >
             <View style={styles.providerMark}>
               {activeProvider === "apple" ? (
-                <ActivityIndicator color="#ffffff" />
+                <ActivityIndicator color={colors.appleText} />
               ) : (
-                <Text style={styles.appleMark}></Text>
+                <Text style={[styles.appleMark, { color: colors.appleText }]}>
+                  
+                </Text>
               )}
             </View>
             <View style={styles.loginButtonContent}>
-              <Text style={styles.appleButtonText}>
+              <Text style={[styles.buttonText, { color: colors.appleText }]}>
                 {getAppleButtonLabel({ activeProvider, appleAvailable })}
               </Text>
             </View>
           </Pressable>
-        </View>
 
-        <View style={styles.surface}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>테스트 계정</Text>
-            <Text style={styles.sectionHint}>개발용</Text>
+          <View style={styles.dividerRow}>
+            <View
+              style={[styles.dividerLine, { backgroundColor: colors.divider }]}
+            />
+            <Text style={[styles.dividerText, { color: colors.mutedText }]}>
+              테스트 계정
+            </Text>
+            <View
+              style={[styles.dividerLine, { backgroundColor: colors.divider }]}
+            />
           </View>
+
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
             editable={!isBusy}
             onChangeText={onChangeAccountId}
             placeholder="아이디"
-            placeholderTextColor="#94a3b8"
-            style={styles.input}
+            placeholderTextColor={colors.placeholder}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.inputBorder,
+                color: colors.inputText
+              }
+            ]}
             value={accountId}
           />
           <TextInput
             editable={!isBusy}
             onChangeText={onChangePassword}
             placeholder="비밀번호"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.placeholder}
             secureTextEntry
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.inputBorder,
+                color: colors.inputText
+              }
+            ]}
             value={password}
           />
           <TextInput
             editable={!isBusy}
             onChangeText={onChangeDisplayName}
             placeholder="닉네임(선택)"
-            placeholderTextColor="#94a3b8"
-            style={styles.input}
+            placeholderTextColor={colors.placeholder}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.inputBorder,
+                color: colors.inputText
+              }
+            ]}
             value={displayName}
           />
           <Pressable
@@ -225,32 +303,50 @@ export default function NativeLoginStep({
             disabled={isBusy}
             onPress={onPasswordLogin}
             style={({ pressed }) => [
-              styles.loginButton,
-              styles.passwordButton,
+              styles.authButton,
+              {
+                backgroundColor: colors.passwordBackground,
+                borderColor: colors.buttonBorder
+              },
               isBusy && styles.disabledButton,
-              pressed && styles.passwordButtonPressed
+              pressed && { backgroundColor: colors.passwordPressed }
             ]}
           >
             <View style={styles.loginButtonContent}>
-              <Text style={styles.passwordButtonText}>
+              <Text style={[styles.buttonText, { color: colors.passwordText }]}>
                 {getButtonLabel({
                   provider: "password",
                   activeProvider,
-                  label: "기존 방식으로 로그인",
-                  loadingLabel: "로그인 중"
+                  label: "테스트 계정으로 계속",
+                  loadingLabel: "확인 중"
                 })}
               </Text>
             </View>
             {activeProvider === "password" ? (
-              <ActivityIndicator color="#ffffff" style={styles.buttonSpinner} />
+              <ActivityIndicator
+                color={colors.passwordText}
+                style={styles.buttonSpinner}
+              />
             ) : null}
           </Pressable>
         </View>
 
         {friendlyErrorMessage ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorTitle}>로그인에 실패했어요</Text>
-            <Text style={styles.errorText}>{friendlyErrorMessage}</Text>
+          <View
+            style={[
+              styles.errorBox,
+              {
+                backgroundColor: colors.errorBackground,
+                borderColor: colors.errorBorder
+              }
+            ]}
+          >
+            <Text style={[styles.errorTitle, { color: colors.errorText }]}>
+              계속 진행하지 못했어요
+            </Text>
+            <Text style={[styles.errorText, { color: colors.errorText }]}>
+              {friendlyErrorMessage}
+            </Text>
           </View>
         ) : null}
       </ScrollView>
@@ -260,135 +356,62 @@ export default function NativeLoginStep({
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
-    backgroundColor: "#f4f7f4"
+    flex: 1
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    gap: 14,
+    gap: 22,
     paddingHorizontal: 24,
-    paddingVertical: 26
+    paddingVertical: 34
   },
-  header: {
+  brand: {
     width: "100%",
     maxWidth: 380,
     alignSelf: "center",
-    gap: 14
-  },
-  logoRow: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: 12
+    marginBottom: 10
   },
   logoBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 13,
+    width: 210,
+    height: 210,
     alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    backgroundColor: "#e7f2ef"
+    justifyContent: "center"
   },
   logoImage: {
-    width: 52,
-    height: 52
+    width: 210,
+    height: 210,
+    resizeMode: "contain"
   },
-  headerText: {
-    flex: 1
-  },
-  eyebrow: {
-    color: "#0f766e",
-    fontSize: 12,
-    fontWeight: "900"
-  },
-  title: {
-    marginTop: 2,
-    color: "#111827",
-    fontSize: 26,
-    fontWeight: "900"
-  },
-  description: {
-    color: "#475569",
-    fontSize: 15,
-    fontWeight: "700",
-    lineHeight: 22
-  },
-  surface: {
-    width: "100%",
-    maxWidth: 380,
-    alignSelf: "center",
-    gap: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#dbe5df",
-    backgroundColor: "#ffffff",
-    padding: 16,
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: {
-      width: 0,
-      height: 10
-    },
-    elevation: 8
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2
-  },
-  sectionTitle: {
-    color: "#111827",
-    fontSize: 15,
-    fontWeight: "900"
-  },
-  sectionBadge: {
-    overflow: "hidden",
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    color: "#0f766e",
-    fontSize: 11,
+  brandName: {
+    marginTop: -34,
+    fontSize: 32,
     fontWeight: "900",
-    backgroundColor: "#dff6ef"
+    letterSpacing: 0
   },
-  sectionHint: {
-    color: "#94a3b8",
-    fontSize: 12,
-    fontWeight: "800"
+  authStack: {
+    width: "100%",
+    maxWidth: 326,
+    alignSelf: "center",
+    gap: 12
   },
-  loginButton: {
+  authButton: {
     position: "relative",
-    minHeight: 52,
-    borderRadius: 8,
+    minHeight: 54,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
     gap: 10,
     paddingHorizontal: 14
   },
-  googleButton: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    backgroundColor: "#ffffff"
-  },
-  appleButton: {
-    backgroundColor: "#111827"
-  },
   disabledButton: {
     opacity: 0.52
   },
-  buttonPressed: {
-    backgroundColor: "#f8fafc"
-  },
-  appleButtonPressed: {
-    backgroundColor: "#030712"
-  },
   providerMark: {
     position: "absolute",
-    left: 14,
+    left: 16,
     width: 30,
     height: 30,
     borderRadius: 15,
@@ -401,7 +424,6 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   appleMark: {
-    color: "#ffffff",
     fontSize: 19,
     fontWeight: "900"
   },
@@ -413,59 +435,53 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 18
   },
-  googleButtonText: {
-    color: "#111827",
+  buttonText: {
     fontSize: 15,
-    fontWeight: "900"
+    fontWeight: "900",
+    letterSpacing: 0
   },
-  appleButtonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "900"
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginVertical: 8
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1
+  },
+  dividerText: {
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0
   },
   input: {
-    height: 48,
-    borderRadius: 8,
+    height: 50,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#cbd5e1",
     paddingHorizontal: 14,
-    color: "#111827",
     fontSize: 15,
     fontWeight: "700",
-    backgroundColor: "#ffffff"
-  },
-  passwordButton: {
-    marginTop: 2,
-    backgroundColor: "#0f766e"
-  },
-  passwordButtonPressed: {
-    backgroundColor: "#115e59"
-  },
-  passwordButtonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "900"
+    letterSpacing: 0
   },
   errorBox: {
     width: "100%",
-    maxWidth: 380,
+    maxWidth: 326,
     alignSelf: "center",
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#fecdd3",
-    backgroundColor: "#fff1f2",
     padding: 14
   },
   errorTitle: {
-    color: "#be123c",
     fontSize: 14,
-    fontWeight: "900"
+    fontWeight: "900",
+    letterSpacing: 0
   },
   errorText: {
     marginTop: 5,
-    color: "#be123c",
     fontSize: 13,
     fontWeight: "700",
-    lineHeight: 19
+    lineHeight: 19,
+    letterSpacing: 0
   }
 });

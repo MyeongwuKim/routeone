@@ -177,7 +177,7 @@ function AppInfoPage() {
         <AppInfoNotice
           icon={<MdSystemUpdateAlt />}
           title="네이티브 버전 연동 준비 중"
-          description="iOS와 Android에서 버전 브릿지가 연결되면 이 화면에 앱 버전과 빌드 번호가 표시돼요."
+          description="iOS와 Android에서 버전 브릿지가 연결되면 이 화면에 앱 버전이 표시돼요."
         />
       ) : null}
 
@@ -200,17 +200,9 @@ function AppInfoPage() {
             <div className="border-b border-brand-50" />
             <AppInfoRowSkeleton label="앱 버전" />
             <div className="border-b border-brand-50" />
-            <AppInfoRowSkeleton label="빌드 번호" />
-            <div className="border-b border-brand-50" />
-            <AppInfoRowSkeleton label="런타임 버전" />
-            <div className="border-b border-brand-50" />
             <AppInfoRowSkeleton label="OS 버전" />
             <div className="border-b border-brand-50" />
             <AppInfoRowSkeleton label="웹 번들 버전" />
-            <div className="border-b border-brand-50" />
-            <AppInfoRowSkeleton label="업데이트 채널" />
-            <div className="border-b border-brand-50" />
-            <AppInfoRowSkeleton label="번들 ID" />
           </>
         ) : (
           <>
@@ -225,23 +217,12 @@ function AppInfoPage() {
               fallback={isNativeRuntime ? "네이티브 연동 대기" : "-"}
             />
             <div className="border-b border-brand-50" />
-            <AppInfoRow label="빌드 번호" value={appInfo?.buildNumber} />
-            <div className="border-b border-brand-50" />
-            <AppInfoRow label="런타임 버전" value={appInfo?.runtimeVersion} />
-            <div className="border-b border-brand-50" />
             <AppInfoRow label="OS 버전" value={appInfo?.osVersion} />
             <div className="border-b border-brand-50" />
             <AppInfoRow
               label="웹 번들 버전"
               value={formatWebBundleVersion(appInfo)}
             />
-            <div className="border-b border-brand-50" />
-            <AppInfoRow
-              label="업데이트 채널"
-              value={appInfo?.webBundleChannel}
-            />
-            <div className="border-b border-brand-50" />
-            <AppInfoRow label="번들 ID" value={appInfo?.bundleIdentifier} />
           </>
         )}
       </section>

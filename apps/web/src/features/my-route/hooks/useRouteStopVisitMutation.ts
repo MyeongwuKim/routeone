@@ -15,8 +15,7 @@ import {
 } from "../myRouteCache";
 import { cacheRouteStopVerificationPhotoDataUrl } from "../routeCompletionPoster";
 import {
-  assertVisitPositionNearPlace,
-  requestCurrentPosition,
+  requestVisitVerificationPosition,
   requestVisitPhoto,
   uploadVerifiedVisitPhoto,
   type VisitPhotoSource,
@@ -182,11 +181,7 @@ export function useRouteStopVisitMutation({
     mutationFn: async ({ target, source }: PrepareVisitPhotoVariables) => {
       const position = isRetrospectiveCompletion
         ? null
-        : await requestCurrentPosition();
-
-      if (position) {
-        assertVisitPositionNearPlace(position, target.stop.place);
-      }
+        : await requestVisitVerificationPosition(target.stop.place);
 
       const photo = await requestVisitPhoto(source);
       const uploadPayload = await routeApi.createRouteStopVisitPhotoUpload(
@@ -246,9 +241,7 @@ export function useRouteStopVisitMutation({
   });
   const gpsMutation = useMutation({
     mutationFn: async (target: VisitCompletionTarget) => {
-      const position = await requestCurrentPosition();
-
-      assertVisitPositionNearPlace(position, target.stop.place);
+      const position = await requestVisitVerificationPosition(target.stop.place);
 
       return {
         ...target,

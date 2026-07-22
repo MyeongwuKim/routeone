@@ -4,6 +4,7 @@ import {
   Image,
   StyleSheet,
   Text,
+  useColorScheme,
   View
 } from "react-native";
 
@@ -16,6 +17,25 @@ export default function RouteOneLaunchScreen({
   progress,
   message
 }: RouteOneLaunchScreenProps) {
+  const colorScheme = useColorScheme();
+  const colors =
+    colorScheme === "dark"
+      ? {
+          background: "#061918",
+          title: "#f8fafc",
+          muted: "rgba(226, 245, 241, 0.78)",
+          track: "rgba(226, 245, 241, 0.2)",
+          fill: "#e2f5f1",
+          percentage: "#ffb199"
+        }
+      : {
+          background: "#0f766e",
+          title: "#ffffff",
+          muted: "rgba(255, 255, 255, 0.78)",
+          track: "rgba(255, 255, 255, 0.22)",
+          fill: "#ffffff",
+          percentage: "#ffb199"
+        };
   const normalizedProgress = Math.max(0, Math.min(1, progress));
   const animatedProgress = useRef(
     new Animated.Value(normalizedProgress)
@@ -35,15 +55,17 @@ export default function RouteOneLaunchScreen({
   });
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <View style={styles.brand}>
         <Image
           accessibilityIgnoresInvertColors
-          source={require("../../../assets/splash-icon.png")}
+          source={require("../../../assets/splash-brand-icon.png")}
           style={styles.logo}
         />
-        <Text style={styles.name}>RouteOne</Text>
-        <Text style={styles.tagline}>여행의 시작부터 도착까지</Text>
+        <Text style={[styles.name, { color: colors.title }]}>RouteOne</Text>
+        <Text style={[styles.tagline, { color: colors.muted }]}>
+          여행의 시작부터 도착까지
+        </Text>
       </View>
 
       <View style={styles.progressArea}>
@@ -54,17 +76,23 @@ export default function RouteOneLaunchScreen({
             max: 100,
             now: Math.round(normalizedProgress * 100)
           }}
-          style={styles.progressTrack}
+          style={[styles.progressTrack, { backgroundColor: colors.track }]}
         >
           <Animated.View
-            style={[styles.progressFill, { width: progressWidth }]}
+            style={[
+              styles.progressFill,
+              { backgroundColor: colors.fill, width: progressWidth }
+            ]}
           />
         </View>
         <View style={styles.progressCaption}>
-          <Text numberOfLines={1} style={styles.message}>
+          <Text
+            numberOfLines={1}
+            style={[styles.message, { color: colors.muted }]}
+          >
             {message}
           </Text>
-          <Text style={styles.percentage}>
+          <Text style={[styles.percentage, { color: colors.percentage }]}>
             {Math.round(normalizedProgress * 100)}%
           </Text>
         </View>
@@ -78,7 +106,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f7faf9",
     paddingHorizontal: 28
   },
   brand: {
@@ -91,14 +118,12 @@ const styles = StyleSheet.create({
   },
   name: {
     marginTop: -42,
-    color: "#123f3c",
     fontSize: 31,
     fontWeight: "800",
     letterSpacing: 0
   },
   tagline: {
     marginTop: 7,
-    color: "#65807d",
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0
@@ -114,13 +139,11 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 7,
     overflow: "hidden",
-    borderRadius: 4,
-    backgroundColor: "#dce8e5"
+    borderRadius: 4
   },
   progressFill: {
     height: "100%",
-    borderRadius: 4,
-    backgroundColor: "#0f766e"
+    borderRadius: 4
   },
   progressCaption: {
     minHeight: 22,
@@ -132,14 +155,12 @@ const styles = StyleSheet.create({
   },
   message: {
     flex: 1,
-    color: "#486661",
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0
   },
   percentage: {
     minWidth: 34,
-    color: "#e56c5b",
     fontSize: 12,
     fontWeight: "800",
     textAlign: "right",

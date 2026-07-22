@@ -21,6 +21,7 @@ export type NativeBridgeReadyMessage = {
   appVariant?: string;
   webBundleChannel?: string;
   webBundleManifestUrl?: string | null;
+  devVerificationBypass?: boolean;
 };
 
 export type NativeAuthTokenMessage = {

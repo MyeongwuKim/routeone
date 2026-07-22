@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "#f7faf9"
+    backgroundColor: "#0f766e"
   },
   errorPanel: {
     position: "absolute",

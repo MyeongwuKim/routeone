@@ -1,4 +1,10 @@
-import { SafeAreaView, StatusBar, StyleSheet, View } from "react-native";
+import {
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  useColorScheme,
+  View
+} from "react-native";
 import NativeLoginStep from "./components/native-onboarding/NativeLoginStep";
 import NativeOnboardingStep from "./components/native-onboarding/NativeOnboardingStep";
 import NativeWebViewScreen from "./components/native-webview/NativeWebViewScreen";
@@ -32,6 +38,9 @@ const onboardingText = {
 } as const;
 
 export default function App() {
+  const colorScheme = useColorScheme();
+  const brandBackgroundColor =
+    colorScheme === "dark" ? "#061918" : "#0f766e";
   const {
     appLanguage,
     bootStep,
@@ -52,8 +61,16 @@ export default function App() {
 
   if (bootStep === "checking") {
     return (
-      <View style={styles.launchContainer}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f7faf9" />
+      <View
+        style={[
+          styles.launchContainer,
+          { backgroundColor: brandBackgroundColor }
+        ]}
+      >
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor={brandBackgroundColor}
+        />
         <RouteOneLaunchScreen
           message="앱을 준비하고 있어요."
           progress={0.06}
@@ -146,8 +163,13 @@ export default function App() {
 
   if (bootStep === "login") {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" />
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: brandBackgroundColor }]}
+      >
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor={brandBackgroundColor}
+        />
         <NativeLoginStep
           accountId={nativeLogin.accountId}
           activeProvider={nativeLogin.activeProvider}
@@ -182,8 +204,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   launchContainer: {
-    flex: 1,
-    backgroundColor: "#f7faf9"
+    flex: 1
   },
   container: {
     flex: 1,

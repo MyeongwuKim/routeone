@@ -1,14 +1,19 @@
 declare namespace NodeJS {
   interface ProcessEnv {
+    APP_VARIANT?: "none" | "dev" | "prod";
     EXPO_PUBLIC_NCP_MAPS_KEY_ID?: string;
     EXPO_PUBLIC_NCP_MAPS_KEY?: string;
     EXPO_PUBLIC_NAVER_MAP_API_KEY_ID?: string;
     EXPO_PUBLIC_NAVER_MAP_API_KEY?: string;
     EXPO_PUBLIC_GRAPHQL_ENDPOINT?: string;
     EXPO_PUBLIC_API_URL?: string;
-    EXPO_PUBLIC_APP_VARIANT?: "dev" | "prod";
+    EXPO_PUBLIC_APP_VARIANT?: "none" | "dev" | "prod";
+    EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS?: string;
+    EXPO_PUBLIC_DEV_VERIFICATION_BYPASS?: string;
+    EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE?: string;
     EXPO_PUBLIC_WEB_BUNDLE_BASE_URL?: string;
     EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV?: string;
     EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD?: string;
+    R2_PUBLIC_BASE_URL?: string;
   }
 }

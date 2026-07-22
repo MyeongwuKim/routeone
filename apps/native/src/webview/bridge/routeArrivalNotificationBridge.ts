@@ -37,6 +37,12 @@ const MAX_GEOFENCE_REGION_COUNT = 20;
 const DEFAULT_GEOFENCE_RADIUS_METERS = 100;
 const MIN_GEOFENCE_RADIUS_METERS = 100;
 const MAX_GEOFENCE_RADIUS_METERS = 500;
+const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
+const ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE = TRUTHY_ENV_VALUES.has(
+  process.env.EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE
+    ?.trim()
+    .toLowerCase() ?? ""
+);
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -215,11 +221,14 @@ async function stopRouteArrivalGeofencingIfStarted() {
   }
 }
 
-async function scheduleRouteArrivalNotification(regionId: string) {
+async function scheduleRouteArrivalNotification(
+  regionId: string,
+  options: { force?: boolean } = {}
+) {
   const todayKey = getTodayDateKey();
   const notifiedRegionDates = await readNotifiedRegionDates();
 
-  if (notifiedRegionDates[regionId] === todayKey) {
+  if (!options.force && notifiedRegionDates[regionId] === todayKey) {
     return;
   }
 
@@ -309,6 +318,12 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
         radius,
       }))
     );
+
+    if (ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE) {
+      await scheduleRouteArrivalNotification(getRouteArrivalRegionId(places[0]), {
+        force: true,
+      });
+    }
 
     postNativeRouteArrivalNotificationSyncResponse(webViewRef, message.id, {
       ok: true,

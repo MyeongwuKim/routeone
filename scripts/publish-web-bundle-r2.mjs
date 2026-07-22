@@ -227,16 +227,14 @@ function listReleases() {
 }
 
 function readMinimumNativeVersion() {
-  const configPath = env.ROUTEONE_NATIVE_CONFIG_PATH
-    ? resolve(env.ROUTEONE_NATIVE_CONFIG_PATH)
-    : null;
-  const expoConfig = configPath && existsSync(configPath)
-    ? readExpoConfig(configPath)
-    : {};
-  const nativeVersion = env.ROUTEONE_NATIVE_VERSION?.trim() || expoConfig.version || null;
-  const iosVersion = env.ROUTEONE_IOS_NATIVE_VERSION?.trim() || nativeVersion;
+  const versionsPath = resolve(
+    env.ROUTEONE_NATIVE_APP_VERSIONS_PATH || "apps/native/app-versions.json"
+  );
+  const configuredVersions = readNativeAppVersions(versionsPath, channel);
+  const iosVersion =
+    env.ROUTEONE_IOS_NATIVE_VERSION?.trim() || configuredVersions.ios;
   const androidVersion =
-    env.ROUTEONE_ANDROID_NATIVE_VERSION?.trim() || nativeVersion;
+    env.ROUTEONE_ANDROID_NATIVE_VERSION?.trim() || configuredVersions.android;
 
   if (!iosVersion || !androidVersion) {
     fail("Native iOS and Android versions are required.");
@@ -248,12 +246,24 @@ function readMinimumNativeVersion() {
   };
 }
 
-function readExpoConfig(configPath) {
+function readNativeAppVersions(configPath, appVariant) {
   try {
     const parsed = JSON.parse(readFileSync(configPath, "utf8"));
-    return parsed.expo || parsed;
+    const versions = parsed?.[appVariant];
+
+    if (
+      typeof versions?.ios !== "string" ||
+      typeof versions?.android !== "string"
+    ) {
+      fail(`Native app versions are missing for ${appVariant}.`);
+    }
+
+    return {
+      ios: versions.ios.trim(),
+      android: versions.android.trim()
+    };
   } catch {
-    fail(`Failed to read native config JSON: ${configPath}`);
+    fail(`Failed to read native app versions: ${configPath}`);
   }
 }
 

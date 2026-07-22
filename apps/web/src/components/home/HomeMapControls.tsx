@@ -36,6 +36,9 @@ type HomeMapControlsProps = {
   onSelectFilter: (filter: SearchFilter) => void;
 };
 
+const REGION_SKELETON_WIDTHS = ["w-14", "w-20", "w-16", "w-20", "w-16"];
+const FILTER_SKELETON_WIDTHS = ["w-20", "w-24", "w-24", "w-20", "w-20"];
+
 function SearchFilterIcon({ filter }: { filter: SearchFilter }) {
   if (filter === "all") {
     return <IoMapOutline className="text-sm" />;
@@ -145,6 +148,56 @@ function HomeMapControls({
               </SelectablePillButton>
             );
           })}
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function HomeMapControlsSkeleton() {
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center justify-between"
+      >
+        <div className="skeleton-shimmer h-12 flex-1 rounded-full border border-white/80 bg-white/95 shadow-md" />
+        <div className="skeleton-shimmer ml-2 h-12 w-16 rounded-full border border-brand-200 bg-brand-100/95 shadow" />
+      </div>
+
+      <div
+        aria-hidden="true"
+        className="scrollbar-hide pointer-events-none absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+3.4rem)] z-20 overflow-hidden px-3 pb-1"
+      >
+        <div className="flex w-max min-w-full gap-2 pr-3">
+          {REGION_SKELETON_WIDTHS.map((widthClassName, index) => (
+            <div
+              key={`region-skeleton-${index}`}
+              className={`skeleton-shimmer h-8 shrink-0 rounded-full border shadow-sm ${
+                index === 0
+                  ? "w-14 border-brand-500 bg-brand-500/85"
+                  : `${widthClassName} border-brand-100 bg-white/95`
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div
+        aria-hidden="true"
+        className="scrollbar-hide pointer-events-none absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+6.1rem)] z-20 overflow-hidden px-3 pb-1"
+      >
+        <div className="flex w-max min-w-full gap-2 pr-3">
+          {FILTER_SKELETON_WIDTHS.map((widthClassName, index) => (
+            <div
+              key={`filter-skeleton-${index}`}
+              className={`skeleton-shimmer h-8 shrink-0 rounded-full border shadow-sm ${
+                index === 0
+                  ? "w-20 border-brand-500 bg-brand-500/85"
+                  : `${widthClassName} border-brand-100 bg-white/95`
+              }`}
+            />
+          ))}
         </div>
       </div>
     </>

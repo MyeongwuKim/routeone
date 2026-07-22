@@ -50,6 +50,15 @@ export async function resolveWebBundle(
   let fallback = createEmbeddedBundle();
 
   try {
+    if (!WEB_BUNDLE_UPDATE_CONFIG.updatesEnabled) {
+      emitWebBundleProgress(reportProgress, {
+        stage: "loading",
+        progress: 0.92,
+        message: "로컬 RouteOne을 불러오고 있어요."
+      });
+      return fallback;
+    }
+
     emitWebBundleProgress(reportProgress, {
       stage: "preparing",
       progress: 0.08,

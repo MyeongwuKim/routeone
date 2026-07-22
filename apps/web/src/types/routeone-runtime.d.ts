@@ -26,6 +26,7 @@ declare global {
     RouteOneRuntimeConfig?: {
       graphqlEndpoint?: string;
       routerMode?: "browser" | "hash";
+      devVerificationBypass?: boolean;
     };
     RouteOneNative?: {
       getAppInfo?: () => Promise<{

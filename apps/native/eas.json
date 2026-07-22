@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "local"
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -9,7 +9,10 @@
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "dev",
-        "EXPO_PUBLIC_APP_VARIANT": "dev"
+        "EXPO_PUBLIC_APP_VARIANT": "dev",
+        "EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS": "1",
+        "EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE": "1",
+        "ROUTEONE_BUILD_PLATFORM": "ios"
       },
       "ios": {
         "simulator": false
@@ -19,7 +22,10 @@
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "dev",
-        "EXPO_PUBLIC_APP_VARIANT": "dev"
+        "EXPO_PUBLIC_APP_VARIANT": "dev",
+        "EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS": "1",
+        "EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE": "1",
+        "ROUTEONE_BUILD_PLATFORM": "ios"
       },
       "ios": {
         "simulator": false
@@ -30,7 +36,10 @@
       "distribution": "store",
       "env": {
         "APP_VARIANT": "dev",
-        "EXPO_PUBLIC_APP_VARIANT": "dev"
+        "EXPO_PUBLIC_APP_VARIANT": "dev",
+        "EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS": "1",
+        "EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE": "1",
+        "ROUTEONE_BUILD_PLATFORM": "ios"
       },
       "ios": {
         "image": "latest"
@@ -41,10 +50,20 @@
       "distribution": "store",
       "env": {
         "APP_VARIANT": "prod",
-        "EXPO_PUBLIC_APP_VARIANT": "prod"
+        "EXPO_PUBLIC_APP_VARIANT": "prod",
+        "ROUTEONE_BUILD_PLATFORM": "ios"
       },
       "ios": {
         "image": "latest"
+      }
+    },
+    "production-android": {
+      "autoIncrement": true,
+      "distribution": "store",
+      "env": {
+        "APP_VARIANT": "prod",
+        "EXPO_PUBLIC_APP_VARIANT": "prod",
+        "ROUTEONE_BUILD_PLATFORM": "android"
       }
     }
   },
@@ -53,7 +72,8 @@
       "ios": {}
     },
     "production": {
-      "ios": {}
+      "ios": {},
+      "android": {}
     }
   }
 }

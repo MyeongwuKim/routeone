@@ -4,5 +4,5 @@
     "strict": true,
     "noEmit": true
   },
-  "include": ["index.ts", "src"]
+  "include": ["app.config.ts", "index.ts", "src"]
 }

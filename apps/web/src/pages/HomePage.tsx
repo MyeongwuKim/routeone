@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
-import HomeMapControls from "@/components/home/HomeMapControls";
+import HomeMapControls, {
+  HomeMapControlsSkeleton,
+} from "@/components/home/HomeMapControls";
 import PlaceSearchPopup from "@/components/search/PlaceSearchPopup";
 import { useHomeAttractionData } from "@/features/home/useHomeAttractionData";
 import { useHomeMap } from "@/features/home/useHomeMap";
@@ -195,11 +197,12 @@ function HomePage() {
   );
   const shouldShowAttractionLoader =
     Boolean(TOUR_API_SERVICE_KEY) &&
+    mapReady &&
     !mapError &&
     !attractionData &&
-    (attractionLoadingStage !== "idle" ||
-      !mapReady ||
-      isAttractionFetching);
+    (attractionLoadingStage !== "idle" || isAttractionFetching);
+  const shouldShowMapSetupSkeleton = !mapReady && !mapError;
+  const shouldShowInteractiveMapUi = mapReady || Boolean(mapError);
   const orderedRegions = useMemo(() => {
     if (!currentLocation) {
       return GANGWON_REGIONS;
@@ -399,16 +402,6 @@ function HomePage() {
       return;
     }
 
-    if (!mapReady) {
-      showLoading({
-        title: text.home.loadingMapTitle,
-        description: text.home.loadingMapDescription,
-        footerText: text.home.loadingFooter,
-        animation: "map-rendering",
-      });
-      return;
-    }
-
     if (
       attractionLoadingStage === "fetching-places" ||
       (attractionLoadingStage === "idle" &&
@@ -456,7 +449,6 @@ function HomePage() {
     isAttractionFetching,
     hideLoading,
     isSearchPopupOpen,
-    mapReady,
     shouldShowAttractionLoader,
     showLoading,
     text,
@@ -493,31 +485,35 @@ function HomePage() {
         style={{ background: "#dbeafe" }}
       />
 
-      <HomeMapControls
-        regions={orderedRegions}
-        selectedSigunguCode={selectedSigunguCode}
-        selectedRegionLabel={selectedRegionLabel}
-        festivalCountBySigunguCode={festivalCountBySigunguCode}
-        filters={placeSearchFilters}
-        selectedFilter={searchFilter}
-        savedPlaceCount={savedPlaceIds.length}
-        isSavedPlaceCountLoading={isAttractionLoading}
-        onOpenSearch={() => setIsSearchPopupOpen(true)}
-        onOpenSavedList={() => {
-          resetSheet();
-          openSavedList();
-        }}
-        onSelectRegion={(sigunguCode) => {
-          hasManuallySelectedRegionRef.current = true;
-          setSelectedSigunguCode(sigunguCode);
-        }}
-        onSelectFilter={(filter) => {
-          resetSheet();
-          setSearchFilter(filter);
-        }}
-      />
+      {shouldShowMapSetupSkeleton ? <HomeMapControlsSkeleton /> : null}
 
-      {appendTarget ? (
+      {shouldShowInteractiveMapUi ? (
+        <HomeMapControls
+          regions={orderedRegions}
+          selectedSigunguCode={selectedSigunguCode}
+          selectedRegionLabel={selectedRegionLabel}
+          festivalCountBySigunguCode={festivalCountBySigunguCode}
+          filters={placeSearchFilters}
+          selectedFilter={searchFilter}
+          savedPlaceCount={savedPlaceIds.length}
+          isSavedPlaceCountLoading={isAttractionLoading}
+          onOpenSearch={() => setIsSearchPopupOpen(true)}
+          onOpenSavedList={() => {
+            resetSheet();
+            openSavedList();
+          }}
+          onSelectRegion={(sigunguCode) => {
+            hasManuallySelectedRegionRef.current = true;
+            setSelectedSigunguCode(sigunguCode);
+          }}
+          onSelectFilter={(filter) => {
+            resetSheet();
+            setSearchFilter(filter);
+          }}
+        />
+      ) : null}
+
+      {appendTarget && shouldShowInteractiveMapUi ? (
         <div className="pointer-events-auto absolute inset-x-3 top-[calc(max(0.75rem,env(safe-area-inset-top))+9rem)] z-30 rounded-2xl border border-brand-200 bg-white/95 p-3 shadow-md backdrop-blur">
           <div className="flex items-start gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-sm font-black text-brand-700">

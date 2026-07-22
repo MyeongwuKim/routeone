@@ -1,11 +1,22 @@
 import { WEB_BUNDLE_UPDATE_CONFIG } from "../../config/webBundleUpdateConfig";
 
+const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
+
+function readTruthyPublicEnv(name: string) {
+  return TRUTHY_ENV_VALUES.has(
+    process.env[name]?.trim().toLowerCase() ?? ""
+  );
+}
+
 const ROUTEONE_RUNTIME_CONFIG = {
   graphqlEndpoint: "/graphql",
   routerMode: "hash",
   nativeAppVariant: WEB_BUNDLE_UPDATE_CONFIG.appVariant,
   webBundleChannel: WEB_BUNDLE_UPDATE_CONFIG.channel,
-  webBundleManifestUrl: WEB_BUNDLE_UPDATE_CONFIG.manifestUrl
+  webBundleManifestUrl: WEB_BUNDLE_UPDATE_CONFIG.manifestUrl,
+  devVerificationBypass:
+    readTruthyPublicEnv("EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS") ||
+    readTruthyPublicEnv("EXPO_PUBLIC_DEV_VERIFICATION_BYPASS")
 };
 
 export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
@@ -33,7 +44,8 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
         graphqlEndpoint: window.RouteOneRuntimeConfig.graphqlEndpoint,
         appVariant: window.RouteOneRuntimeConfig.nativeAppVariant,
         webBundleChannel: window.RouteOneRuntimeConfig.webBundleChannel,
-        webBundleManifestUrl: window.RouteOneRuntimeConfig.webBundleManifestUrl
+        webBundleManifestUrl: window.RouteOneRuntimeConfig.webBundleManifestUrl,
+        devVerificationBypass: window.RouteOneRuntimeConfig.devVerificationBypass
       })
     );
   }

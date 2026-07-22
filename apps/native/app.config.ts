@@ -1,10 +1,20 @@
+import appVersions from "./app-versions.json";
+
 type AppVariant = "dev" | "prod";
+type AppPlatform = "ios" | "android";
+
+type AppVersionConfig = Record<AppVariant, Record<AppPlatform, string>>;
 
 type AppVariantConfig = {
   displayName: string;
   slug: string;
   scheme: string;
   bundleIdentifier: string;
+};
+
+type AppVariantResult = {
+  appVariant: AppVariant;
+  isExplicit: boolean;
 };
 
 const APP_VARIANT_CONFIG: Record<AppVariant, AppVariantConfig> = {
@@ -22,21 +32,70 @@ const APP_VARIANT_CONFIG: Record<AppVariant, AppVariantConfig> = {
   }
 };
 
-function getAppVariant(): AppVariant {
-  const variant = process.env.APP_VARIANT?.trim().toLowerCase() ?? "dev";
+function getAppVariant(): AppVariantResult {
+  const variant = process.env.APP_VARIANT?.trim().toLowerCase() ?? "";
 
-  if (variant === "dev" || variant === "prod") {
-    return variant;
+  if (
+    !variant ||
+    variant === "none" ||
+    variant === "null" ||
+    variant === "undefined"
+  ) {
+    return {
+      appVariant: "dev",
+      isExplicit: false
+    };
   }
 
-  throw new Error(`APP_VARIANT must be "dev" or "prod". Received "${variant}".`);
+  if (variant === "dev" || variant === "prod") {
+    return {
+      appVariant: variant,
+      isExplicit: true
+    };
+  }
+
+  throw new Error(
+    `APP_VARIANT must be "none", "dev", or "prod". Received "${variant}".`
+  );
+}
+
+function getBuildPlatform(): AppPlatform {
+  const platform =
+    process.env.ROUTEONE_BUILD_PLATFORM?.trim().toLowerCase() ?? "ios";
+
+  if (platform === "ios" || platform === "android") {
+    return platform;
+  }
+
+  throw new Error(
+    `ROUTEONE_BUILD_PLATFORM must be "ios" or "android". Received "${platform}".`
+  );
+}
+
+function getAppVersion(variant: AppVariant, platform: AppPlatform) {
+  const version = (appVersions as AppVersionConfig)[variant][platform].trim();
+
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
+    throw new Error(
+      `Invalid ${variant}.${platform} version in app-versions.json: "${version}".`
+    );
+  }
+
+  return version;
 }
 
 function trimTrailingSlashes(value: string) {
   return value.replace(/\/+$/g, "");
 }
 
-function getWebBundleManifestUrl(variant: AppVariant) {
+function getWebBundleManifestUrl(
+  variant: AppVariant,
+  shouldUseRemoteWebBundle: boolean
+) {
+  if (!shouldUseRemoteWebBundle) {
+    return null;
+  }
+
   const explicitUrl =
     variant === "prod"
       ? process.env.EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD?.trim()
@@ -53,33 +112,30 @@ function getWebBundleManifestUrl(variant: AppVariant) {
   return `${trimTrailingSlashes(webBundlePublicBaseUrl)}/latest/manifest.json`;
 }
 
-const appVariant = getAppVariant();
+const { appVariant, isExplicit: hasExplicitAppVariant } = getAppVariant();
+const buildPlatform = getBuildPlatform();
 const appVariantConfig = APP_VARIANT_CONFIG[appVariant];
 const appDisplayName = appVariantConfig.displayName;
 const appSlug = appVariantConfig.slug;
 const appScheme = appVariantConfig.scheme;
 const appBundleIdentifier = appVariantConfig.bundleIdentifier;
-const appVersion = process.env.ROUTEONE_APP_VERSION?.trim() || "1.0.0";
-const iosBuildNumber = process.env.ROUTEONE_IOS_BUILD_NUMBER?.trim() || "1";
-const androidVersionCode = Number.parseInt(
-  process.env.ROUTEONE_ANDROID_VERSION_CODE?.trim() || "1",
-  10
-);
+const appVersion = getAppVersion(appVariant, buildPlatform);
 const webBundleChannel = appVariant;
 const webBundlePublicBaseUrl =
   process.env.EXPO_PUBLIC_WEB_BUNDLE_BASE_URL?.trim() ||
   process.env.R2_PUBLIC_BASE_URL?.trim() ||
   "";
-const webBundleManifestUrl = getWebBundleManifestUrl(appVariant);
+const shouldUseRemoteWebBundle = hasExplicitAppVariant;
+const webBundleManifestUrl = getWebBundleManifestUrl(
+  appVariant,
+  shouldUseRemoteWebBundle
+);
 const routeoneExtra = {
   appVariant,
   webBundleChannel,
+  webBundleUpdatesEnabled: shouldUseRemoteWebBundle,
   ...(webBundleManifestUrl ? { webBundleManifestUrl } : {})
 };
-
-if (!Number.isInteger(androidVersionCode) || androidVersionCode < 1) {
-  throw new Error("ROUTEONE_ANDROID_VERSION_CODE must be a positive integer.");
-}
 
 const googleIosClientId =
   process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim() ??
@@ -98,10 +154,14 @@ const plugins: unknown[] = [
   [
     "expo-splash-screen",
     {
-      backgroundColor: "#f7faf9",
-      image: "./assets/splash-icon.png",
+      backgroundColor: "#0f766e",
+      image: "./assets/splash-brand-icon.png",
       imageWidth: 280,
-      resizeMode: "contain"
+      resizeMode: "contain",
+      dark: {
+        backgroundColor: "#061918",
+        image: "./assets/splash-brand-icon.png"
+      }
     }
   ],
   [
@@ -154,7 +214,7 @@ export default {
     icon: "./assets/icon.png",
     orientation: "portrait",
     scheme: appScheme,
-    userInterfaceStyle: "light",
+    userInterfaceStyle: "automatic",
     jsEngine: "hermes",
     platforms: ["ios", "android"],
     plugins,
@@ -163,7 +223,6 @@ export default {
     },
     ios: {
       bundleIdentifier: appBundleIdentifier,
-      buildNumber: iosBuildNumber,
       supportsTablet: false,
       usesAppleSignIn: true,
       infoPlist: {
@@ -171,6 +230,7 @@ export default {
           NSAllowsArbitraryLoads: false,
           NSAllowsLocalNetworking: true
         },
+        ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
           "RouteOne이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
         NSLocationAlwaysAndWhenInUseUsageDescription:
@@ -186,11 +246,10 @@ export default {
     },
     android: {
       package: appBundleIdentifier,
-      versionCode: androidVersionCode,
       edgeToEdgeEnabled: true,
       adaptiveIcon: {
-        foregroundImage: "./assets/splash-icon.png",
-        backgroundColor: "#f7faf9"
+        foregroundImage: "./assets/splash-brand-icon.png",
+        backgroundColor: "#0f766e"
       },
       permissions: [
         "ACCESS_COARSE_LOCATION",

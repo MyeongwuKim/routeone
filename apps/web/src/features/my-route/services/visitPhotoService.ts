@@ -59,10 +59,26 @@ type CloudflareImageUploadResponse = {
 
 const VISIT_GPS_VERIFICATION_MAX_DISTANCE_METERS = 100;
 const EARTH_RADIUS_METERS = 6_371_000;
+const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 
 function getRouteOneNativeBridge() {
   return (window as Window & { RouteOneNative?: RouteOneNativeBridge })
     .RouteOneNative;
+}
+
+function isTruthyEnv(value: unknown) {
+  return (
+    typeof value === "string" &&
+    TRUTHY_ENV_VALUES.has(value.trim().toLowerCase())
+  );
+}
+
+export function isVisitVerificationBypassEnabled() {
+  return (
+    window.RouteOneRuntimeConfig?.devVerificationBypass === true ||
+    isTruthyEnv(import.meta.env.VITE_ROUTEONE_DEV_VERIFICATION_BYPASS) ||
+    isTruthyEnv(import.meta.env.VITE_DEV_VERIFICATION_BYPASS)
+  );
 }
 
 function toRadians(degree: number) {
@@ -110,6 +126,25 @@ export async function requestCurrentPosition() {
   }
 
   return nativeBridge.getCurrentPosition();
+}
+
+export async function requestVisitVerificationPosition(
+  place: VisitPlaceCoordinates
+) {
+  if (isVisitVerificationBypassEnabled()) {
+    return {
+      lat: place.lat,
+      lng: place.lng,
+      accuracyMeters: 1,
+      timestamp: Date.now(),
+    } satisfies RouteOneNativePosition;
+  }
+
+  const position = await requestCurrentPosition();
+
+  assertVisitPositionNearPlace(position, place);
+
+  return position;
 }
 
 export async function requestVisitPhoto(source: VisitPhotoSource) {

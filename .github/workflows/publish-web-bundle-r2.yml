@@ -8,6 +8,7 @@ on:
     paths:
       - "apps/web/**"
       - "apps/native/app.config.ts"
+      - "apps/native/app-versions.json"
       - ".github/workflows/publish-web-bundle-r2.yml"
       - "scripts/publish-web-bundle-r2.mjs"
       - "package.json"
@@ -108,25 +109,42 @@ jobs:
           echo "R2_BUCKET_NAME=${SELECTED_R2_BUCKET_NAME}" >> "${GITHUB_ENV}"
           echo "R2_PUBLIC_BASE_URL=${SELECTED_R2_PUBLIC_BASE_URL}" >> "${GITHUB_ENV}"
 
+      - name: Load web build env
+        shell: bash
+        env:
+          SELECTED_VISITKOREA_SERVICE_KEY: ${{ secrets.VITE_VISITKOREA_SERVICE_KEY || vars.VITE_VISITKOREA_SERVICE_KEY }}
+          SELECTED_NCP_MAPS_KEY_ID: ${{ secrets.VITE_NCP_MAPS_KEY_ID || vars.VITE_NCP_MAPS_KEY_ID }}
+          SELECTED_NCP_MAPS_KEY: ${{ secrets.VITE_NCP_MAPS_KEY || vars.VITE_NCP_MAPS_KEY }}
+          SELECTED_NCP_MAPS_DARK_STYLE_ID: ${{ vars.VITE_NCP_MAPS_DARK_STYLE_ID }}
+        run: |
+          if [[ -z "${SELECTED_VISITKOREA_SERVICE_KEY}" ]]; then
+            echo "VITE_VISITKOREA_SERVICE_KEY is required for the web bundle build." >&2
+            exit 1
+          fi
+
+          if [[ -z "${SELECTED_NCP_MAPS_KEY_ID}" ]]; then
+            echo "VITE_NCP_MAPS_KEY_ID is required for the web bundle build." >&2
+            exit 1
+          fi
+
+          echo "VITE_VISITKOREA_SERVICE_KEY=${SELECTED_VISITKOREA_SERVICE_KEY}" >> "${GITHUB_ENV}"
+          echo "VITE_NCP_MAPS_KEY_ID=${SELECTED_NCP_MAPS_KEY_ID}" >> "${GITHUB_ENV}"
+
+          if [[ -n "${SELECTED_NCP_MAPS_KEY}" ]]; then
+            echo "VITE_NCP_MAPS_KEY=${SELECTED_NCP_MAPS_KEY}" >> "${GITHUB_ENV}"
+          fi
+
+          if [[ -n "${SELECTED_NCP_MAPS_DARK_STYLE_ID}" ]]; then
+            echo "VITE_NCP_MAPS_DARK_STYLE_ID=${SELECTED_NCP_MAPS_DARK_STYLE_ID}" >> "${GITHUB_ENV}"
+          fi
+
       - name: Build web
         env:
           ROUTEONE_NATIVE_WEB_BUNDLE: "1"
         run: pnpm build:web
 
-      - name: Export native version config
-        env:
-          EXPO_PUBLIC_APP_VARIANT: ${{ env.APP_VARIANT }}
-          ROUTEONE_APP_VERSION: ${{ vars.ROUTEONE_APP_VERSION }}
-          ROUTEONE_IOS_BUILD_NUMBER: ${{ vars.ROUTEONE_IOS_BUILD_NUMBER }}
-          ROUTEONE_ANDROID_VERSION_CODE: ${{ vars.ROUTEONE_ANDROID_VERSION_CODE }}
-        run: pnpm --filter native exec expo config --type public --json > native-config.json
-
       - name: Publish to R2
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          ROUTEONE_APP_VERSION: ${{ vars.ROUTEONE_APP_VERSION }}
-          ROUTEONE_IOS_BUILD_NUMBER: ${{ vars.ROUTEONE_IOS_BUILD_NUMBER }}
-          ROUTEONE_ANDROID_VERSION_CODE: ${{ vars.ROUTEONE_ANDROID_VERSION_CODE }}
-          ROUTEONE_NATIVE_CONFIG_PATH: native-config.json
           ROUTEONE_WEB_BUNDLE_RETENTION: "5"
         run: pnpm publish:web-bundle:r2
