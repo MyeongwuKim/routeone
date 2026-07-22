@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -45,7 +46,11 @@ export default function NativeOnboardingStep({
       <View style={styles.card}>
         <View style={styles.topRow}>
           <View style={styles.icon}>
-            <Text style={styles.iconText}>R1</Text>
+            <Image
+              accessibilityIgnoresInvertColors
+              source={require("../../../assets/icon.png")}
+              style={styles.iconImage}
+            />
           </View>
           <View style={styles.headerText}>
             <Text style={styles.eyebrow}>ROUTE ONE</Text>
@@ -129,15 +134,15 @@ const styles = StyleSheet.create({
   icon: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0f766e",
+    overflow: "hidden",
+    backgroundColor: "#e7f2ef",
   },
-  iconText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "900",
+  iconImage: {
+    width: 48,
+    height: 48,
   },
   headerText: {
     flex: 1,

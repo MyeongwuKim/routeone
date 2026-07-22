@@ -31,8 +31,6 @@ import {
 import { TOUR_API_SERVICE_KEY } from "@/pages/HomePage.constants";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 
-const ENGLISH_DISPLAY_DATA_TIMEOUT_MS = 5_000;
-
 export type HomeAttractionQueryData = {
   allAttractions: GangwonAttraction[];
   sourceAttractions: GangwonAttraction[];
@@ -43,51 +41,6 @@ export type HomeAttractionQueryData = {
   lclsNameByCode: Record<string, string>;
   isLocalized: boolean;
 };
-
-function withTimeoutFallback<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  fallback: T
-) {
-  let timeoutId: number | undefined;
-
-  return Promise.race([
-    promise,
-    new Promise<T>((resolve) => {
-      timeoutId = window.setTimeout(() => resolve(fallback), timeoutMs);
-    }),
-  ]).finally(() => {
-    if (timeoutId !== undefined) {
-      window.clearTimeout(timeoutId);
-    }
-  });
-}
-
-function mergeAttractionDisplayData(
-  sourceAttractions: GangwonAttraction[],
-  displayAttractions: GangwonAttraction[]
-) {
-  const displayAttractionById = new Map(
-    displayAttractions.map((attraction) => [attraction.id, attraction])
-  );
-
-  return sourceAttractions.map((sourceAttraction) => {
-    const displayAttraction = displayAttractionById.get(sourceAttraction.id);
-
-    if (!displayAttraction) {
-      return sourceAttraction;
-    }
-
-    return {
-      ...sourceAttraction,
-      title: displayAttraction.title || sourceAttraction.title,
-      address: displayAttraction.address || sourceAttraction.address,
-      firstImage: sourceAttraction.firstImage || displayAttraction.firstImage,
-      secondImage:
-        sourceAttraction.secondImage || displayAttraction.secondImage,
-    };
-  });
-}
 
 export function useHomeAttractionData(selectedSigunguCode: string) {
   const text = useUiText();
@@ -246,58 +199,10 @@ export function useHomeAttractionData(selectedSigunguCode: string) {
         });
       });
 
-      const englishDisplayAttractions =
-        appLanguage === "en"
-          ? await withTimeoutFallback(
-              Promise.all([
-                fetchGangwonAttractions(
-                  TOUR_API_SERVICE_KEY,
-                  {
-                    sigunguCode: selectedSigunguCode || undefined,
-                    contentTypeIds: ["12", "39"],
-                  },
-                  "en"
-                ).catch(() => [] as GangwonAttraction[]),
-                fetchGangwonFestivals(
-                  TOUR_API_SERVICE_KEY,
-                  {
-                    sigunguCode: selectedSigunguCode || undefined,
-                    lookAheadDays: 90,
-                  },
-                  "en"
-                ).catch(() => [] as GangwonAttraction[]),
-              ]).then(([englishAttractions, englishFestivals]) => [
-                ...englishAttractions,
-                ...englishFestivals,
-              ]),
-              ENGLISH_DISPLAY_DATA_TIMEOUT_MS,
-              [] as GangwonAttraction[]
-            )
-          : [];
-      const displayAttractions =
-        englishDisplayAttractions.length > 0
-          ? mergeAttractionDisplayData(
-              filteredAttractions,
-              englishDisplayAttractions
-            )
-          : filteredAttractions;
-      const displayAttractionByKey = new Map(
-        displayAttractions.map((attraction) => [
-          `${attraction.id}-${attraction.contentTypeId}`,
-          attraction,
-        ])
-      );
-
       return {
-        allAttractions: displayAttractions,
+        allAttractions: filteredAttractions,
         sourceAttractions: filteredAttractions,
-        topAttractions: topAttractions.map((item) => ({
-          ...item,
-          attraction:
-            displayAttractionByKey.get(
-              `${item.attraction.id}-${item.attraction.contentTypeId}`
-            ) ?? item.attraction,
-        })),
+        topAttractions,
         lclsNameByCode: resolvedLclsNameByCode,
         isLocalized: appLanguage !== "en",
       };

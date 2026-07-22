@@ -1,7 +1,10 @@
 export type NativeWebBundlePlatform = "android" | "ios";
+export type WebBundleChannel = "dev" | "prod";
 
 export type WebBundleManifest = {
   version: string;
+  channel: WebBundleChannel | null;
+  appVariant: WebBundleChannel | null;
   bundleUrl: string;
   entryPath: string;
   sha256: string;

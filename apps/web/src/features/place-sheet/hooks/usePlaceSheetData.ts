@@ -33,12 +33,33 @@ import {
 } from "../placeSheetModel";
 
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
+const LOCALIZATION_RETRY_ATTEMPTS = 5;
+const LOCALIZATION_RETRY_DELAY_MS = 1500;
+const LOCALIZATION_REFETCH_INTERVAL_MS = 3000;
+const LOCALIZATION_MAX_BACKGROUND_REFETCHES = 6;
+
+type PlaceTextCandidate = {
+  title: string;
+  address: string;
+};
+
+function hasKoreanPlaceText(place: PlaceTextCandidate | null | undefined) {
+  return Boolean(place && /[가-힣]/u.test(`${place.title} ${place.address}`));
+}
+
+function hasKoreanPlaceTexts(
+  places: PlaceTextCandidate[] | null | undefined
+) {
+  return places?.some(hasKoreanPlaceText) ?? false;
+}
 
 type UsePlaceSheetDataParams = {
   appLanguage: AppLanguage;
   currentLocation: PlaceSheetCoordinates;
   isOpen: boolean;
   selectedPlace: MapSheetPlace | null;
+  shouldLoadOverviewData: boolean;
+  shouldLoadRouteData: boolean;
   text: UiText;
   updateSelectedPlace: (place: MapSheetPlace) => void;
 };
@@ -48,6 +69,8 @@ export function usePlaceSheetData({
   currentLocation,
   isOpen,
   selectedPlace,
+  shouldLoadOverviewData,
+  shouldLoadRouteData,
   text,
   updateSelectedPlace,
 }: UsePlaceSheetDataParams) {
@@ -61,43 +84,50 @@ export function usePlaceSheetData({
       return;
     }
 
-    if (!/[가-힣]/u.test(`${selectedPlace.title} ${selectedPlace.address}`)) {
+    if (!hasKoreanPlaceText(selectedPlace)) {
       return;
     }
 
     let isCancelled = false;
 
-    void placeLocalizationApi
-      .localizeTourPlaces([
+    void localizeTourPlaces(
+      [
         {
-          contentId: selectedPlace.contentId,
+          ...selectedPlace,
+          id: selectedPlace.contentId,
           contentTypeId: selectedPlace.contentTypeId,
           title: selectedPlace.title,
           address: selectedPlace.address,
         },
-      ])
-      .then((response) => {
+      ],
+      appLanguage,
+      {
+        retryUncached: true,
+        retryAttempts: LOCALIZATION_RETRY_ATTEMPTS,
+        retryDelayMs: LOCALIZATION_RETRY_DELAY_MS,
+      }
+    )
+      .then((localizedPlaces) => {
         if (isCancelled) {
           return;
         }
 
-        const localizedPlace = response.localizeTourPlaces[0];
+        const localizedPlace = localizedPlaces[0];
         if (!localizedPlace) {
           return;
         }
 
         if (
-          localizedPlace.title === selectedPlace.title &&
-          localizedPlace.address === selectedPlace.address
+          !hasKoreanPlaceText(localizedPlace) &&
+          (localizedPlace.title !== selectedPlace.title ||
+            localizedPlace.address !== selectedPlace.address)
         ) {
-          return;
+          updateSelectedPlace({
+            ...selectedPlace,
+            title: localizedPlace.title || selectedPlace.title,
+            address: localizedPlace.address || selectedPlace.address,
+          });
         }
-
-        updateSelectedPlace({
-          ...selectedPlace,
-          title: localizedPlace.title || selectedPlace.title,
-          address: localizedPlace.address || selectedPlace.address,
-        });
       })
       .catch((error) => {
         console.warn(text.placeSheet.localizationFallbackWarn, error);
@@ -206,7 +236,7 @@ export function usePlaceSheetData({
       currentLocation.lng,
       appLanguage,
     ],
-    enabled: isOpen && Boolean(selectedPlace),
+    enabled: isOpen && shouldLoadRouteData && Boolean(selectedPlace),
     queryFn: async () => {
       if (!selectedPlace) {
         throw new Error(text.placeSheet.selectedPlaceMissing);
@@ -266,6 +296,7 @@ export function usePlaceSheetData({
     ],
     enabled:
       isOpen &&
+      shouldLoadOverviewData &&
       Boolean(selectedPlace) &&
       (selectedPlace ? isTouristPlace(selectedPlace) : false) &&
       hasTourApiServiceKey &&
@@ -305,6 +336,7 @@ export function usePlaceSheetData({
     ],
     enabled:
       isOpen &&
+      shouldLoadOverviewData &&
       Boolean(selectedPlace) &&
       hasTourApiServiceKey &&
       Number.isFinite(selectedPlace?.lat) &&
@@ -326,9 +358,20 @@ export function usePlaceSheetData({
         },
         "ko"
       );
-      return localizeTourPlaces(nearbyPlaces, appLanguage);
+      return localizeTourPlaces(nearbyPlaces, appLanguage, {
+        retryUncached: true,
+        retryAttempts: LOCALIZATION_RETRY_ATTEMPTS,
+        retryDelayMs: LOCALIZATION_RETRY_DELAY_MS,
+      });
     },
-    staleTime: 1000 * 60 * 20,
+    refetchInterval: (query) =>
+      appLanguage === "en" &&
+      shouldLoadOverviewData &&
+      query.state.dataUpdateCount < LOCALIZATION_MAX_BACKGROUND_REFETCHES &&
+      hasKoreanPlaceTexts(query.state.data)
+        ? LOCALIZATION_REFETCH_INTERVAL_MS
+        : false,
+    staleTime: appLanguage === "en" ? 0 : 1000 * 60 * 20,
     gcTime: 1000 * 60 * 60,
   });
 

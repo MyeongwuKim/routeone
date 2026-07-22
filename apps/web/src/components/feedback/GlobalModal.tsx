@@ -1,4 +1,5 @@
 import { IoAlertCircleOutline, IoClose } from "react-icons/io5";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiModalStore, type UiModalAction } from "@/stores/uiModalStore";
 
 function getActionClassName(action: UiModalAction) {
@@ -29,7 +30,7 @@ function GlobalModal() {
 
   return (
     <div
-      className="global-modal-backdrop-enter fixed inset-0 z-[2800] flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pb-4"
+      className={`global-modal-backdrop-enter fixed inset-0 ${UI_LAYER_CLASS.appDialog} flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pb-4`}
       onClick={closeModal}
     >
       <section

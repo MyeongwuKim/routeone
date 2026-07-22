@@ -22,23 +22,18 @@ const queryClient = new QueryClient({
   },
 });
 
-async function preloadAppFonts() {
+function warmAppFonts() {
   if (!("fonts" in document)) {
     return;
   }
 
-  const fonts = [
+  void Promise.allSettled([
     document.fonts.load('400 16px "Roboto"', "RouteOne"),
     document.fonts.load('500 16px "Roboto"', "RouteOne"),
     document.fonts.load('700 16px "Roboto"', "RouteOne"),
     document.fonts.load('900 16px "Roboto"', "RouteOne"),
     document.fonts.load('400 16px "Jua"', "RouteOne"),
     document.fonts.load('400 16px "Jua"', "감자"),
-  ];
-
-  await Promise.race([
-    Promise.all(fonts),
-    new Promise((resolve) => window.setTimeout(resolve, 1500)),
   ]);
 }
 
@@ -53,4 +48,5 @@ function renderApp() {
   );
 }
 
-void preloadAppFonts().finally(renderApp);
+warmAppFonts();
+renderApp();

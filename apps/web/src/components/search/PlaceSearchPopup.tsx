@@ -8,6 +8,7 @@ import type {
   ResolvedMarkerType,
   SearchFilter,
 } from "@/lib/gangwonAttractionMap";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText } from "@/lib/uiText";
 import type { GangwonAttraction } from "@/lib/visitKoreaTourApi";
 
@@ -67,7 +68,9 @@ function PlaceSearchPopup({
   const hasKeyword = Boolean(searchKeyword.trim());
 
   return (
-    <section className="fixed inset-0 z-[3200] bg-slate-50 text-slate-900 dark:bg-[#071718] dark:text-slate-100">
+    <section
+      className={`fixed inset-0 ${UI_LAYER_CLASS.searchOverlay} bg-slate-50 text-slate-900 dark:bg-[#071718] dark:text-slate-100`}
+    >
       <div className="flex h-full flex-col">
         <div className="border-b border-slate-200 bg-white/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur dark:border-brand-400/20 dark:bg-[#0b211f]/95">
           <div className="flex items-center gap-2">

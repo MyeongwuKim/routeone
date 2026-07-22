@@ -1,6 +1,6 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { withDangerousMod } = require("@expo/config-plugins");
+const { withDangerousMod } = require("expo/config-plugins");
 
 const MODULAR_HEADER_PODS = [
   "  pod 'GoogleUtilities', :modular_headers => true",

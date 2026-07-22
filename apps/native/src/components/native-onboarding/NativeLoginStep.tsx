@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -111,7 +112,11 @@ export default function NativeLoginStep({
         <View style={styles.header}>
           <View style={styles.logoRow}>
             <View style={styles.logoBadge}>
-              <Text style={styles.logoText}>R1</Text>
+              <Image
+                accessibilityIgnoresInvertColors
+                source={require("../../../assets/icon.png")}
+                style={styles.logoImage}
+              />
             </View>
             <View style={styles.headerText}>
               <Text style={styles.eyebrow}>ROUTE ONE</Text>
@@ -279,15 +284,15 @@ const styles = StyleSheet.create({
   logoBadge: {
     width: 52,
     height: 52,
-    borderRadius: 8,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0f766e"
+    overflow: "hidden",
+    backgroundColor: "#e7f2ef"
   },
-  logoText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "900"
+  logoImage: {
+    width: 52,
+    height: 52
   },
   headerText: {
     flex: 1

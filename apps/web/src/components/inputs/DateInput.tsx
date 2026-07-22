@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { IoChevronBack, IoChevronForward } from "react-icons/io5";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText, type UiText } from "@/lib/uiText";
 
 type DateInputProps = {
@@ -128,7 +129,7 @@ function DateInput({ value, placeholder, onChange }: DateInputProps) {
 
       {isOpen ? (
         <div
-          className="center-modal-backdrop-enter fixed inset-0 z-[1800] flex items-center justify-center bg-slate-900/55 px-4"
+          className={`center-modal-backdrop-enter fixed inset-0 ${UI_LAYER_CLASS.inputDialog} flex items-center justify-center bg-slate-900/55 px-4`}
           onClick={() => setIsOpen(false)}
         >
           <div

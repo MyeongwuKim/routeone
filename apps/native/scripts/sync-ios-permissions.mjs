@@ -100,16 +100,6 @@ function getGoogleIosUrlScheme() {
     : "";
 }
 
-function isAppleSignInEnabled() {
-  const env = readEnvFile();
-  const value =
-    process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim() ??
-    env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN ??
-    "";
-
-  return value.toLowerCase() === "true" || value === "1";
-}
-
 function syncGoogleUrlScheme(source) {
   const googleIosUrlScheme = getGoogleIosUrlScheme();
 
@@ -218,21 +208,6 @@ function syncAppleEntitlement() {
   }
 
   const source = readFileSync(entitlementsPath, "utf8");
-  const appleEntryPattern =
-    /\s*<key>com\.apple\.developer\.applesignin<\/key>\s*<array>\s*<string>Default<\/string>\s*<\/array>/;
-
-  if (!isAppleSignInEnabled()) {
-    if (!source.includes("<key>com.apple.developer.applesignin</key>")) {
-      return null;
-    }
-
-    const nextSource = source
-      .replace(appleEntryPattern, "")
-      .replace(/<dict>\s*<\/dict>/, "<dict/>");
-
-    writeFileSync(entitlementsPath, nextSource);
-    return "removed";
-  }
 
   if (source.includes("<key>com.apple.developer.applesignin</key>")) {
     return null;
@@ -290,9 +265,6 @@ const changes = [
   backgroundLocationResult.didChange ? "enabled background location mode" : null,
   appleEntitlementResult === "added"
     ? "added Apple Sign In entitlement"
-    : null,
-  appleEntitlementResult === "removed"
-    ? "removed Apple Sign In entitlement"
     : null,
 ].filter(Boolean);
 

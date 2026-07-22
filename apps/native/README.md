@@ -136,9 +136,9 @@ releases/
     └── web-ui.zip
 ```
 
-`latest/manifest.json`은 최신 release의 manifest와 같은 내용을 담고, 네이티브 앱이 최신 웹 버전과 다운로드 주소를 확인할 때 사용해요. release manifest에는 `version`, `bundleUrl`, `entryPath`, `sha256`, `createdAt`, `runtimeReadySignal`, `minimumNativeVersion`이 들어가요.
+`latest/manifest.json`은 최신 release의 manifest와 같은 내용을 담고, 네이티브 앱이 최신 웹 버전과 다운로드 주소를 확인할 때 사용해요. release manifest에는 `version`, `channel`, `appVariant`, `bundleUrl`, `entryPath`, `sha256`, `createdAt`, `runtimeReadySignal`, `minimumNativeVersion`이 들어가요.
 
-앱은 시작할 때 manifest 버전과 최소 네이티브 버전을 확인하고, 새 ZIP의 SHA-256을 검증한 뒤 앱 문서 디렉터리에 압축을 풀어요. 새 번들이 처음 로드되지 않으면 직전 로컬 번들로 되돌아가고, 저장된 번들이 없으면 앱에 내장된 웹 번들을 사용해요.
+앱은 시작할 때 manifest의 `channel`이 현재 앱의 `dev` 또는 `prod` 채널과 맞는지 먼저 확인해요. 채널이 다르면 버전 비교와 설치를 건너뛰고, 채널이 맞을 때만 manifest 버전과 최소 네이티브 버전을 확인해요. 새 ZIP의 SHA-256을 검증한 뒤 앱 문서 디렉터리에 압축을 풀고, 새 번들이 처음 로드되지 않으면 직전 로컬 번들로 되돌아가요. 저장된 번들이 없으면 앱에 내장된 웹 번들을 사용해요.
 
 버전 폴더명은 기본적으로 `1.0.{GitHub Actions 실행번호}` 형식이에요. Repository variable `ROUTEONE_WEB_VERSION_PREFIX`를 바꾸면 `1.1.{실행번호}`처럼 앞자리를 변경할 수 있고, Actions에서 수동 실행할 때는 `version` 입력값으로 정확한 버전을 지정할 수 있어요.
 

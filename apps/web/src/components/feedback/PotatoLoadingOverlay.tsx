@@ -1,4 +1,5 @@
 import { useUiLoadingStore, type AppLoadingAnimation } from "@/stores/uiLoadingStore";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 
 type PotatoLoadingCardProps = {
   title: string;
@@ -532,7 +533,9 @@ export default function PotatoLoadingOverlay() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[1800] flex items-center justify-center px-4">
+    <div
+      className={`pointer-events-none fixed inset-0 ${UI_LAYER_CLASS.loadingOverlay} flex items-center justify-center px-4`}
+    >
       {dimmed ? <div className="absolute inset-0 bg-slate-900/5" /> : null}
       <PotatoLoadingCard
         title={title}

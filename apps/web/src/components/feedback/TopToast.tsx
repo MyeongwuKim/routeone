@@ -1,4 +1,5 @@
 import { IoBagHandleOutline } from "react-icons/io5";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 function TopToast() {
@@ -9,7 +10,9 @@ function TopToast() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-[2147483647] flex justify-center px-4">
+    <div
+      className={`pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] ${UI_LAYER_CLASS.toast} flex justify-center px-4`}
+    >
       <div
         className={`flex items-center rounded-full border border-brand-300 bg-white/95 px-4 py-2 text-sm font-semibold text-brand-800 shadow-lg backdrop-blur transition-[transform,opacity,filter] duration-420 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform ${
           isVisible ? "scale-100 opacity-100 blur-0" : "scale-95 opacity-0 blur-[1px]"

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_GANGWON_REGION } from "@/data/gangwonRegions";
+import {
+  GANGWON_CENTER,
+  GANGWON_REGIONS,
+} from "@/data/gangwonRegions";
 import {
   IoBagAdd,
   IoBagAddOutline,
@@ -19,6 +22,7 @@ import PlaceSheetMediaSection from "./PlaceSheetMediaSection";
 import PlaceSheetOverviewPanel from "./PlaceSheetOverviewPanel";
 import { CompactHoursBadge, SkeletonBar } from "./PlaceSheetPrimitives";
 import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import type { NearbyTouristPlace } from "@/lib/visitKoreaTourApi";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
@@ -37,6 +41,7 @@ function PlaceBottomSheet() {
     isOpen,
     sheetMode,
     sheetResetVersion,
+    directionOrigin,
     selectedPlace,
     openSheet,
     updateSelectedPlace,
@@ -49,7 +54,28 @@ function PlaceBottomSheet() {
     useState<PlaceImageViewerTarget | null>(null);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const currentLocation = DEFAULT_GANGWON_REGION.center;
+  const fallbackDirectionRegion = selectedPlace
+    ? GANGWON_REGIONS.find(
+        (region) =>
+          region.sigunguCode === selectedPlace.signguCode ||
+          region.adminCode === selectedPlace.signguCode
+      ) ??
+      GANGWON_REGIONS.find((region) =>
+        selectedPlace.address.includes(region.label)
+      )
+    : null;
+  const fallbackDirectionLabel = fallbackDirectionRegion
+    ? text.placeSheet.referenceLocation(
+        text.labels.regions[fallbackDirectionRegion.label] ??
+          fallbackDirectionRegion.label
+      )
+    : text.placeSheet.gangwonReferenceLocation;
+  const resolvedDirectionOrigin = directionOrigin ?? {
+    coordinates: fallbackDirectionRegion?.center ?? GANGWON_CENTER,
+    label: fallbackDirectionLabel,
+    isCurrentLocation: false,
+  };
+  const currentLocation = resolvedDirectionOrigin.coordinates;
 
   const isFullPopupMode = sheetMode === "full-popup";
   const isCurrentPlaceSaved = selectedPlace
@@ -69,12 +95,16 @@ function PlaceBottomSheet() {
     onRequestClose: resetSheet,
     resetVersion: sheetResetVersion,
   });
+  const shouldShowOverviewPanel = isFullPopupMode || showOverviewPanel;
+  const shouldShowExpandedSection = isFullPopupMode || isSheetExpanded;
 
   const placeSheetData = usePlaceSheetData({
     appLanguage,
     currentLocation,
     isOpen,
     selectedPlace,
+    shouldLoadOverviewData: shouldShowOverviewPanel,
+    shouldLoadRouteData: shouldShowExpandedSection,
     text,
     updateSelectedPlace,
   });
@@ -88,8 +118,6 @@ function PlaceBottomSheet() {
     userPlacePhotos,
     userPlacePhotoViewerUrls,
   } = placeSheetData;
-  const shouldShowOverviewPanel = isFullPopupMode || showOverviewPanel;
-  const shouldShowExpandedSection = isFullPopupMode || isSheetExpanded;
   const selectedTopRank = selectedPlace?.topRank ?? null;
   const topRankBadge = selectedTopRank
     ? getTopRankBadgeStyle(selectedTopRank, text)
@@ -163,7 +191,10 @@ function PlaceBottomSheet() {
         areaCode: selectedPlace.areaCode,
         signguCode: selectedPlace.signguCode,
       }),
-      { mode: sheetMode }
+      {
+        directionOrigin: resolvedDirectionOrigin,
+        mode: sheetMode,
+      }
     );
 
     requestAnimationFrame(() => {
@@ -211,14 +242,14 @@ function PlaceBottomSheet() {
         type="button"
         onClick={resetSheet}
         aria-label={text.placeSheet.bottomSheetCloseAria}
-        className="fixed inset-0 z-[1800] bg-slate-900/25"
+        className={`fixed inset-0 ${UI_LAYER_CLASS.sheetBackdrop} bg-slate-900/25`}
       />
 
       <section
         className={
           isFullPopupMode
-            ? "fixed inset-0 z-[3000] w-full bg-white"
-            : `fixed bottom-0 z-[1900] w-full bg-white ${
+            ? `fixed inset-0 ${UI_LAYER_CLASS.placeDetail} w-full bg-white`
+            : `fixed bottom-0 ${UI_LAYER_CLASS.bottomSheet} w-full bg-white ${
                 isSheetExpanded
                   ? "inset-x-0 rounded-none border-0 shadow-none"
                   : "inset-x-0 mx-auto max-w-md rounded-t-3xl border border-brand-200 shadow-[0_-10px_32px_rgba(15,23,42,0.25)]"
@@ -355,6 +386,7 @@ function PlaceBottomSheet() {
               appLanguage={appLanguage}
               currentLocation={currentLocation}
               data={placeSheetData}
+              directionOrigin={resolvedDirectionOrigin}
               isDarkMode={isDarkMode}
               isVisible={shouldShowOverviewPanel}
               onSelectNearbyPlace={handleSelectNearbyPlace}
@@ -367,7 +399,9 @@ function PlaceBottomSheet() {
       </section>
 
       {isTopRankInfoOpen && topRankBadge ? (
-        <div className="fixed inset-0 z-[2600] flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div
+          className={`fixed inset-0 ${UI_LAYER_CLASS.appDialog} flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]`}
+        >
           <button
             type="button"
             aria-label={text.placeSheet.topRankInfoCloseAria}

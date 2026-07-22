@@ -28,6 +28,7 @@ if (!accessKeyId || !secretAccessKey) {
 }
 
 const retention = readPositiveInteger("ROUTEONE_WEB_BUNDLE_RETENTION", 5);
+const channel = readWebBundleChannel();
 const distDir = resolve(env.ROUTEONE_WEB_DIST_DIR || "apps/web/dist");
 const buildNumber = readPositiveInteger(
   "ROUTEONE_WEB_BUNDLE_BUILD_NUMBER",
@@ -59,6 +60,8 @@ try {
   const minimumNativeVersion = readMinimumNativeVersion();
   const manifest = {
     version,
+    channel,
+    appVariant: channel,
     bundleUrl: `${publicBaseUrl}/${bundleKey}`,
     entryPath: "index.html",
     sha256: sha256(bundlePath),
@@ -93,6 +96,23 @@ function required(name, transform = (value) => value) {
   }
 
   return transform(value);
+}
+
+function readWebBundleChannel() {
+  const value = (
+    env.ROUTEONE_WEB_BUNDLE_CHANNEL ||
+    env.EXPO_PUBLIC_APP_VARIANT ||
+    env.APP_VARIANT ||
+    "dev"
+  )
+    .trim()
+    .toLowerCase();
+
+  if (value === "dev" || value === "prod") {
+    return value;
+  }
+
+  fail("ROUTEONE_WEB_BUNDLE_CHANNEL must be dev or prod.");
 }
 
 function readPositiveInteger(name, fallback) {

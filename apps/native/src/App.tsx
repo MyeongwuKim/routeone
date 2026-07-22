@@ -6,18 +6,49 @@ import RouteOneLaunchScreen from "./components/native-webview/RouteOneLaunchScre
 import { useNativeBoot } from "./boot/useNativeBoot";
 import { useNativeLogin } from "./auth/useNativeLogin";
 
+const onboardingText = {
+  ko: {
+    locationTitle: "위치 권한 허용",
+    locationDescription:
+      "장소 근처에 도착했는지 확인하고 사진 인증을 도와드릴게요.",
+    notificationTitle: "알림 권한 허용",
+    notificationDescription:
+      "오늘 방문할 장소 근처에 도착하면 알림으로 알려드릴게요.",
+    allow: "허용",
+    checking: "확인 중",
+    later: "나중에"
+  },
+  en: {
+    locationTitle: "Allow Location",
+    locationDescription:
+      "RouteOne uses your location to help confirm arrivals and visit photos.",
+    notificationTitle: "Allow Notifications",
+    notificationDescription:
+      "RouteOne can notify you when you are near a place on today's route.",
+    allow: "Allow",
+    checking: "Checking",
+    later: "Later"
+  }
+} as const;
+
 export default function App() {
   const {
+    appLanguage,
     bootStep,
     completeNativeLogin,
     isRequestingLocationPermission,
+    isRequestingNotificationPermission,
     nativeAuthToken,
     requestLocationPermission,
-    skipLocationPermission
+    requestNotificationPermission,
+    selectAppLanguage,
+    skipLocationPermission,
+    skipNotificationPermission
   } = useNativeBoot();
   const nativeLogin = useNativeLogin({
     onComplete: completeNativeLogin
   });
+  const text = onboardingText[appLanguage];
 
   if (bootStep === "checking") {
     return (
@@ -31,16 +62,42 @@ export default function App() {
     );
   }
 
+  if (bootStep === "language") {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <NativeOnboardingStep
+          description="RouteOne에서 사용할 언어를 선택해 주세요. Choose the language to use in RouteOne."
+          primaryAction={{
+            label: "English",
+            onPress: () => {
+              void selectAppLanguage("en");
+            },
+            variant: "primary"
+          }}
+          secondaryAction={{
+            label: "한국어",
+            onPress: () => {
+              void selectAppLanguage("ko");
+            },
+            variant: "secondary"
+          }}
+          title="사용 언어 / Language"
+        />
+      </SafeAreaView>
+    );
+  }
+
   if (bootStep === "location") {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
         <NativeOnboardingStep
-          description="장소 근처에 도착했는지 확인하고 사진 인증을 도와드릴게요."
+          description={text.locationDescription}
           primaryAction={{
             disabled: isRequestingLocationPermission,
-            label: "허용",
-            loadingLabel: "확인 중",
+            label: text.allow,
+            loadingLabel: text.checking,
             onPress: () => {
               void requestLocationPermission();
             },
@@ -48,11 +105,40 @@ export default function App() {
           }}
           secondaryAction={{
             disabled: isRequestingLocationPermission,
-            label: "나중에",
-            onPress: skipLocationPermission,
+            label: text.later,
+            onPress: () => {
+              void skipLocationPermission();
+            },
             variant: "secondary"
           }}
-          title="위치 권한 허용"
+          title={text.locationTitle}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (bootStep === "notification") {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <NativeOnboardingStep
+          description={text.notificationDescription}
+          primaryAction={{
+            disabled: isRequestingNotificationPermission,
+            label: text.allow,
+            loadingLabel: text.checking,
+            onPress: () => {
+              void requestNotificationPermission();
+            },
+            variant: "primary"
+          }}
+          secondaryAction={{
+            disabled: isRequestingNotificationPermission,
+            label: text.later,
+            onPress: skipNotificationPermission,
+            variant: "secondary"
+          }}
+          title={text.notificationTitle}
         />
       </SafeAreaView>
     );
@@ -86,7 +172,12 @@ export default function App() {
     );
   }
 
-  return <NativeWebViewScreen nativeAuthToken={nativeAuthToken} />;
+  return (
+    <NativeWebViewScreen
+      appLanguage={appLanguage}
+      nativeAuthToken={nativeAuthToken}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

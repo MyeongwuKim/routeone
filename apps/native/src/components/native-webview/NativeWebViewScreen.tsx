@@ -26,6 +26,7 @@ import {
 import RouteOneLaunchScreen from "./RouteOneLaunchScreen";
 
 type NativeWebViewScreenProps = {
+  appLanguage: "ko" | "en";
   nativeAuthToken: string | null;
 };
 
@@ -35,6 +36,29 @@ type WebViewNavigationRequest = {
 };
 
 const AUTH_TOKEN_STORAGE_KEY = "routeone.authToken";
+const APP_LANGUAGE_STORAGE_KEY = "routeone-app-language";
+
+function readProgressNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : fallback;
+}
+
+function readBundleProgress(
+  progress: WebBundleProgress | null | undefined
+): WebBundleProgress {
+  if (!progress) {
+    return INITIAL_WEB_BUNDLE_PROGRESS;
+  }
+
+  return {
+    ...progress,
+    progress: readProgressNumber(
+      progress.progress,
+      INITIAL_WEB_BUNDLE_PROGRESS.progress
+    )
+  };
+}
 
 function getRouteArrivalNotificationWebPath(
   response: Notifications.NotificationResponse | null
@@ -88,6 +112,7 @@ function createWebViewNavigationScript(path: string) {
 }
 
 export default function NativeWebViewScreen({
+  appLanguage,
   nativeAuthToken
 }: NativeWebViewScreenProps) {
   const webViewRef = useRef<WebView>(null);
@@ -106,9 +131,19 @@ export default function NativeWebViewScreen({
           AUTH_TOKEN_STORAGE_KEY
         )}, ${JSON.stringify(nativeAuthToken)}); } catch (error) {}`
       : "";
+    const languageScript = `
+      try {
+        window.localStorage.setItem(${JSON.stringify(
+          APP_LANGUAGE_STORAGE_KEY
+        )}, ${JSON.stringify(appLanguage)});
+        if (window.document && window.document.documentElement) {
+          window.document.documentElement.lang = ${JSON.stringify(appLanguage)};
+        }
+      } catch (error) {}
+    `;
 
-    return `${authScript}\n${ROUTEONE_WEBVIEW_BRIDGE_SCRIPT}`;
-  }, [nativeAuthToken]);
+    return `${authScript}\n${languageScript}\n${ROUTEONE_WEBVIEW_BRIDGE_SCRIPT}`;
+  }, [appLanguage, nativeAuthToken]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -275,6 +310,8 @@ export default function NativeWebViewScreen({
     [resolvedBundle]
   );
 
+  const displayBundleProgress = readBundleProgress(bundleProgress);
+
   return (
     <View style={styles.webViewContainer}>
       <StatusBar barStyle="dark-content" />
@@ -307,16 +344,22 @@ export default function NativeWebViewScreen({
             });
           }}
           onLoadProgress={(event) => {
+            const webViewProgress = readProgressNumber(
+              event.nativeEvent?.progress,
+              0
+            );
             setBundleProgress((current) => {
-              if (current.stage === "ready") {
-                return current;
+              const currentProgress = readBundleProgress(current);
+
+              if (currentProgress.stage === "ready") {
+                return currentProgress;
               }
 
               return {
                 stage: "loading",
                 progress: Math.max(
-                  current.progress,
-                  0.95 + event.nativeEvent.progress * 0.03
+                  currentProgress.progress,
+                  0.95 + webViewProgress * 0.03
                 ),
                 message: "RouteOne을 불러오고 있어요."
               };
@@ -324,11 +367,11 @@ export default function NativeWebViewScreen({
           }}
           onLoadEnd={() => {
             if (resolvedBundle.readySignalRequired) {
-              setBundleProgress({
-                stage: "loading",
-                progress: 0.98,
-                message: "화면을 마무리하고 있어요."
-              });
+            setBundleProgress({
+              stage: "loading",
+              progress: 0.98,
+              message: "웹 화면 준비 신호를 기다리고 있어요."
+            });
               return;
             }
 
@@ -354,8 +397,8 @@ export default function NativeWebViewScreen({
       {isLoading || !resolvedBundle ? (
         <View style={styles.overlay}>
           <RouteOneLaunchScreen
-            message={bundleProgress.message}
-            progress={bundleProgress.progress}
+            message={displayBundleProgress.message}
+            progress={displayBundleProgress.progress}
           />
         </View>
       ) : null}

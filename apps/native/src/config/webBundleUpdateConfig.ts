@@ -3,15 +3,23 @@ import Constants from "expo-constants";
 type AppVariant = "dev" | "prod";
 
 type RouteOneExtra = {
-  appVariant?: string;
-  webBundleChannel?: string;
-  webBundleManifestUrl?: string | null;
+  appVariant?: unknown;
+  webBundleChannel?: unknown;
+  webBundleManifestUrl?: unknown;
 };
 
 const routeOneExtra = (Constants.expoConfig?.extra?.routeone ?? {}) as RouteOneExtra;
 
-function normalizeAppVariant(value: string | undefined): AppVariant {
-  return value?.trim().toLowerCase() === "prod" ? "prod" : "dev";
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readPublicEnv(name: string) {
+  return readString(process.env[name]);
+}
+
+function normalizeAppVariant(value: unknown): AppVariant {
+  return readString(value).toLowerCase() === "prod" ? "prod" : "dev";
 }
 
 function trimTrailingSlashes(value: string) {
@@ -21,30 +29,30 @@ function trimTrailingSlashes(value: string) {
 function readManifestUrl(appVariant: AppVariant) {
   const explicitUrl =
     appVariant === "prod"
-      ? process.env.EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD?.trim()
-      : process.env.EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV?.trim();
+      ? readPublicEnv("EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD")
+      : readPublicEnv("EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV");
 
   if (explicitUrl) {
     return explicitUrl;
   }
 
-  const baseUrl = process.env.EXPO_PUBLIC_WEB_BUNDLE_BASE_URL?.trim();
+  const baseUrl = readPublicEnv("EXPO_PUBLIC_WEB_BUNDLE_BASE_URL");
 
   if (!baseUrl) {
-    return routeOneExtra.webBundleManifestUrl?.trim() || null;
+    return readString(routeOneExtra.webBundleManifestUrl) || null;
   }
 
   return `${trimTrailingSlashes(baseUrl)}/latest/manifest.json`;
 }
 
 const appVariant = normalizeAppVariant(
-  process.env.EXPO_PUBLIC_APP_VARIANT ?? routeOneExtra.appVariant
+  readPublicEnv("EXPO_PUBLIC_APP_VARIANT") || routeOneExtra.appVariant
 );
 const manifestUrl = readManifestUrl(appVariant);
 
 export const WEB_BUNDLE_UPDATE_CONFIG = {
   appVariant,
-  channel: routeOneExtra.webBundleChannel?.trim() || appVariant,
+  channel: normalizeAppVariant(routeOneExtra.webBundleChannel || appVariant),
   manifestUrl,
-  nativeVersion: Constants.expoConfig?.version?.trim() || "0.0.0"
+  nativeVersion: readString(Constants.expoConfig?.version) || "0.0.0"
 } as const;

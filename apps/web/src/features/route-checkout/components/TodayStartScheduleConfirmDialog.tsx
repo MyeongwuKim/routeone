@@ -1,3 +1,4 @@
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText } from "@/lib/uiText";
 
 type TodayStartScheduleConfirmDialogProps = {
@@ -21,7 +22,9 @@ export default function TodayStartScheduleConfirmDialog({
   const isOneDayTrip = tripDays === 1;
 
   return (
-    <div className="center-modal-backdrop-enter fixed inset-0 z-[2700] flex items-center justify-center bg-slate-950/60 px-4">
+    <div
+      className={`center-modal-backdrop-enter fixed inset-0 ${UI_LAYER_CLASS.routeCheckoutDialog} flex items-center justify-center bg-slate-950/60 px-4`}
+    >
       <div
         role="dialog"
         aria-modal="true"

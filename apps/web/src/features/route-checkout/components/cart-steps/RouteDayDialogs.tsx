@@ -8,6 +8,7 @@ import {
   IoTrashOutline,
 } from "react-icons/io5";
 import { MIN_PLACE_STAY_SUMMARY_VISIT_COUNT } from "@/lib/routePlaceSnapshot";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
 import {
   clampStayMinutes,
@@ -36,7 +37,9 @@ export function StayMinutesPopup({
   };
 
   return (
-    <div className="center-modal-backdrop-enter fixed inset-0 z-[2700] flex items-center justify-center bg-slate-950/35 px-4">
+    <div
+      className={`center-modal-backdrop-enter fixed inset-0 ${UI_LAYER_CLASS.routeCheckoutDialog} flex items-center justify-center bg-slate-950/35 px-4`}
+    >
       <button
         type="button"
         aria-label={text.cart.stayEditCloseAria}
@@ -165,7 +168,9 @@ export function PlaceCartRouteItemSheet({
       : text.placeSheet.staySamplePending(MIN_PLACE_STAY_SUMMARY_VISIT_COUNT);
 
   return (
-    <div className="fixed inset-0 z-[2600] flex items-end bg-slate-950/30">
+    <div
+      className={`fixed inset-0 ${UI_LAYER_CLASS.routeCheckout} flex items-end bg-slate-950/30`}
+    >
       <button
         type="button"
         aria-label={text.cart.placeEditCloseAria}

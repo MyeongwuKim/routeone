@@ -59,7 +59,7 @@ const appDisplayName = appVariantConfig.displayName;
 const appSlug = appVariantConfig.slug;
 const appScheme = appVariantConfig.scheme;
 const appBundleIdentifier = appVariantConfig.bundleIdentifier;
-const appVersion = process.env.ROUTEONE_APP_VERSION?.trim() || "0.1.0";
+const appVersion = process.env.ROUTEONE_APP_VERSION?.trim() || "1.0.0";
 const iosBuildNumber = process.env.ROUTEONE_IOS_BUILD_NUMBER?.trim() || "1";
 const androidVersionCode = Number.parseInt(
   process.env.ROUTEONE_ANDROID_VERSION_CODE?.trim() || "1",
@@ -71,14 +71,16 @@ const webBundlePublicBaseUrl =
   process.env.R2_PUBLIC_BASE_URL?.trim() ||
   "";
 const webBundleManifestUrl = getWebBundleManifestUrl(appVariant);
+const routeoneExtra = {
+  appVariant,
+  webBundleChannel,
+  ...(webBundleManifestUrl ? { webBundleManifestUrl } : {})
+};
 
 if (!Number.isInteger(androidVersionCode) || androidVersionCode < 1) {
   throw new Error("ROUTEONE_ANDROID_VERSION_CODE must be a positive integer.");
 }
 
-const enableAppleSignIn =
-  process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim().toLowerCase() ===
-    "true" || process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim() === "1";
 const googleIosClientId =
   process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim() ??
   process.env.GOOGLE_IOS_CLIENT_ID?.trim() ??
@@ -131,12 +133,9 @@ const plugins: unknown[] = [
         "RouteOne이 지난 방문 사진 인증을 위해 선택한 사진을 사용합니다."
     }
   ],
+  "expo-apple-authentication",
   "./plugins/withGoogleModularHeaders"
 ];
-
-if (enableAppleSignIn) {
-  plugins.push("expo-apple-authentication");
-}
 
 if (googleIosUrlScheme) {
   plugins.push([
@@ -160,17 +159,13 @@ export default {
     platforms: ["ios", "android"],
     plugins,
     extra: {
-      routeone: {
-        appVariant,
-        webBundleChannel,
-        webBundleManifestUrl
-      }
+      routeone: routeoneExtra
     },
     ios: {
       bundleIdentifier: appBundleIdentifier,
       buildNumber: iosBuildNumber,
       supportsTablet: false,
-      usesAppleSignIn: enableAppleSignIn,
+      usesAppleSignIn: true,
       infoPlist: {
         NSAppTransportSecurity: {
           NSAllowsArbitraryLoads: false,

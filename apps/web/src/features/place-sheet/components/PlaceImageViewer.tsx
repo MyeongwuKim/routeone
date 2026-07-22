@@ -1,5 +1,6 @@
 import { useRef, type PointerEvent } from "react";
 import { IoClose } from "react-icons/io5";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import type { UiText } from "@/lib/uiText";
 import type { PlaceImageViewerTarget } from "../placeSheetModel";
 
@@ -55,7 +56,9 @@ function PlaceImageViewer({
   };
 
   return (
-    <section className="fixed inset-0 z-[3600] flex items-center justify-center bg-white/35 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
+    <section
+      className={`fixed inset-0 ${UI_LAYER_CLASS.mediaViewer} flex items-center justify-center bg-white/35 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl`}
+    >
       <button
         type="button"
         aria-label={text.placeSheet.imageViewerCloseAria}

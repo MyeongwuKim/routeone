@@ -77,6 +77,15 @@ function AppInfoRow({
   );
 }
 
+function AppInfoRowSkeleton({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <span className="text-sm font-semibold text-slate-500">{label}</span>
+      <span className="h-4 w-28 animate-pulse rounded-full bg-slate-200" />
+    </div>
+  );
+}
+
 function AppInfoNotice({
   icon,
   title,
@@ -185,31 +194,56 @@ function AppInfoPage() {
           <p className="text-xs font-black text-brand-700">앱 정보</p>
         </div>
 
-        <AppInfoRow
-          label="실행 환경"
-          value={appInfo ? formatPlatform(appInfo.platform) : "확인 중"}
-        />
-        <div className="border-b border-brand-50" />
-        <AppInfoRow
-          label="앱 버전"
-          value={appInfo?.appVersion}
-          fallback={isNativeRuntime ? "네이티브 연동 대기" : "-"}
-        />
-        <div className="border-b border-brand-50" />
-        <AppInfoRow label="빌드 번호" value={appInfo?.buildNumber} />
-        <div className="border-b border-brand-50" />
-        <AppInfoRow label="런타임 버전" value={appInfo?.runtimeVersion} />
-        <div className="border-b border-brand-50" />
-        <AppInfoRow label="OS 버전" value={appInfo?.osVersion} />
-        <div className="border-b border-brand-50" />
-        <AppInfoRow
-          label="웹 번들 버전"
-          value={formatWebBundleVersion(appInfo)}
-        />
-        <div className="border-b border-brand-50" />
-        <AppInfoRow label="업데이트 채널" value={appInfo?.webBundleChannel} />
-        <div className="border-b border-brand-50" />
-        <AppInfoRow label="번들 ID" value={appInfo?.bundleIdentifier} />
+        {appInfoState.status === "loading" ? (
+          <>
+            <AppInfoRowSkeleton label="실행 환경" />
+            <div className="border-b border-brand-50" />
+            <AppInfoRowSkeleton label="앱 버전" />
+            <div className="border-b border-brand-50" />
+            <AppInfoRowSkeleton label="빌드 번호" />
+            <div className="border-b border-brand-50" />
+            <AppInfoRowSkeleton label="런타임 버전" />
+            <div className="border-b border-brand-50" />
+            <AppInfoRowSkeleton label="OS 버전" />
+            <div className="border-b border-brand-50" />
+            <AppInfoRowSkeleton label="웹 번들 버전" />
+            <div className="border-b border-brand-50" />
+            <AppInfoRowSkeleton label="업데이트 채널" />
+            <div className="border-b border-brand-50" />
+            <AppInfoRowSkeleton label="번들 ID" />
+          </>
+        ) : (
+          <>
+            <AppInfoRow
+              label="실행 환경"
+              value={appInfo ? formatPlatform(appInfo.platform) : "확인 중"}
+            />
+            <div className="border-b border-brand-50" />
+            <AppInfoRow
+              label="앱 버전"
+              value={appInfo?.appVersion}
+              fallback={isNativeRuntime ? "네이티브 연동 대기" : "-"}
+            />
+            <div className="border-b border-brand-50" />
+            <AppInfoRow label="빌드 번호" value={appInfo?.buildNumber} />
+            <div className="border-b border-brand-50" />
+            <AppInfoRow label="런타임 버전" value={appInfo?.runtimeVersion} />
+            <div className="border-b border-brand-50" />
+            <AppInfoRow label="OS 버전" value={appInfo?.osVersion} />
+            <div className="border-b border-brand-50" />
+            <AppInfoRow
+              label="웹 번들 버전"
+              value={formatWebBundleVersion(appInfo)}
+            />
+            <div className="border-b border-brand-50" />
+            <AppInfoRow
+              label="업데이트 채널"
+              value={appInfo?.webBundleChannel}
+            />
+            <div className="border-b border-brand-50" />
+            <AppInfoRow label="번들 ID" value={appInfo?.bundleIdentifier} />
+          </>
+        )}
       </section>
 
       <AppInfoNotice

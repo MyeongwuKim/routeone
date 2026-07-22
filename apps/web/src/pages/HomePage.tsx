@@ -16,6 +16,7 @@ import {
 } from "@/lib/recentPlaceSearches";
 import {
   calculateDistanceMeters,
+  type CurrentLocation,
 } from "@/lib/gangwonBoundaryUtils";
 import {
   createMapSheetPlaceFromAttraction,
@@ -77,6 +78,8 @@ function HomePage() {
     readRecentPlaceSearches
   );
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const currentLocationRef = useRef<CurrentLocation | null>(null);
+  const hasManuallySelectedRegionRef = useRef(false);
 
   const {
     attractionData,
@@ -100,6 +103,15 @@ function HomePage() {
       rank,
       mode = "bottom-sheet",
     }: OpenPlaceSheetFromAttractionOptions) => {
+      const currentLocationForOrigin = currentLocationRef.current;
+      const selectedRegionForOrigin =
+        GANGWON_REGIONS.find(
+          (region) => region.sigunguCode === selectedSigunguCode
+        ) ?? DEFAULT_GANGWON_REGION;
+      const selectedRegionOriginLabel =
+        text.labels.regions[selectedRegionForOrigin.label] ??
+        selectedRegionForOrigin.label;
+
       openSheet(
         createMapSheetPlaceFromAttraction({
           attraction,
@@ -108,10 +120,25 @@ function HomePage() {
           touristTrendName,
           topRank: rank ?? null,
         }),
-        { mode }
+        {
+          directionOrigin: currentLocationForOrigin
+            ? {
+                coordinates: currentLocationForOrigin,
+                label: text.placeSheet.currentLocation,
+                isCurrentLocation: true,
+              }
+            : {
+                coordinates: selectedRegionForOrigin.center,
+                label: text.placeSheet.referenceLocation(
+                  selectedRegionOriginLabel
+                ),
+                isCurrentLocation: false,
+              },
+          mode,
+        }
       );
     },
-    [openSheet, selectedSigunguCode]
+    [openSheet, selectedSigunguCode, text]
   );
   const {
     currentLocation,
@@ -131,6 +158,34 @@ function HomePage() {
     topRankByAttractionId,
     trendNameByAttractionId,
   });
+
+  useEffect(() => {
+    currentLocationRef.current = currentLocation;
+  }, [currentLocation]);
+
+  useEffect(() => {
+    if (!currentLocation || hasManuallySelectedRegionRef.current) {
+      return;
+    }
+
+    const nearestRegion = GANGWON_REGIONS.reduce((nearest, region) => {
+      const nearestDistance = calculateDistanceMeters(
+        currentLocation,
+        nearest.center
+      );
+      const regionDistance = calculateDistanceMeters(
+        currentLocation,
+        region.center
+      );
+      return regionDistance < nearestDistance ? region : nearest;
+    }, GANGWON_REGIONS[0]);
+
+    setSelectedSigunguCode((currentSigunguCode) =>
+      currentSigunguCode === nearestRegion.sigunguCode
+        ? currentSigunguCode
+        : nearestRegion.sigunguCode
+    );
+  }, [currentLocation]);
   const openPlaceSheetFromAttraction = useCallback(
     (options: OpenPlaceSheetFromAttractionOptions) => {
       focusAttraction(options.attraction);
@@ -161,7 +216,18 @@ function HomePage() {
     DEFAULT_GANGWON_REGION;
   const selectedRegionLabel =
     text.labels.regions[selectedRegion.label] ?? selectedRegion.label;
-  const routeStartLocation = currentLocation ?? selectedRegion.center;
+  const routeStartLocation = currentLocation;
+  const selectedRegionDirectionOrigin = currentLocation
+    ? {
+        coordinates: currentLocation,
+        label: text.placeSheet.currentLocation,
+        isCurrentLocation: true,
+      }
+    : {
+        coordinates: selectedRegion.center,
+        label: text.placeSheet.referenceLocation(selectedRegionLabel),
+        isCurrentLocation: false,
+      };
   const placeSearchFilters = useMemo(
     () =>
       PLACE_SEARCH_FILTERS.map((filter) => ({
@@ -441,7 +507,10 @@ function HomePage() {
           resetSheet();
           openSavedList();
         }}
-        onSelectRegion={setSelectedSigunguCode}
+        onSelectRegion={(sigunguCode) => {
+          hasManuallySelectedRegionRef.current = true;
+          setSelectedSigunguCode(sigunguCode);
+        }}
         onSelectFilter={(filter) => {
           resetSheet();
           setSearchFilter(filter);
@@ -495,7 +564,10 @@ function HomePage() {
         initialTripDays={appendTarget ? 1 : undefined}
         onClose={closeSavedList}
         onSelectPlace={(place) => {
-          openSheet(place, { mode: "full-popup" });
+          openSheet(place, {
+            directionOrigin: selectedRegionDirectionOrigin,
+            mode: "full-popup",
+          });
         }}
         onRemovePlace={removeSavedPlace}
         onClearPlaces={clearSavedPlaces}
@@ -529,6 +601,7 @@ function HomePage() {
           }}
           onResultClick={(item) => {
             appendRecentSearch(searchKeyword);
+            closeSearchPopup();
             openPlaceSheetFromAttraction({
               attraction: item.attraction,
               markerType: item.markerType,

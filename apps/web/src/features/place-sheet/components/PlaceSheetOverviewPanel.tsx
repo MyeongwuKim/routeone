@@ -3,6 +3,7 @@ import PlaceResultCard from "@/components/place/PlaceResultCard";
 import { localizePlaceCategoryLabel, type UiText } from "@/lib/uiText";
 import type { NearbyTouristPlace } from "@/lib/visitKoreaTourApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
+import type { MapSheetDirectionOrigin } from "@/stores/mapSheetStore";
 import type { MapSheetPlace } from "@/types/place";
 import type { PlaceSheetData } from "../hooks/usePlaceSheetData";
 import {
@@ -25,6 +26,7 @@ type PlaceSheetOverviewPanelProps = {
   appLanguage: AppLanguage;
   currentLocation: PlaceSheetCoordinates;
   data: PlaceSheetData;
+  directionOrigin: MapSheetDirectionOrigin;
   isDarkMode: boolean;
   isVisible: boolean;
   onSelectNearbyPlace: (place: NearbyTouristPlace) => void;
@@ -52,6 +54,7 @@ function PlaceSheetOverviewPanel({
   appLanguage,
   currentLocation,
   data,
+  directionOrigin,
   isDarkMode,
   isVisible,
   onSelectNearbyPlace,
@@ -140,6 +143,7 @@ function PlaceSheetOverviewPanel({
           <PlaceDirectionsSection
             appLanguage={appLanguage}
             currentLocation={currentLocation}
+            directionOrigin={directionOrigin}
             isDarkMode={isDarkMode}
             isRouteLoading={isRouteLoading}
             routeDistanceText={routeDistanceText}

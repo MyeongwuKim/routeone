@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IoCarSportOutline, IoNavigate } from "react-icons/io5";
+import {
+  IoCarSportOutline,
+  IoInformationCircleOutline,
+  IoNavigate,
+} from "react-icons/io5";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import {
   applyNaverMapTheme,
@@ -7,12 +11,14 @@ import {
 } from "@/lib/naverMapTheme";
 import type { UiText } from "@/lib/uiText";
 import type { AppLanguage } from "@/stores/appLanguageStore";
+import type { MapSheetDirectionOrigin } from "@/stores/mapSheetStore";
 import type { MapSheetPlace } from "@/types/place";
 import type { PlaceSheetCoordinates } from "../placeSheetModel";
 import { RouteInfoSkeleton, SkeletonBar } from "./PlaceSheetPrimitives";
 
 const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 const NAVER_MAP_SCHEME_APP_NAME = "routeone.web";
+const PREVIEW_MAP_RESIZE_RETRY_MS = [0, 80, 240, 600] as const;
 
 type PreviewMapInstance = {
   setOptions?: (
@@ -26,9 +32,12 @@ type PreviewMapOverlay = {
   setMap: (map: null) => void;
 };
 
+type PreviewNaverMapsApi = NonNullable<Window["naver"]>["maps"];
+
 type PlaceDirectionsSectionProps = {
   appLanguage: AppLanguage;
   currentLocation: PlaceSheetCoordinates;
+  directionOrigin: MapSheetDirectionOrigin;
   isDarkMode: boolean;
   isRouteLoading: boolean;
   routeDistanceText: string | null;
@@ -39,9 +48,29 @@ type PlaceDirectionsSectionProps = {
   text: UiText;
 };
 
+function fitPreviewMapToBounds(
+  naverMaps: PreviewNaverMapsApi,
+  previewMap: PreviewMapInstance,
+  bounds: unknown
+) {
+  naverMaps.Event.trigger(previewMap, "resize");
+
+  try {
+    previewMap.fitBounds(bounds, {
+      top: 24,
+      right: 24,
+      bottom: 40,
+      left: 24,
+    });
+  } catch {
+    previewMap.fitBounds(bounds);
+  }
+}
+
 function PlaceDirectionsSection({
   appLanguage,
   currentLocation,
+  directionOrigin,
   isDarkMode,
   isRouteLoading,
   routeDistanceText,
@@ -58,6 +87,9 @@ function PlaceDirectionsSection({
   const previewMapContainerRef = useRef<HTMLDivElement | null>(null);
   const previewOverlaysRef = useRef<PreviewMapOverlay[]>([]);
   const selectedPlaceKey = `${selectedPlace.contentId}-${selectedPlace.contentTypeId}`;
+  const originLabel = directionOrigin.isCurrentLocation
+    ? text.placeSheet.currentLocation
+    : directionOrigin.label;
 
   const clearPreviewOverlays = useCallback(() => {
     previewOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
@@ -172,7 +204,7 @@ function PlaceDirectionsSection({
     const originMarker = new naverMaps.Marker({
       map: previewMap,
       position: originLatLng,
-      title: text.placeSheet.currentLocation,
+      title: originLabel,
     });
     previewOverlaysRef.current.push(originMarker);
 
@@ -195,21 +227,45 @@ function PlaceDirectionsSection({
       previewOverlaysRef.current.push(routeLine);
     }
 
-    try {
-      naverMaps.Event.trigger(previewMap, "resize");
-      previewMap.fitBounds(bounds, {
-        top: 24,
-        right: 24,
-        bottom: 40,
-        left: 24,
-      });
-    } catch {
-      previewMap.fitBounds(bounds);
-    }
+    let isCancelled = false;
+    const animationFrameIds: number[] = [];
+    const timeoutIds: number[] = [];
+    const refitPreviewMap = () => {
+      if (isCancelled || !previewMap) {
+        return;
+      }
 
-    requestAnimationFrame(() => {
-      naverMaps.Event.trigger(previewMap, "resize");
-    });
+      fitPreviewMapToBounds(naverMaps, previewMap, bounds);
+    };
+    const queueRefitPreviewMap = (delayMs: number) => {
+      if (delayMs === 0) {
+        animationFrameIds.push(window.requestAnimationFrame(refitPreviewMap));
+        return;
+      }
+
+      timeoutIds.push(
+        window.setTimeout(() => {
+          animationFrameIds.push(window.requestAnimationFrame(refitPreviewMap));
+        }, delayMs)
+      );
+    };
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => queueRefitPreviewMap(0));
+
+    fitPreviewMapToBounds(naverMaps, previewMap, bounds);
+    PREVIEW_MAP_RESIZE_RETRY_MS.forEach(queueRefitPreviewMap);
+    resizeObserver?.observe(container);
+
+    return () => {
+      isCancelled = true;
+      resizeObserver?.disconnect();
+      animationFrameIds.forEach((frameId) =>
+        window.cancelAnimationFrame(frameId)
+      );
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    };
   }, [
     clearPreviewOverlays,
     currentLocation,
@@ -217,7 +273,7 @@ function PlaceDirectionsSection({
     isPreviewMapSdkReady,
     routePathPoints,
     selectedPlace,
-    text.placeSheet.currentLocation,
+    originLabel,
   ]);
 
   useEffect(() => {
@@ -230,14 +286,18 @@ function PlaceDirectionsSection({
 
   const handleOpenDirections = () => {
     const params = new URLSearchParams({
-      slat: `${currentLocation.lat}`,
-      slng: `${currentLocation.lng}`,
-      sname: text.placeSheet.currentLocation,
       dlat: `${selectedPlace.lat}`,
       dlng: `${selectedPlace.lng}`,
       dname: selectedPlace.title,
       appname: NAVER_MAP_SCHEME_APP_NAME,
     });
+
+    if (directionOrigin.isCurrentLocation) {
+      params.set("slat", `${currentLocation.lat}`);
+      params.set("slng", `${currentLocation.lng}`);
+      params.set("sname", originLabel);
+    }
+
     window.location.href = `nmap://route/car?${params.toString()}`;
   };
 
@@ -246,6 +306,22 @@ function PlaceDirectionsSection({
       <div className="mb-3 flex items-center justify-between">
         <p className="font-trip text-sm text-brand-700">PLACE DIRECTIONS</p>
       </div>
+
+      {!directionOrigin.isCurrentLocation ? (
+        <div className="mb-3 flex gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
+          <IoInformationCircleOutline className="mt-0.5 shrink-0 text-base text-amber-600" />
+          <div>
+            <p className="font-bold">
+              {text.placeSheet.locationPermissionMissingTitle}
+            </p>
+            <p className="mt-0.5 font-semibold text-amber-800/80">
+              {text.placeSheet.locationPermissionMissingDescription(
+                originLabel
+              )}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="relative overflow-hidden rounded-2xl border border-brand-100 bg-brand-50">
         <div
@@ -285,13 +361,25 @@ function PlaceDirectionsSection({
         {isRouteLoading ? (
           <RouteInfoSkeleton />
         ) : routeDurationText && routeDistanceText ? (
-          <div className="flex items-center gap-2 text-sm">
-            <IoCarSportOutline className="text-brand-600" />
-            <p className="font-semibold text-slate-900">
-              {text.placeSheet.routeFromCurrentLocation(routeDurationText)}
-            </p>
-            <span className="text-slate-400">·</span>
-            <p className="text-slate-600">{routeDistanceText}</p>
+          <div className="text-sm">
+            <div className="flex items-center gap-2">
+              <IoCarSportOutline className="shrink-0 text-brand-600" />
+              <p className="font-semibold text-slate-900">
+                {directionOrigin.isCurrentLocation
+                  ? text.placeSheet.routeFromCurrentLocation(routeDurationText)
+                  : text.placeSheet.routeFromReferenceLocation(
+                      originLabel,
+                      routeDurationText
+                    )}
+              </p>
+              <span className="text-slate-400">·</span>
+              <p className="text-slate-600">{routeDistanceText}</p>
+            </div>
+            {!directionOrigin.isCurrentLocation ? (
+              <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">
+                {text.placeSheet.referenceRouteNotice}
+              </p>
+            ) : null}
           </div>
         ) : (
           <p className="text-sm text-slate-500">

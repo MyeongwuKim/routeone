@@ -1,6 +1,6 @@
 {
   "name": "native",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -16,7 +16,7 @@
     "preios": "pnpm run patch:expo-modules-jsi && pnpm run sync:ios-permissions",
     "sync:ios-permissions": "node scripts/sync-ios-permissions.mjs",
     "android": "pnpm run build:webview && expo run:android",
-    "ios": "pnpm run build:webview && expo run:ios",
+    "ios": "pnpm run prebuild:ios:dev && APP_VARIANT=dev EXPO_PUBLIC_APP_VARIANT=dev pnpm run build:webview && APP_VARIANT=dev EXPO_PUBLIC_APP_VARIANT=dev expo run:ios",
     "prebuild:ios:dev": "APP_VARIANT=dev EXPO_PUBLIC_APP_VARIANT=dev expo prebuild --platform ios && pnpm run sync:ios-permissions",
     "prebuild:ios:dev:clean": "APP_VARIANT=dev EXPO_PUBLIC_APP_VARIANT=dev expo prebuild --platform ios --clean && pnpm run sync:ios-permissions",
     "prebuild:ios:test": "pnpm run prebuild:ios:dev",

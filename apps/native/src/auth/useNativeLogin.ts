@@ -21,9 +21,6 @@ const GOOGLE_WEB_CLIENT_ID =
   process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim() ?? "";
 const GOOGLE_IOS_CLIENT_ID =
   process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim() ?? "";
-const ENABLE_APPLE_SIGN_IN =
-  process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim().toLowerCase() ===
-    "true" || process.env.EXPO_PUBLIC_ENABLE_APPLE_SIGN_IN?.trim() === "1";
 
 function configureGoogleSignIn() {
   GoogleSignin.configure({
@@ -83,13 +80,6 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
     let isMounted = true;
 
     configureGoogleSignIn();
-
-    if (!ENABLE_APPLE_SIGN_IN) {
-      setAppleAvailable(false);
-      return () => {
-        isMounted = false;
-      };
-    }
 
     void AppleAuthentication.isAvailableAsync().then((isAvailable) => {
       if (isMounted) {
@@ -176,10 +166,6 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
     setErrorMessage(null);
 
     try {
-      if (!ENABLE_APPLE_SIGN_IN) {
-        throw new Error("Apple 로그인이 비활성화된 빌드예요.");
-      }
-
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,

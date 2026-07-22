@@ -1,5 +1,6 @@
 import type {
   NativeWebBundlePlatform,
+  WebBundleChannel,
   WebBundleManifest
 } from "./webBundleTypes";
 
@@ -42,6 +43,24 @@ function readEntryPath(value: unknown) {
   }
 
   return normalized;
+}
+
+function readWebBundleChannel(value: unknown, fieldName: string) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error(`Web bundle manifest ${fieldName} is invalid.`);
+  }
+
+  const channel = value.trim().toLowerCase();
+
+  if (channel === "dev" || channel === "prod") {
+    return channel satisfies WebBundleChannel;
+  }
+
+  throw new Error(`Web bundle manifest ${fieldName} is invalid.`);
 }
 
 function readMinimumNativeVersion(value: unknown) {
@@ -94,6 +113,8 @@ function parseManifest(value: unknown): WebBundleManifest {
 
   return {
     version,
+    channel: readWebBundleChannel(value.channel, "channel"),
+    appVariant: readWebBundleChannel(value.appVariant, "appVariant"),
     bundleUrl: readRemoteUrl(value.bundleUrl, "bundleUrl"),
     entryPath: readEntryPath(value.entryPath),
     sha256: sha256.toLowerCase(),

@@ -442,6 +442,10 @@ export type UiText = {
     staySamplePending: (minCount: number) => string;
     stayAverage: (averageLabel: string, visitCount: number) => string;
     currentLocation: string;
+    referenceLocation: (label: string) => string;
+    gangwonReferenceLocation: string;
+    locationPermissionMissingTitle: string;
+    locationPermissionMissingDescription: (label: string) => string;
     destination: string;
     mapLoadError: string;
     bottomSheetCloseAria: string;
@@ -470,6 +474,8 @@ export type UiText = {
     mapPreparing: string;
     address: string;
     routeFromCurrentLocation: (duration: string) => string;
+    routeFromReferenceLocation: (label: string, duration: string) => string;
+    referenceRouteNotice: string;
     routeLoadError: string;
     directions: string;
     nearbyTitle: string;
@@ -635,7 +641,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
   ko: {
     common: {
       cancel: "취소",
-      clearAll: "전체 해제",
+      clearAll: "비우기",
       close: "닫기",
       confirm: "확인",
       retry: "다시 시도",
@@ -1199,6 +1205,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       stayAverage: (averageLabel, visitCount) =>
         `${averageLabel} · ${visitCount}회 방문 기준`,
       currentLocation: "현재 위치",
+      referenceLocation: (label) => `${label} 중심`,
+      gangwonReferenceLocation: "강원 중심",
+      locationPermissionMissingTitle:
+        "위치 권한이 없어 실제 내 위치 기준으로 표시할 수 없어요.",
+      locationPermissionMissingDescription: (label) =>
+        `지금은 ${label} 기준의 참고 경로를 보여드려요.`,
       destination: "목적지",
       mapLoadError: "지도를 불러오지 못했습니다.",
       bottomSheetCloseAria: "바텀시트 닫기",
@@ -1227,7 +1239,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       mapPreparing: "지도 준비 중",
       address: "주소",
       routeFromCurrentLocation: (duration) =>
-        `내 위치(강릉 중심) 기준 차로 ${duration}`,
+        `내 위치 기준 차로 ${duration}`,
+      routeFromReferenceLocation: (label, duration) =>
+        `${label} 기준 참고 경로 · 차로 ${duration}`,
+      referenceRouteNotice:
+        "위치 권한을 허용하면 실제 내 위치 기준으로 다시 안내할 수 있어요.",
       routeLoadError: "길찾기 정보를 가져오지 못했습니다.",
       directions: "길찾기",
       nearbyTitle: "이런 곳도 좋아요",
@@ -1441,7 +1457,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
   en: {
     common: {
       cancel: "Cancel",
-      clearAll: "Clear all",
+      clearAll: "Empty",
       close: "Close",
       confirm: "OK",
       retry: "Try again",
@@ -2014,6 +2030,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       stayAverage: (averageLabel, visitCount) =>
         `${averageLabel} · based on ${visitCount} visits`,
       currentLocation: "Current location",
+      referenceLocation: (label) => `${label} center`,
+      gangwonReferenceLocation: "Gangwon center",
+      locationPermissionMissingTitle:
+        "Location access is off, so this cannot use your exact position.",
+      locationPermissionMissingDescription: (label) =>
+        `Showing a reference route from ${label} for now.`,
       destination: "Destination",
       mapLoadError: "Could not load the map.",
       bottomSheetCloseAria: "Close bottom sheet",
@@ -2043,7 +2065,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       mapPreparing: "Preparing map",
       address: "Address",
       routeFromCurrentLocation: (duration) =>
-        `${duration} by car from your location (Gangneung center)`,
+        `${duration} by car from your location`,
+      routeFromReferenceLocation: (label, duration) =>
+        `Reference route from ${label} · ${duration} by car`,
+      referenceRouteNotice:
+        "Allow location access to recalculate this from your real position.",
       routeLoadError: "Could not load directions.",
       directions: "Directions",
       nearbyTitle: "You Might Also Like",

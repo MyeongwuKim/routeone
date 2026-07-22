@@ -1,10 +1,13 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import AppRouter from "./router/AppRouter";
 import GlobalModal from "./components/feedback/GlobalModal";
 import TopToast from "./components/feedback/TopToast";
 import PotatoLoadingOverlay from "./components/feedback/PotatoLoadingOverlay";
-import PlaceBottomSheet from "./features/place-sheet/components/PlaceBottomSheet";
 import { initializeUiTheme } from "./stores/uiThemeStore";
+
+const PlaceBottomSheet = lazy(
+  () => import("./features/place-sheet/components/PlaceBottomSheet")
+);
 
 function App() {
   useEffect(() => {
@@ -17,7 +20,9 @@ function App() {
       <TopToast />
       <PotatoLoadingOverlay />
       <AppRouter />
-      <PlaceBottomSheet />
+      <Suspense fallback={null}>
+        <PlaceBottomSheet />
+      </Suspense>
     </>
   );
 }

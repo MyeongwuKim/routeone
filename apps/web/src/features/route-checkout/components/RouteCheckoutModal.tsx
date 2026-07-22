@@ -17,6 +17,7 @@ import type {
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import type { MapSheetPlace } from "@/types/place";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText } from "@/lib/uiText";
 import {
   getCurrentTimeValue,
@@ -167,7 +168,9 @@ function RouteCheckoutModalContent({
     step === "start-location" ? text.cart.buildRoute : text.cart.next;
 
   return (
-    <section className="route-checkout-modal-enter fixed inset-0 z-[2600] h-dvh overflow-hidden bg-white">
+    <section
+      className={`route-checkout-modal-enter fixed inset-0 ${UI_LAYER_CLASS.routeCheckout} h-dvh overflow-hidden bg-white`}
+    >
       <div className="flex h-full min-h-0 flex-col">
         <header className="app-safe-area-header flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3">
           <div className="flex items-center">

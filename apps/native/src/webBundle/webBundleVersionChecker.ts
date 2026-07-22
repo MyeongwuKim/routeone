@@ -1,5 +1,6 @@
 import type {
   NativeWebBundlePlatform,
+  WebBundleChannel,
   WebBundleManifest
 } from "./webBundleTypes";
 
@@ -104,6 +105,7 @@ export function shouldInstallWebBundle(options: {
   currentWebVersion: string | null;
   nativeVersion: string;
   platform: NativeWebBundlePlatform;
+  expectedChannel: WebBundleChannel;
   failedVersions: readonly string[];
 }) {
   const {
@@ -111,9 +113,15 @@ export function shouldInstallWebBundle(options: {
     currentWebVersion,
     nativeVersion,
     platform,
+    expectedChannel,
     failedVersions
   } = options;
   const minimumNativeVersion = manifest.minimumNativeVersion?.[platform];
+  const manifestChannel = manifest.channel ?? manifest.appVariant;
+
+  if (manifestChannel !== expectedChannel) {
+    return false;
+  }
 
   if (
     minimumNativeVersion &&

@@ -26,7 +26,7 @@ function createEmbeddedBundle(): ResolvedWebBundle {
       baseUrl: "https://routeone.native/"
     },
     pending: false,
-    readySignalRequired: false
+    readySignalRequired: true
   };
 }
 
@@ -59,7 +59,7 @@ export async function resolveWebBundle(
     fallback = snapshot.active
       ? createInstalledBundle(snapshot.active)
       : createEmbeddedBundle();
-    const { manifestUrl, nativeVersion } = WEB_BUNDLE_UPDATE_CONFIG;
+    const { channel, manifestUrl, nativeVersion } = WEB_BUNDLE_UPDATE_CONFIG;
 
     if (
       !manifestUrl ||
@@ -86,6 +86,7 @@ export async function resolveWebBundle(
         currentWebVersion: snapshot.active?.version ?? null,
         nativeVersion,
         platform: Platform.OS,
+        expectedChannel: channel,
         failedVersions: snapshot.failedVersions
       })
     ) {

@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText, type UiText } from "@/lib/uiText";
 
 type TimeWheelInputProps = {
@@ -498,7 +499,9 @@ function TimeWheelInput({
       </button>
 
       {isOpen ? (
-        <div className="fixed inset-0 z-[1800] flex items-center justify-center bg-slate-900/45 px-4">
+        <div
+          className={`fixed inset-0 ${UI_LAYER_CLASS.inputDialog} flex items-center justify-center bg-slate-900/45 px-4`}
+        >
           <div className="w-full max-w-[360px] rounded-[26px] border border-brand-200 bg-white p-3.5 text-slate-900 shadow-2xl">
             <div className="mb-2.5">
               <p className="text-[28px] font-bold leading-tight">{title}</p>
