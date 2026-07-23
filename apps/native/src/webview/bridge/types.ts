@@ -1,4 +1,5 @@
 import type { MutableRefObject } from "react";
+import type { ResolvedWebBundleKind } from "../../webBundle/webBundleTypes";
 
 export type WebViewRef = MutableRefObject<{
   injectJavaScript: (script: string) => void;
@@ -36,7 +37,7 @@ export type NativeAppInfoRequest = {
 
 export type NativeAppInfoContext = {
   webBundleVersion: string | null;
-  webBundleKind: "embedded" | "installed";
+  webBundleKind: ResolvedWebBundleKind;
 };
 
 export type NativeLocationRequest = {

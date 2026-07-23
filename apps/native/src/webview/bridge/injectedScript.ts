@@ -14,7 +14,9 @@ const ROUTEONE_RUNTIME_CONFIG = {
   nativeAppVariant: WEB_BUNDLE_UPDATE_CONFIG.appVariant,
   webBundleChannel: WEB_BUNDLE_UPDATE_CONFIG.channel,
   webBundleManifestUrl: WEB_BUNDLE_UPDATE_CONFIG.manifestUrl,
-  webBundlePublicOrigin: WEB_BUNDLE_UPDATE_CONFIG.publicOrigin,
+  ...(WEB_BUNDLE_UPDATE_CONFIG.publicOrigin
+    ? { webBundlePublicOrigin: WEB_BUNDLE_UPDATE_CONFIG.publicOrigin }
+    : {}),
   devVerificationBypass:
     readTruthyPublicEnv("EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS") ||
     readTruthyPublicEnv("EXPO_PUBLIC_DEV_VERIFICATION_BYPASS")

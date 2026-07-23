@@ -6,7 +6,7 @@ export type RouteOneAppInfo = {
   osVersion?: string | null;
   bundleIdentifier?: string | null;
   webBundleVersion?: string | null;
-  webBundleKind?: "embedded" | "installed" | null;
+  webBundleKind?: "embedded" | "installed" | "remote" | null;
   webBundleChannel?: string | null;
   appVariant?: string | null;
 };

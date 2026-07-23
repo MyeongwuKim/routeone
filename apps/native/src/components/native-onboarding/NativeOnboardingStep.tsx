@@ -1,6 +1,5 @@
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -25,11 +24,11 @@ type NativeOnboardingStepProps = {
 
 const ONBOARDING_THEME = {
   light: {
-    background: "#0f766e",
-    brandText: "#ffffff",
-    mutedText: "rgba(255, 255, 255, 0.78)",
-    cardBackground: "rgba(255, 255, 255, 0.96)",
-    cardBorder: "rgba(255, 255, 255, 0.28)",
+    background: "#f8fafc",
+    brandText: "#0f766e",
+    mutedText: "#64748b",
+    cardBackground: "#ffffff",
+    cardBorder: "#e2e8f0",
     title: "#0f172a",
     description: "#475569",
     primaryBackground: "#0f766e",
@@ -58,14 +57,14 @@ const ONBOARDING_THEME = {
   }
 } as const;
 
-function useOnboardingTheme() {
+export function useNativeOnboardingTheme() {
   const colorScheme = useColorScheme();
 
   return ONBOARDING_THEME[colorScheme === "dark" ? "dark" : "light"];
 }
 
 export function NativeOnboardingLoading() {
-  const colors = useOnboardingTheme();
+  const colors = useNativeOnboardingTheme();
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -86,21 +85,10 @@ export default function NativeOnboardingStep({
   const actions = secondaryAction
     ? [secondaryAction, primaryAction]
     : [primaryAction];
-  const colors = useOnboardingTheme();
+  const colors = useNativeOnboardingTheme();
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={styles.brand}>
-        <Image
-          accessibilityIgnoresInvertColors
-          source={require("../../../assets/splash-brand-icon.png")}
-          style={styles.logoImage}
-        />
-        <Text style={[styles.brandName, { color: colors.brandText }]}>
-          RouteOne
-        </Text>
-      </View>
-
       <View
         style={[
           styles.card,
@@ -111,9 +99,6 @@ export default function NativeOnboardingStep({
         ]}
       >
         <View style={styles.headerText}>
-          <Text style={[styles.eyebrow, { color: colors.secondaryText }]}>
-            ROUTE ONE
-          </Text>
           <Text style={[styles.title, { color: colors.title }]}>{title}</Text>
         </View>
         <Text style={[styles.description, { color: colors.description }]}>
@@ -175,65 +160,48 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 24
+    paddingHorizontal: 24,
+    paddingVertical: 24
   },
   loadingText: {
     marginTop: 12,
     fontSize: 14,
     fontWeight: "800"
   },
-  brand: {
-    alignItems: "center",
-    marginBottom: 18
-  },
-  logoImage: {
-    width: 150,
-    height: 150,
-    resizeMode: "contain"
-  },
-  brandName: {
-    marginTop: -28,
-    fontSize: 26,
-    fontWeight: "900",
-    letterSpacing: 0
-  },
   card: {
     width: "100%",
-    maxWidth: 326,
-    borderRadius: 14,
+    maxWidth: 320,
+    borderRadius: 16,
     borderWidth: 1,
-    padding: 24,
+    padding: 22,
     shadowColor: "#0f172a",
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
     shadowOffset: {
       width: 0,
-      height: 12,
+      height: 8,
     },
-    elevation: 12,
+    elevation: 8,
   },
   headerText: {
     width: "100%"
   },
-  eyebrow: {
-    fontSize: 12,
-    fontWeight: "900",
-  },
   title: {
-    marginTop: 6,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "900",
+    textAlign: "center"
   },
   description: {
-    marginTop: 22,
-    fontSize: 15,
+    marginTop: 14,
+    fontSize: 14,
     fontWeight: "700",
-    lineHeight: 23,
+    lineHeight: 21,
+    textAlign: "center"
   },
   actions: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 24,
+    marginTop: 22,
   },
   button: {
     flex: 1,

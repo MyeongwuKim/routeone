@@ -27,6 +27,8 @@ export type InstalledWebBundle = {
   readySignalRequired: boolean;
 };
 
+export type ResolvedWebBundleKind = "embedded" | "installed" | "remote";
+
 export type WebBundleSource =
   | {
       html: string;
@@ -38,7 +40,7 @@ export type WebBundleSource =
 
 export type ResolvedWebBundle = {
   key: string;
-  kind: "embedded" | "installed";
+  kind: ResolvedWebBundleKind;
   version: string | null;
   source: WebBundleSource;
   allowingReadAccessToUrl?: string;

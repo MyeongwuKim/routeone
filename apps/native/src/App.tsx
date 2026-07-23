@@ -6,7 +6,9 @@ import {
   View
 } from "react-native";
 import NativeLoginStep from "./components/native-onboarding/NativeLoginStep";
-import NativeOnboardingStep from "./components/native-onboarding/NativeOnboardingStep";
+import NativeOnboardingStep, {
+  useNativeOnboardingTheme
+} from "./components/native-onboarding/NativeOnboardingStep";
 import NativeWebViewScreen from "./components/native-webview/NativeWebViewScreen";
 import RouteOneLaunchScreen from "./components/native-webview/RouteOneLaunchScreen";
 import { useNativeBoot } from "./boot/useNativeBoot";
@@ -41,6 +43,7 @@ export default function App() {
   const colorScheme = useColorScheme();
   const brandBackgroundColor =
     colorScheme === "dark" ? "#061918" : "#0f766e";
+  const onboardingTheme = useNativeOnboardingTheme();
   const {
     appLanguage,
     bootStep,
@@ -81,8 +84,16 @@ export default function App() {
 
   if (bootStep === "language") {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" />
+      <SafeAreaView
+        style={[
+          styles.container,
+          { backgroundColor: onboardingTheme.background }
+        ]}
+      >
+        <StatusBar
+          barStyle={colorScheme === "dark" ? "light-content" : "dark-content"}
+          backgroundColor={onboardingTheme.background}
+        />
         <NativeOnboardingStep
           description="RouteOne에서 사용할 언어를 선택해 주세요. Choose the language to use in RouteOne."
           primaryAction={{
@@ -107,8 +118,16 @@ export default function App() {
 
   if (bootStep === "location") {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" />
+      <SafeAreaView
+        style={[
+          styles.container,
+          { backgroundColor: onboardingTheme.background }
+        ]}
+      >
+        <StatusBar
+          barStyle={colorScheme === "dark" ? "light-content" : "dark-content"}
+          backgroundColor={onboardingTheme.background}
+        />
         <NativeOnboardingStep
           description={text.locationDescription}
           primaryAction={{
@@ -136,8 +155,16 @@ export default function App() {
 
   if (bootStep === "notification") {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" />
+      <SafeAreaView
+        style={[
+          styles.container,
+          { backgroundColor: onboardingTheme.background }
+        ]}
+      >
+        <StatusBar
+          barStyle={colorScheme === "dark" ? "light-content" : "dark-content"}
+          backgroundColor={onboardingTheme.background}
+        />
         <NativeOnboardingStep
           description={text.notificationDescription}
           primaryAction={{

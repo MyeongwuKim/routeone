@@ -35,12 +35,7 @@ function readHttpOrigin(value: string | null | undefined) {
 }
 
 export function getNaverMapAuthOrigin() {
-  return (
-    readHttpOrigin(window.location.href) ??
-    readHttpOrigin(window.RouteOneRuntimeConfig?.webBundlePublicOrigin) ??
-    readHttpOrigin(document.baseURI) ??
-    "unknown"
-  );
+  return readHttpOrigin(window.location.href) ?? "unknown";
 }
 
 function resetNaverMapSdk() {
