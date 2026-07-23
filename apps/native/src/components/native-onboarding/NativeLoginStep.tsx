@@ -13,7 +13,10 @@ import {
 } from "react-native";
 import type { NativeLoginProvider } from "../../auth/nativeLoginTypes";
 
+type AppLanguage = "ko" | "en";
+
 type NativeLoginStepProps = {
+  language: AppLanguage;
   accountId: string;
   password: string;
   displayName: string;
@@ -77,6 +80,46 @@ const LOGIN_THEME = {
   }
 } as const;
 
+const LOGIN_TEXT = {
+  ko: {
+    appleChecking: "Apple 확인 중",
+    appleContinue: "Apple로 계속",
+    appleIosOnly: "iOS에서 사용 가능",
+    applePermissionError: "Apple 로그인 권한을 켠 뒤 앱을 다시 설치해 주세요.",
+    applePreparing: "Apple 준비 중",
+    checking: "확인 중",
+    displayNamePlaceholder: "닉네임(선택)",
+    errorTitle: "계속 진행하지 못했어요",
+    googleChecking: "Google 확인 중",
+    googleConfigurationError:
+      "Google 로그인 설정이 앱에 아직 반영되지 않았어요. 앱을 다시 설치한 뒤 시도해 주세요.",
+    googleContinue: "Google로 계속",
+    passwordPlaceholder: "비밀번호",
+    testAccount: "테스트 계정",
+    testAccountContinue: "테스트 계정으로 계속",
+    accountIdPlaceholder: "아이디"
+  },
+  en: {
+    appleChecking: "Checking Apple",
+    appleContinue: "Continue with Apple",
+    appleIosOnly: "Available on iOS",
+    applePermissionError:
+      "Turn on Sign in with Apple, then reinstall the app.",
+    applePreparing: "Preparing Apple",
+    checking: "Checking",
+    displayNamePlaceholder: "Nickname (optional)",
+    errorTitle: "Could not continue",
+    googleChecking: "Checking Google",
+    googleConfigurationError:
+      "Google sign-in configuration has not been applied to this app yet. Reinstall the app and try again.",
+    googleContinue: "Continue with Google",
+    passwordPlaceholder: "Password",
+    testAccount: "Test account",
+    testAccountContinue: "Continue with test account",
+    accountIdPlaceholder: "ID"
+  }
+} as const;
+
 function getButtonLabel({
   provider,
   activeProvider,
@@ -93,43 +136,49 @@ function getButtonLabel({
 
 function getAppleButtonLabel({
   activeProvider,
-  appleAvailable
+  appleAvailable,
+  text
 }: {
   activeProvider: NativeLoginProvider | null;
   appleAvailable: boolean;
+  text: (typeof LOGIN_TEXT)[AppLanguage];
 }) {
   if (Platform.OS !== "ios") {
-    return "iOS에서 사용 가능";
+    return text.appleIosOnly;
   }
 
   if (!appleAvailable) {
-    return "Apple 준비 중";
+    return text.applePreparing;
   }
 
   return getButtonLabel({
     provider: "apple",
     activeProvider,
-    label: "Apple로 계속",
-    loadingLabel: "Apple 확인 중"
+    label: text.appleContinue,
+    loadingLabel: text.appleChecking
   });
 }
 
-function getFriendlyErrorMessage(errorMessage: string) {
+function getFriendlyErrorMessage(
+  errorMessage: string,
+  text: (typeof LOGIN_TEXT)[AppLanguage]
+) {
   if (errorMessage.includes("URL schemes")) {
-    return "Google 로그인 설정이 앱에 아직 반영되지 않았어요. 앱을 다시 설치한 뒤 시도해 주세요.";
+    return text.googleConfigurationError;
   }
 
   if (
     errorMessage.includes("비활성화된 빌드") ||
     errorMessage.includes("Sign in with Apple")
   ) {
-    return "Apple 로그인 권한을 켠 뒤 앱을 다시 설치해 주세요.";
+    return text.applePermissionError;
   }
 
   return errorMessage;
 }
 
 export default function NativeLoginStep({
+  language,
   accountId,
   password,
   displayName,
@@ -145,10 +194,11 @@ export default function NativeLoginStep({
 }: NativeLoginStepProps) {
   const colorScheme = useColorScheme();
   const colors = LOGIN_THEME[colorScheme === "dark" ? "dark" : "light"];
+  const text = LOGIN_TEXT[language];
   const isBusy = activeProvider !== null;
   const isAppleDisabled = isBusy || Platform.OS !== "ios" || !appleAvailable;
   const friendlyErrorMessage = errorMessage
-    ? getFriendlyErrorMessage(errorMessage)
+    ? getFriendlyErrorMessage(errorMessage, text)
     : null;
 
   return (
@@ -201,8 +251,8 @@ export default function NativeLoginStep({
                 {getButtonLabel({
                   provider: "google",
                   activeProvider,
-                  label: "Google로 계속",
-                  loadingLabel: "Google 확인 중"
+                  label: text.googleContinue,
+                  loadingLabel: text.googleChecking
                 })}
               </Text>
             </View>
@@ -233,7 +283,11 @@ export default function NativeLoginStep({
             </View>
             <View style={styles.loginButtonContent}>
               <Text style={[styles.buttonText, { color: colors.appleText }]}>
-                {getAppleButtonLabel({ activeProvider, appleAvailable })}
+                {getAppleButtonLabel({
+                  activeProvider,
+                  appleAvailable,
+                  text
+                })}
               </Text>
             </View>
           </Pressable>
@@ -243,7 +297,7 @@ export default function NativeLoginStep({
               style={[styles.dividerLine, { backgroundColor: colors.divider }]}
             />
             <Text style={[styles.dividerText, { color: colors.mutedText }]}>
-              테스트 계정
+              {text.testAccount}
             </Text>
             <View
               style={[styles.dividerLine, { backgroundColor: colors.divider }]}
@@ -255,7 +309,7 @@ export default function NativeLoginStep({
             autoCorrect={false}
             editable={!isBusy}
             onChangeText={onChangeAccountId}
-            placeholder="아이디"
+            placeholder={text.accountIdPlaceholder}
             placeholderTextColor={colors.placeholder}
             style={[
               styles.input,
@@ -270,7 +324,7 @@ export default function NativeLoginStep({
           <TextInput
             editable={!isBusy}
             onChangeText={onChangePassword}
-            placeholder="비밀번호"
+            placeholder={text.passwordPlaceholder}
             placeholderTextColor={colors.placeholder}
             secureTextEntry
             style={[
@@ -286,7 +340,7 @@ export default function NativeLoginStep({
           <TextInput
             editable={!isBusy}
             onChangeText={onChangeDisplayName}
-            placeholder="닉네임(선택)"
+            placeholder={text.displayNamePlaceholder}
             placeholderTextColor={colors.placeholder}
             style={[
               styles.input,
@@ -317,8 +371,8 @@ export default function NativeLoginStep({
                 {getButtonLabel({
                   provider: "password",
                   activeProvider,
-                  label: "테스트 계정으로 계속",
-                  loadingLabel: "확인 중"
+                  label: text.testAccountContinue,
+                  loadingLabel: text.checking
                 })}
               </Text>
             </View>
@@ -342,7 +396,7 @@ export default function NativeLoginStep({
             ]}
           >
             <Text style={[styles.errorTitle, { color: colors.errorText }]}>
-              계속 진행하지 못했어요
+              {text.errorTitle}
             </Text>
             <Text style={[styles.errorText, { color: colors.errorText }]}>
               {friendlyErrorMessage}

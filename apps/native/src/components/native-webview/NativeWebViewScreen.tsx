@@ -1,12 +1,15 @@
 import * as Notifications from "expo-notifications";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
+  BackHandler,
   StatusBar,
   StyleSheet,
   Text,
   View
 } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
+import { isFatalWebBundleInstallError } from "../../webBundle/webBundleErrors";
 import { INITIAL_WEB_BUNDLE_PROGRESS } from "../../webBundle/webBundleProgress";
 import {
   markResolvedWebBundleReady,
@@ -26,9 +29,11 @@ import {
 import RouteOneLaunchScreen from "./RouteOneLaunchScreen";
 
 type NativeWebViewScreenProps = {
-  appLanguage: "ko" | "en";
+  appLanguage: AppLanguage;
   nativeAuthToken: string | null;
 };
+
+type AppLanguage = "ko" | "en";
 
 type WebViewNavigationRequest = {
   url: string;
@@ -37,6 +42,67 @@ type WebViewNavigationRequest = {
 
 const AUTH_TOKEN_STORAGE_KEY = "routeone.authToken";
 const APP_LANGUAGE_STORAGE_KEY = "routeone-app-language";
+
+const WEB_VIEW_TEXT = {
+  ko: {
+    fatalAlertConfirm: "예",
+    fatalAlertDescription: "앱을 종료한 뒤 다시 실행해 주세요.",
+    fatalAlertTitle: "업데이트를 적용하지 못했어요",
+    fatalInstallMessages: {
+      download: "업데이트 파일을 3번 시도했지만 내려받지 못했어요.",
+      extract: "업데이트 압축을 3번 시도했지만 풀지 못했어요.",
+      verify: "업데이트 파일을 3번 시도했지만 확인하지 못했어요."
+    },
+    launchTagline: "여행의 시작부터 도착까지",
+    loadErrorTitle: "웹앱을 불러오지 못했어요.",
+    loadingRouteOne: "RouteOne을 불러오고 있어요.",
+    prepareFailed: "웹 번들을 준비하지 못했어요.",
+    progressMessages: {
+      applying: "새 버전을 적용하고 있어요.",
+      checking: "최신 버전을 확인하고 있어요.",
+      downloading: "업데이트를 내려받고 있어요.",
+      extracting: "업데이트 압축을 풀고 있어요.",
+      loading: "RouteOne을 불러오고 있어요.",
+      preparing: "저장된 버전을 확인하고 있어요.",
+      ready: "준비가 끝났어요.",
+      rollback: "이전 버전으로 복구하고 있어요.",
+      verifying: "업데이트 파일을 확인하고 있어요."
+    },
+    ready: "준비가 끝났어요.",
+    reloadingRouteOne: "RouteOne을 다시 불러오고 있어요.",
+    restoringPrevious: "이전 버전으로 복구하고 있어요.",
+    waitingReadySignal: "웹 화면 준비 신호를 기다리고 있어요."
+  },
+  en: {
+    fatalAlertConfirm: "Yes",
+    fatalAlertDescription: "The app will close. Please open it again.",
+    fatalAlertTitle: "Could not apply the update",
+    fatalInstallMessages: {
+      download: "The update file could not be downloaded after 3 attempts.",
+      extract: "The update archive could not be extracted after 3 attempts.",
+      verify: "The update file could not be verified after 3 attempts."
+    },
+    launchTagline: "From first plan to final stop",
+    loadErrorTitle: "Could not load the web app.",
+    loadingRouteOne: "Loading RouteOne.",
+    prepareFailed: "Could not prepare the web bundle.",
+    progressMessages: {
+      applying: "Applying the new version.",
+      checking: "Checking for updates.",
+      downloading: "Downloading the update.",
+      extracting: "Extracting the update.",
+      loading: "Loading RouteOne.",
+      preparing: "Checking the saved version.",
+      ready: "Ready.",
+      rollback: "Restoring the previous version.",
+      verifying: "Verifying the update file."
+    },
+    ready: "Ready.",
+    reloadingRouteOne: "Loading RouteOne again.",
+    restoringPrevious: "Restoring the previous version.",
+    waitingReadySignal: "Waiting for the web screen to be ready."
+  }
+} as const;
 
 function readProgressNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value)
@@ -58,6 +124,43 @@ function readBundleProgress(
       INITIAL_WEB_BUNDLE_PROGRESS.progress
     )
   };
+}
+
+function readDisplayBundleProgress(
+  progress: WebBundleProgress | null | undefined,
+  text: (typeof WEB_VIEW_TEXT)[AppLanguage]
+): WebBundleProgress {
+  const normalizedProgress = readBundleProgress(progress);
+  const loadingMessages: readonly string[] = [
+    text.loadingRouteOne,
+    text.reloadingRouteOne,
+    text.waitingReadySignal
+  ];
+
+  if (
+    normalizedProgress.stage === "loading" &&
+    loadingMessages.includes(normalizedProgress.message)
+  ) {
+    return normalizedProgress;
+  }
+
+  return {
+    ...normalizedProgress,
+    message:
+      text.progressMessages[normalizedProgress.stage] ??
+      normalizedProgress.message
+  };
+}
+
+function getLoadErrorMessage(
+  error: unknown,
+  text: (typeof WEB_VIEW_TEXT)[AppLanguage]
+) {
+  if (isFatalWebBundleInstallError(error)) {
+    return text.fatalInstallMessages[error.reason];
+  }
+
+  return error instanceof Error ? error.message : text.prepareFailed;
 }
 
 function getRouteArrivalNotificationWebPath(
@@ -141,8 +244,10 @@ export default function NativeWebViewScreen({
   appLanguage,
   nativeAuthToken
 }: NativeWebViewScreenProps) {
+  const text = WEB_VIEW_TEXT[appLanguage];
   const webViewRef = useRef<WebView>(null);
   const pendingNavigationPathRef = useRef<string | null>(null);
+  const fatalExitAlertShownRef = useRef(false);
   const rollbackInProgressRef = useRef(false);
   const [resolvedBundle, setResolvedBundle] =
     useState<ResolvedWebBundle | null>(null);
@@ -175,6 +280,30 @@ export default function NativeWebViewScreen({
     return `${authScript}\n${languageScript}\n${ROUTEONE_WEBVIEW_BRIDGE_SCRIPT}`;
   }, [appLanguage, nativeAuthToken]);
 
+  const requestFatalAppExit = useCallback(
+    (message: string) => {
+      if (fatalExitAlertShownRef.current) {
+        return;
+      }
+
+      fatalExitAlertShownRef.current = true;
+      Alert.alert(
+        text.fatalAlertTitle,
+        `${message}\n\n${text.fatalAlertDescription}`,
+        [
+          {
+            text: text.fatalAlertConfirm,
+            onPress: () => {
+              BackHandler.exitApp();
+            }
+          }
+        ],
+        { cancelable: false }
+      );
+    },
+    [text]
+  );
+
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
       try {
@@ -186,7 +315,7 @@ export default function NativeWebViewScreen({
           setBundleProgress({
             stage: "ready",
             progress: 1,
-            message: "준비가 끝났어요."
+            message: text.ready
           });
           setLoadError(null);
           setIsLoading(false);
@@ -203,7 +332,7 @@ export default function NativeWebViewScreen({
         webBundleKind: resolvedBundle?.kind ?? "embedded"
       });
     },
-    [resolvedBundle]
+    [resolvedBundle, text]
   );
 
   const injectNavigationPath = useCallback((path: string) => {
@@ -282,24 +411,28 @@ export default function NativeWebViewScreen({
           setBundleProgress({
             stage: "loading",
             progress: 0.93,
-            message: "RouteOne을 불러오고 있어요."
+            message: text.loadingRouteOne
           });
           setResolvedBundle(bundle);
         }
       })
       .catch((error) => {
         if (!cancelled) {
-          setLoadError(
-            error instanceof Error ? error.message : "웹 번들을 준비하지 못했어요."
-          );
+          const errorMessage = getLoadErrorMessage(error, text);
+
+          setLoadError(errorMessage);
           setIsLoading(false);
+
+          if (isFatalWebBundleInstallError(error)) {
+            requestFatalAppExit(errorMessage);
+          }
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [requestFatalAppExit, text]);
 
   const handleLoadError = useCallback(
     (description: string) => {
@@ -317,7 +450,7 @@ export default function NativeWebViewScreen({
       setBundleProgress({
         stage: "rollback",
         progress: 0.92,
-        message: "이전 버전으로 복구하고 있어요."
+        message: text.restoringPrevious
       });
       void rollbackResolvedWebBundle(resolvedBundle)
         .then((fallbackBundle) => {
@@ -326,7 +459,7 @@ export default function NativeWebViewScreen({
           setBundleProgress({
             stage: "loading",
             progress: 0.94,
-            message: "RouteOne을 다시 불러오고 있어요."
+            message: text.reloadingRouteOne
           });
           setResolvedBundle(fallbackBundle);
         })
@@ -340,10 +473,13 @@ export default function NativeWebViewScreen({
           rollbackInProgressRef.current = false;
         });
     },
-    [resolvedBundle]
+    [resolvedBundle, text]
   );
 
-  const displayBundleProgress = readBundleProgress(bundleProgress);
+  const displayBundleProgress = readDisplayBundleProgress(
+    bundleProgress,
+    text
+  );
 
   return (
     <View style={styles.webViewContainer}>
@@ -373,7 +509,7 @@ export default function NativeWebViewScreen({
             setBundleProgress({
               stage: "loading",
               progress: 0.95,
-              message: "RouteOne을 불러오고 있어요."
+              message: text.loadingRouteOne
             });
           }}
           onLoadProgress={(event) => {
@@ -394,24 +530,24 @@ export default function NativeWebViewScreen({
                   currentProgress.progress,
                   0.95 + webViewProgress * 0.03
                 ),
-                message: "RouteOne을 불러오고 있어요."
+                message: text.loadingRouteOne
               };
             });
           }}
           onLoadEnd={() => {
             if (resolvedBundle.readySignalRequired) {
-            setBundleProgress({
-              stage: "loading",
-              progress: 0.98,
-              message: "웹 화면 준비 신호를 기다리고 있어요."
-            });
+              setBundleProgress({
+                stage: "loading",
+                progress: 0.98,
+                message: text.waitingReadySignal
+              });
               return;
             }
 
             setBundleProgress({
               stage: "ready",
               progress: 1,
-              message: "준비가 끝났어요."
+              message: text.ready
             });
             setIsLoading(false);
             void markResolvedWebBundleReady(resolvedBundle).catch((error) => {
@@ -432,12 +568,13 @@ export default function NativeWebViewScreen({
           <RouteOneLaunchScreen
             message={displayBundleProgress.message}
             progress={displayBundleProgress.progress}
+            tagline={text.launchTagline}
           />
         </View>
       ) : null}
       {loadError ? (
         <View style={styles.errorPanel}>
-          <Text style={styles.errorTitle}>웹앱을 불러오지 못했어요.</Text>
+          <Text style={styles.errorTitle}>{text.loadErrorTitle}</Text>
           <Text style={styles.errorMessage}>{loadError}</Text>
         </View>
       ) : null}

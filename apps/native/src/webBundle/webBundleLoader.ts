@@ -19,6 +19,7 @@ import type {
   WebBundleProgressReporter
 } from "./webBundleTypes";
 import { emitWebBundleProgress } from "./webBundleProgress";
+import { isFatalWebBundleInstallError } from "./webBundleErrors";
 import {
   compareWebBundleVersions,
   shouldInstallWebBundle
@@ -250,6 +251,10 @@ export async function resolveWebBundle(
         await installWebBundle(manifest, reportProgress)
       );
     } catch (error) {
+      if (isFatalWebBundleInstallError(error)) {
+        throw error;
+      }
+
       if (remoteFallbackBundle) {
         console.warn(
           "[web-bundle] install failed; using remote entry url",
@@ -266,6 +271,10 @@ export async function resolveWebBundle(
       throw error;
     }
   } catch (error) {
+    if (isFatalWebBundleInstallError(error)) {
+      throw error;
+    }
+
     console.warn("[web-bundle] update check failed; using local bundle", error);
     emitWebBundleProgress(reportProgress, {
       stage: "loading",

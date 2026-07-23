@@ -77,11 +77,21 @@ function AppInfoRow({
   );
 }
 
-function AppInfoRowSkeleton({ label }: { label: string }) {
+function AppInfoRowSkeleton({
+  label,
+  valueWidth = "w-28",
+}: {
+  label: string;
+  valueWidth?: string;
+}) {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
-      <span className="text-sm font-semibold text-slate-500">{label}</span>
-      <span className="h-4 w-28 animate-pulse rounded-full bg-slate-200" />
+      <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+        {label}
+      </span>
+      <span
+        className={`skeleton-shimmer h-4 ${valueWidth} shrink-0 rounded-full bg-slate-200 dark:bg-slate-700`}
+      />
     </div>
   );
 }
@@ -196,13 +206,13 @@ function AppInfoPage() {
 
         {appInfoState.status === "loading" ? (
           <>
-            <AppInfoRowSkeleton label="실행 환경" />
+            <AppInfoRowSkeleton label="실행 환경" valueWidth="w-20" />
             <div className="border-b border-brand-50" />
-            <AppInfoRowSkeleton label="앱 버전" />
+            <AppInfoRowSkeleton label="앱 버전" valueWidth="w-24" />
             <div className="border-b border-brand-50" />
             <AppInfoRowSkeleton label="OS 버전" />
             <div className="border-b border-brand-50" />
-            <AppInfoRowSkeleton label="웹 번들 버전" />
+            <AppInfoRowSkeleton label="웹 번들 버전" valueWidth="w-24" />
           </>
         ) : (
           <>

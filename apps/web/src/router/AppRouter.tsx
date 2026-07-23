@@ -360,19 +360,34 @@ function LanguageLazyFallback() {
 
 function AppInfoLazyFallback() {
   const text = useUiText();
-  const rowKeys = [
-    "platform",
-    "app-version",
-    "build-number",
-    "runtime-version",
-    "os-version",
-    "web-bundle-version",
-    "update-channel",
-    "bundle-id",
+  const rows = [
+    {
+      key: "platform",
+      label: "실행 환경",
+      valueWidth: "w-20",
+    },
+    {
+      key: "app-version",
+      label: "앱 버전",
+      valueWidth: "w-24",
+    },
+    {
+      key: "os-version",
+      label: "OS 버전",
+      valueWidth: "w-28",
+    },
+    {
+      key: "web-bundle-version",
+      label: "웹 번들 버전",
+      valueWidth: "w-24",
+    },
   ];
 
   return (
-    <section className="space-y-4 pb-4 text-slate-900 dark:text-slate-100">
+    <section
+      aria-busy="true"
+      className="space-y-4 pb-4 text-slate-900 dark:text-slate-100"
+    >
       <MyInfoSubpageFallbackHeader
         eyebrow={text.routeShell.appSettings}
         title={text.routeShell.appInfoTitle}
@@ -380,15 +395,21 @@ function AppInfoLazyFallback() {
 
       <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
         <div className="border-b border-brand-50 px-4 py-3 dark:border-brand-400/15">
-          <div className="h-3 w-14 animate-pulse rounded-full bg-brand-100 dark:bg-brand-400/20" />
+          <p className="text-xs font-black text-brand-700 dark:text-brand-200">
+            앱 정보
+          </p>
         </div>
-        {rowKeys.map((rowKey, index) => (
-          <div key={rowKey}>
+        {rows.map((row, index) => (
+          <div key={row.key}>
             <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <div className="h-3 w-20 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
-              <div className="h-4 w-28 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+              <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                {row.label}
+              </span>
+              <div
+                className={`skeleton-shimmer h-4 ${row.valueWidth} shrink-0 rounded-full bg-slate-200 dark:bg-slate-700`}
+              />
             </div>
-            {index < rowKeys.length - 1 ? (
+            {index < rows.length - 1 ? (
               <div className="border-b border-brand-50 dark:border-brand-400/15" />
             ) : null}
           </div>

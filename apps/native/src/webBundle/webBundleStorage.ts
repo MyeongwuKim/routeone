@@ -6,6 +6,10 @@ import type {
   WebBundleManifest,
   WebBundleProgressReporter
 } from "./webBundleTypes";
+import {
+  FatalWebBundleInstallError,
+  type WebBundleFatalInstallReason
+} from "./webBundleErrors";
 import { emitWebBundleProgress } from "./webBundleProgress";
 
 type StoredBundleRecord = {
@@ -37,7 +41,20 @@ const MAX_EXTRACTED_BYTES = 150 * 1024 * 1024;
 const MAX_EXTRACTED_FILES = 5_000;
 const DOWNLOAD_TIMEOUT_MS = 30_000;
 const MAX_FAILED_VERSIONS = 10;
+const WEB_BUNDLE_INSTALL_ATTEMPTS = 3;
 let stateMutationQueue: Promise<unknown> = Promise.resolve();
+
+class WebBundleInstallAttemptError extends Error {
+  readonly reason: WebBundleFatalInstallReason;
+  readonly cause: unknown;
+
+  constructor(reason: WebBundleFatalInstallReason, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "WebBundleInstallAttemptError";
+    this.reason = reason;
+    this.cause = cause;
+  }
+}
 
 function runStateMutation<T>(mutation: () => Promise<T>) {
   const result = stateMutationQueue.then(mutation, mutation);
@@ -280,6 +297,12 @@ function bytesToHex(value: ArrayBuffer) {
   ).join("");
 }
 
+function copyBytesToArrayBuffer(value: Uint8Array) {
+  const copy = new Uint8Array(value.byteLength);
+  copy.set(value);
+  return copy.buffer;
+}
+
 function readSafeZipPath(value: string) {
   const normalized = value.replace(/\\/g, "/").replace(/^\.\//, "");
 
@@ -341,6 +364,196 @@ function extractBundle(bundleBytes: Uint8Array, stagingDirectory: Directory) {
   }
 }
 
+function getInstallAttemptProgressMessage(
+  reason: WebBundleFatalInstallReason,
+  attempt: number
+) {
+  const suffix = ` (${attempt}/${WEB_BUNDLE_INSTALL_ATTEMPTS})`;
+
+  if (reason === "download") {
+    return `업데이트를 내려받고 있어요.${suffix}`;
+  }
+
+  if (reason === "verify") {
+    return `업데이트 파일을 확인하고 있어요.${suffix}`;
+  }
+
+  return `업데이트 압축을 풀고 있어요.${suffix}`;
+}
+
+function getFatalInstallMessage(reason: WebBundleFatalInstallReason) {
+  if (reason === "download") {
+    return "업데이트 파일을 3번 시도했지만 내려받지 못했어요.";
+  }
+
+  if (reason === "verify") {
+    return "업데이트 파일을 3번 시도했지만 확인하지 못했어요.";
+  }
+
+  return "업데이트 압축을 3번 시도했지만 풀지 못했어요.";
+}
+
+function deleteFileIfExists(file: File) {
+  if (file.exists) {
+    file.delete();
+  }
+}
+
+function deleteDirectoryIfExists(directory: Directory) {
+  if (directory.exists) {
+    directory.delete();
+  }
+}
+
+async function runWebBundleInstallAttempt({
+  downloadFile,
+  manifest,
+  reportProgress,
+  stagingDirectory,
+  attempt
+}: {
+  downloadFile: File;
+  manifest: WebBundleManifest;
+  reportProgress?: WebBundleProgressReporter;
+  stagingDirectory: Directory;
+  attempt: number;
+}) {
+  deleteFileIfExists(downloadFile);
+  deleteDirectoryIfExists(stagingDirectory);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+
+  try {
+    emitWebBundleProgress(reportProgress, {
+      stage: "downloading",
+      progress: 0.26,
+      message: getInstallAttemptProgressMessage("download", attempt)
+    });
+
+    try {
+      await File.downloadFileAsync(manifest.bundleUrl, downloadFile, {
+        idempotent: true,
+        signal: controller.signal,
+        onProgress: ({ bytesWritten, totalBytes }) => {
+          const ratio = totalBytes > 0 ? bytesWritten / totalBytes : 0;
+
+          emitWebBundleProgress(reportProgress, {
+            stage: "downloading",
+            progress: 0.26 + Math.max(0, Math.min(1, ratio)) * 0.36,
+            message: getInstallAttemptProgressMessage("download", attempt)
+          });
+        }
+      });
+
+      if (downloadFile.size <= 0 || downloadFile.size > MAX_DOWNLOAD_BYTES) {
+        throw new Error("Downloaded web bundle ZIP has an invalid size.");
+      }
+    } catch (error) {
+      throw new WebBundleInstallAttemptError("download", error);
+    }
+
+    emitWebBundleProgress(reportProgress, {
+      stage: "verifying",
+      progress: 0.68,
+      message: getInstallAttemptProgressMessage("verify", attempt)
+    });
+
+    let bundleBytes: Uint8Array;
+
+    try {
+      bundleBytes = await downloadFile.bytes();
+      const actualSha256 = bytesToHex(
+        await digest(
+          CryptoDigestAlgorithm.SHA256,
+          copyBytesToArrayBuffer(bundleBytes)
+        )
+      );
+
+      if (actualSha256 !== manifest.sha256) {
+        throw new Error(
+          "Downloaded web bundle SHA-256 does not match manifest."
+        );
+      }
+    } catch (error) {
+      throw new WebBundleInstallAttemptError("verify", error);
+    }
+
+    emitWebBundleProgress(reportProgress, {
+      stage: "extracting",
+      progress: 0.76,
+      message: getInstallAttemptProgressMessage("extract", attempt)
+    });
+
+    try {
+      stagingDirectory.create({ intermediates: true });
+      extractBundle(bundleBytes, stagingDirectory);
+
+      const stagedEntryFile = new File(
+        stagingDirectory,
+        ...manifest.entryPath.split("/")
+      );
+
+      if (!stagedEntryFile.exists) {
+        throw new Error(
+          `Web bundle entry file is missing: ${manifest.entryPath}`
+        );
+      }
+    } catch (error) {
+      throw new WebBundleInstallAttemptError("extract", error);
+    }
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function stageWebBundleWithRetries({
+  downloadFile,
+  manifest,
+  reportProgress,
+  stagingDirectory
+}: {
+  downloadFile: File;
+  manifest: WebBundleManifest;
+  reportProgress?: WebBundleProgressReporter;
+  stagingDirectory: Directory;
+}) {
+  let lastFailure: WebBundleInstallAttemptError | null = null;
+
+  for (let attempt = 1; attempt <= WEB_BUNDLE_INSTALL_ATTEMPTS; attempt += 1) {
+    try {
+      await runWebBundleInstallAttempt({
+        downloadFile,
+        manifest,
+        reportProgress,
+        stagingDirectory,
+        attempt
+      });
+      return;
+    } catch (error) {
+      const failure =
+        error instanceof WebBundleInstallAttemptError
+          ? error
+          : new WebBundleInstallAttemptError("download", error);
+      lastFailure = failure;
+      console.warn(
+        `[web-bundle] install attempt ${attempt}/${WEB_BUNDLE_INSTALL_ATTEMPTS} failed`,
+        failure.cause
+      );
+      deleteFileIfExists(downloadFile);
+      deleteDirectoryIfExists(stagingDirectory);
+    }
+  }
+
+  const reason = lastFailure?.reason ?? "download";
+
+  throw new FatalWebBundleInstallError(
+    getFatalInstallMessage(reason),
+    reason,
+    lastFailure?.cause ?? lastFailure
+  );
+}
+
 export async function installWebBundle(
   manifest: WebBundleManifest,
   reportProgress?: WebBundleProgressReporter
@@ -355,72 +568,16 @@ export async function installWebBundle(
     `.staging-${manifest.version}`
   );
   const releaseDirectory = getReleaseDirectory(manifest.version);
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
   let activated = false;
   let promoted = false;
 
   try {
-    if (stagingDirectory.exists) {
-      stagingDirectory.delete();
-    }
-
-    emitWebBundleProgress(reportProgress, {
-      stage: "downloading",
-      progress: 0.26,
-      message: "업데이트를 내려받고 있어요."
+    await stageWebBundleWithRetries({
+      downloadFile,
+      manifest,
+      reportProgress,
+      stagingDirectory
     });
-
-    await File.downloadFileAsync(manifest.bundleUrl, downloadFile, {
-      idempotent: true,
-      signal: controller.signal,
-      onProgress: ({ bytesWritten, totalBytes }) => {
-        const ratio = totalBytes > 0 ? bytesWritten / totalBytes : 0;
-
-        emitWebBundleProgress(reportProgress, {
-          stage: "downloading",
-          progress: 0.26 + Math.max(0, Math.min(1, ratio)) * 0.36,
-          message: "업데이트를 내려받고 있어요."
-        });
-      }
-    });
-
-    if (downloadFile.size <= 0 || downloadFile.size > MAX_DOWNLOAD_BYTES) {
-      throw new Error("Downloaded web bundle ZIP has an invalid size.");
-    }
-
-    emitWebBundleProgress(reportProgress, {
-      stage: "verifying",
-      progress: 0.68,
-      message: "업데이트 파일을 확인하고 있어요."
-    });
-
-    const bundleBytes = await downloadFile.bytes();
-    const actualSha256 = bytesToHex(
-      await digest(CryptoDigestAlgorithm.SHA256, bundleBytes)
-    );
-
-    if (actualSha256 !== manifest.sha256) {
-      throw new Error("Downloaded web bundle SHA-256 does not match manifest.");
-    }
-
-    emitWebBundleProgress(reportProgress, {
-      stage: "extracting",
-      progress: 0.76,
-      message: "업데이트 압축을 풀고 있어요."
-    });
-
-    stagingDirectory.create({ intermediates: true });
-    extractBundle(bundleBytes, stagingDirectory);
-
-    const stagedEntryFile = new File(
-      stagingDirectory,
-      ...manifest.entryPath.split("/")
-    );
-
-    if (!stagedEntryFile.exists) {
-      throw new Error(`Web bundle entry file is missing: ${manifest.entryPath}`);
-    }
 
     emitWebBundleProgress(reportProgress, {
       stage: "applying",
@@ -469,11 +626,7 @@ export async function installWebBundle(
 
     return installedBundle;
   } finally {
-    clearTimeout(timeoutId);
-
-    if (downloadFile.exists) {
-      downloadFile.delete();
-    }
+    deleteFileIfExists(downloadFile);
 
     if (!activated && stagingDirectory.exists) {
       stagingDirectory.delete();

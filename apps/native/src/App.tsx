@@ -24,7 +24,9 @@ const onboardingText = {
       "오늘 방문할 장소 근처에 도착하면 알림으로 알려드릴게요.",
     allow: "허용",
     checking: "확인 중",
-    later: "나중에"
+    later: "나중에",
+    launchPreparing: "앱을 준비하고 있어요.",
+    launchTagline: "여행의 시작부터 도착까지"
   },
   en: {
     locationTitle: "Allow Location",
@@ -35,7 +37,9 @@ const onboardingText = {
       "RouteOne can notify you when you are near a place on today's route.",
     allow: "Allow",
     checking: "Checking",
-    later: "Later"
+    later: "Later",
+    launchPreparing: "Preparing the app.",
+    launchTagline: "From first plan to final stop"
   }
 } as const;
 
@@ -75,8 +79,9 @@ export default function App() {
           backgroundColor={brandBackgroundColor}
         />
         <RouteOneLaunchScreen
-          message="앱을 준비하고 있어요."
+          message={text.launchPreparing}
           progress={0.06}
+          tagline={text.launchTagline}
         />
       </View>
     );
@@ -203,6 +208,7 @@ export default function App() {
           appleAvailable={nativeLogin.appleAvailable}
           displayName={nativeLogin.displayName}
           errorMessage={nativeLogin.errorMessage}
+          language={appLanguage}
           onAppleLogin={() => {
             void nativeLogin.handleAppleLogin();
           }}

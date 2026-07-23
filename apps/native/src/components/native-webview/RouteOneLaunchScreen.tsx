@@ -11,11 +11,13 @@ import {
 type RouteOneLaunchScreenProps = {
   progress: number;
   message: string;
+  tagline?: string;
 };
 
 export default function RouteOneLaunchScreen({
   progress,
-  message
+  message,
+  tagline = "여행의 시작부터 도착까지"
 }: RouteOneLaunchScreenProps) {
   const colorScheme = useColorScheme();
   const colors =
@@ -64,7 +66,7 @@ export default function RouteOneLaunchScreen({
         />
         <Text style={[styles.name, { color: colors.title }]}>RouteOne</Text>
         <Text style={[styles.tagline, { color: colors.muted }]}>
-          여행의 시작부터 도착까지
+          {tagline}
         </Text>
       </View>
 
