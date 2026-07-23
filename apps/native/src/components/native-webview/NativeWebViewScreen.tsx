@@ -111,6 +111,32 @@ function createWebViewNavigationScript(path: string) {
   `;
 }
 
+function readHttpOrigin(urlValue: string) {
+  try {
+    const url = new URL(urlValue);
+
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.origin;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function readWebBundleAllowedOrigins(bundle: ResolvedWebBundle | null) {
+  if (!bundle) {
+    return [];
+  }
+
+  const sourceUrl =
+    "uri" in bundle.source ? bundle.source.uri : bundle.source.baseUrl;
+  const origin = readHttpOrigin(sourceUrl);
+
+  return origin ? [origin] : [];
+}
+
 export default function NativeWebViewScreen({
   appLanguage,
   nativeAuthToken
@@ -124,6 +150,10 @@ export default function NativeWebViewScreen({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [bundleProgress, setBundleProgress] = useState<WebBundleProgress>(
     INITIAL_WEB_BUNDLE_PROGRESS
+  );
+  const allowedWebBundleOrigins = useMemo(
+    () => readWebBundleAllowedOrigins(resolvedBundle),
+    [resolvedBundle]
   );
   const injectedScript = useMemo(() => {
     const authScript = nativeAuthToken
@@ -226,14 +256,17 @@ export default function NativeWebViewScreen({
 
   const handleShouldStartLoadWithRequest = useCallback(
     (request: WebViewNavigationRequest) => {
-      if (request.isTopFrame === false || shouldKeepUrlInWebView(request.url)) {
+      if (
+        request.isTopFrame === false ||
+        shouldKeepUrlInWebView(request.url, allowedWebBundleOrigins)
+      ) {
         return true;
       }
 
-      void openNativeExternalUrl(request.url);
+      void openNativeExternalUrl(request.url, allowedWebBundleOrigins);
       return false;
     },
-    []
+    [allowedWebBundleOrigins]
   );
 
   useEffect(() => {

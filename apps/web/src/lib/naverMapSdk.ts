@@ -16,6 +16,33 @@ function createNaverSdkUrl(keyId: string, language: NaverMapSdkLanguage) {
   return url.toString();
 }
 
+function readHttpOrigin(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.origin;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export function getNaverMapAuthOrigin() {
+  return (
+    readHttpOrigin(window.location.href) ??
+    readHttpOrigin(window.RouteOneRuntimeConfig?.webBundlePublicOrigin) ??
+    readHttpOrigin(document.baseURI) ??
+    "unknown"
+  );
+}
+
 function resetNaverMapSdk() {
   const existing = document.getElementById(NAVER_MAP_SCRIPT_ID);
 

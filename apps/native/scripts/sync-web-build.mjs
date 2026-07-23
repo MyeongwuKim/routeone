@@ -13,10 +13,42 @@ const packageManager = process.env.npm_execpath?.includes("pnpm")
   ? "pnpm"
   : "npm";
 const moduleSpecifierPrefix = "@routeone/";
+const defaultWebviewBaseUrl = "https://routeone.native/";
+const nativeWebviewBaseUrl = readNativeWebviewBaseUrl();
 const nativeRuntimeConfig = {
   graphqlEndpoint: "/graphql",
-  routerMode: "hash"
+  routerMode: "hash",
+  webBundlePublicOrigin: readHttpOrigin(nativeWebviewBaseUrl)
 };
+
+function trimTrailingSlashes(value) {
+  return value.replace(/\/+$/g, "");
+}
+
+function readNativeWebviewBaseUrl() {
+  const publicBaseUrl =
+    process.env.EXPO_PUBLIC_WEB_BUNDLE_BASE_URL?.trim() ||
+    process.env.R2_PUBLIC_BASE_URL?.trim() ||
+    "";
+
+  return publicBaseUrl
+    ? `${trimTrailingSlashes(publicBaseUrl)}/`
+    : defaultWebviewBaseUrl;
+}
+
+function readHttpOrigin(value) {
+  try {
+    const url = new URL(value);
+
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.origin;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
 
 async function buildNativeWebBundle() {
   const result = spawnSync(packageManager, ["run", "build"], {
@@ -193,7 +225,7 @@ function cleanupDocument(html) {
     .replace(
       /<head>/,
       `<head>
-    <base href="https://routeone.native/" />
+    <base href="${nativeWebviewBaseUrl}" />
     <script data-routeone-runtime-config>
       window.RouteOneRuntimeConfig = Object.assign({}, window.RouteOneRuntimeConfig, ${JSON.stringify(
         nativeRuntimeConfig

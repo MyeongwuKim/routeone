@@ -6,6 +6,7 @@ export type WebBundleManifest = {
   channel: WebBundleChannel | null;
   appVariant: WebBundleChannel | null;
   bundleUrl: string;
+  entryUrl: string | null;
   entryPath: string;
   sha256: string;
   createdAt: string | null;
@@ -18,6 +19,7 @@ export type WebBundleManifest = {
 export type InstalledWebBundle = {
   version: string;
   entryPath: string;
+  entryUrl: string | null;
   entryUri: string;
   directoryUri: string;
   sha256: string;

@@ -27,6 +27,7 @@ declare global {
       graphqlEndpoint?: string;
       routerMode?: "browser" | "hash";
       devVerificationBypass?: boolean;
+      webBundlePublicOrigin?: string | null;
     };
     RouteOneNative?: {
       getAppInfo?: () => Promise<{

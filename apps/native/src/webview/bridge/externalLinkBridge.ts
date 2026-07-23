@@ -4,7 +4,16 @@ import type { NativeExternalUrlRequest } from "./types";
 const WEBVIEW_BASE_ORIGIN = "https://routeone.native";
 const LOCAL_WEB_BUNDLE_PATH = "/routeone-web-bundles/releases/";
 
-export function shouldKeepUrlInWebView(urlValue: string) {
+function isAllowedWebViewOrigin(url: URL, allowedOrigins: readonly string[]) {
+  return (
+    url.origin === WEBVIEW_BASE_ORIGIN || allowedOrigins.includes(url.origin)
+  );
+}
+
+export function shouldKeepUrlInWebView(
+  urlValue: string,
+  allowedOrigins: readonly string[] = []
+) {
   if (!urlValue) {
     return true;
   }
@@ -32,14 +41,17 @@ export function shouldKeepUrlInWebView(urlValue: string) {
       return false;
     }
 
-    return url.origin === WEBVIEW_BASE_ORIGIN;
+    return isAllowedWebViewOrigin(url, allowedOrigins);
   } catch {
     return true;
   }
 }
 
-export async function openNativeExternalUrl(url: string) {
-  if (!url || shouldKeepUrlInWebView(url)) {
+export async function openNativeExternalUrl(
+  url: string,
+  allowedOrigins: readonly string[] = []
+) {
+  if (!url || shouldKeepUrlInWebView(url, allowedOrigins)) {
     return;
   }
 

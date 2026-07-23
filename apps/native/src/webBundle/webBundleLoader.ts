@@ -16,14 +16,28 @@ import type {
 import { emitWebBundleProgress } from "./webBundleProgress";
 import { shouldInstallWebBundle } from "./webBundleVersionChecker";
 
+const DEFAULT_EMBEDDED_BASE_URL = "https://routeone.native/";
+
+function getEmbeddedBaseUrl() {
+  return WEB_BUNDLE_UPDATE_CONFIG.publicBaseUrl
+    ? `${WEB_BUNDLE_UPDATE_CONFIG.publicBaseUrl}/`
+    : DEFAULT_EMBEDDED_BASE_URL;
+}
+
+function createEmbeddedHtml(baseUrl: string) {
+  return WEB_BUNDLE_HTML.replaceAll(DEFAULT_EMBEDDED_BASE_URL, baseUrl);
+}
+
 function createEmbeddedBundle(): ResolvedWebBundle {
+  const baseUrl = getEmbeddedBaseUrl();
+
   return {
     key: "embedded",
     kind: "embedded",
     version: null,
     source: {
-      html: WEB_BUNDLE_HTML,
-      baseUrl: "https://routeone.native/"
+      html: createEmbeddedHtml(baseUrl),
+      baseUrl
     },
     pending: false,
     readySignalRequired: true
@@ -33,12 +47,16 @@ function createEmbeddedBundle(): ResolvedWebBundle {
 function createInstalledBundle(
   bundle: InstalledWebBundle
 ): ResolvedWebBundle {
+  const source = { uri: bundle.entryUrl ?? bundle.entryUri };
+
   return {
     key: `installed-${bundle.version}-${bundle.pending ? "pending" : "ready"}`,
     kind: "installed",
     version: bundle.version,
-    source: { uri: bundle.entryUri },
-    allowingReadAccessToUrl: bundle.directoryUri,
+    source,
+    ...(bundle.entryUrl
+      ? {}
+      : { allowingReadAccessToUrl: bundle.directoryUri }),
     pending: bundle.pending,
     readySignalRequired: bundle.readySignalRequired
   };

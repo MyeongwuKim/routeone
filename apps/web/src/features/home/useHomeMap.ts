@@ -30,7 +30,10 @@ import {
 } from "@/lib/gangwonAttractionMap";
 import { getCurrentPosition } from "@/lib/currentPosition";
 import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
-import { loadNaverMapSdk } from "@/lib/naverMapSdk";
+import {
+  getNaverMapAuthOrigin,
+  loadNaverMapSdk,
+} from "@/lib/naverMapSdk";
 import {
   applyNaverMapTheme,
   getNaverMapThemeOptions,
@@ -440,7 +443,7 @@ export function useHomeMap({
       setMapStatus({
         language: appLanguage,
         isReady: false,
-        error: text.home.mapAuthError,
+        error: text.home.mapAuthError(getNaverMapAuthOrigin()),
       });
     };
 

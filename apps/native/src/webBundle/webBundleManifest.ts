@@ -30,6 +30,14 @@ function readRemoteUrl(value: unknown, fieldName: string) {
   return url.href;
 }
 
+function readOptionalRemoteUrl(value: unknown, fieldName: string) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  return readRemoteUrl(value, fieldName);
+}
+
 function readEntryPath(value: unknown) {
   const entryPath = typeof value === "string" ? value : "index.html";
   const normalized = entryPath.replace(/\\/g, "/").replace(/^\.\//, "");
@@ -116,6 +124,7 @@ function parseManifest(value: unknown): WebBundleManifest {
     channel: readWebBundleChannel(value.channel, "channel"),
     appVariant: readWebBundleChannel(value.appVariant, "appVariant"),
     bundleUrl: readRemoteUrl(value.bundleUrl, "bundleUrl"),
+    entryUrl: readOptionalRemoteUrl(value.entryUrl, "entryUrl"),
     entryPath: readEntryPath(value.entryPath),
     sha256: sha256.toLowerCase(),
     createdAt: typeof value.createdAt === "string" ? value.createdAt : null,

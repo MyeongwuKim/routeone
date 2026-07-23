@@ -4,6 +4,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useColorScheme,
   View,
 } from "react-native";
 
@@ -22,11 +23,56 @@ type NativeOnboardingStepProps = {
   secondaryAction?: NativeOnboardingAction;
 };
 
+const ONBOARDING_THEME = {
+  light: {
+    background: "#0f766e",
+    brandText: "#ffffff",
+    mutedText: "rgba(255, 255, 255, 0.78)",
+    cardBackground: "rgba(255, 255, 255, 0.96)",
+    cardBorder: "rgba(255, 255, 255, 0.28)",
+    title: "#0f172a",
+    description: "#475569",
+    primaryBackground: "#0f766e",
+    primaryPressed: "#115e59",
+    primaryText: "#ffffff",
+    secondaryBackground: "#ffffff",
+    secondaryPressed: "#edf7f4",
+    secondaryBorder: "#d5e7e1",
+    secondaryText: "#0f766e"
+  },
+  dark: {
+    background: "#061918",
+    brandText: "#f8fafc",
+    mutedText: "rgba(226, 245, 241, 0.76)",
+    cardBackground: "rgba(13, 36, 34, 0.92)",
+    cardBorder: "rgba(148, 216, 204, 0.18)",
+    title: "#f8fafc",
+    description: "rgba(226, 245, 241, 0.76)",
+    primaryBackground: "#14b8a6",
+    primaryPressed: "#0f9488",
+    primaryText: "#042f2e",
+    secondaryBackground: "rgba(13, 36, 34, 0.88)",
+    secondaryPressed: "rgba(20, 184, 166, 0.18)",
+    secondaryBorder: "rgba(148, 216, 204, 0.22)",
+    secondaryText: "#e2f5f1"
+  }
+} as const;
+
+function useOnboardingTheme() {
+  const colorScheme = useColorScheme();
+
+  return ONBOARDING_THEME[colorScheme === "dark" ? "dark" : "light"];
+}
+
 export function NativeOnboardingLoading() {
+  const colors = useOnboardingTheme();
+
   return (
-    <View style={styles.screen}>
-      <ActivityIndicator color="#0f766e" />
-      <Text style={styles.loadingText}>RouteOne을 준비하는 중이에요.</Text>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <ActivityIndicator color={colors.brandText} />
+      <Text style={[styles.loadingText, { color: colors.mutedText }]}>
+        RouteOne을 준비하는 중이에요.
+      </Text>
     </View>
   );
 }
@@ -40,24 +86,39 @@ export default function NativeOnboardingStep({
   const actions = secondaryAction
     ? [secondaryAction, primaryAction]
     : [primaryAction];
+  const colors = useOnboardingTheme();
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.card}>
-        <View style={styles.topRow}>
-          <View style={styles.icon}>
-            <Image
-              accessibilityIgnoresInvertColors
-              source={require("../../../assets/icon.png")}
-              style={styles.iconImage}
-            />
-          </View>
-          <View style={styles.headerText}>
-            <Text style={styles.eyebrow}>ROUTE ONE</Text>
-            <Text style={styles.title}>{title}</Text>
-          </View>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <View style={styles.brand}>
+        <Image
+          accessibilityIgnoresInvertColors
+          source={require("../../../assets/splash-brand-icon.png")}
+          style={styles.logoImage}
+        />
+        <Text style={[styles.brandName, { color: colors.brandText }]}>
+          RouteOne
+        </Text>
+      </View>
+
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.cardBackground,
+            borderColor: colors.cardBorder
+          }
+        ]}
+      >
+        <View style={styles.headerText}>
+          <Text style={[styles.eyebrow, { color: colors.secondaryText }]}>
+            ROUTE ONE
+          </Text>
+          <Text style={[styles.title, { color: colors.title }]}>{title}</Text>
         </View>
-        <Text style={styles.description}>{description}</Text>
+        <Text style={[styles.description, { color: colors.description }]}>
+          {description}
+        </Text>
         <View style={secondaryAction ? styles.actions : undefined}>
           {actions.map((action) => (
             <Pressable
@@ -67,21 +128,35 @@ export default function NativeOnboardingStep({
               onPress={action.onPress}
               style={({ pressed }) => [
                 secondaryAction ? styles.button : styles.fullButton,
-                action.variant === "primary"
-                  ? styles.primaryButton
-                  : styles.secondaryButton,
-                pressed &&
-                  (action.variant === "primary"
-                    ? styles.primaryButtonPressed
-                    : styles.buttonPressed),
+                {
+                  backgroundColor:
+                    action.variant === "primary"
+                      ? colors.primaryBackground
+                      : colors.secondaryBackground,
+                  borderColor:
+                    action.variant === "primary"
+                      ? colors.primaryBackground
+                      : colors.secondaryBorder
+                },
+                pressed && {
+                  backgroundColor:
+                    action.variant === "primary"
+                      ? colors.primaryPressed
+                      : colors.secondaryPressed
+                },
+                action.disabled && styles.disabledButton
               ]}
             >
               <Text
-                style={
-                  action.variant === "primary"
-                    ? styles.primaryButtonText
-                    : styles.secondaryButtonText
-                }
+                style={[
+                  styles.buttonText,
+                  {
+                    color:
+                      action.variant === "primary"
+                        ? colors.primaryText
+                        : colors.secondaryText
+                  }
+                ]}
               >
                 {action.disabled && action.loadingLabel
                   ? action.loadingLabel
@@ -100,25 +175,36 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 24,
-    backgroundColor: "#e7f2ef",
+    paddingHorizontal: 24
   },
   loadingText: {
     marginTop: 12,
-    color: "#0f766e",
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "800"
+  },
+  brand: {
+    alignItems: "center",
+    marginBottom: 18
+  },
+  logoImage: {
+    width: 150,
+    height: 150,
+    resizeMode: "contain"
+  },
+  brandName: {
+    marginTop: -28,
+    fontSize: 26,
+    fontWeight: "900",
+    letterSpacing: 0
   },
   card: {
     width: "100%",
-    maxWidth: 360,
-    borderRadius: 20,
+    maxWidth: 326,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(20, 184, 166, 0.46)",
-    backgroundColor: "#ffffff",
     padding: 24,
     shadowColor: "#0f172a",
-    shadowOpacity: 0.14,
+    shadowOpacity: 0.18,
     shadowRadius: 24,
     shadowOffset: {
       width: 0,
@@ -126,41 +212,20 @@ const styles = StyleSheet.create({
     },
     elevation: 12,
   },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  icon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    backgroundColor: "#e7f2ef",
-  },
-  iconImage: {
-    width: 48,
-    height: 48,
-  },
   headerText: {
-    flex: 1,
+    width: "100%"
   },
   eyebrow: {
-    color: "#0f766e",
     fontSize: 12,
     fontWeight: "900",
   },
   title: {
-    marginTop: 2,
-    color: "#111827",
+    marginTop: 6,
     fontSize: 22,
     fontWeight: "900",
   },
   description: {
     marginTop: 22,
-    color: "#475569",
     fontSize: 15,
     fontWeight: "700",
     lineHeight: 23,
@@ -174,38 +239,24 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 14,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   fullButton: {
     height: 52,
     borderRadius: 16,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 26,
   },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    backgroundColor: "#f8fafc",
+  disabledButton: {
+    opacity: 0.56
   },
-  primaryButton: {
-    backgroundColor: "#0f766e",
-  },
-  buttonPressed: {
-    opacity: 0.72,
-  },
-  primaryButtonPressed: {
-    backgroundColor: "#115e59",
-  },
-  secondaryButtonText: {
-    color: "#475569",
+  buttonText: {
     fontSize: 15,
     fontWeight: "800",
-  },
-  primaryButtonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "900",
+    letterSpacing: 0
   },
 });

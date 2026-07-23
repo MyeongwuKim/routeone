@@ -7,12 +7,13 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
 
 const env = process.env;
 
@@ -43,11 +44,15 @@ if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(version)) {
 }
 
 const createdAt = new Date().toISOString();
-const publicBaseUrl = trimTrailingSlashes(required("R2_PUBLIC_BASE_URL"));
+const publicBaseUrl = trimTrailingSlashes(
+  requiredAny(["R2_PUBLIC_BASE_URL", "EXPO_PUBLIC_WEB_BUNDLE_BASE_URL"])
+);
 const tmpRoot = mkdtempSync(join(tmpdir(), "routeone-web-bundle-"));
 const bundleFileName = "web-ui.zip";
 const bundlePath = join(tmpRoot, bundleFileName);
 const releasePrefix = joinKey("releases", version);
+const releaseWebPrefix = joinKey(releasePrefix, "web");
+const entryKey = joinKey(releaseWebPrefix, "index.html");
 const bundleKey = joinKey(releasePrefix, bundleFileName);
 const releaseManifestKey = joinKey(releasePrefix, "manifest.json");
 const latestManifestKey = joinKey("latest", "manifest.json");
@@ -63,6 +68,7 @@ try {
     channel,
     appVariant: channel,
     bundleUrl: `${publicBaseUrl}/${bundleKey}`,
+    entryUrl: `${publicBaseUrl}/${entryKey}`,
     entryPath: "index.html",
     sha256: sha256(bundlePath),
     createdAt,
@@ -70,7 +76,13 @@ try {
     minimumNativeVersion
   };
 
-  uploadFile(bundlePath, bundleKey, "application/zip", "public, max-age=31536000, immutable");
+  uploadDistFiles();
+  uploadFile(
+    bundlePath,
+    bundleKey,
+    "application/zip",
+    "public, max-age=31536000, immutable"
+  );
   writeJson(manifestPath, manifest);
   uploadFile(
     manifestPath,
@@ -82,6 +94,7 @@ try {
   pruneReleases();
 
   console.log(`Published ${bundleKey}`);
+  console.log(`Published ${releaseWebPrefix}/`);
   console.log(`Published ${releaseManifestKey}`);
   console.log(`Updated ${latestManifestKey}`);
 } finally {
@@ -96,6 +109,18 @@ function required(name, transform = (value) => value) {
   }
 
   return transform(value);
+}
+
+function requiredAny(names, transform = (value) => value) {
+  for (const name of names) {
+    const value = env[name]?.trim();
+
+    if (value) {
+      return transform(value);
+    }
+  }
+
+  fail(`${names.join(" or ")} is required.`);
 }
 
 function readWebBundleChannel() {
@@ -147,6 +172,90 @@ function uploadFile(sourcePath, key, contentType, cacheControl) {
     "--cache-control",
     cacheControl
   ]);
+}
+
+function uploadDistFiles() {
+  for (const filePath of listDistFiles(distDir)) {
+    const relativePath = toPosixPath(relative(distDir, filePath));
+    const key = joinKey(releaseWebPrefix, relativePath);
+
+    uploadFile(
+      filePath,
+      key,
+      getContentType(filePath),
+      getCacheControl(relativePath)
+    );
+  }
+}
+
+function listDistFiles(directory) {
+  const files = [];
+
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name === ".DS_Store" || entry.name === "__MACOSX") {
+      continue;
+    }
+
+    const entryPath = join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      files.push(...listDistFiles(entryPath));
+      continue;
+    }
+
+    if (entry.isFile()) {
+      files.push(entryPath);
+    }
+  }
+
+  return files;
+}
+
+function getContentType(filePath) {
+  switch (extname(filePath).toLowerCase()) {
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".gif":
+      return "image/gif";
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".ico":
+      return "image/x-icon";
+    case ".jpeg":
+    case ".jpg":
+      return "image/jpeg";
+    case ".js":
+    case ".mjs":
+      return "text/javascript; charset=utf-8";
+    case ".json":
+      return "application/json; charset=utf-8";
+    case ".map":
+      return "application/json; charset=utf-8";
+    case ".png":
+      return "image/png";
+    case ".svg":
+      return "image/svg+xml";
+    case ".webp":
+      return "image/webp";
+    case ".woff":
+      return "font/woff";
+    case ".woff2":
+      return "font/woff2";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function getCacheControl(relativePath) {
+  if (toPosixPath(relativePath) === "index.html") {
+    return "no-store";
+  }
+
+  if (toPosixPath(relativePath).startsWith("assets/")) {
+    return "public, max-age=31536000, immutable";
+  }
+
+  return "public, max-age=3600";
 }
 
 function pruneReleases() {
@@ -326,6 +435,10 @@ function joinKey(...segments) {
     .map((segment) => segment.trim())
     .filter(Boolean)
     .join("/");
+}
+
+function toPosixPath(value) {
+  return value.split(sep).join("/");
 }
 
 function trimTrailingSlashes(value) {

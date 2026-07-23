@@ -11,6 +11,7 @@ import { emitWebBundleProgress } from "./webBundleProgress";
 type StoredBundleRecord = {
   version: string;
   entryPath: string;
+  entryUrl: string | null;
   sha256: string;
   readySignalRequired: boolean;
 };
@@ -99,9 +100,36 @@ function readStoredBundleRecord(value: unknown): StoredBundleRecord | null {
   return {
     version: record.version,
     entryPath: record.entryPath,
+    entryUrl: readStoredEntryUrl(record.entryUrl),
     sha256: record.sha256,
     readySignalRequired: record.readySignalRequired === true
   };
+}
+
+function readStoredEntryUrl(value: unknown) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    const isLocalDevelopmentUrl =
+      __DEV__ &&
+      url.protocol === "http:" &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1");
+
+    if (url.protocol !== "https:" && !isLocalDevelopmentUrl) {
+      return null;
+    }
+
+    return url.href;
+  } catch {
+    return null;
+  }
 }
 
 async function readState(): Promise<WebBundleState> {
@@ -412,6 +440,7 @@ export async function installWebBundle(
     state.active = {
       version: manifest.version,
       entryPath: manifest.entryPath,
+      entryUrl: manifest.entryUrl,
       sha256: manifest.sha256,
       readySignalRequired: manifest.readySignalRequired
     };

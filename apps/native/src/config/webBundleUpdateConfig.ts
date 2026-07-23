@@ -46,7 +46,36 @@ function trimTrailingSlashes(value: string) {
   return value.replace(/\/+$/g, "");
 }
 
-function readManifestUrl(appVariant: AppVariant, updatesEnabled: boolean) {
+function readPublicBaseUrl() {
+  return trimTrailingSlashes(
+    readPublicEnv("EXPO_PUBLIC_WEB_BUNDLE_BASE_URL") ||
+      readPublicEnv("R2_PUBLIC_BASE_URL")
+  );
+}
+
+function readHttpOrigin(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.origin;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function readManifestUrl(
+  appVariant: AppVariant,
+  updatesEnabled: boolean,
+  publicBaseUrl: string
+) {
   if (!updatesEnabled) {
     return null;
   }
@@ -60,13 +89,11 @@ function readManifestUrl(appVariant: AppVariant, updatesEnabled: boolean) {
     return explicitUrl;
   }
 
-  const baseUrl = readPublicEnv("EXPO_PUBLIC_WEB_BUNDLE_BASE_URL");
-
-  if (!baseUrl) {
+  if (!publicBaseUrl) {
     return readString(routeOneExtra.webBundleManifestUrl) || null;
   }
 
-  return `${trimTrailingSlashes(baseUrl)}/latest/manifest.json`;
+  return `${publicBaseUrl}/latest/manifest.json`;
 }
 
 const explicitRuntimeAppVariant = readAppVariant(
@@ -79,12 +106,16 @@ const configuredUpdatesEnabled = readBoolean(
 );
 const updatesEnabled =
   configuredUpdatesEnabled ?? Boolean(explicitRuntimeAppVariant);
-const manifestUrl = readManifestUrl(appVariant, updatesEnabled);
+const publicBaseUrl = readPublicBaseUrl();
+const publicOrigin = readHttpOrigin(publicBaseUrl);
+const manifestUrl = readManifestUrl(appVariant, updatesEnabled, publicBaseUrl);
 
 export const WEB_BUNDLE_UPDATE_CONFIG = {
   appVariant,
   channel: normalizeAppVariant(routeOneExtra.webBundleChannel || appVariant),
   manifestUrl,
+  publicBaseUrl,
+  publicOrigin,
   updatesEnabled,
   nativeVersion: readString(Constants.expoConfig?.version) || "0.0.0"
 } as const;
