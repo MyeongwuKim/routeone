@@ -4,12 +4,12 @@ import {
   getTodayRouteDay,
 } from "../routeDisplay";
 import type { MyRoute } from "../types";
+import {
+  nativeBridge,
+  type NativeArrivalNotificationPlace,
+} from "@/native-bridge";
 
 const ROUTE_ARRIVAL_NOTIFICATION_RADIUS_METERS = 100;
-
-function getRouteOneNativeBridge() {
-  return window.RouteOneNative;
-}
 
 function isStartedActiveRoute(route: MyRoute) {
   return route.status === "ACTIVE" && Boolean(route.startedAt);
@@ -18,7 +18,7 @@ function isStartedActiveRoute(route: MyRoute) {
 function getNativeRouteArrivalNotificationPlaces(
   routes: MyRoute[],
   todayKey = getTodayDateKey()
-): RouteOneNativeArrivalNotificationPlace[] {
+): NativeArrivalNotificationPlace[] {
   return routes.flatMap((route) => {
     if (!isStartedActiveRoute(route)) {
       return [];
@@ -53,16 +53,10 @@ function getNativeRouteArrivalNotificationPlaces(
 }
 
 export async function syncTodayRouteArrivalNotifications(routes: MyRoute[]) {
-  const nativeBridge = getRouteOneNativeBridge();
-
-  if (!nativeBridge?.syncRouteArrivalNotifications) {
-    return null;
-  }
-
   const places = getNativeRouteArrivalNotificationPlaces(routes);
 
   try {
-    return await nativeBridge.syncRouteArrivalNotifications({
+    return await nativeBridge.notifications.syncRouteArrivals({
       places,
       radiusMeters: ROUTE_ARRIVAL_NOTIFICATION_RADIUS_METERS,
     });

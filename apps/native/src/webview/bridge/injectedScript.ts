@@ -125,12 +125,26 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 
   var lastTouchEndAt = 0;
 
+  function isNaverMapEvent(event) {
+    var target = event && event.target;
+
+    return Boolean(
+      target &&
+      typeof target.closest === "function" &&
+      target.closest(".naver-map-root")
+    );
+  }
+
   lockViewportZoom();
 
   document.addEventListener("DOMContentLoaded", lockViewportZoom, { once: true });
   document.addEventListener(
     "dblclick",
     function preventDoubleClickZoom(event) {
+      if (isNaverMapEvent(event)) {
+        return;
+      }
+
       event.preventDefault();
     },
     { capture: true, passive: false }
@@ -138,6 +152,10 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   document.addEventListener(
     "gesturestart",
     function preventGestureZoom(event) {
+      if (isNaverMapEvent(event)) {
+        return;
+      }
+
       event.preventDefault();
     },
     { capture: true, passive: false }
@@ -145,6 +163,11 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   document.addEventListener(
     "touchend",
     function preventDoubleTapZoom(event) {
+      if (isNaverMapEvent(event)) {
+        lastTouchEndAt = 0;
+        return;
+      }
+
       var now = Date.now();
 
       if (now - lastTouchEndAt <= 320) {
@@ -165,6 +188,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   var pendingPhotoRequests = Object.create(null);
   var pendingPhotoUploadRequests = Object.create(null);
   var pendingRouteArrivalNotificationSyncRequests = Object.create(null);
+  var pendingFestivalNotificationSyncRequests = Object.create(null);
   var pendingSaveImageRequests = Object.create(null);
   var requestSeq = 0;
 
@@ -433,6 +457,26 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     });
   };
 
+  window.__ROUTEONE_NATIVE_FESTIVAL_NOTIFICATIONS_SYNC_RESPONSE__ = function handleNativeFestivalNotificationsSyncResponse(id, payload) {
+    var handlers = pendingFestivalNotificationSyncRequests[id];
+
+    if (!handlers) {
+      return;
+    }
+
+    delete pendingFestivalNotificationSyncRequests[id];
+
+    if (!payload || !payload.ok) {
+      handlers.reject(new Error((payload && payload.error) || "Native festival notification sync failed"));
+      return;
+    }
+
+    handlers.resolve({
+      scheduledCount: payload.scheduledCount,
+      notificationStatus: payload.notificationStatus
+    });
+  };
+
   window.__ROUTEONE_NATIVE_SAVE_IMAGE_RESPONSE__ = function handleNativeSaveImageResponse(id, payload) {
     var handlers = pendingSaveImageRequests[id];
 
@@ -552,6 +596,26 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
             id: requestId,
             places: places,
             radiusMeters: radiusMeters
+          })
+        );
+      });
+    },
+    syncFestivalNotifications: function syncFestivalNotifications(options) {
+      if (!window.ReactNativeWebView) {
+        return Promise.reject(new Error("Native bridge is not available"));
+      }
+
+      var requestId = "native-festival-notifications-" + Date.now() + "-" + requestSeq++;
+      var notifications = options && Array.isArray(options.notifications) ? options.notifications : [];
+
+      return new Promise(function routeOneNativeFestivalNotifications(resolve, reject) {
+        pendingFestivalNotificationSyncRequests[requestId] = { resolve: resolve, reject: reject };
+
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: "routeone:native-festival-notifications-sync",
+            id: requestId,
+            notifications: notifications
           })
         );
       });

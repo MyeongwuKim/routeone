@@ -3,6 +3,7 @@ import { handleNativeAppInfoRequest } from "./appInfoBridge";
 import { handleNativeAuthTokenMessage } from "./authTokenBridge";
 import { handleNativeExternalUrlRequest } from "./externalLinkBridge";
 import { handleNativeFetchRequest, NATIVE_GRAPHQL_ENDPOINT } from "./fetchBridge";
+import { handleNativeFestivalNotificationSyncRequest } from "./festivalNotificationBridge";
 import { ROUTEONE_WEBVIEW_BRIDGE_SCRIPT } from "./injectedScript";
 import { handleNativeLocationRequest } from "./locationBridge";
 import {
@@ -10,6 +11,7 @@ import {
   isNativeAuthTokenMessage,
   isNativeBridgeReadyMessage,
   isNativeExternalUrlRequest,
+  isNativeFestivalNotificationSyncRequest,
   isNativeFetchRequest,
   isNativeLocationRequest,
   isNativePhotoUploadRequest,
@@ -27,10 +29,19 @@ import {
 
 export { ROUTEONE_WEBVIEW_BRIDGE_SCRIPT };
 
+type NativeBridgeHandlers = {
+  onAuthSessionChange?: (session: {
+    token: string | null;
+    expiresAt: number | null;
+    reason: "logout" | "expired" | null;
+  }) => void;
+};
+
 export async function handleNativeBridgeMessage(
   event: WebViewMessageEvent,
   webViewRef: WebViewRef,
-  appInfoContext: NativeAppInfoContext
+  appInfoContext: NativeAppInfoContext,
+  handlers: NativeBridgeHandlers = {}
 ) {
   let message: unknown;
 
@@ -48,12 +59,13 @@ export async function handleNativeBridgeMessage(
   }
 
   if (isNativeAuthTokenMessage(message)) {
-    await handleNativeAuthTokenMessage(message);
+    const session = await handleNativeAuthTokenMessage(message);
+    handlers.onAuthSessionChange?.(session);
     return;
   }
 
   if (isNativeAppInfoRequest(message)) {
-    handleNativeAppInfoRequest(message, webViewRef, appInfoContext);
+    await handleNativeAppInfoRequest(message, webViewRef, appInfoContext);
     return;
   }
 
@@ -74,6 +86,11 @@ export async function handleNativeBridgeMessage(
 
   if (isNativeRouteArrivalNotificationSyncRequest(message)) {
     await handleNativeRouteArrivalNotificationSyncRequest(message, webViewRef);
+    return;
+  }
+
+  if (isNativeFestivalNotificationSyncRequest(message)) {
+    await handleNativeFestivalNotificationSyncRequest(message, webViewRef);
     return;
   }
 

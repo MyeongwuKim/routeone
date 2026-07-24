@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { IoTimeOutline } from "react-icons/io5";
 import type { UiText } from "@/lib/uiText";
 import type { MapSheetPlace } from "@/types/place";
@@ -38,6 +39,14 @@ function PlaceSheetMediaSection({
   userPlacePhotos,
   userPlacePhotoViewerUrls,
 }: PlaceSheetMediaSectionProps) {
+  const officialImageStripRef = useRef<HTMLDivElement | null>(null);
+  const userImageStripRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    officialImageStripRef.current?.scrollTo({ left: 0 });
+    userImageStripRef.current?.scrollTo({ left: 0 });
+  }, [selectedPlace.id]);
+
   return (
     <>
       <div className="mt-3 flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/70 px-3 py-3 text-xs dark:border-brand-400/25 dark:bg-slate-950/35">
@@ -55,7 +64,10 @@ function PlaceSheetMediaSection({
       </div>
 
       <div className="mt-5">
-        <div className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
+        <div
+          ref={officialImageStripRef}
+          className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1"
+        >
           {!isSelectedPlaceDetailReady ? (
             <ImageStripSkeleton />
           ) : activeImageList.length > 0 ? (
@@ -144,7 +156,10 @@ function PlaceSheetMediaSection({
             </span>
           ) : null}
         </div>
-        <div className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
+        <div
+          ref={userImageStripRef}
+          className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1"
+        >
           {isPlacePhotosLoading ? (
             <ImageStripSkeleton />
           ) : userPlacePhotos.length > 0 ? (

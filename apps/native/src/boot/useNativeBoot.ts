@@ -4,7 +4,8 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import type { NativeAuthPayload } from "../auth/nativeAuth";
 import {
-  readStoredNativeAuthToken,
+  NATIVE_AUTH_SESSION_DURATION_MS,
+  readStoredNativeAuthSession,
   storeNativeAuthToken
 } from "../auth/nativeAuthStorage";
 
@@ -28,6 +29,10 @@ export function useNativeBoot() {
   const [bootStep, setBootStep] = useState<NativeBootStep>("checking");
   const [appLanguage, setAppLanguage] = useState<AppLanguage>("ko");
   const [nativeAuthToken, setNativeAuthToken] = useState<string | null>(null);
+  const [nativeAuthExpiresAt, setNativeAuthExpiresAt] = useState<number | null>(
+    null
+  );
+  const [isAuthSessionExpired, setIsAuthSessionExpired] = useState(false);
   const [isRequestingLocationPermission, setIsRequestingLocationPermission] =
     useState(false);
   const [
@@ -67,7 +72,7 @@ export function useNativeBoot() {
       const storedLanguage = normalizeAppLanguage(
         await AsyncStorage.getItem(APP_LANGUAGE_STORAGE_KEY)
       );
-      const storedAuthToken = await readStoredNativeAuthToken();
+      const storedAuthSession = await readStoredNativeAuthSession();
 
       if (!isMounted) {
         return;
@@ -77,11 +82,14 @@ export function useNativeBoot() {
         setAppLanguage(storedLanguage);
       }
 
-      if (storedAuthToken) {
-        setNativeAuthToken(storedAuthToken);
+      if (storedAuthSession.token) {
+        setNativeAuthToken(storedAuthSession.token);
+        setNativeAuthExpiresAt(storedAuthSession.expiresAt);
         setBootStep("webview");
         return;
       }
+
+      setIsAuthSessionExpired(storedAuthSession.expired);
 
       if (!storedLanguage) {
         setBootStep("language");
@@ -185,18 +193,39 @@ export function useNativeBoot() {
   }, [isRequestingNotificationPermission]);
 
   const completeNativeLogin = useCallback(async (payload: NativeAuthPayload) => {
+    const expiresAt = Date.now() + NATIVE_AUTH_SESSION_DURATION_MS;
+
     setNativeAuthToken(payload.token);
-    await storeNativeAuthToken(payload.token);
+    setNativeAuthExpiresAt(expiresAt);
+    setIsAuthSessionExpired(false);
+    await storeNativeAuthToken(payload.token, expiresAt);
     await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
     setBootStep("webview");
   }, []);
 
+  const handleNativeAuthSessionChange = useCallback(
+    (session: {
+      token: string | null;
+      expiresAt: number | null;
+      reason: "logout" | "expired" | null;
+    }) => {
+      setNativeAuthToken(session.token);
+      setNativeAuthExpiresAt(session.expiresAt);
+      setIsAuthSessionExpired(session.reason === "expired");
+      setBootStep(session.token ? "webview" : "login");
+    },
+    []
+  );
+
   return {
     bootStep,
     completeNativeLogin,
+    handleNativeAuthSessionChange,
     appLanguage,
+    isAuthSessionExpired,
     isRequestingLocationPermission,
     isRequestingNotificationPermission,
+    nativeAuthExpiresAt,
     nativeAuthToken,
     requestLocationPermission,
     requestNotificationPermission,

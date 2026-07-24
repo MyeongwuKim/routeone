@@ -3,6 +3,8 @@ import type {
   NativeBridgeReadyMessage,
   NativeAuthTokenMessage,
   NativeExternalUrlRequest,
+  NativeFestivalNotification,
+  NativeFestivalNotificationSyncRequest,
   NativeFetchRequest,
   NativeLocationRequest,
   NativePhotoUploadRequest,
@@ -11,6 +13,13 @@ import type {
   NativeRouteArrivalNotificationSyncRequest,
   NativeSaveImageRequest,
 } from "./types";
+
+const NATIVE_FESTIVAL_NOTIFICATION_KINDS = new Set([
+  "today",
+  "weekly",
+  "monthly",
+  "trip",
+]);
 
 export function isNativeAppInfoRequest(
   value: unknown
@@ -152,6 +161,51 @@ export function isNativeRouteArrivalNotificationSyncRequest(
     typeof maybeRequest.id === "string" &&
     Array.isArray(maybeRequest.places) &&
     maybeRequest.places.every(isNativeRouteArrivalNotificationPlace)
+  );
+}
+
+function isNativeFestivalNotification(
+  value: unknown
+): value is NativeFestivalNotification {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeNotification = value as Partial<NativeFestivalNotification>;
+
+  return (
+    typeof maybeNotification.id === "string" &&
+    typeof maybeNotification.kind === "string" &&
+    NATIVE_FESTIVAL_NOTIFICATION_KINDS.has(maybeNotification.kind) &&
+    typeof maybeNotification.regionCode === "string" &&
+    typeof maybeNotification.regionLabel === "string" &&
+    typeof maybeNotification.dateKey === "string" &&
+    Array.isArray(maybeNotification.festivalIds) &&
+    maybeNotification.festivalIds.every((id) => typeof id === "string") &&
+    Array.isArray(maybeNotification.festivalTitles) &&
+    maybeNotification.festivalTitles.every(
+      (title) => typeof title === "string"
+    ) &&
+    (maybeNotification.triggerAt == null ||
+      typeof maybeNotification.triggerAt === "string")
+  );
+}
+
+export function isNativeFestivalNotificationSyncRequest(
+  value: unknown
+): value is NativeFestivalNotificationSyncRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeRequest =
+    value as Partial<NativeFestivalNotificationSyncRequest>;
+
+  return (
+    maybeRequest.type === "routeone:native-festival-notifications-sync" &&
+    typeof maybeRequest.id === "string" &&
+    Array.isArray(maybeRequest.notifications) &&
+    maybeRequest.notifications.every(isNativeFestivalNotification)
   );
 }
 

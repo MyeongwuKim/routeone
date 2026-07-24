@@ -1,9 +1,12 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { MdLogin, MdPassword, MdRoute } from "react-icons/md";
 import { authApi, ME_QUERY_KEY } from "@/api/authApi";
-import { setAuthToken } from "@/lib/authToken";
+import {
+  consumeAuthSessionExpired,
+  setAuthToken,
+} from "@/lib/authToken";
 import { useAuthUserStore } from "@/stores/authUserStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
@@ -22,6 +25,12 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (consumeAuthSessionExpired()) {
+      showToast("7일 동안 접속하지 않아 로그아웃되었어요.", 3200);
+    }
+  }, [showToast]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

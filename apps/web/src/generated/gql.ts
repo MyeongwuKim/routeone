@@ -48,6 +48,7 @@ type Documents = {
     "mutation UpdateRouteStopStayMinutes($input: UpdateRouteStopStayMinutesInput!) {\n  updateRouteStopStayMinutes(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.UpdateRouteStopStayMinutesDocument,
     "mutation LoginWithPassword($input: PasswordLoginInput!) {\n  loginWithPassword(input: $input) {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      locale\n      createdAt\n      updatedAt\n    }\n  }\n}": typeof types.LoginWithPasswordDocument,
     "query Me {\n  me {\n    id\n    accountId\n    email\n    displayName\n    locale\n    createdAt\n    updatedAt\n  }\n}": typeof types.MeDocument,
+    "mutation RefreshAuthSession {\n  refreshAuthSession {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      locale\n      createdAt\n      updatedAt\n    }\n  }\n}": typeof types.RefreshAuthSessionDocument,
 };
 const documents: Documents = {
     "mutation CacheTourCategoryLocalizations($input: [TourCategoryLocalizationInput!]!) {\n  cacheTourCategoryLocalizations(input: $input) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}": types.CacheTourCategoryLocalizationsDocument,
@@ -84,6 +85,7 @@ const documents: Documents = {
     "mutation UpdateRouteStopStayMinutes($input: UpdateRouteStopStayMinutesInput!) {\n  updateRouteStopStayMinutes(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.UpdateRouteStopStayMinutesDocument,
     "mutation LoginWithPassword($input: PasswordLoginInput!) {\n  loginWithPassword(input: $input) {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      locale\n      createdAt\n      updatedAt\n    }\n  }\n}": types.LoginWithPasswordDocument,
     "query Me {\n  me {\n    id\n    accountId\n    email\n    displayName\n    locale\n    createdAt\n    updatedAt\n  }\n}": types.MeDocument,
+    "mutation RefreshAuthSession {\n  refreshAuthSession {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      locale\n      createdAt\n      updatedAt\n    }\n  }\n}": types.RefreshAuthSessionDocument,
 };
 
 /**
@@ -236,6 +238,10 @@ export function graphql(source: "mutation LoginWithPassword($input: PasswordLogi
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "query Me {\n  me {\n    id\n    accountId\n    email\n    displayName\n    locale\n    createdAt\n    updatedAt\n  }\n}"): (typeof documents)["query Me {\n  me {\n    id\n    accountId\n    email\n    displayName\n    locale\n    createdAt\n    updatedAt\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation RefreshAuthSession {\n  refreshAuthSession {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      locale\n      createdAt\n      updatedAt\n    }\n  }\n}"): (typeof documents)["mutation RefreshAuthSession {\n  refreshAuthSession {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      locale\n      createdAt\n      updatedAt\n    }\n  }\n}"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

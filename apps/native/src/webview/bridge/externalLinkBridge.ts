@@ -4,6 +4,7 @@ import type { NativeExternalUrlRequest } from "./types";
 const WEBVIEW_BASE_ORIGIN = "https://routeone.native";
 const LOCAL_WEB_BUNDLE_PATH = "/routeone-web-bundles/releases/";
 const NAVER_MAP_SCHEME_PREFIX = "nmap://";
+const ROUTEONE_APP_SETTINGS_SCHEME_PREFIX = "routeone-settings:";
 const NAVER_MAP_WEB_DIRECTIONS_URL =
   "https://map.naver.com/p/directions/";
 
@@ -55,6 +56,18 @@ export async function openNativeExternalUrl(
   allowedOrigins: readonly string[] = []
 ) {
   if (!url || shouldKeepUrlInWebView(url, allowedOrigins)) {
+    return;
+  }
+
+  if (url.startsWith(ROUTEONE_APP_SETTINGS_SCHEME_PREFIX)) {
+    try {
+      await Linking.openSettings();
+    } catch (error) {
+      console.warn(
+        "[routeone-native-bridge] failed to open app settings",
+        error
+      );
+    }
     return;
   }
 

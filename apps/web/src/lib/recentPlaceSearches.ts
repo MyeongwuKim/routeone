@@ -1,5 +1,5 @@
 const RECENT_PLACE_SEARCHES_STORAGE_KEY = "routeone:recent-place-searches";
-const RECENT_PLACE_SEARCHES_LIMIT = 8;
+const RECENT_PLACE_SEARCHES_LIMIT = 10;
 
 function normalizeRecentPlaceSearches(value: unknown) {
   if (!Array.isArray(value)) {

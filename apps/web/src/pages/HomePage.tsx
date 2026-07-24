@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
+import { routeApi } from "@/api/routeApi";
 import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
 import HomeMapControls, {
   HomeMapControlsSkeleton,
 } from "@/components/home/HomeMapControls";
 import PlaceSearchPopup from "@/components/search/PlaceSearchPopup";
+import { syncFestivalNotifications } from "@/features/home/festivalNotificationService";
 import { useHomeAttractionData } from "@/features/home/useHomeAttractionData";
 import { useHomeMap } from "@/features/home/useHomeMap";
+import { MY_ROUTES_QUERY_KEY } from "@/features/my-route/myRouteCache";
 import {
   DEFAULT_GANGWON_REGION,
   GANGWON_REGIONS,
   GANGWON_SIGNGU_ADMIN_CODES,
 } from "@/data/gangwonRegions";
 import { useUiText } from "@/lib/uiText";
+import { getAuthToken } from "@/lib/authToken";
 import {
   readRecentPlaceSearches,
   writeRecentPlaceSearches,
@@ -42,6 +48,8 @@ import {
 
 function HomePage() {
   const text = useUiText();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const hasAuthToken = Boolean(getAuthToken());
 
   const openSheet = useMapSheetStore((state) => state.openSheet);
   const resetSheet = useMapSheetStore((state) => state.resetSheet);
@@ -82,6 +90,12 @@ function HomePage() {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const currentLocationRef = useRef<CurrentLocation | null>(null);
   const hasManuallySelectedRegionRef = useRef(false);
+  const myRoutesQuery = useQuery({
+    queryKey: MY_ROUTES_QUERY_KEY,
+    queryFn: () => routeApi.myRoutes(),
+    enabled: hasAuthToken,
+    staleTime: 1000 * 60 * 5,
+  });
 
   const {
     attractionData,
@@ -89,9 +103,11 @@ function HomePage() {
     attractionLoadingStage,
     boundaryBySigunguCode,
     festivalCountBySigunguCode,
+    festivals,
     isAttractionFetching,
     isAttractionLoading,
     isBoundaryDataReady,
+    isFestivalDataReady,
     isUpdatingPlaceLabelsRef,
     setAttractionLoadingStage,
     topRankByAttractionId,
@@ -214,6 +230,16 @@ function HomePage() {
       return distanceA - distanceB;
     });
   }, [currentLocation]);
+  const regionLabelByCode = useMemo(
+    () =>
+      Object.fromEntries(
+        GANGWON_REGIONS.map((region) => [
+          region.sigunguCode,
+          text.labels.regions[region.label] ?? region.label,
+        ])
+      ),
+    [text]
+  );
   const selectedRegion =
     GANGWON_REGIONS.find((region) => region.sigunguCode === selectedSigunguCode) ??
     DEFAULT_GANGWON_REGION;
@@ -239,6 +265,73 @@ function HomePage() {
       })),
     [text]
   );
+
+  useEffect(() => {
+    const festivalRegionCode = searchParams.get("festivalRegion");
+
+    if (!festivalRegionCode) {
+      return;
+    }
+
+    const festivalRegion = GANGWON_REGIONS.find(
+      (region) => region.sigunguCode === festivalRegionCode
+    );
+
+    if (!festivalRegion) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("festivalRegion");
+    nextSearchParams.delete("festivalDate");
+    nextSearchParams.delete("source");
+    const frameId = requestAnimationFrame(() => {
+      hasManuallySelectedRegionRef.current = true;
+      setSelectedSigunguCode(festivalRegion.sigunguCode);
+      setSearchFilter("festival");
+      setSearchKeyword(
+        text.labels.regions[festivalRegion.label] ?? festivalRegion.label
+      );
+      setIsSearchPopupOpen(true);
+      setSearchParams(nextSearchParams, { replace: true });
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [searchParams, setSearchParams, text]);
+
+  useEffect(() => {
+    const isRouteDataReady = !hasAuthToken || myRoutesQuery.isSuccess;
+
+    if (!isFestivalDataReady || !isRouteDataReady) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void syncFestivalNotifications({
+        currentRegionCode: currentLocation
+          ? (orderedRegions[0]?.sigunguCode ?? null)
+          : null,
+        festivals,
+        regionLabelByCode,
+        routes: myRoutesQuery.data?.myRoutes ?? [],
+      });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    currentLocation,
+    festivals,
+    hasAuthToken,
+    isFestivalDataReady,
+    myRoutesQuery.data,
+    myRoutesQuery.isSuccess,
+    orderedRegions,
+    regionLabelByCode,
+  ]);
 
   const searchResults = useMemo(() => {
     if (!attractionData) {
@@ -597,7 +690,6 @@ function HomePage() {
           }}
           onResultClick={(item) => {
             appendRecentSearch(searchKeyword);
-            closeSearchPopup();
             openPlaceSheetFromAttraction({
               attraction: item.attraction,
               markerType: item.markerType,

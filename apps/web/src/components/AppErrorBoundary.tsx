@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { nativeBridge } from "@/native-bridge";
 
 type AppErrorBoundaryProps = {
   children: ReactNode;
@@ -60,23 +61,9 @@ export default class AppErrorBoundary extends Component<
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
     console.error("[routeone-web] render failed", error, errorInfo);
 
-    const nativeWebView = (
-      window as Window & {
-        ReactNativeWebView?: { postMessage(message: string): void };
-      }
-    ).ReactNativeWebView;
-
-    nativeWebView?.postMessage(
-      JSON.stringify({
-        type: "routeone:web-runtime-error",
-        source: "react-error-boundary",
-        message:
-          error instanceof Error
-            ? error.message
-            : typeof error === "string"
-              ? error
-              : "Unknown render error",
-      })
+    nativeBridge.lifecycle.reportRuntimeError(
+      "react-error-boundary",
+      error
     );
   }
 

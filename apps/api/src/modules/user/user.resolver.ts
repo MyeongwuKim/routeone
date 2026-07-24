@@ -55,6 +55,7 @@ export const userTypeDefs = gql`
   extend type Mutation {
     loginWithPassword(input: PasswordLoginInput!): AuthPayload!
     loginWithNativeOAuth(input: NativeOAuthLoginInput!): AuthPayload!
+    refreshAuthSession: AuthPayload!
   }
 `;
 
@@ -232,6 +233,22 @@ export const userResolvers = {
       return {
         token: createAuthToken(user.id),
         user,
+      };
+    },
+    refreshAuthSession(
+      _parent: unknown,
+      _args: unknown,
+      context: GraphQLContext
+    ) {
+      if (!context.authenticatedUserId) {
+        throw new Error(
+          "로그인 세션이 만료되었어요. 다시 로그인해 주세요."
+        );
+      }
+
+      return {
+        token: createAuthToken(context.authenticatedUserId),
+        user: context.user,
       };
     },
   },

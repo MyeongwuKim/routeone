@@ -2,6 +2,7 @@ import * as Notifications from "expo-notifications";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  AppState,
   BackHandler,
   StatusBar,
   StyleSheet,
@@ -30,7 +31,13 @@ import RouteOneLaunchScreen from "./RouteOneLaunchScreen";
 
 type NativeWebViewScreenProps = {
   appLanguage: AppLanguage;
+  nativeAuthExpiresAt: number | null;
   nativeAuthToken: string | null;
+  onAuthSessionChange: (session: {
+    token: string | null;
+    expiresAt: number | null;
+    reason: "logout" | "expired" | null;
+  }) => void;
 };
 
 type AppLanguage = "ko" | "en";
@@ -41,7 +48,13 @@ type WebViewNavigationRequest = {
 };
 
 const AUTH_TOKEN_STORAGE_KEY = "routeone.authToken";
+const AUTH_SESSION_EXPIRES_AT_STORAGE_KEY =
+  "routeone.authSessionExpiresAt";
 const APP_LANGUAGE_STORAGE_KEY = "routeone-app-language";
+const APP_ACTIVE_EVENT_SCRIPT = `
+  window.dispatchEvent(new Event("routeone:native-app-active"));
+  true;
+`;
 
 const WEB_VIEW_TEXT = {
   ko: {
@@ -178,7 +191,7 @@ function readRuntimeErrorMessage(
     : text.loadErrorTitle;
 }
 
-function getRouteArrivalNotificationWebPath(
+function getNotificationWebPath(
   response: Notifications.NotificationResponse | null
 ) {
   if (
@@ -193,6 +206,22 @@ function getRouteArrivalNotificationWebPath(
   const dayId = typeof data.dayId === "string" ? data.dayId : null;
   const stopId = typeof data.stopId === "string" ? data.stopId : null;
   const type = typeof data.type === "string" ? data.type : null;
+
+  if (type === "festival-summary") {
+    const regionCode =
+      typeof data.regionCode === "string" ? data.regionCode : null;
+    const dateKey = typeof data.dateKey === "string" ? data.dateKey : null;
+
+    if (!regionCode || !dateKey) {
+      return null;
+    }
+
+    return `/home?${new URLSearchParams({
+      festivalRegion: regionCode,
+      festivalDate: dateKey,
+      source: "festival-notification"
+    }).toString()}`;
+  }
 
   if (type !== "route-arrival" || !routeId || !dayId) {
     return null;
@@ -257,7 +286,9 @@ function readWebBundleAllowedOrigins(bundle: ResolvedWebBundle | null) {
 
 export default function NativeWebViewScreen({
   appLanguage,
-  nativeAuthToken
+  nativeAuthExpiresAt,
+  nativeAuthToken,
+  onAuthSessionChange
 }: NativeWebViewScreenProps) {
   const text = WEB_VIEW_TEXT[appLanguage];
   const webViewRef = useRef<WebView>(null);
@@ -277,9 +308,14 @@ export default function NativeWebViewScreen({
   );
   const injectedScript = useMemo(() => {
     const authScript = nativeAuthToken
-      ? `try { window.localStorage.setItem(${JSON.stringify(
-          AUTH_TOKEN_STORAGE_KEY
-        )}, ${JSON.stringify(nativeAuthToken)}); } catch (error) {}`
+      ? `try {
+          window.localStorage.setItem(${JSON.stringify(
+            AUTH_TOKEN_STORAGE_KEY
+          )}, ${JSON.stringify(nativeAuthToken)});
+          window.localStorage.setItem(${JSON.stringify(
+            AUTH_SESSION_EXPIRES_AT_STORAGE_KEY
+          )}, ${JSON.stringify(String(nativeAuthExpiresAt))});
+        } catch (error) {}`
       : "";
     const languageScript = `
       try {
@@ -293,7 +329,7 @@ export default function NativeWebViewScreen({
     `;
 
     return `${authScript}\n${languageScript}\n${ROUTEONE_WEBVIEW_BRIDGE_SCRIPT}`;
-  }, [appLanguage, nativeAuthToken]);
+  }, [appLanguage, nativeAuthExpiresAt, nativeAuthToken]);
 
   const requestFatalAppExit = useCallback(
     (message: string) => {
@@ -347,12 +383,19 @@ export default function NativeWebViewScreen({
         // Other bridge handlers perform their own message validation.
       }
 
-      void handleNativeBridgeMessage(event, webViewRef, {
-        webBundleVersion: resolvedBundle?.version ?? null,
-        webBundleKind: resolvedBundle?.kind ?? "embedded"
-      });
+      void handleNativeBridgeMessage(
+        event,
+        webViewRef,
+        {
+          webBundleVersion: resolvedBundle?.version ?? null,
+          webBundleKind: resolvedBundle?.kind ?? "embedded"
+        },
+        {
+          onAuthSessionChange
+        }
+      );
     },
-    [resolvedBundle, text]
+    [onAuthSessionChange, resolvedBundle, text]
   );
 
   const handleWebViewProcessTerminated = useCallback(() => {
@@ -394,10 +437,30 @@ export default function NativeWebViewScreen({
   }, [injectNavigationPath, isLoading]);
 
   useEffect(() => {
+    let previousAppState = AppState.currentState;
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      const isReturningToActive =
+        nextAppState === "active" &&
+        (previousAppState === "background" ||
+          previousAppState === "inactive");
+
+      previousAppState = nextAppState;
+
+      if (isReturningToActive) {
+        webViewRef.current?.injectJavaScript(APP_ACTIVE_EVENT_SCRIPT);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     const handleNotificationResponse = (
       response: Notifications.NotificationResponse | null
     ) => {
-      const webPath = getRouteArrivalNotificationWebPath(response);
+      const webPath = getNotificationWebPath(response);
 
       if (webPath) {
         navigateWebViewToPath(webPath);

@@ -1,4 +1,7 @@
 import Constants from "expo-constants";
+import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { WEB_BUNDLE_UPDATE_CONFIG } from "../../config/webBundleUpdateConfig";
 import { postNativeAppInfoResponse } from "./responses";
@@ -6,6 +9,7 @@ import type {
   NativeAppInfoContext,
   NativeAppInfoRequest,
   NativeAppInfoResponse,
+  NativePermissionStatus,
   WebViewRef
 } from "./types";
 
@@ -41,9 +45,66 @@ function getOsVersion() {
   return Platform.Version === undefined ? null : String(Platform.Version);
 }
 
-function createNativeAppInfo(
+function normalizePermissionStatus(
+  status: string,
+  granted: boolean
+): NativePermissionStatus {
+  if (granted || status === "granted") {
+    return "granted";
+  }
+
+  if (status === "denied") {
+    return "denied";
+  }
+
+  if (status === "undetermined") {
+    return "undetermined";
+  }
+
+  return "unavailable";
+}
+
+async function getLocationPermissionStatus(): Promise<NativePermissionStatus> {
+  try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    return normalizePermissionStatus(permission.status, permission.granted);
+  } catch {
+    return "unavailable";
+  }
+}
+
+async function getNotificationPermissionStatus(): Promise<NativePermissionStatus> {
+  try {
+    const permission = await Notifications.getPermissionsAsync();
+    return normalizePermissionStatus(permission.status, permission.granted);
+  } catch {
+    return "unavailable";
+  }
+}
+
+async function getCameraPermissionStatus(): Promise<NativePermissionStatus> {
+  try {
+    const permission = await ImagePicker.getCameraPermissionsAsync();
+    return normalizePermissionStatus(permission.status, permission.granted);
+  } catch {
+    return "unavailable";
+  }
+}
+
+async function createNativeAppInfo(
   context: NativeAppInfoContext
-): NativeAppInfoResponse {
+): Promise<NativeAppInfoResponse> {
+  const [
+    locationPermissionStatus,
+    notificationPermissionStatus,
+    cameraPermissionStatus
+  ] =
+    await Promise.all([
+      getLocationPermissionStatus(),
+      getNotificationPermissionStatus(),
+      getCameraPermissionStatus()
+    ]);
+
   return {
     ok: true,
     platform: Platform.OS,
@@ -55,11 +116,14 @@ function createNativeAppInfo(
     webBundleVersion: context.webBundleVersion,
     webBundleKind: context.webBundleKind,
     webBundleChannel: WEB_BUNDLE_UPDATE_CONFIG.channel,
-    appVariant: WEB_BUNDLE_UPDATE_CONFIG.appVariant
+    appVariant: WEB_BUNDLE_UPDATE_CONFIG.appVariant,
+    locationPermissionStatus,
+    notificationPermissionStatus,
+    cameraPermissionStatus
   };
 }
 
-export function handleNativeAppInfoRequest(
+export async function handleNativeAppInfoRequest(
   request: NativeAppInfoRequest,
   webViewRef: WebViewRef,
   context: NativeAppInfoContext
@@ -67,6 +131,6 @@ export function handleNativeAppInfoRequest(
   postNativeAppInfoResponse(
     webViewRef,
     request.id,
-    createNativeAppInfo(context)
+    await createNativeAppInfo(context)
   );
 }

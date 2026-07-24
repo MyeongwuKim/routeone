@@ -1,0 +1,14 @@
+mutation RefreshAuthSession {
+  refreshAuthSession {
+    token
+    user {
+      id
+      accountId
+      email
+      displayName
+      locale
+      createdAt
+      updatedAt
+    }
+  }
+}

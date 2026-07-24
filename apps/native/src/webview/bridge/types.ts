@@ -28,6 +28,8 @@ export type NativeBridgeReadyMessage = {
 export type NativeAuthTokenMessage = {
   type: "routeone:native-auth-token";
   token?: string | null;
+  expiresAt?: number | null;
+  reason?: "logout" | "expired";
 };
 
 export type NativeAppInfoRequest = {
@@ -39,6 +41,12 @@ export type NativeAppInfoContext = {
   webBundleVersion: string | null;
   webBundleKind: ResolvedWebBundleKind;
 };
+
+export type NativePermissionStatus =
+  | "granted"
+  | "denied"
+  | "undetermined"
+  | "unavailable";
 
 export type NativeLocationRequest = {
   type: "routeone:native-location-current";
@@ -84,6 +92,29 @@ export type NativeRouteArrivalNotificationSyncRequest = {
   id: string;
   places: NativeRouteArrivalNotificationPlace[];
   radiusMeters?: number | null;
+};
+
+export type NativeFestivalNotificationKind =
+  | "today"
+  | "weekly"
+  | "monthly"
+  | "trip";
+
+export type NativeFestivalNotification = {
+  id: string;
+  kind: NativeFestivalNotificationKind;
+  regionCode: string;
+  regionLabel: string;
+  dateKey: string;
+  festivalIds: string[];
+  festivalTitles: string[];
+  triggerAt?: string | null;
+};
+
+export type NativeFestivalNotificationSyncRequest = {
+  type: "routeone:native-festival-notifications-sync";
+  id: string;
+  notifications: NativeFestivalNotification[];
 };
 
 export type NativeExternalUrlRequest = {
@@ -169,6 +200,17 @@ export type NativeRouteArrivalNotificationSyncResponse =
       error: string;
     };
 
+export type NativeFestivalNotificationSyncResponse =
+  | {
+      ok: true;
+      scheduledCount: number;
+      notificationStatus: string;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 export type NativeSaveImageResponse =
   | {
       ok: true;
@@ -192,4 +234,7 @@ export type NativeAppInfoResponse = {
   webBundleKind: NativeAppInfoContext["webBundleKind"];
   webBundleChannel: string;
   appVariant: string;
+  locationPermissionStatus: NativePermissionStatus;
+  notificationPermissionStatus: NativePermissionStatus;
+  cameraPermissionStatus: NativePermissionStatus;
 };

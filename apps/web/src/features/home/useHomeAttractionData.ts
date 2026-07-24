@@ -42,6 +42,19 @@ export type HomeAttractionQueryData = {
   isLocalized: boolean;
 };
 
+const GANGWON_BOUNDARY_ASSET_PATH = "/gangwon-sigungu-boundary.json";
+
+function getGangwonBoundaryAssetUrl() {
+  if (GANGWON_BOUNDARY_ASSET_PATH.startsWith("data:")) {
+    return GANGWON_BOUNDARY_ASSET_PATH;
+  }
+
+  return new URL(
+    GANGWON_BOUNDARY_ASSET_PATH.replace(/^\/+/, ""),
+    document.baseURI
+  ).toString();
+}
+
 export function useHomeAttractionData(selectedSigunguCode: string) {
   const text = useUiText();
   const queryClient = useQueryClient();
@@ -84,7 +97,7 @@ export function useHomeAttractionData(selectedSigunguCode: string) {
   const boundaryQuery = useQuery({
     queryKey: ["gangwon-boundary"],
     queryFn: async () => {
-      const response = await fetch("/gangwon-sigungu-boundary.json");
+      const response = await fetch(getGangwonBoundaryAssetUrl());
       if (!response.ok) {
         throw new Error("Failed to load boundary data.");
       }
@@ -335,7 +348,7 @@ export function useHomeAttractionData(selectedSigunguCode: string) {
         TOUR_API_SERVICE_KEY,
         { lookAheadDays: 90 },
         "ko"
-      ).catch(() => [] as GangwonAttraction[]);
+      );
       return localizeTourPlaces(festivals, appLanguage);
     },
     staleTime: 1000 * 60 * 60 * 12,
@@ -387,6 +400,8 @@ export function useHomeAttractionData(selectedSigunguCode: string) {
       : attractionLoadingStage,
     boundaryBySigunguCode: boundaryQuery.data ?? {},
     festivalCountBySigunguCode,
+    festivals: festivalsQuery.data ?? [],
+    isFestivalDataReady: festivalsQuery.isSuccess,
     isAttractionLoading: attractionsQuery.isFetching,
     isAttractionFetching: attractionsQuery.isFetching,
     isBoundaryDataReady: boundaryQuery.isSuccess || boundaryQuery.isError,

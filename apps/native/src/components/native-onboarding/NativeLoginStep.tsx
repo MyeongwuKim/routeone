@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -23,6 +24,7 @@ type NativeLoginStepProps = {
   appleAvailable: boolean;
   activeProvider: NativeLoginProvider | null;
   errorMessage: string | null;
+  toastMessage?: string | null;
   onChangeAccountId: (value: string) => void;
   onChangePassword: (value: string) => void;
   onChangeDisplayName: (value: string) => void;
@@ -185,6 +187,7 @@ export default function NativeLoginStep({
   appleAvailable,
   activeProvider,
   errorMessage,
+  toastMessage,
   onChangeAccountId,
   onChangePassword,
   onChangeDisplayName,
@@ -197,15 +200,36 @@ export default function NativeLoginStep({
   const text = LOGIN_TEXT[language];
   const isBusy = activeProvider !== null;
   const isAppleDisabled = isBusy || Platform.OS !== "ios" || !appleAvailable;
+  const [isToastVisible, setIsToastVisible] = useState(Boolean(toastMessage));
   const friendlyErrorMessage = errorMessage
     ? getFriendlyErrorMessage(errorMessage, text)
     : null;
+
+  useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+
+    setIsToastVisible(true);
+    const timeoutId = setTimeout(() => {
+      setIsToastVisible(false);
+    }, 3200);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [toastMessage]);
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.screen, { backgroundColor: colors.background }]}
     >
+      {isToastVisible && toastMessage ? (
+        <View pointerEvents="none" style={styles.toast}>
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </View>
+      ) : null}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -411,6 +435,34 @@ export default function NativeLoginStep({
 const styles = StyleSheet.create({
   screen: {
     flex: 1
+  },
+  toast: {
+    position: "absolute",
+    top: 18,
+    left: 20,
+    right: 20,
+    zIndex: 10,
+    minHeight: 48,
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#111827",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: "#000000",
+    shadowOffset: {
+      width: 0,
+      height: 4
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6
+  },
+  toastText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0,
+    textAlign: "center"
   },
   scrollContent: {
     flexGrow: 1,

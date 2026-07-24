@@ -1,24 +1,15 @@
-export type RouteOnePosition = {
-  lat: number;
-  lng: number;
-  accuracyMeters: number | null;
-  timestamp: number;
-};
+import {
+  nativeBridge,
+  type NativePosition,
+} from "@/native-bridge";
 
-type RouteOneNativeBridge = {
-  getCurrentPosition?: () => Promise<RouteOnePosition>;
-};
-
-function getRouteOneNativeBridge() {
-  return (window as Window & { RouteOneNative?: RouteOneNativeBridge })
-    .RouteOneNative;
-}
+export type RouteOnePosition = NativePosition;
 
 export function getCurrentPosition() {
-  const nativeBridge = getRouteOneNativeBridge();
+  const nativePositionRequest = nativeBridge.location.getCurrentPosition();
 
-  if (nativeBridge?.getCurrentPosition) {
-    return nativeBridge.getCurrentPosition();
+  if (nativePositionRequest) {
+    return nativePositionRequest;
   }
 
   return new Promise<RouteOnePosition>((resolve, reject) => {

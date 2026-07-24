@@ -25,6 +25,7 @@ const onboardingText = {
     allow: "허용",
     checking: "확인 중",
     later: "나중에",
+    sessionExpired: "7일 동안 접속하지 않아 로그아웃되었어요.",
     launchPreparing: "앱을 준비하고 있어요.",
     launchTagline: "여행의 시작부터 도착까지"
   },
@@ -38,6 +39,7 @@ const onboardingText = {
     allow: "Allow",
     checking: "Checking",
     later: "Later",
+    sessionExpired: "You were signed out after 7 days of inactivity.",
     launchPreparing: "Preparing the app.",
     launchTagline: "From first plan to final stop"
   }
@@ -52,8 +54,11 @@ export default function App() {
     appLanguage,
     bootStep,
     completeNativeLogin,
+    handleNativeAuthSessionChange,
+    isAuthSessionExpired,
     isRequestingLocationPermission,
     isRequestingNotificationPermission,
+    nativeAuthExpiresAt,
     nativeAuthToken,
     requestLocationPermission,
     requestNotificationPermission,
@@ -222,6 +227,7 @@ export default function App() {
             void nativeLogin.handlePasswordLogin();
           }}
           password={nativeLogin.password}
+          toastMessage={isAuthSessionExpired ? text.sessionExpired : null}
         />
       </SafeAreaView>
     );
@@ -230,7 +236,9 @@ export default function App() {
   return (
     <NativeWebViewScreen
       appLanguage={appLanguage}
+      nativeAuthExpiresAt={nativeAuthExpiresAt}
       nativeAuthToken={nativeAuthToken}
+      onAuthSessionChange={handleNativeAuthSessionChange}
     />
   );
 }

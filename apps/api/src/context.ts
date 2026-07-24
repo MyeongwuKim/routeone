@@ -4,6 +4,7 @@ import { prisma } from "./lib/prisma.js";
 import { readBearerToken, verifyAuthToken } from "./lib/auth.js";
 
 export type GraphQLContext = {
+  authenticatedUserId: string | null;
   prisma: PrismaClient;
   user: User;
 };
@@ -48,9 +49,11 @@ async function getUserFromRequest(request?: FastifyRequest) {
 export async function createContext(
   request?: FastifyRequest
 ): Promise<GraphQLContext> {
-  const user = (await getUserFromRequest(request)) ?? (await getLocalDevUser());
+  const authenticatedUser = await getUserFromRequest(request);
+  const user = authenticatedUser ?? (await getLocalDevUser());
 
   return {
+    authenticatedUserId: authenticatedUser?.id ?? null,
     prisma,
     user,
   };

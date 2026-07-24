@@ -1,6 +1,7 @@
 import {
   LoginWithPasswordDocument,
   MeDocument,
+  RefreshAuthSessionDocument,
   type PasswordLoginInput,
 } from "@/generated/graphql";
 import { requestGraphQL } from "@/lib/graphqlClient";
@@ -16,5 +17,8 @@ export const authApi = {
     return requestGraphQL(LoginWithPasswordDocument, {
       input,
     });
+  },
+  refreshAuthSession() {
+    return requestGraphQL(RefreshAuthSessionDocument);
   },
 };

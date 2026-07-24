@@ -1,4 +1,5 @@
 import { routeApi } from "@/api/routeApi";
+import { nativeBridge } from "@/native-bridge";
 import {
   formatRouteDate,
   getRouteSubtitle,
@@ -1594,12 +1595,15 @@ export async function downloadRouteCompletionPoster(
   fileName: string,
   title = "RouteOne 포토카드"
 ): Promise<RouteCompletionPosterSaveResult> {
-  if (window.RouteOneNative?.saveImage) {
-    const saveResult = await window.RouteOneNative.saveImage({
-      dataUrl,
-      fileName,
-      title
-    });
+  const nativeSaveRequest = nativeBridge.media.saveImage({
+    dataUrl,
+    fileName,
+    title,
+  });
+
+  if (nativeSaveRequest) {
+    const saveResult = await nativeSaveRequest;
+
     return {
       mode: "native",
       completed: saveResult.shared,

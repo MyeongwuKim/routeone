@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { nativeBridge } from "@/native-bridge";
 
 export default function NativeWebBundleReadySignal() {
   useEffect(() => {
@@ -6,20 +7,12 @@ export default function NativeWebBundleReadySignal() {
     let firstFrameId: number | null = null;
     let secondFrameId: number | null = null;
     let timeoutId: number | null = null;
-    const nativeWebView = (
-      window as Window & {
-        ReactNativeWebView?: { postMessage(message: string): void };
-      }
-    ).ReactNativeWebView;
-
     const postReadySignal = () => {
       if (isCancelled) {
         return;
       }
 
-      nativeWebView?.postMessage(
-        JSON.stringify({ type: "routeone:web-bundle-ready" })
-      );
+      nativeBridge.lifecycle.postWebBundleReady();
     };
 
     if (typeof window.requestAnimationFrame === "function") {

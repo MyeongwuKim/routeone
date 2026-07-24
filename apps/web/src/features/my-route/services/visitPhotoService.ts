@@ -1,49 +1,16 @@
-type RouteOneNativePosition = {
-  lat: number;
-  lng: number;
-  accuracyMeters: number | null;
-  timestamp: number;
-};
+import {
+  nativeBridge,
+  type NativePhotoUploadTarget,
+  type NativePosition,
+  type NativeVisitPhoto,
+  type NativeVisitPhotoSource,
+} from "@/native-bridge";
 
-type RouteOneNativePhoto = {
-  uri: string | null;
-  dataUrl?: string | null;
-  width: number | null;
-  height: number | null;
-  uploadedImageId?: string | null;
-  uploadedImageUrl?: string | null;
-};
-
-export type VisitPhotoSource = "camera" | "library";
-
-type RouteOneNativePhotoUploadTarget = {
-  uploadUrl: string;
-  imageId: string;
-  imageUrl: string;
-  fileName: string;
-  environment: string;
-};
-
-type RouteOneNativePhotoUploadResult = {
-  uploadedImageId?: string | null;
-  uploadedImageUrl?: string | null;
-};
+export type VisitPhotoSource = NativeVisitPhotoSource;
 
 type VisitPlaceCoordinates = {
   lat: number;
   lng: number;
-};
-
-type RouteOneNativeBridge = {
-  getCurrentPosition?: () => Promise<RouteOneNativePosition>;
-  takeVisitPhoto?: (options?: {
-    source?: VisitPhotoSource;
-    uploadTarget?: RouteOneNativePhotoUploadTarget;
-  }) => Promise<RouteOneNativePhoto>;
-  uploadVisitPhoto?: (options: {
-    photoUri: string;
-    uploadTarget: RouteOneNativePhotoUploadTarget;
-  }) => Promise<RouteOneNativePhotoUploadResult>;
 };
 
 type CloudflareImageUploadResponse = {
@@ -60,11 +27,6 @@ type CloudflareImageUploadResponse = {
 const VISIT_GPS_VERIFICATION_MAX_DISTANCE_METERS = 100;
 const EARTH_RADIUS_METERS = 6_371_000;
 const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
-
-function getRouteOneNativeBridge() {
-  return (window as Window & { RouteOneNative?: RouteOneNativeBridge })
-    .RouteOneNative;
-}
 
 function isTruthyEnv(value: unknown) {
   return (
@@ -119,13 +81,13 @@ export function assertVisitPositionNearPlace(
 }
 
 export async function requestCurrentPosition() {
-  const nativeBridge = getRouteOneNativeBridge();
+  const positionRequest = nativeBridge.location.getCurrentPosition();
 
-  if (!nativeBridge?.getCurrentPosition) {
+  if (!positionRequest) {
     throw new Error("앱에서만 위치 인증을 사용할 수 있어요.");
   }
 
-  return nativeBridge.getCurrentPosition();
+  return positionRequest;
 }
 
 export async function requestVisitVerificationPosition(
@@ -137,7 +99,7 @@ export async function requestVisitVerificationPosition(
       lng: place.lng,
       accuracyMeters: 1,
       timestamp: Date.now(),
-    } satisfies RouteOneNativePosition;
+    } satisfies NativePosition;
   }
 
   const position = await requestCurrentPosition();
@@ -148,29 +110,20 @@ export async function requestVisitVerificationPosition(
 }
 
 export async function requestVisitPhoto(source: VisitPhotoSource) {
-  const nativeBridge = getRouteOneNativeBridge();
+  const photoRequest = nativeBridge.media.takeVisitPhoto(source);
 
-  if (!nativeBridge?.takeVisitPhoto) {
+  if (!photoRequest) {
     throw new Error("앱에서만 사진 인증을 사용할 수 있어요.");
   }
 
-  return nativeBridge.takeVisitPhoto({ source });
+  return photoRequest;
 }
 
 async function requestVisitPhotoUpload(
   photoUri: string,
-  uploadTarget: RouteOneNativePhotoUploadTarget
+  uploadTarget: NativePhotoUploadTarget
 ) {
-  const nativeBridge = getRouteOneNativeBridge();
-
-  if (!nativeBridge?.uploadVisitPhoto) {
-    return null;
-  }
-
-  return nativeBridge.uploadVisitPhoto({
-    photoUri,
-    uploadTarget,
-  });
+  return nativeBridge.media.uploadVisitPhoto(photoUri, uploadTarget);
 }
 
 function assertCloudflareUploadUrl(uploadUrl: string) {
@@ -239,8 +192,8 @@ async function parseCloudflareUploadResponse(response: Response) {
 }
 
 export async function uploadVerifiedVisitPhoto(
-  uploadTarget: RouteOneNativePhotoUploadTarget,
-  photo: RouteOneNativePhoto
+  uploadTarget: NativePhotoUploadTarget,
+  photo: NativeVisitPhoto
 ) {
   if (photo.uploadedImageUrl) {
     return photo.uploadedImageUrl;

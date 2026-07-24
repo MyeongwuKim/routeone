@@ -1,6 +1,7 @@
 import type {
   NativeAppInfoResponse,
   NativeFetchResponse,
+  NativeFestivalNotificationSyncResponse,
   NativeLocationResponse,
   NativePhotoUploadResponse,
   NativePhotoResponse,
@@ -95,6 +96,19 @@ export function postNativeRouteArrivalNotificationSyncResponse(
   postNativeResponse(
     webViewRef,
     "__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_SYNC_RESPONSE__",
+    id,
+    payload
+  );
+}
+
+export function postNativeFestivalNotificationSyncResponse(
+  webViewRef: WebViewRef,
+  id: string,
+  payload: NativeFestivalNotificationSyncResponse
+) {
+  postNativeResponse(
+    webViewRef,
+    "__ROUTEONE_NATIVE_FESTIVAL_NOTIFICATIONS_SYNC_RESPONSE__",
     id,
     payload
   );

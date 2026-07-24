@@ -12,22 +12,32 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";
 import {
   MdArrowBack,
+  MdChevronRight,
   MdHistory,
+  MdLocationOn,
+  MdNotifications,
   MdOutlineAccountCircle,
   MdOutlineHub,
   MdOutlineRoute,
+  MdPhotoCamera,
 } from "react-icons/md";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import RoutePageHeader from "@/components/layout/RoutePageHeader";
 import BottomTabLayout from "@/layouts/BottomTabLayout";
+import {
+  AUTH_SESSION_REFRESH_INTERVAL_MS,
+  refreshAuthSessionIfNeeded,
+} from "@/lib/authSession";
 import { getAuthToken } from "@/lib/authToken";
 import { useUiText } from "@/lib/uiText";
+import { nativeBridge } from "@/native-bridge";
 import MyInfoPage from "@/pages/MyInfoPage";
 
 type PreloadableLazyComponent<
@@ -360,6 +370,7 @@ function LanguageLazyFallback() {
 
 function AppInfoLazyFallback() {
   const text = useUiText();
+  const isNativeRuntime = nativeBridge.runtime.isAvailable();
   const rows = [
     {
       key: "platform",
@@ -380,6 +391,23 @@ function AppInfoLazyFallback() {
       key: "web-bundle-version",
       label: "웹 번들 버전",
       valueWidth: "w-24",
+    },
+  ];
+  const permissionRows = [
+    {
+      key: "location",
+      icon: <MdLocationOn />,
+      label: "위치 권한",
+    },
+    {
+      key: "notification",
+      icon: <MdNotifications />,
+      label: "푸시 알림 권한",
+    },
+    {
+      key: "camera",
+      icon: <MdPhotoCamera />,
+      label: "카메라 권한",
     },
   ];
 
@@ -416,16 +444,32 @@ function AppInfoLazyFallback() {
         ))}
       </section>
 
-      <div className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
-        <div className="flex gap-3">
-          <div className="size-10 shrink-0 animate-pulse rounded-2xl bg-brand-50 dark:bg-brand-400/15" />
-          <div className="min-w-0 flex-1">
-            <div className="h-4 w-36 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
-            <div className="mt-2 h-3 w-full animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
-            <div className="mt-2 h-3 w-2/3 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
+      {isNativeRuntime ? (
+        <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
+          <div className="border-b border-brand-50 px-4 py-3 dark:border-brand-400/15">
+            <p className="text-xs font-black text-brand-700 dark:text-brand-200">
+              권한
+            </p>
           </div>
-        </div>
-      </div>
+          {permissionRows.map((row, index) => (
+            <div key={row.key}>
+              <div className="flex w-full items-center gap-3 px-4 py-3 text-left">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-lg text-brand-700">
+                  {row.icon}
+                </span>
+                <span className="min-w-0 flex-1 text-sm font-semibold text-slate-700">
+                  {row.label}
+                </span>
+                <span className="skeleton-shimmer h-3 w-12 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700" />
+                <MdChevronRight className="shrink-0 text-lg text-slate-400" />
+              </div>
+              {index < permissionRows.length - 1 ? (
+                <div className="border-b border-brand-50 dark:border-brand-400/15" />
+              ) : null}
+            </div>
+          ))}
+        </section>
+      ) : null}
     </section>
   );
 }
@@ -481,6 +525,55 @@ function withRouteSuspense(children: ReactNode, fallback: ReactNode = null) {
   return <Suspense fallback={fallback}>{children}</Suspense>;
 }
 
+function AuthSessionTracker() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!getAuthToken()) {
+      return;
+    }
+
+    let isActive = true;
+    const refreshSession = async () => {
+      const result = await refreshAuthSessionIfNeeded();
+
+      if (isActive && result === "expired") {
+        navigate("/login", { replace: true });
+      }
+    };
+    const handleNativeAppActive = () => {
+      void refreshSession();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshSession();
+      }
+    };
+
+    void refreshSession();
+    const intervalId = window.setInterval(
+      () => void refreshSession(),
+      AUTH_SESSION_REFRESH_INTERVAL_MS
+    );
+    const unsubscribeAppActive =
+      nativeBridge.events.subscribeAppActive(handleNativeAppActive);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+      unsubscribeAppActive();
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+    };
+  }, [location.pathname, navigate]);
+
+  return null;
+}
+
 function RequireAuth() {
   if (!getAuthToken()) {
     return <Navigate to="/login" replace />;
@@ -507,6 +600,7 @@ function AppRouter() {
 
   return (
     <Router>
+      <AuthSessionTracker />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route element={<RequireAuth />}>

@@ -279,6 +279,9 @@ body {
 .naver-map-root {
   position: absolute;
   inset: 0;
+  z-index: 0;
+  isolation: isolate;
+  touch-action: none;
 }
 
 .naver-map-root img,

@@ -7,7 +7,7 @@ type AuthTokenPayload = {
 };
 
 const TOKEN_PREFIX = "routeone";
-const TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+const TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const PASSWORD_KEY_LENGTH = 64;
 
 function getAuthSecret() {
