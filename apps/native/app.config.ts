@@ -241,6 +241,7 @@ export default {
           "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
         NSPhotoLibraryUsageDescription:
           "RouteOne이 지난 방문 사진 인증을 위해 선택한 사진을 사용합니다.",
+        LSApplicationQueriesSchemes: ["nmap"],
         UIBackgroundModes: ["location"]
       }
     },

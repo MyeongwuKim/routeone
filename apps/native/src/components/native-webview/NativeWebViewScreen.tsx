@@ -163,6 +163,21 @@ function getLoadErrorMessage(
   return error instanceof Error ? error.message : text.prepareFailed;
 }
 
+function readRuntimeErrorMessage(
+  value: unknown,
+  text: (typeof WEB_VIEW_TEXT)[AppLanguage]
+) {
+  if (!value || typeof value !== "object") {
+    return text.loadErrorTitle;
+  }
+
+  const message = (value as { message?: unknown }).message;
+
+  return typeof message === "string" && message.trim()
+    ? message.trim()
+    : text.loadErrorTitle;
+}
+
 function getRouteArrivalNotificationWebPath(
   response: Notifications.NotificationResponse | null
 ) {
@@ -323,6 +338,11 @@ export default function NativeWebViewScreen({
             console.warn("[web-bundle] failed to confirm ready bundle", error);
           });
         }
+
+        if (message.type === "routeone:web-runtime-error") {
+          setLoadError(readRuntimeErrorMessage(message, text));
+          setIsLoading(false);
+        }
       } catch {
         // Other bridge handlers perform their own message validation.
       }
@@ -334,6 +354,18 @@ export default function NativeWebViewScreen({
     },
     [resolvedBundle, text]
   );
+
+  const handleWebViewProcessTerminated = useCallback(() => {
+    console.warn("[web-bundle] webview content process terminated; reloading");
+    setLoadError(null);
+    setIsLoading(true);
+    setBundleProgress({
+      stage: "loading",
+      progress: 0.94,
+      message: text.reloadingRouteOne
+    });
+    webViewRef.current?.reload();
+  }, [text]);
 
   const injectNavigationPath = useCallback((path: string) => {
     webViewRef.current?.injectJavaScript(createWebViewNavigationScript(path));
@@ -560,6 +592,8 @@ export default function NativeWebViewScreen({
           onError={(event) => {
             handleLoadError(event.nativeEvent.description);
           }}
+          onContentProcessDidTerminate={handleWebViewProcessTerminated}
+          onRenderProcessGone={handleWebViewProcessTerminated}
           onMessage={handleMessage}
         />
       ) : null}

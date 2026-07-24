@@ -30,36 +30,41 @@ type FetchDrivingRouteParams = {
   language?: DirectionsLanguage;
 };
 
+function getDirectionsFailureMessage(language: DirectionsLanguage) {
+  return language === "en"
+    ? "Could not load directions."
+    : "길찾기 정보를 가져오지 못했습니다.";
+}
+
 export async function fetchDrivingRouteFromCurrentLocation(
   params: FetchDrivingRouteParams
 ) {
+  const language = params.language ?? "ko";
   const query = new URLSearchParams({
     start: `${params.startLng},${params.startLat}`,
     goal: `${params.goalLng},${params.goalLat}`,
     option: "traoptimal",
-    lang: params.language ?? "ko",
+    lang: language,
   });
 
   const response = await fetch(`${DIRECTIONS_API_BASE_URL}?${query.toString()}`);
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error(
-        "네이버 길찾기 API 인증에 실패했습니다. VITE_NCP_MAPS_KEY_ID, VITE_NCP_MAPS_KEY 값을 확인해주세요."
-      );
-    }
-
     const errorText = (await response.text()).trim();
-    throw new Error(
-      `Directions API request failed: ${response.status}${
-        errorText ? ` (${errorText})` : ""
-      }`
-    );
+    console.warn("[naver-directions] request failed", {
+      status: response.status,
+      response: errorText || null,
+    });
+    throw new Error(getDirectionsFailureMessage(language));
   }
 
   const data = (await response.json()) as DirectionsApiResponse;
   if (data.code !== 0) {
-    throw new Error(data.message ?? "길찾기 정보를 가져오지 못했습니다.");
+    console.warn("[naver-directions] response rejected", {
+      code: data.code ?? null,
+      message: data.message ?? null,
+    });
+    throw new Error(getDirectionsFailureMessage(language));
   }
 
   const route = data.route?.traoptimal?.[0];
@@ -72,7 +77,8 @@ export async function fetchDrivingRouteFromCurrentLocation(
     })) ?? [];
 
   if (path.length === 0) {
-    throw new Error("경로 좌표를 찾지 못했습니다.");
+    console.warn("[naver-directions] route path is empty");
+    throw new Error(getDirectionsFailureMessage(language));
   }
 
   return {

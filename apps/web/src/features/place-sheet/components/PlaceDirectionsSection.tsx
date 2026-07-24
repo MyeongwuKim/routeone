@@ -17,7 +17,7 @@ import type { PlaceSheetCoordinates } from "../placeSheetModel";
 import { RouteInfoSkeleton, SkeletonBar } from "./PlaceSheetPrimitives";
 
 const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
-const NAVER_MAP_SCHEME_APP_NAME = "routeone.web";
+const NAVER_MAP_SCHEME_APP_NAME = "com.routeone.app";
 const PREVIEW_MAP_RESIZE_RETRY_MS = [0, 80, 240, 600] as const;
 
 type PreviewMapInstance = {

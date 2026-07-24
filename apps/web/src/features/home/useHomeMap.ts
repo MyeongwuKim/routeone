@@ -10,7 +10,6 @@ import {
 import { createBadgeMarkerIconHtml } from "@/components/map/NaverMapMarkerIcon";
 import {
   DEFAULT_GANGWON_REGION,
-  GANGWON_BOUNDS,
   GANGWON_CENTER,
   GANGWON_REGIONS,
 } from "@/data/gangwonRegions";
@@ -48,6 +47,10 @@ import { useUiThemeStore } from "@/stores/uiThemeStore";
 import type { HomeAttractionQueryData } from "./useHomeAttractionData";
 
 const MARKER_RENDER_CHUNK_SIZE = 80;
+const MAP_BOUNDS_RETRY_LIMIT = 6;
+const MAP_BOUNDS_RETRY_DELAY_MS = 120;
+const MAP_READY_FALLBACK_DELAY_MS = 650;
+
 type HomeMapInstance = {
   fitBounds: (bounds: unknown) => void;
   getZoom: () => number;
@@ -101,6 +104,20 @@ type UseHomeMapOptions = {
   topRankByAttractionId: Map<string, number>;
   trendNameByAttractionId: Map<string, string>;
 };
+
+function isNaverMapModelPendingError(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+
+  return (
+    message.includes("_mapModel") ||
+    message.includes("getFitZoomAndCenter")
+  );
+}
 
 export function useHomeMap({
   attractionData,
@@ -322,33 +339,61 @@ export function useHomeMap({
 
   const moveMapToBounds = useCallback(
     (bounds: HomeMapBounds, smooth: boolean) => {
-      const mapInstance = mapInstanceRef.current;
-      if (!mapInstance) {
-        return;
-      }
+      const move = (attempt: number) => {
+        const mapInstance = mapInstanceRef.current;
+        if (!mapInstance) {
+          return;
+        }
 
-      if (!smooth) {
-        mapInstance.fitBounds(bounds);
-        return;
-      }
-
-      if (typeof mapInstance.panToBounds === "function") {
-        mapInstance.panToBounds(bounds);
-        return;
-      }
-
-      const center = bounds.getCenter?.();
-      if (center && typeof mapInstance.panTo === "function") {
-        mapInstance.panTo(center, { duration: 450 });
-        window.setTimeout(() => {
-          if (mapInstanceRef.current === mapInstance) {
+        try {
+          if (!smooth) {
             mapInstance.fitBounds(bounds);
+            return;
           }
-        }, 220);
-        return;
-      }
 
-      mapInstance.fitBounds(bounds);
+          if (typeof mapInstance.panToBounds === "function") {
+            mapInstance.panToBounds(bounds);
+            return;
+          }
+
+          const center = bounds.getCenter?.();
+          if (center && typeof mapInstance.panTo === "function") {
+            mapInstance.panTo(center, { duration: 450 });
+            window.setTimeout(() => {
+              if (mapInstanceRef.current === mapInstance) {
+                try {
+                  mapInstance.fitBounds(bounds);
+                } catch (error) {
+                  if (!isNaverMapModelPendingError(error)) {
+                    console.warn(
+                      "[routeone-web] failed to fit map bounds",
+                      error
+                    );
+                  }
+                }
+              }
+            }, 220);
+            return;
+          }
+
+          mapInstance.fitBounds(bounds);
+        } catch (error) {
+          if (
+            attempt < MAP_BOUNDS_RETRY_LIMIT &&
+            isNaverMapModelPendingError(error)
+          ) {
+            window.setTimeout(
+              () => move(attempt + 1),
+              MAP_BOUNDS_RETRY_DELAY_MS
+            );
+            return;
+          }
+
+          console.warn("[routeone-web] failed to move map bounds", error);
+        }
+      };
+
+      move(0);
     },
     []
   );
@@ -430,6 +475,10 @@ export function useHomeMap({
     let isDisposed = false;
     let resizeObserver: ResizeObserver | null = null;
     let handleResize: (() => void) | null = null;
+    let mapReadyListener: unknown = null;
+    let readyFallbackTimeoutId: number | null = null;
+    let resizeFrameId: number | null = null;
+    const resizeTimeoutIds: number[] = [];
     const resetFrameId = window.requestAnimationFrame(() => {
       setMapStatus({
         language: appLanguage,
@@ -447,6 +496,18 @@ export function useHomeMap({
         language: appLanguage,
         isReady: false,
         error: text.home.mapAuthError(authOrigin, authHref),
+      });
+    };
+
+    const markMapReady = () => {
+      if (isDisposed) {
+        return;
+      }
+
+      setMapStatus({
+        language: appLanguage,
+        isReady: true,
+        error: null,
       });
     };
 
@@ -487,29 +548,31 @@ export function useHomeMap({
         applyNaverMapTheme(mapInstance, shouldUseDarkMap);
         enableNaverMapPointerInteractions(mapInstance);
 
-        const gangwonBounds = new naverMaps.LatLngBounds(
-          new naverMaps.LatLng(GANGWON_BOUNDS.south, GANGWON_BOUNDS.west),
-          new naverMaps.LatLng(GANGWON_BOUNDS.north, GANGWON_BOUNDS.east)
-        );
-        mapInstance.fitBounds(gangwonBounds);
-        mapInstance.setZoom(Math.max(10, mapInstance.getZoom()));
-
         const forceResize = () => {
           if (mapInstanceRef.current) {
             naverMaps.Event.trigger(mapInstance, "resize");
           }
         };
 
-        window.requestAnimationFrame(forceResize);
-        window.setTimeout(forceResize, 120);
-        window.setTimeout(forceResize, 360);
-        naverMaps.Event.once(mapInstance, "init", () => {
-          setMapStatus({
-            language: appLanguage,
-            isReady: true,
-            error: null,
-          });
+        mapReadyListener = naverMaps.Event.once(
+          mapInstance,
+          "init",
+          () => {
+            forceResize();
+            markMapReady();
+          }
+        );
+        resizeFrameId = window.requestAnimationFrame(() => {
+          forceResize();
         });
+        readyFallbackTimeoutId = window.setTimeout(
+          markMapReady,
+          MAP_READY_FALLBACK_DELAY_MS
+        );
+        resizeTimeoutIds.push(
+          window.setTimeout(forceResize, 120),
+          window.setTimeout(forceResize, 360)
+        );
 
         handleResize = forceResize;
         window.addEventListener("resize", handleResize);
@@ -531,8 +594,20 @@ export function useHomeMap({
     return () => {
       isDisposed = true;
       window.cancelAnimationFrame(resetFrameId);
+      if (readyFallbackTimeoutId !== null) {
+        window.clearTimeout(readyFallbackTimeoutId);
+      }
+      if (resizeFrameId !== null) {
+        window.cancelAnimationFrame(resizeFrameId);
+      }
+      resizeTimeoutIds.forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
       clearMarkers();
       clearBoundaryPolygons();
+      if (mapReadyListener) {
+        naverMapsRef.current?.Event?.removeListener(mapReadyListener);
+      }
       if (handleResize) {
         window.removeEventListener("resize", handleResize);
       }

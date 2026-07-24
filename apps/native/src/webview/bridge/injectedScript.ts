@@ -34,6 +34,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   )});
 
   var didPostBridgeReady = false;
+  var didPostRuntimeError = false;
 
   function postBridgeReady() {
     if (didPostBridgeReady || !window.ReactNativeWebView) {
@@ -53,6 +54,48 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
       })
     );
   }
+
+  function stringifyRuntimeError(value) {
+    if (!value) {
+      return "Unknown web runtime error";
+    }
+
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (typeof value.message === "string") {
+      return value.message;
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      return String(value);
+    }
+  }
+
+  function postRuntimeError(source, value) {
+    if (didPostRuntimeError || !window.ReactNativeWebView) {
+      return;
+    }
+
+    didPostRuntimeError = true;
+    window.ReactNativeWebView.postMessage(
+      JSON.stringify({
+        type: "routeone:web-runtime-error",
+        source: source,
+        message: stringifyRuntimeError(value)
+      })
+    );
+  }
+
+  window.addEventListener("error", function handleRouteOneWebError(event) {
+    postRuntimeError("error", event && (event.error || event.message));
+  });
+  window.addEventListener("unhandledrejection", function handleRouteOneWebRejection(event) {
+    postRuntimeError("unhandledrejection", event && event.reason);
+  });
 
   function lockViewportZoom() {
     var viewport = document.querySelector("meta[name='viewport']");

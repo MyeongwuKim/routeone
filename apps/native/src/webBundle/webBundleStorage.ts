@@ -297,10 +297,10 @@ function bytesToHex(value: ArrayBuffer) {
   ).join("");
 }
 
-function copyBytesToArrayBuffer(value: Uint8Array) {
+function copyBytesToUint8Array(value: Uint8Array) {
   const copy = new Uint8Array(value.byteLength);
   copy.set(value);
-  return copy.buffer;
+  return copy;
 }
 
 function readSafeZipPath(value: string) {
@@ -466,7 +466,7 @@ async function runWebBundleInstallAttempt({
       const actualSha256 = bytesToHex(
         await digest(
           CryptoDigestAlgorithm.SHA256,
-          copyBytesToArrayBuffer(bundleBytes)
+          copyBytesToUint8Array(bundleBytes)
         )
       );
 

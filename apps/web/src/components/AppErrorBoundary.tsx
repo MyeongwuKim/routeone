@@ -5,6 +5,7 @@ type AppErrorBoundaryProps = {
 };
 
 type AppErrorBoundaryState = {
+  errorMessage: string | null;
   hasError: boolean;
 };
 
@@ -40,15 +41,43 @@ export default class AppErrorBoundary extends Component<
   AppErrorBoundaryState
 > {
   state: AppErrorBoundaryState = {
+    errorMessage: null,
     hasError: false,
   };
 
-  static getDerivedStateFromError(): AppErrorBoundaryState {
-    return { hasError: true };
+  static getDerivedStateFromError(error: unknown): AppErrorBoundaryState {
+    return {
+      errorMessage:
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Unknown render error",
+      hasError: true,
+    };
   }
 
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
     console.error("[routeone-web] render failed", error, errorInfo);
+
+    const nativeWebView = (
+      window as Window & {
+        ReactNativeWebView?: { postMessage(message: string): void };
+      }
+    ).ReactNativeWebView;
+
+    nativeWebView?.postMessage(
+      JSON.stringify({
+        type: "routeone:web-runtime-error",
+        source: "react-error-boundary",
+        message:
+          error instanceof Error
+            ? error.message
+            : typeof error === "string"
+              ? error
+              : "Unknown render error",
+      })
+    );
   }
 
   render() {
@@ -70,6 +99,11 @@ export default class AppErrorBoundary extends Component<
           <p className="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-300">
             {text.description}
           </p>
+          {this.state.errorMessage ? (
+            <pre className="mt-3 max-h-28 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-100 p-3 text-xs font-semibold leading-5 text-slate-600 dark:bg-slate-900/70 dark:text-slate-300">
+              {this.state.errorMessage}
+            </pre>
+          ) : null}
           <button
             type="button"
             onClick={() => window.location.reload()}

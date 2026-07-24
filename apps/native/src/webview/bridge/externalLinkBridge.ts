@@ -1,8 +1,11 @@
-import { Linking } from "react-native";
+import { Linking, Platform } from "react-native";
 import type { NativeExternalUrlRequest } from "./types";
 
 const WEBVIEW_BASE_ORIGIN = "https://routeone.native";
 const LOCAL_WEB_BUNDLE_PATH = "/routeone-web-bundles/releases/";
+const NAVER_MAP_SCHEME_PREFIX = "nmap://";
+const NAVER_MAP_WEB_DIRECTIONS_URL =
+  "https://map.naver.com/p/directions/";
 
 function isAllowedWebViewOrigin(url: URL, allowedOrigins: readonly string[]) {
   return (
@@ -55,9 +58,36 @@ export async function openNativeExternalUrl(
     return;
   }
 
+  if (url.startsWith(NAVER_MAP_SCHEME_PREFIX) && Platform.OS === "ios") {
+    try {
+      const canOpenNaverMap = await Linking.canOpenURL(url);
+      await Linking.openURL(
+        canOpenNaverMap ? url : NAVER_MAP_WEB_DIRECTIONS_URL
+      );
+    } catch (error) {
+      console.warn(
+        "[routeone-native-bridge] failed to open NAVER Map",
+        error
+      );
+    }
+    return;
+  }
+
   try {
     await Linking.openURL(url);
   } catch (error) {
+    if (url.startsWith(NAVER_MAP_SCHEME_PREFIX)) {
+      try {
+        await Linking.openURL(NAVER_MAP_WEB_DIRECTIONS_URL);
+        return;
+      } catch (fallbackError) {
+        console.warn(
+          "[routeone-native-bridge] failed to open NAVER Map web directions",
+          fallbackError
+        );
+      }
+    }
+
     console.warn(
       "[routeone-native-bridge] failed to open external url",
       error

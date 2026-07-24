@@ -481,8 +481,7 @@ export function usePlaceSheetData({
     placeStaySummaryLabel,
     routeDistanceText,
     routeDurationText,
-    routeError:
-      routeQuery.error instanceof Error ? routeQuery.error.message : null,
+    routeError: routeQuery.isError ? text.placeSheet.routeLoadError : null,
     routePathPoints,
     selectedPlaceKey,
     userPlacePhotos,

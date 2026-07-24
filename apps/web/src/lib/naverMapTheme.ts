@@ -9,14 +9,15 @@ type NaverMapLike = {
 };
 
 export function getNaverMapThemeOptions(isDarkMode: boolean) {
-  if (!isDarkMode || !NAVER_DARK_MAP_STYLE_ID) {
-    return {};
+  const options: Record<string, unknown> = {
+    gl: true,
+  };
+
+  if (isDarkMode && NAVER_DARK_MAP_STYLE_ID) {
+    options.customStyleId = NAVER_DARK_MAP_STYLE_ID;
   }
 
-  return {
-    gl: true,
-    customStyleId: NAVER_DARK_MAP_STYLE_ID,
-  };
+  return options;
 }
 
 export function applyNaverMapTheme(
@@ -27,11 +28,14 @@ export function applyNaverMapTheme(
     return;
   }
 
-  if (!NAVER_DARK_MAP_STYLE_ID || typeof map.setOptions !== "function") {
+  if (typeof map.setOptions !== "function") {
     return;
   }
 
   map.setOptions({
-    customStyleId: isDarkMode ? NAVER_DARK_MAP_STYLE_ID : null,
+    customStyleId:
+      isDarkMode && NAVER_DARK_MAP_STYLE_ID
+        ? NAVER_DARK_MAP_STYLE_ID
+        : null,
   });
 }
