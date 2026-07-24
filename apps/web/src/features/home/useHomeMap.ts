@@ -147,6 +147,8 @@ export function useHomeMap({
   const onSelectAttractionRef = useRef(onSelectAttraction);
   const [currentLocation, setCurrentLocation] =
     useState<CurrentLocation | null>(null);
+  const [isCurrentLocationLookupPending, setIsCurrentLocationLookupPending] =
+    useState(true);
   const [mapStatus, setMapStatus] = useState<HomeMapStatus>({
     language: appLanguage,
     isReady: false,
@@ -458,6 +460,11 @@ export function useHomeMap({
       .catch(() => {
         if (isMounted) {
           setCurrentLocation(null);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsCurrentLocationLookupPending(false);
         }
       });
 
@@ -805,6 +812,7 @@ export function useHomeMap({
   return {
     currentLocation,
     focusAttraction,
+    isCurrentLocationLookupPending,
     mapError,
     mapReady,
     mapRef,

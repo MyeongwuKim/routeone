@@ -343,7 +343,10 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
       webBundleVersion: payload.webBundleVersion,
       webBundleKind: payload.webBundleKind,
       webBundleChannel: payload.webBundleChannel,
-      appVariant: payload.appVariant
+      appVariant: payload.appVariant,
+      locationPermissionStatus: payload.locationPermissionStatus,
+      notificationPermissionStatus: payload.notificationPermissionStatus,
+      cameraPermissionStatus: payload.cameraPermissionStatus
     });
   };
 

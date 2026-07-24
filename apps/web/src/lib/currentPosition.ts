@@ -5,7 +5,20 @@ import {
 
 export type RouteOnePosition = NativePosition;
 
+const FORCED_TEST_POSITION: Omit<RouteOnePosition, "timestamp"> | null = {
+  lat: 37.8813,
+  lng: 127.7298,
+  accuracyMeters: 15,
+};
+
 export function getCurrentPosition() {
+  if (FORCED_TEST_POSITION) {
+    return Promise.resolve({
+      ...FORCED_TEST_POSITION,
+      timestamp: Date.now(),
+    });
+  }
+
   const nativePositionRequest = nativeBridge.location.getCurrentPosition();
 
   if (nativePositionRequest) {

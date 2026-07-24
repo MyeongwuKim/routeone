@@ -159,14 +159,6 @@ export function useNativeBoot() {
     }
   }, [goToNotificationOrLogin]);
 
-  const skipLocationPermission = useCallback(async () => {
-    if (isRequestingLocationPermission) {
-      return;
-    }
-
-    await goToNotificationOrLogin();
-  }, [goToNotificationOrLogin, isRequestingLocationPermission]);
-
   const requestNotificationPermission = useCallback(async () => {
     setIsRequestingNotificationPermission(true);
 
@@ -183,14 +175,6 @@ export function useNativeBoot() {
       setIsRequestingNotificationPermission(false);
     }
   }, []);
-
-  const skipNotificationPermission = useCallback(() => {
-    if (isRequestingNotificationPermission) {
-      return;
-    }
-
-    setBootStep("login");
-  }, [isRequestingNotificationPermission]);
 
   const completeNativeLogin = useCallback(async (payload: NativeAuthPayload) => {
     const expiresAt = Date.now() + NATIVE_AUTH_SESSION_DURATION_MS;
@@ -230,7 +214,5 @@ export function useNativeBoot() {
     requestLocationPermission,
     requestNotificationPermission,
     selectAppLanguage,
-    skipLocationPermission,
-    skipNotificationPermission
   };
 }

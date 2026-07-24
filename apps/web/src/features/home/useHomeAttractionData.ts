@@ -42,6 +42,10 @@ export type HomeAttractionQueryData = {
   isLocalized: boolean;
 };
 
+type UseHomeAttractionDataOptions = {
+  enabled?: boolean;
+};
+
 const GANGWON_BOUNDARY_ASSET_PATH = "/gangwon-sigungu-boundary.json";
 
 function getGangwonBoundaryAssetUrl() {
@@ -55,13 +59,17 @@ function getGangwonBoundaryAssetUrl() {
   ).toString();
 }
 
-export function useHomeAttractionData(selectedSigunguCode: string) {
+export function useHomeAttractionData(
+  selectedSigunguCode: string,
+  options: UseHomeAttractionDataOptions = {}
+) {
   const text = useUiText();
   const queryClient = useQueryClient();
   const appLanguage = useAppLanguageStore((state) => state.language);
   const [attractionLoadingStage, setAttractionLoadingStage] =
     useState<AttractionLoadingStage>("idle");
   const isUpdatingPlaceLabelsRef = useRef(false);
+  const isAttractionQueryEnabled = options.enabled ?? true;
 
   const loadLclsNameByCode = useCallback(async () => {
     try {
@@ -110,7 +118,7 @@ export function useHomeAttractionData(selectedSigunguCode: string) {
 
   const attractionsQuery = useQuery<HomeAttractionQueryData>({
     queryKey: attractionQueryKey,
-    enabled: Boolean(TOUR_API_SERVICE_KEY),
+    enabled: Boolean(TOUR_API_SERVICE_KEY) && isAttractionQueryEnabled,
     queryFn: async () => {
       setAttractionLoadingStage("fetching-places");
       const signguCode = GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode];

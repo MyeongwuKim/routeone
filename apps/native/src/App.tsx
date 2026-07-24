@@ -22,9 +22,8 @@ const onboardingText = {
     notificationTitle: "알림 권한 허용",
     notificationDescription:
       "오늘 방문할 장소 근처에 도착하면 알림으로 알려드릴게요.",
-    allow: "허용",
+    requestPermission: "권한 요청하기",
     checking: "확인 중",
-    later: "나중에",
     sessionExpired: "7일 동안 접속하지 않아 로그아웃되었어요.",
     launchPreparing: "앱을 준비하고 있어요.",
     launchTagline: "여행의 시작부터 도착까지"
@@ -36,9 +35,8 @@ const onboardingText = {
     notificationTitle: "Allow Notifications",
     notificationDescription:
       "RouteOne can notify you when you are near a place on today's route.",
-    allow: "Allow",
+    requestPermission: "Request Permission",
     checking: "Checking",
-    later: "Later",
     sessionExpired: "You were signed out after 7 days of inactivity.",
     launchPreparing: "Preparing the app.",
     launchTagline: "From first plan to final stop"
@@ -63,8 +61,6 @@ export default function App() {
     requestLocationPermission,
     requestNotificationPermission,
     selectAppLanguage,
-    skipLocationPermission,
-    skipNotificationPermission
   } = useNativeBoot();
   const nativeLogin = useNativeLogin({
     onComplete: completeNativeLogin
@@ -142,20 +138,12 @@ export default function App() {
           description={text.locationDescription}
           primaryAction={{
             disabled: isRequestingLocationPermission,
-            label: text.allow,
+            label: text.requestPermission,
             loadingLabel: text.checking,
             onPress: () => {
               void requestLocationPermission();
             },
             variant: "primary"
-          }}
-          secondaryAction={{
-            disabled: isRequestingLocationPermission,
-            label: text.later,
-            onPress: () => {
-              void skipLocationPermission();
-            },
-            variant: "secondary"
           }}
           title={text.locationTitle}
         />
@@ -179,18 +167,12 @@ export default function App() {
           description={text.notificationDescription}
           primaryAction={{
             disabled: isRequestingNotificationPermission,
-            label: text.allow,
+            label: text.requestPermission,
             loadingLabel: text.checking,
             onPress: () => {
               void requestNotificationPermission();
             },
             variant: "primary"
-          }}
-          secondaryAction={{
-            disabled: isRequestingNotificationPermission,
-            label: text.later,
-            onPress: skipNotificationPermission,
-            variant: "secondary"
           }}
           title={text.notificationTitle}
         />

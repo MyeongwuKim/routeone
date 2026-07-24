@@ -46,6 +46,21 @@ import {
   TOUR_API_SERVICE_KEY,
 } from "@/pages/HomePage.constants";
 
+function getNearestGangwonRegion(currentLocation: CurrentLocation) {
+  return GANGWON_REGIONS.reduce((nearest, region) => {
+    const nearestDistance = calculateDistanceMeters(
+      currentLocation,
+      nearest.center
+    );
+    const regionDistance = calculateDistanceMeters(
+      currentLocation,
+      region.center
+    );
+
+    return regionDistance < nearestDistance ? region : nearest;
+  }, GANGWON_REGIONS[0]);
+}
+
 function HomePage() {
   const text = useUiText();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -72,6 +87,10 @@ function HomePage() {
   const [selectedSigunguCode, setSelectedSigunguCode] = useState<string>(
     DEFAULT_GANGWON_REGION.sigunguCode
   );
+  const [isInitialRegionResolved, setIsInitialRegionResolved] =
+    useState(false);
+  const [canLoadHomeAttractions, setCanLoadHomeAttractions] =
+    useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [isSearchPopupOpen, setIsSearchPopupOpen] = useState(false);
   const [searchFilter, setSearchFilter] = useState<SearchFilter>("all");
@@ -112,7 +131,9 @@ function HomePage() {
     setAttractionLoadingStage,
     topRankByAttractionId,
     trendNameByAttractionId,
-  } = useHomeAttractionData(selectedSigunguCode);
+  } = useHomeAttractionData(selectedSigunguCode, {
+    enabled: canLoadHomeAttractions,
+  });
   const handleSelectAttraction = useCallback(
     ({
       attraction,
@@ -161,6 +182,7 @@ function HomePage() {
   const {
     currentLocation,
     focusAttraction,
+    isCurrentLocationLookupPending,
     mapError,
     mapReady,
     mapRef,
@@ -182,28 +204,58 @@ function HomePage() {
   }, [currentLocation]);
 
   useEffect(() => {
-    if (!currentLocation || hasManuallySelectedRegionRef.current) {
+    if (isCurrentLocationLookupPending || isInitialRegionResolved) {
       return;
     }
 
-    const nearestRegion = GANGWON_REGIONS.reduce((nearest, region) => {
-      const nearestDistance = calculateDistanceMeters(
-        currentLocation,
-        nearest.center
-      );
-      const regionDistance = calculateDistanceMeters(
-        currentLocation,
-        region.center
-      );
-      return regionDistance < nearestDistance ? region : nearest;
-    }, GANGWON_REGIONS[0]);
+    const frameId = window.requestAnimationFrame(() => {
+      if (!currentLocation || hasManuallySelectedRegionRef.current) {
+        setIsInitialRegionResolved(true);
+        return;
+      }
 
-    setSelectedSigunguCode((currentSigunguCode) =>
-      currentSigunguCode === nearestRegion.sigunguCode
-        ? currentSigunguCode
-        : nearestRegion.sigunguCode
-    );
-  }, [currentLocation]);
+      const nearestRegion = getNearestGangwonRegion(currentLocation);
+
+      if (selectedSigunguCode !== nearestRegion.sigunguCode) {
+        setSelectedSigunguCode(nearestRegion.sigunguCode);
+        return;
+      }
+
+      setIsInitialRegionResolved(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [
+    currentLocation,
+    isCurrentLocationLookupPending,
+    isInitialRegionResolved,
+    selectedSigunguCode,
+  ]);
+
+  useEffect(() => {
+    if (
+      canLoadHomeAttractions ||
+      !isInitialRegionResolved ||
+      (!mapReady && !mapError)
+    ) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      setCanLoadHomeAttractions(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [
+    canLoadHomeAttractions,
+    isInitialRegionResolved,
+    mapError,
+    mapReady,
+  ]);
   const openPlaceSheetFromAttraction = useCallback(
     (options: OpenPlaceSheetFromAttractionOptions) => {
       focusAttraction(options.attraction);
@@ -213,14 +265,18 @@ function HomePage() {
   );
   const shouldShowAttractionLoader =
     Boolean(TOUR_API_SERVICE_KEY) &&
+    canLoadHomeAttractions &&
     mapReady &&
     !mapError &&
     !attractionData &&
     (attractionLoadingStage !== "idle" || isAttractionFetching);
-  const shouldShowMapSetupSkeleton = !mapReady && !mapError;
-  const shouldShowInteractiveMapUi = mapReady || Boolean(mapError);
+  const shouldShowMapSetupSkeleton =
+    (!mapReady && !mapError) ||
+    ((mapReady || Boolean(mapError)) && !isInitialRegionResolved);
+  const shouldShowInteractiveMapUi =
+    (mapReady || Boolean(mapError)) && isInitialRegionResolved;
   const orderedRegions = useMemo(() => {
-    if (!currentLocation) {
+    if (!currentLocation || !isInitialRegionResolved) {
       return GANGWON_REGIONS;
     }
 
@@ -229,7 +285,7 @@ function HomePage() {
       const distanceB = calculateDistanceMeters(currentLocation, b.center);
       return distanceA - distanceB;
     });
-  }, [currentLocation]);
+  }, [currentLocation, isInitialRegionResolved]);
   const regionLabelByCode = useMemo(
     () =>
       Object.fromEntries(
@@ -304,7 +360,7 @@ function HomePage() {
   useEffect(() => {
     const isRouteDataReady = !hasAuthToken || myRoutesQuery.isSuccess;
 
-    if (!isFestivalDataReady || !isRouteDataReady) {
+    if (!isInitialRegionResolved || !isFestivalDataReady || !isRouteDataReady) {
       return;
     }
 
@@ -326,6 +382,7 @@ function HomePage() {
     currentLocation,
     festivals,
     hasAuthToken,
+    isInitialRegionResolved,
     isFestivalDataReady,
     myRoutesQuery.data,
     myRoutesQuery.isSuccess,
