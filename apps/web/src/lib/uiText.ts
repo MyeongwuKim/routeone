@@ -138,7 +138,7 @@ export type UiText = {
     loadingMarkersTitle: string;
     loadingMarkersDescription: string;
     mapMissingKey: string;
-    mapAuthError: (origin: string) => string;
+    mapAuthError: (origin: string, href: string) => string;
     mapSdkMissing: string;
     mapLoadError: string;
     today: string;
@@ -881,10 +881,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loadingMarkersTitle: "지도를 그리고 있어요",
       loadingMarkersDescription: "지도 위에 핀을 배치하는 중",
       mapMissingKey: "VITE_NCP_MAPS_KEY_ID가 설정되지 않았습니다.",
-      mapAuthError: (origin) =>
+      mapAuthError: (origin, href) =>
         origin === "unknown"
           ? "네이버 지도 인증에 실패했습니다. 앱이 원격 웹 번들 entryUrl이 아닌 내장 HTML로 실행 중인지 확인해 주세요."
-          : `네이버 지도 인증에 실패했습니다. 네이버 콘솔 Web 서비스 URL에 ${origin} 등록 여부를 확인해 주세요.`,
+          : `네이버 지도 인증에 실패했습니다. 네이버 콘솔 Web 서비스 URL에 ${origin} 등록 여부를 확인해 주세요. 실행 URL: ${href}`,
       mapSdkMissing: "Naver Maps SDK를 찾을 수 없습니다.",
       mapLoadError: "지도 로드에 실패했습니다. 키와 도메인 등록을 확인해 주세요.",
       today: "오늘",
@@ -1708,10 +1708,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loadingMarkersTitle: "Drawing the map",
       loadingMarkersDescription: "Placing pins on the map",
       mapMissingKey: "VITE_NCP_MAPS_KEY_ID is not configured.",
-      mapAuthError: (origin) =>
+      mapAuthError: (origin, href) =>
         origin === "unknown"
           ? "Naver Maps authentication failed. Check whether the app is running the embedded HTML instead of the remote web bundle entryUrl."
-          : `Naver Maps authentication failed. Check whether ${origin} is registered as a Web service URL in the Naver console.`,
+          : `Naver Maps authentication failed. Check whether ${origin} is registered as a Web service URL in the Naver console. Runtime URL: ${href}`,
       mapSdkMissing: "Naver Maps SDK was not found.",
       mapLoadError: "Failed to load the map. Check the key and registered domain.",
       today: "Today",

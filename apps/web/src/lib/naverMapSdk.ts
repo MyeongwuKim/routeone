@@ -1,4 +1,6 @@
 const NAVER_MAP_SCRIPT_ID = "naver-map-sdk";
+const NAVER_MAP_SUBMODULES = "geocoder";
+const NAVER_MAP_SUBMODULE_LOAD_FALLBACK_MS = 3_000;
 
 let sdkLoadPromise: Promise<void> | null = null;
 let sdkLoadLanguage: NaverMapSdkLanguage | null = null;
@@ -10,7 +12,7 @@ export type NaverMapSdkLanguage = "ko" | "en" | "zh" | "ja";
 function createNaverSdkUrl(keyId: string, language: NaverMapSdkLanguage) {
   const url = new URL("https://oapi.map.naver.com/openapi/v3/maps.js");
   url.searchParams.set("ncpKeyId", keyId);
-  url.searchParams.set("submodules", "geocoder,gl");
+  url.searchParams.set("submodules", NAVER_MAP_SUBMODULES);
   url.searchParams.set("language", language);
 
   return url.toString();
@@ -36,6 +38,39 @@ function readHttpOrigin(value: string | null | undefined) {
 
 export function getNaverMapAuthOrigin() {
   return readHttpOrigin(window.location.href) ?? "unknown";
+}
+
+export function getNaverMapAuthHref() {
+  return window.location.href || "unknown";
+}
+
+function waitForNaverMapSubmodules() {
+  const naverMaps = window.naver?.maps;
+
+  if (!naverMaps || naverMaps.jsContentLoaded) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const previousHandler = naverMaps.onJSContentLoaded;
+    const timerId = window.setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
+    }, NAVER_MAP_SUBMODULE_LOAD_FALLBACK_MS);
+
+    naverMaps.onJSContentLoaded = () => {
+      previousHandler?.();
+
+      if (!settled) {
+        settled = true;
+        window.clearTimeout(timerId);
+        resolve();
+      }
+    };
+  });
 }
 
 function resetNaverMapSdk() {
@@ -87,7 +122,13 @@ export function loadNaverMapSdk(
         return;
       }
 
-      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener(
+        "load",
+        () => {
+          void waitForNaverMapSubmodules().then(resolve);
+        },
+        { once: true }
+      );
       existing.addEventListener(
         "error",
         () => reject(new Error("Failed to load Naver Maps SDK.")),
@@ -101,7 +142,14 @@ export function loadNaverMapSdk(
     script.async = true;
     script.src = createNaverSdkUrl(keyId, language);
 
-    script.onload = () => {
+    script.onload = async () => {
+      if (loadToken !== sdkLoadToken) {
+        reject(new Error("Naver Maps SDK load was superseded."));
+        return;
+      }
+
+      await waitForNaverMapSubmodules();
+
       if (loadToken !== sdkLoadToken) {
         reject(new Error("Naver Maps SDK load was superseded."));
         return;

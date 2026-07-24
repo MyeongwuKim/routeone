@@ -49,7 +49,9 @@ type NaverMapsApi = {
   MapTypeId: {
     NORMAL: unknown;
   };
+  jsContentLoaded?: boolean;
   Marker: new (options: Record<string, unknown>) => NaverMapOverlay;
+  onJSContentLoaded?: () => void;
   Point: new (x: number, y: number) => object;
   Polygon: new (options: Record<string, unknown>) => NaverMapOverlay;
   Polyline: new (options: Record<string, unknown>) => NaverMapOverlay;
