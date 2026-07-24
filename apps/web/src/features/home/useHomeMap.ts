@@ -47,6 +47,7 @@ import { useUiThemeStore } from "@/stores/uiThemeStore";
 import type { HomeAttractionQueryData } from "./useHomeAttractionData";
 
 const MARKER_RENDER_CHUNK_SIZE = 80;
+const MAP_AUTH_RETRY_DELAYS_MS = [1_500, 5_000] as const;
 
 type HomeMapInstance = {
   fitBounds: (bounds: unknown) => void;
@@ -83,6 +84,11 @@ type HomeMapStatus = {
   language: string;
   isReady: boolean;
   error: string | null;
+};
+
+type HomeMapAuthRetryState = {
+  language: string;
+  count: number;
 };
 
 type UseHomeMapOptions = {
@@ -135,6 +141,15 @@ export function useHomeMap({
     isReady: false,
     error: null,
   });
+  const [mapAuthRetryState, setMapAuthRetryState] =
+    useState<HomeMapAuthRetryState>({
+      language: appLanguage,
+      count: 0,
+    });
+  const mapAuthRetryCount =
+    mapAuthRetryState.language === appLanguage
+      ? mapAuthRetryState.count
+      : 0;
   const mapReady =
     mapStatus.language === appLanguage && mapStatus.isReady;
   const mapError = !NCP_KEY_ID
@@ -430,6 +445,7 @@ export function useHomeMap({
     let isDisposed = false;
     let resizeObserver: ResizeObserver | null = null;
     let handleResize: (() => void) | null = null;
+    let authRetryTimerId: number | null = null;
     const resetFrameId = window.requestAnimationFrame(() => {
       setMapStatus({
         language: appLanguage,
@@ -440,10 +456,35 @@ export function useHomeMap({
 
     container.innerHTML = "";
     window.navermap_authFailure = () => {
+      const authOrigin = getNaverMapAuthOrigin();
+      const retryDelay = MAP_AUTH_RETRY_DELAYS_MS[mapAuthRetryCount];
+
+      if (authOrigin !== "unknown" && retryDelay !== undefined) {
+        setMapStatus({
+          language: appLanguage,
+          isReady: false,
+          error: null,
+        });
+        authRetryTimerId = window.setTimeout(() => {
+          if (!isDisposed) {
+            setMapAuthRetryState((currentState) => {
+              if (currentState.language !== appLanguage) {
+                return { language: appLanguage, count: 1 };
+              }
+
+              return currentState.count === mapAuthRetryCount
+                ? { language: appLanguage, count: currentState.count + 1 }
+                : currentState;
+            });
+          }
+        }, retryDelay);
+        return;
+      }
+
       setMapStatus({
         language: appLanguage,
         isReady: false,
-        error: text.home.mapAuthError(getNaverMapAuthOrigin()),
+        error: text.home.mapAuthError(authOrigin),
       });
     };
 
@@ -528,6 +569,9 @@ export function useHomeMap({
     return () => {
       isDisposed = true;
       window.cancelAnimationFrame(resetFrameId);
+      if (authRetryTimerId !== null) {
+        window.clearTimeout(authRetryTimerId);
+      }
       clearMarkers();
       clearBoundaryPolygons();
       if (handleResize) {
@@ -545,6 +589,7 @@ export function useHomeMap({
     clearBoundaryPolygons,
     clearMarkers,
     closeSheet,
+    mapAuthRetryCount,
     text,
   ]);
 

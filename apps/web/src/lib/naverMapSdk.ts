@@ -62,7 +62,11 @@ export function loadNaverMapSdk(
   }
 
   if (sdkLoadPromise && sdkLoadLanguage === language) {
-    return sdkLoadPromise;
+    if (loadedLanguage === language && !window.naver?.maps) {
+      resetNaverMapSdk();
+    } else {
+      return sdkLoadPromise;
+    }
   }
 
   if (sdkLoadPromise || window.naver?.maps) {
