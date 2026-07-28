@@ -1,11 +1,14 @@
 import type {
   NativeAppInfoResponse,
+  NativeDeliveredNotificationHistoryResponse,
   NativeFetchResponse,
   NativeFestivalNotificationSyncResponse,
   NativeLocationResponse,
   NativePhotoUploadResponse,
   NativePhotoResponse,
+  NativePushTokenResponse,
   NativeRouteArrivalNotificationSyncResponse,
+  NativeRouteReviewNotificationSyncResponse,
   NativeSaveImageResponse,
   WebViewRef,
 } from "./types";
@@ -101,6 +104,32 @@ export function postNativeRouteArrivalNotificationSyncResponse(
   );
 }
 
+export function postNativeDeliveredNotificationHistoryResponse(
+  webViewRef: WebViewRef,
+  id: string,
+  payload: NativeDeliveredNotificationHistoryResponse
+) {
+  postNativeResponse(
+    webViewRef,
+    "__ROUTEONE_NATIVE_DELIVERED_NOTIFICATION_HISTORY_RESPONSE__",
+    id,
+    payload
+  );
+}
+
+export function postNativePushTokenResponse(
+  webViewRef: WebViewRef,
+  id: string,
+  payload: NativePushTokenResponse
+) {
+  postNativeResponse(
+    webViewRef,
+    "__ROUTEONE_NATIVE_PUSH_TOKEN_RESPONSE__",
+    id,
+    payload
+  );
+}
+
 export function postNativeFestivalNotificationSyncResponse(
   webViewRef: WebViewRef,
   id: string,
@@ -109,6 +138,19 @@ export function postNativeFestivalNotificationSyncResponse(
   postNativeResponse(
     webViewRef,
     "__ROUTEONE_NATIVE_FESTIVAL_NOTIFICATIONS_SYNC_RESPONSE__",
+    id,
+    payload
+  );
+}
+
+export function postNativeRouteReviewNotificationSyncResponse(
+  webViewRef: WebViewRef,
+  id: string,
+  payload: NativeRouteReviewNotificationSyncResponse
+) {
+  postNativeResponse(
+    webViewRef,
+    "__ROUTEONE_NATIVE_ROUTE_REVIEW_NOTIFICATIONS_SYNC_RESPONSE__",
     id,
     payload
   );

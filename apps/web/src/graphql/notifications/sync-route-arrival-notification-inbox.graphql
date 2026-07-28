@@ -1,0 +1,8 @@
+mutation SyncRouteArrivalNotificationInbox(
+  $notifications: [RouteArrivalNotificationSyncInput!]!
+) {
+  syncRouteArrivalNotificationInbox(notifications: $notifications) {
+    syncedCount
+    notificationKeys
+  }
+}

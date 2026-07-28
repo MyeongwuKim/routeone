@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
-import { routeApi } from "@/api/routeApi";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { MdCelebration, MdOutlineRoute } from "react-icons/md";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  notificationApi,
+  NOTIFICATION_INBOX_FIRST_PAGE_QUERY_KEY,
+  NOTIFICATION_INBOX_PAGE_SIZE,
+} from "@/api/notificationApi";
 import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
 import HomeMapControls, {
   HomeMapControlsSkeleton,
 } from "@/components/home/HomeMapControls";
 import PlaceSearchPopup from "@/components/search/PlaceSearchPopup";
-import { syncFestivalNotifications } from "@/features/home/festivalNotificationService";
 import { useHomeAttractionData } from "@/features/home/useHomeAttractionData";
 import { useHomeMap } from "@/features/home/useHomeMap";
-import { MY_ROUTES_QUERY_KEY } from "@/features/my-route/myRouteCache";
 import {
   DEFAULT_GANGWON_REGION,
   GANGWON_REGIONS,
@@ -34,12 +37,14 @@ import {
   matchesPlaceFilter,
   resolveMarkerType,
   type OpenPlaceSheetFromAttractionOptions,
-  type SearchFilter,
 } from "@/lib/gangwonAttractionMap";
+import { nativeBridge } from "@/native-bridge";
+import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
+import { useUiToastStore } from "@/stores/uiToastStore";
 import {
   PLACE_SEARCH_FILTERS,
   SEARCH_RESULTS_PAGE_SIZE,
@@ -61,8 +66,11 @@ function getNearestGangwonRegion(currentLocation: CurrentLocation) {
   }, GANGWON_REGIONS[0]);
 }
 
+type TestNotificationKind = "festival" | "route-review";
+
 function HomePage() {
   const text = useUiText();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const hasAuthToken = Boolean(getAuthToken());
 
@@ -79,28 +87,42 @@ function HomePage() {
   } = usePlaceCartStore();
   const showLoading = useUiLoadingStore((state) => state.showLoading);
   const hideLoading = useUiLoadingStore((state) => state.hideLoading);
+  const showToast = useUiToastStore((state) => state.showToast);
   const appendTarget = useRouteEditFlowStore((state) => state.appendTarget);
   const clearAppendTarget = useRouteEditFlowStore(
     (state) => state.clearAppendTarget
   );
 
-  const [selectedSigunguCode, setSelectedSigunguCode] = useState<string>(
-    DEFAULT_GANGWON_REGION.sigunguCode
+  const selectedSigunguCode = useHomeExploreStore(
+    (state) => state.selectedSigunguCode
   );
-  const [isInitialRegionResolved, setIsInitialRegionResolved] =
-    useState(false);
+  const isInitialRegionResolved = useHomeExploreStore(
+    (state) => state.isInitialRegionResolved
+  );
+  const searchKeyword = useHomeExploreStore((state) => state.searchKeyword);
+  const searchFilter = useHomeExploreStore((state) => state.searchFilter);
+  const visibleSearchState = useHomeExploreStore(
+    (state) => state.visibleSearchState
+  );
+  const resolveInitialRegion = useHomeExploreStore(
+    (state) => state.resolveInitialRegion
+  );
+  const selectRegion = useHomeExploreStore((state) => state.selectRegion);
+  const setSearchKeyword = useHomeExploreStore(
+    (state) => state.setSearchKeyword
+  );
+  const setSearchFilter = useHomeExploreStore(
+    (state) => state.setSearchFilter
+  );
+  const loadMoreSearchResults = useHomeExploreStore(
+    (state) => state.loadMoreSearchResults
+  );
   const [canLoadHomeAttractions, setCanLoadHomeAttractions] =
     useState(false);
-  const [searchKeyword, setSearchKeyword] = useState("");
   const [isSearchPopupOpen, setIsSearchPopupOpen] = useState(false);
-  const [searchFilter, setSearchFilter] = useState<SearchFilter>("all");
   const searchResultScope = `${selectedSigunguCode}:${searchFilter}:${searchKeyword}`;
-  const [visibleSearchState, setVisibleSearchState] = useState({
-    scope: searchResultScope,
-    count: SEARCH_RESULTS_PAGE_SIZE,
-  });
   const visibleSearchResultCount =
-    visibleSearchState.scope === searchResultScope
+    visibleSearchState?.scope === searchResultScope
       ? visibleSearchState.count
       : SEARCH_RESULTS_PAGE_SIZE;
   const [recentSearches, setRecentSearches] = useState<string[]>(
@@ -108,12 +130,114 @@ function HomePage() {
   );
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const currentLocationRef = useRef<CurrentLocation | null>(null);
-  const hasManuallySelectedRegionRef = useRef(false);
-  const myRoutesQuery = useQuery({
-    queryKey: MY_ROUTES_QUERY_KEY,
-    queryFn: () => routeApi.myRoutes(),
+  const notificationInboxQuery = useQuery({
+    queryKey: NOTIFICATION_INBOX_FIRST_PAGE_QUERY_KEY,
+    queryFn: () =>
+      notificationApi.inbox({
+        first: NOTIFICATION_INBOX_PAGE_SIZE,
+        after: null,
+      }),
     enabled: hasAuthToken,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const unreadNotificationCount =
+    notificationInboxQuery.data?.unreadNotificationCount ?? 0;
+  const registerNativePushDevice = useCallback(async () => {
+    if (!nativeBridge.runtime.isAvailable()) {
+      return;
+    }
+
+    const pushToken =
+      await nativeBridge.notifications.getPushToken(true);
+
+    if (!pushToken?.expoPushToken) {
+      if (pushToken?.permissionStatus === "denied") {
+        nativeBridge.permissions.openSettings();
+        throw new Error(text.home.festivalTestPermissionDenied);
+      }
+
+      if (pushToken?.reason === "missing-project-id") {
+        throw new Error(text.home.festivalTestProjectUnavailable);
+      }
+
+      throw new Error(text.home.festivalTestDeviceUnavailable);
+    }
+
+    if (
+      pushToken.platform !== "ios" &&
+      pushToken.platform !== "android"
+    ) {
+      throw new Error(text.home.festivalTestDeviceUnavailable);
+    }
+
+    const result = await notificationApi.registerPushDevice({
+      expoPushToken: pushToken.expoPushToken,
+      platform: pushToken.platform === "ios" ? "IOS" : "ANDROID",
+      appVariant: pushToken.appVariant,
+    });
+
+    return result.registerPushDevice.id;
+  }, [
+    text.home.festivalTestDeviceUnavailable,
+    text.home.festivalTestPermissionDenied,
+    text.home.festivalTestProjectUnavailable,
+  ]);
+  const testNotificationMutation = useMutation({
+    mutationFn: async (kind: TestNotificationKind) => {
+      const pushDeviceId = await registerNativePushDevice();
+
+      if (kind === "route-review") {
+        if (!pushDeviceId) {
+          throw new Error(text.home.festivalTestDeviceUnavailable);
+        }
+
+        const result =
+          await notificationApi.sendRouteReviewTest(pushDeviceId);
+
+        return {
+          kind,
+          delivery: result.sendRouteReviewTestNotification,
+        };
+      }
+
+      const result = await notificationApi.sendFestivalTest();
+
+      return {
+        kind,
+        delivery: result.sendFestivalTestNotification,
+      };
+    },
+    onSuccess: ({ kind, delivery }) => {
+      if (delivery.pushStatus === "SENT") {
+        showToast(
+          kind === "festival"
+            ? text.home.festivalTestSent
+            : text.home.routeReviewTestSent
+        );
+      } else {
+        const pushError = delivery.pushError ?? "";
+
+        showToast(
+          kind === "festival"
+            ? text.home.festivalTestFailed(pushError)
+            : text.home.routeReviewTestFailed(pushError),
+          3200
+        );
+      }
+
+      void notificationInboxQuery.refetch();
+    },
+    onError: (error, kind) => {
+      const reason = error instanceof Error ? error.message : "";
+
+      showToast(
+        kind === "festival"
+          ? text.home.festivalTestFailed(reason)
+          : text.home.routeReviewTestFailed(reason),
+        3200
+      );
+    },
   });
 
   const {
@@ -122,11 +246,9 @@ function HomePage() {
     attractionLoadingStage,
     boundaryBySigunguCode,
     festivalCountBySigunguCode,
-    festivals,
     isAttractionFetching,
     isAttractionLoading,
     isBoundaryDataReady,
-    isFestivalDataReady,
     isUpdatingPlaceLabelsRef,
     setAttractionLoadingStage,
     topRankByAttractionId,
@@ -209,19 +331,10 @@ function HomePage() {
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      if (!currentLocation || hasManuallySelectedRegionRef.current) {
-        setIsInitialRegionResolved(true);
-        return;
-      }
-
-      const nearestRegion = getNearestGangwonRegion(currentLocation);
-
-      if (selectedSigunguCode !== nearestRegion.sigunguCode) {
-        setSelectedSigunguCode(nearestRegion.sigunguCode);
-        return;
-      }
-
-      setIsInitialRegionResolved(true);
+      const initialRegion = currentLocation
+        ? getNearestGangwonRegion(currentLocation)
+        : DEFAULT_GANGWON_REGION;
+      resolveInitialRegion(initialRegion.sigunguCode);
     });
 
     return () => {
@@ -231,7 +344,7 @@ function HomePage() {
     currentLocation,
     isCurrentLocationLookupPending,
     isInitialRegionResolved,
-    selectedSigunguCode,
+    resolveInitialRegion,
   ]);
 
   useEffect(() => {
@@ -270,11 +383,8 @@ function HomePage() {
     !mapError &&
     !attractionData &&
     (attractionLoadingStage !== "idle" || isAttractionFetching);
-  const shouldShowMapSetupSkeleton =
-    (!mapReady && !mapError) ||
-    ((mapReady || Boolean(mapError)) && !isInitialRegionResolved);
-  const shouldShowInteractiveMapUi =
-    (mapReady || Boolean(mapError)) && isInitialRegionResolved;
+  const shouldShowMapSetupSkeleton = !isInitialRegionResolved;
+  const shouldShowInteractiveMapUi = isInitialRegionResolved;
   const orderedRegions = useMemo(() => {
     if (!currentLocation || !isInitialRegionResolved) {
       return GANGWON_REGIONS;
@@ -286,16 +396,6 @@ function HomePage() {
       return distanceA - distanceB;
     });
   }, [currentLocation, isInitialRegionResolved]);
-  const regionLabelByCode = useMemo(
-    () =>
-      Object.fromEntries(
-        GANGWON_REGIONS.map((region) => [
-          region.sigunguCode,
-          text.labels.regions[region.label] ?? region.label,
-        ])
-      ),
-    [text]
-  );
   const selectedRegion =
     GANGWON_REGIONS.find((region) => region.sigunguCode === selectedSigunguCode) ??
     DEFAULT_GANGWON_REGION;
@@ -324,6 +424,7 @@ function HomePage() {
 
   useEffect(() => {
     const festivalRegionCode = searchParams.get("festivalRegion");
+    const festivalTitle = searchParams.get("festivalTitle")?.trim() ?? "";
 
     if (!festivalRegionCode) {
       return;
@@ -340,13 +441,15 @@ function HomePage() {
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete("festivalRegion");
     nextSearchParams.delete("festivalDate");
+    nextSearchParams.delete("festivalTitle");
     nextSearchParams.delete("source");
     const frameId = requestAnimationFrame(() => {
-      hasManuallySelectedRegionRef.current = true;
-      setSelectedSigunguCode(festivalRegion.sigunguCode);
+      selectRegion(festivalRegion.sigunguCode);
       setSearchFilter("festival");
       setSearchKeyword(
-        text.labels.regions[festivalRegion.label] ?? festivalRegion.label
+        festivalTitle ||
+          text.labels.regions[festivalRegion.label] ||
+          festivalRegion.label
       );
       setIsSearchPopupOpen(true);
       setSearchParams(nextSearchParams, { replace: true });
@@ -355,40 +458,15 @@ function HomePage() {
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [searchParams, setSearchParams, text]);
-
-  useEffect(() => {
-    const isRouteDataReady = !hasAuthToken || myRoutesQuery.isSuccess;
-
-    if (!isInitialRegionResolved || !isFestivalDataReady || !isRouteDataReady) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      void syncFestivalNotifications({
-        currentRegionCode: currentLocation
-          ? (orderedRegions[0]?.sigunguCode ?? null)
-          : null,
-        festivals,
-        regionLabelByCode,
-        routes: myRoutesQuery.data?.myRoutes ?? [],
-      });
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
   }, [
-    currentLocation,
-    festivals,
-    hasAuthToken,
-    isInitialRegionResolved,
-    isFestivalDataReady,
-    myRoutesQuery.data,
-    myRoutesQuery.isSuccess,
-    orderedRegions,
-    regionLabelByCode,
+    searchParams,
+    selectRegion,
+    setSearchFilter,
+    setSearchKeyword,
+    setSearchParams,
+    text,
   ]);
+
 
   const searchResults = useMemo(() => {
     if (!attractionData) {
@@ -526,7 +604,6 @@ function HomePage() {
   };
   const closeSearchPopup = useCallback(() => {
     setIsSearchPopupOpen(false);
-    setSearchKeyword("");
   }, []);
 
   useEffect(() => {
@@ -646,16 +723,15 @@ function HomePage() {
           filters={placeSearchFilters}
           selectedFilter={searchFilter}
           savedPlaceCount={savedPlaceIds.length}
+          unreadNotificationCount={unreadNotificationCount}
           isSavedPlaceCountLoading={isAttractionLoading}
+          onOpenNotifications={() => navigate("/notifications")}
           onOpenSearch={() => setIsSearchPopupOpen(true)}
           onOpenSavedList={() => {
             resetSheet();
             openSavedList();
           }}
-          onSelectRegion={(sigunguCode) => {
-            hasManuallySelectedRegionRef.current = true;
-            setSelectedSigunguCode(sigunguCode);
-          }}
+          onSelectRegion={selectRegion}
           onSelectFilter={(filter) => {
             resetSheet();
             setSearchFilter(filter);
@@ -737,13 +813,10 @@ function HomePage() {
           onSearchFilterChange={setSearchFilter}
           onClose={closeSearchPopup}
           onLoadMore={() => {
-            setVisibleSearchState((currentState) => ({
-              scope: searchResultScope,
-              count:
-                currentState.scope === searchResultScope
-                  ? currentState.count + SEARCH_RESULTS_PAGE_SIZE
-                  : SEARCH_RESULTS_PAGE_SIZE * 2,
-            }));
+            loadMoreSearchResults(
+              searchResultScope,
+              SEARCH_RESULTS_PAGE_SIZE
+            );
           }}
           onResultClick={(item) => {
             appendRecentSearch(searchKeyword);
@@ -759,6 +832,41 @@ function HomePage() {
           onRecentSearchDelete={removeRecentSearch}
           onRecentSearchClear={clearRecentSearches}
         />
+      ) : null}
+
+      {shouldShowInteractiveMapUi && hasAuthToken ? (
+        <div className="pointer-events-none absolute bottom-4 right-4 z-30 flex flex-col items-end gap-2">
+          <button
+            type="button"
+            aria-label={text.home.routeReviewTestSendAria}
+            disabled={testNotificationMutation.isPending}
+            onClick={() => testNotificationMutation.mutate("route-review")}
+            className="pointer-events-auto inline-flex h-12 items-center gap-2 rounded-full border border-white/80 bg-amber-500 px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(245,158,11,0.32)] transition hover:bg-amber-600 active:scale-[0.98] disabled:cursor-wait disabled:bg-amber-300"
+          >
+            <MdOutlineRoute aria-hidden="true" className="text-lg" />
+            <span>
+              {testNotificationMutation.isPending &&
+              testNotificationMutation.variables === "route-review"
+                ? text.home.routeReviewTestSending
+                : text.home.routeReviewTestSend}
+            </span>
+          </button>
+          <button
+            type="button"
+            aria-label={text.home.festivalTestSendAria}
+            disabled={testNotificationMutation.isPending}
+            onClick={() => testNotificationMutation.mutate("festival")}
+            className="pointer-events-auto inline-flex h-12 items-center gap-2 rounded-full border border-white/80 bg-rose-500 px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(244,63,94,0.35)] transition hover:bg-rose-600 active:scale-[0.98] disabled:cursor-wait disabled:bg-rose-300"
+          >
+            <MdCelebration aria-hidden="true" className="text-lg" />
+            <span>
+              {testNotificationMutation.isPending &&
+              testNotificationMutation.variables === "festival"
+                ? text.home.festivalTestSending
+                : text.home.festivalTestSend}
+            </span>
+          </button>
+        </div>
       ) : null}
 
       {mapError ? (

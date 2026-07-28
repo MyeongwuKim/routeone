@@ -3,10 +3,11 @@ import {
   IoCafeOutline,
   IoLocationSharp,
   IoMapOutline,
+  IoNotificationsOutline,
   IoRestaurantOutline,
   IoSearch,
-  IoTicketOutline,
 } from "react-icons/io5";
+import { MdCelebration } from "react-icons/md";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import { useUiText } from "@/lib/uiText";
@@ -29,7 +30,9 @@ type HomeMapControlsProps = {
   filters: ReadonlyArray<SearchFilterOption>;
   selectedFilter: SearchFilter;
   savedPlaceCount: number;
+  unreadNotificationCount: number;
   isSavedPlaceCountLoading: boolean;
+  onOpenNotifications: () => void;
   onOpenSearch: () => void;
   onOpenSavedList: () => void;
   onSelectRegion: (sigunguCode: string) => void;
@@ -56,7 +59,7 @@ function SearchFilterIcon({ filter }: { filter: SearchFilter }) {
     return <IoCafeOutline className="text-sm" />;
   }
 
-  return <IoTicketOutline className="text-sm" />;
+  return <MdCelebration className="text-sm" />;
 }
 
 function HomeMapControls({
@@ -67,7 +70,9 @@ function HomeMapControls({
   filters,
   selectedFilter,
   savedPlaceCount,
+  unreadNotificationCount,
   isSavedPlaceCountLoading,
+  onOpenNotifications,
   onOpenSearch,
   onOpenSavedList,
   onSelectRegion,
@@ -90,6 +95,21 @@ function HomeMapControls({
           <span className="ml-2 w-full truncate text-sm font-semibold text-slate-400">
             {text.home.searchPrompt(selectedRegionLabel)}
           </span>
+        </button>
+        <button
+          type="button"
+          aria-label={text.home.notificationsAria}
+          onClick={onOpenNotifications}
+          className="pointer-events-auto relative ml-2 inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-white/95 text-xl text-brand-700 shadow-md backdrop-blur transition hover:bg-brand-50"
+        >
+          <IoNotificationsOutline />
+          {unreadNotificationCount > 0 ? (
+            <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-none text-white ring-2 ring-white">
+              {unreadNotificationCount > 99
+                ? "99+"
+                : unreadNotificationCount}
+            </span>
+          ) : null}
         </button>
         <button
           type="button"
@@ -162,6 +182,7 @@ export function HomeMapControlsSkeleton() {
         className="pointer-events-none absolute inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center justify-between"
       >
         <div className="skeleton-shimmer h-12 flex-1 rounded-full border border-white/80 bg-white/95 shadow-md" />
+        <div className="skeleton-shimmer ml-2 size-12 rounded-full border border-brand-100 bg-white/95 shadow" />
         <div className="skeleton-shimmer ml-2 h-12 w-16 rounded-full border border-brand-200 bg-brand-100/95 shadow" />
       </div>
 

@@ -355,6 +355,8 @@ export function createMapSheetPlaceFromAttraction({
     categoryName: markerType.typeName,
     icon: markerType.badge.icon,
     images: [attraction.firstImage, attraction.secondImage].filter(Boolean),
+    eventStartDate: attraction.eventStartDate,
+    eventEndDate: attraction.eventEndDate,
   };
 }
 

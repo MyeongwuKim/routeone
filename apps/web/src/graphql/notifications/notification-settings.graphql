@@ -1,0 +1,10 @@
+query NotificationSettings {
+  notificationSettings {
+    festivalEnabled
+    festivalRegionCodes
+    routeReviewEnabled
+    routeArrivalEnabled
+    createdAt
+    updatedAt
+  }
+}

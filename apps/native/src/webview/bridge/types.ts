@@ -32,6 +32,13 @@ export type NativeAuthTokenMessage = {
   reason?: "logout" | "expired";
 };
 
+export type NativeAppLanguage = "ko" | "en";
+
+export type NativeAppLanguageMessage = {
+  type: "routeone:native-app-language";
+  language: NativeAppLanguage;
+};
+
 export type NativeAppInfoRequest = {
   type: "routeone:native-app-info";
   id: string;
@@ -94,11 +101,36 @@ export type NativeRouteArrivalNotificationSyncRequest = {
   radiusMeters?: number | null;
 };
 
+export type NativeDeliveredRouteArrivalNotification = {
+  id: string;
+  type: "route-arrival";
+  routeId: string;
+  routeTitle?: string | null;
+  dayId: string;
+  stopId: string;
+  placeTitle: string;
+  dateKey: string;
+  deliveredAt: string;
+};
+
+export type NativeDeliveredNotificationHistoryRequest = {
+  type: "routeone:native-delivered-notification-history";
+  id: string;
+  acknowledgedIds?: string[];
+};
+
+export type NativePushTokenRequest = {
+  type: "routeone:native-push-token";
+  id: string;
+  requestPermission?: boolean;
+};
+
 export type NativeFestivalNotificationKind =
   | "today"
   | "weekly"
   | "monthly"
-  | "trip";
+  | "trip"
+  | "test";
 
 export type NativeFestivalNotification = {
   id: string;
@@ -108,6 +140,8 @@ export type NativeFestivalNotification = {
   dateKey: string;
   festivalIds: string[];
   festivalTitles: string[];
+  festivalStartDates?: string[];
+  festivalEndDates?: string[];
   triggerAt?: string | null;
 };
 
@@ -115,6 +149,27 @@ export type NativeFestivalNotificationSyncRequest = {
   type: "routeone:native-festival-notifications-sync";
   id: string;
   notifications: NativeFestivalNotification[];
+};
+
+export type NativeRouteReviewNotificationKind =
+  | "completed"
+  | "incomplete"
+  | "unstarted";
+
+export type NativeRouteReviewNotification = {
+  id: string;
+  kind: NativeRouteReviewNotificationKind;
+  routeId: string;
+  routeTitle: string;
+  dayId: string;
+  triggerAt?: string | null;
+  correctionDeadlineAt: string;
+};
+
+export type NativeRouteReviewNotificationSyncRequest = {
+  type: "routeone:native-route-review-notifications-sync";
+  id: string;
+  notifications: NativeRouteReviewNotification[];
 };
 
 export type NativeExternalUrlRequest = {
@@ -200,7 +255,46 @@ export type NativeRouteArrivalNotificationSyncResponse =
       error: string;
     };
 
+export type NativeDeliveredNotificationHistoryResponse =
+  | {
+      ok: true;
+      notifications: NativeDeliveredRouteArrivalNotification[];
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type NativePushTokenResponse =
+  | {
+      ok: true;
+      expoPushToken: string | null;
+      platform: string;
+      appVariant: string;
+      permissionStatus: NativePermissionStatus;
+      reason:
+        | "permission-not-granted"
+        | "missing-project-id"
+        | "unsupported-platform"
+        | null;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 export type NativeFestivalNotificationSyncResponse =
+  | {
+      ok: true;
+      scheduledCount: number;
+      notificationStatus: string;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type NativeRouteReviewNotificationSyncResponse =
   | {
       ok: true;
       scheduledCount: number;

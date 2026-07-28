@@ -1,4 +1,5 @@
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
+import type { NativeFestivalNotificationKind } from "@/native-bridge";
 import {
   useAppLanguageStore,
   type AppLanguage,
@@ -69,6 +70,7 @@ export type UiText = {
     accountTitle: string;
     appSettings: string;
     languageTitle: string;
+    notificationSettingsTitle: string;
     appInfoTitle: string;
   };
   myInfo: {
@@ -87,11 +89,33 @@ export type UiText = {
     language: string;
     korean: string;
     english: string;
+    notificationSettings: string;
+    notificationSettingsDescription: string;
     appInfo: string;
     appInfoDescription: string;
     logout: string;
     logoutDescription: string;
     logoutToast: string;
+  };
+  notificationSettings: {
+    sectionTitle: string;
+    festivalTitle: string;
+    festivalOnDescription: (regions: string) => string;
+    festivalOffDescription: string;
+    festivalStatus: (count: number) => string;
+    routeReviewTitle: string;
+    routeReviewDescription: string;
+    routeArrivalTitle: string;
+    routeArrivalDescription: string;
+    regionSectionTitle: string;
+    regionSectionDescription: string;
+    finishRegionSelection: string;
+    selectedRegionCount: (count: number) => string;
+    maxRegionToast: string;
+    savedToast: string;
+    saveError: string;
+    permissionDeniedToast: string;
+    loading: string;
   };
   language: {
     koLabel: string;
@@ -142,12 +166,51 @@ export type UiText = {
     mapSdkMissing: string;
     mapLoadError: string;
     today: string;
+    ongoing: string;
     appendDayTitle: (routeTitle: string) => string;
     appendDayDescription: string;
     checkout: string;
     openSearchAria: string;
     searchPrompt: (region: string) => string;
     savedPlacesAria: string;
+    notificationsAria: string;
+    festivalTestSend: string;
+    festivalTestSending: string;
+    festivalTestSendAria: string;
+    festivalTestSent: string;
+    festivalTestFailed: (reason: string) => string;
+    routeReviewTestSend: string;
+    routeReviewTestSending: string;
+    routeReviewTestSendAria: string;
+    routeReviewTestSent: string;
+    routeReviewTestFailed: (reason: string) => string;
+    festivalTestPermissionDenied: string;
+    festivalTestDeviceUnavailable: string;
+    festivalTestProjectUnavailable: string;
+  };
+  notifications: {
+    title: string;
+    description: string;
+    close: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    loadError: string;
+    viewAll: string;
+    collapse: string;
+    showMore: (count: number) => string;
+    openFestivalAria: (festivalTitle: string) => string;
+    festivalDetailLoadError: string;
+    openRouteAria: (routeTitle: string) => string;
+    summaryTitle: (regionLabel: string, count: number) => string;
+    arrivalTitle: (placeTitle: string) => string;
+    arrivalDescription: string;
+    routeReviewCompletedTitle: (routeTitle: string) => string;
+    routeReviewIncompleteTitle: (routeTitle: string) => string;
+    routeReviewUnstartedTitle: (routeTitle: string) => string;
+    routeReviewDescription: (deadlineAt: string) => string;
+    formatDate: (dateKey: string) => string;
+    formatTimestamp: (value: string) => string;
+    kinds: Record<NativeFestivalNotificationKind, string>;
   };
   myRoute: {
     count: (count: number) => string;
@@ -206,6 +269,10 @@ export type UiText = {
   myRouteCard: {
     shared: string;
     pastRoute: string;
+    routeCompleted: string;
+    recordReviewNeeded: string;
+    recordIncomplete: string;
+    correctionUntil: (dateLabel: string) => string;
     dayTrip: string;
     nightTrip: (nights: number, days: number) => string;
     completed: string;
@@ -255,6 +322,12 @@ export type UiText = {
     making: string;
     dayCard: string;
     createPosterAria: (routeTitle: string) => string;
+    notVisited: string;
+    notVisitedTitle: string;
+    notVisitedDescription: (routeTitle: string) => string;
+    notVisitedDetail: string;
+    notVisitedSuccess: string;
+    notVisitedError: string;
   };
   sharedRoute: {
     feedTitle: string;
@@ -805,6 +878,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       accountTitle: "계정 전환",
       appSettings: "앱 설정",
       languageTitle: "언어 설정",
+      notificationSettingsTitle: "알림 설정",
       appInfoTitle: "버전 및 권한",
     },
     myInfo: {
@@ -823,11 +897,36 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       language: "언어 설정",
       korean: "한국어",
       english: "English",
+      notificationSettings: "알림 설정",
+      notificationSettingsDescription: "축제·루트·장소 도착 알림 관리",
       appInfo: "버전 및 권한",
       appInfoDescription: "앱 버전과 위치·알림·카메라 권한 확인",
       logout: "로그아웃",
       logoutDescription: "현재 계정에서 나가기",
       logoutToast: "로그아웃했어요.",
+    },
+    notificationSettings: {
+      sectionTitle: "받을 알림",
+      festivalTitle: "축제 알림",
+      festivalOnDescription: (regions) => `${regions} 축제 소식 받기`,
+      festivalOffDescription: "지역을 선택하면 축제 소식을 받을 수 있어요",
+      festivalStatus: (count) =>
+        count > 0 ? `${count}곳 알림 중` : "꺼짐",
+      routeReviewTitle: "루트 종료 알림",
+      routeReviewDescription:
+        "루트 종료 후 7일 안에 방문 기록을 확인·정리하도록 보내는 리마인더",
+      routeArrivalTitle: "장소 도착 알림",
+      routeArrivalDescription: "루트 장소 근처에서 인증 사진 알림",
+      regionSectionTitle: "축제 알림 지역",
+      regionSectionDescription:
+        "최대 2곳까지 선택할 수 있어요. 선택하지 않으면 알림이 꺼져요.",
+      finishRegionSelection: "선택 완료",
+      selectedRegionCount: (count) => `${count}/2곳 선택`,
+      maxRegionToast: "축제 알림 지역은 최대 2곳까지 선택할 수 있어요.",
+      savedToast: "알림 설정을 저장했어요.",
+      saveError: "알림 설정을 저장하지 못했어요.",
+      permissionDeniedToast: "기기 설정에서 알림 권한을 켜 주세요.",
+      loading: "알림 설정을 불러오고 있어요.",
     },
     language: {
       koLabel: "한국어",
@@ -888,12 +987,80 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       mapSdkMissing: "Naver Maps SDK를 찾을 수 없습니다.",
       mapLoadError: "지도 로드에 실패했습니다. 키와 도메인 등록을 확인해 주세요.",
       today: "오늘",
+      ongoing: "진행 중",
       appendDayTitle: (routeTitle) => `${routeTitle}에 DAY 추가 중`,
       appendDayDescription: "장소를 담고 체크아웃에서 추가할 일정을 확인해요",
       checkout: "체크아웃",
       openSearchAria: "장소 검색 열기",
       searchPrompt: (region) => `${region} 명소 검색`,
       savedPlacesAria: "담은 장소",
+      notificationsAria: "알림함 열기",
+      festivalTestSend: "축제 알림 바로 보내기",
+      festivalTestSending: "보내는 중",
+      festivalTestSendAria: "알림 설정 지역의 실제 축제 알림 보내기",
+      festivalTestSent: "실제 축제 알림을 보냈어요.",
+      festivalTestFailed: (reason) =>
+        reason || "축제 테스트 알림을 보내지 못했어요.",
+      routeReviewTestSend: "루트 종료 알림 바로 보내기",
+      routeReviewTestSending: "보내는 중",
+      routeReviewTestSendAria: "종료된 루트의 기록 확인 알림 바로 보내기",
+      routeReviewTestSent: "루트 종료 알림을 보냈어요.",
+      routeReviewTestFailed: (reason) =>
+        reason || "루트 종료 테스트 알림을 보내지 못했어요.",
+      festivalTestPermissionDenied:
+        "알림 권한이 꺼져 있어요. 기기 설정에서 알림을 허용해 주세요.",
+      festivalTestDeviceUnavailable:
+        "이 앱에서 푸시 토큰을 가져오지 못했어요. 앱을 다시 실행한 뒤 시도해 주세요.",
+      festivalTestProjectUnavailable:
+        "앱의 Expo 프로젝트 설정을 확인해 주세요.",
+    },
+    notifications: {
+      title: "알림함",
+      description: "받은 여행 알림을 날짜별로 모아봐요",
+      close: "알림함 닫기",
+      emptyTitle: "아직 받은 알림이 없어요",
+      emptyDescription:
+        "축제 소식, 장소 도착, 루트 기록 안내가 도착하면 여기에 모여요.",
+      loadError: "알림을 불러오지 못했어요",
+      viewAll: "축제 전체 보기",
+      collapse: "접기",
+      showMore: (count) => `${count}개 더 보기`,
+      openFestivalAria: (festivalTitle) => `${festivalTitle} 축제 보기`,
+      festivalDetailLoadError: "축제 상세 정보를 불러오지 못했어요.",
+      openRouteAria: (routeTitle) => `${routeTitle} 기록 보기`,
+      summaryTitle: (regionLabel, count) =>
+        `${regionLabel} 축제 ${count}개`,
+      arrivalTitle: (placeTitle) => `${placeTitle} 근처에 도착했어요`,
+      arrivalDescription: "인증 사진을 남겨봐요.",
+      routeReviewCompletedTitle: (routeTitle) =>
+        `${routeTitle} 여행을 마쳤어요`,
+      routeReviewIncompleteTitle: (routeTitle) =>
+        `${routeTitle} 기록을 마무리해 보세요`,
+      routeReviewUnstartedTitle: (routeTitle) =>
+        `${routeTitle} 일정이 끝났어요`,
+      routeReviewDescription: (deadlineAt) => {
+        const date = new Date(deadlineAt);
+        return Number.isFinite(date.getTime())
+          ? `${date.getMonth() + 1}월 ${date.getDate()}일까지 방문 기록을 보정할 수 있어요.`
+          : "종료 후 7일 동안 방문 기록을 보정할 수 있어요.";
+      },
+      formatDate: (dateKey) => {
+        const [year, month, day] = dateKey.split("-");
+        return `${year}.${Number(month)}.${Number(day)}`;
+      },
+      formatTimestamp: (value) => {
+        const date = new Date(value);
+        return Number.isFinite(date.getTime())
+          ? `${date.getMonth() + 1}.${date.getDate()} ${date.getHours() < 12 ? "오전" : "오후"} ${date.getHours() % 12 || 12}:${`${date.getMinutes()}`.padStart(2, "0")}`
+          : value;
+      },
+      kinds: {
+        today: "오늘",
+        weekly: "이번 주",
+        monthly: "이번 달",
+        trip: "여행일",
+        test: "테스트",
+      },
     },
     myRoute: {
       count: (count) => `${count}개`,
@@ -952,6 +1119,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     myRouteCard: {
       shared: "공유됨",
       pastRoute: "지난 루트",
+      routeCompleted: "완료",
+      recordReviewNeeded: "기록 확인 필요",
+      recordIncomplete: "미완료",
+      correctionUntil: (dateLabel) => `${dateLabel}까지 수정 가능`,
       dayTrip: "당일치기",
       nightTrip: (nights, days) => `${nights}박 ${days}일`,
       completed: "완료",
@@ -996,11 +1167,18 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loadingTitle: "기록 찾는 중",
       emptyTitle: "아직 다녀온 루트가 없어요.",
       emptyDescription: "감자가 빈 여행 기록을 보고 있어요.",
-      emptyFooter: "일정을 완료하면 여기에 모여요.",
+      emptyFooter: "완료했거나 종료된 일정이 여기에 모여요.",
       nextLoadingTitle: "다음 기록 찾는 중",
       making: "제작 중",
       dayCard: "DAY 카드",
       createPosterAria: (routeTitle) => `${routeTitle} DAY 포스터 만들기`,
+      notVisited: "안 다녀왔어요",
+      notVisitedTitle: "다녀오지 않은 일정인가요?",
+      notVisitedDescription: (routeTitle) =>
+        `${routeTitle}을 다녀온 루트에서 정리해요.`,
+      notVisitedDetail: "일정과 장소 기록이 삭제되며 다시 되돌릴 수 없어요.",
+      notVisitedSuccess: "다녀오지 않은 일정을 정리했어요.",
+      notVisitedError: "일정을 정리하지 못했어요.",
     },
     sharedRoute: {
       feedTitle: "공유 루트",
@@ -1631,6 +1809,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       accountTitle: "Switch Account",
       appSettings: "App Settings",
       languageTitle: "Language",
+      notificationSettingsTitle: "Notifications",
       appInfoTitle: "Version & Permissions",
     },
     myInfo: {
@@ -1649,11 +1828,42 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       language: "Language",
       korean: "Korean",
       english: "English",
+      notificationSettings: "Notifications",
+      notificationSettingsDescription:
+        "Manage festival, route, and arrival alerts",
       appInfo: "Version & Permissions",
       appInfoDescription: "Check app versions and permission settings",
       logout: "Log Out",
       logoutDescription: "Leave the current account",
       logoutToast: "Logged out.",
+    },
+    notificationSettings: {
+      sectionTitle: "Notifications",
+      festivalTitle: "Festival Alerts",
+      festivalOnDescription: (regions) => `Festival news for ${regions}`,
+      festivalOffDescription:
+        "Choose areas to receive festival news",
+      festivalStatus: (count) =>
+        count > 0
+          ? `${count} area${count === 1 ? "" : "s"} active`
+          : "Off",
+      routeReviewTitle: "Route Review Alerts",
+      routeReviewDescription:
+        "A reminder to review and organize visit records within 7 days after a route ends",
+      routeArrivalTitle: "Place Arrival Alerts",
+      routeArrivalDescription:
+        "Photo verification reminders near route stops",
+      regionSectionTitle: "Festival Alert Areas",
+      regionSectionDescription:
+        "Choose up to two areas. Leave all unselected to turn alerts off.",
+      finishRegionSelection: "Done",
+      selectedRegionCount: (count) => `${count}/2 selected`,
+      maxRegionToast: "You can select up to two festival alert areas.",
+      savedToast: "Notification settings saved.",
+      saveError: "Could not save notification settings.",
+      permissionDeniedToast:
+        "Enable notification permission in device settings.",
+      loading: "Loading notification settings.",
     },
     language: {
       koLabel: "Korean",
@@ -1715,12 +1925,96 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       mapSdkMissing: "Naver Maps SDK was not found.",
       mapLoadError: "Failed to load the map. Check the key and registered domain.",
       today: "Today",
+      ongoing: "Ongoing",
       appendDayTitle: (routeTitle) => `Adding a day to ${routeTitle}`,
       appendDayDescription: "Pick places and review the added schedule at checkout",
       checkout: "Checkout",
       openSearchAria: "Open place search",
       searchPrompt: (region) => `Search ${region} places`,
       savedPlacesAria: "Saved places",
+      notificationsAria: "Open notifications",
+      festivalTestSend: "Send Festival Alert",
+      festivalTestSending: "Sending",
+      festivalTestSendAria:
+        "Send real festival alerts for configured notification areas",
+      festivalTestSent: "Real festival alert sent.",
+      festivalTestFailed: (reason) =>
+        reason || "Could not send the festival test alert.",
+      routeReviewTestSend: "Send Route Review Alert",
+      routeReviewTestSending: "Sending",
+      routeReviewTestSendAria: "Send a review alert for an ended route",
+      routeReviewTestSent: "Route review alert sent.",
+      routeReviewTestFailed: (reason) =>
+        reason || "Could not send the route review test alert.",
+      festivalTestPermissionDenied:
+        "Notifications are disabled. Allow them in device settings.",
+      festivalTestDeviceUnavailable:
+        "Could not get a push token from this app. Restart the app and try again.",
+      festivalTestProjectUnavailable:
+        "Check the app's Expo project configuration.",
+    },
+    notifications: {
+      title: "Notifications",
+      description: "Travel notifications collected by date",
+      close: "Close notifications",
+      emptyTitle: "No notifications yet",
+      emptyDescription:
+        "Festival, arrival, and route record updates will appear here.",
+      loadError: "Could not load notifications",
+      viewAll: "View all festivals",
+      collapse: "Show less",
+      showMore: (count) => `Show ${count} more`,
+      openFestivalAria: (festivalTitle) => `View ${festivalTitle}`,
+      festivalDetailLoadError: "Could not load the festival details.",
+      openRouteAria: (routeTitle) => `View ${routeTitle} record`,
+      summaryTitle: (regionLabel, count) =>
+        `${count} ${regionLabel} festival${count === 1 ? "" : "s"}`,
+      arrivalTitle: (placeTitle) => `You arrived near ${placeTitle}`,
+      arrivalDescription: "Leave a verification photo.",
+      routeReviewCompletedTitle: (routeTitle) =>
+        `${routeTitle} is complete`,
+      routeReviewIncompleteTitle: (routeTitle) =>
+        `Finish your ${routeTitle} record`,
+      routeReviewUnstartedTitle: (routeTitle) =>
+        `${routeTitle} has ended`,
+      routeReviewDescription: (deadlineAt) => {
+        const date = new Date(deadlineAt);
+        return Number.isFinite(date.getTime())
+          ? `You can update visit records through ${date.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            })}.`
+          : "You can update visit records for 7 days after the trip ends.";
+      },
+      formatDate: (dateKey) => {
+        const parsedDate = new Date(`${dateKey}T12:00:00`);
+
+        return Number.isFinite(parsedDate.getTime())
+          ? parsedDate.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
+          : dateKey;
+      },
+      formatTimestamp: (value) => {
+        const date = new Date(value);
+        return Number.isFinite(date.getTime())
+          ? date.toLocaleString("en-US", {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          : value;
+      },
+      kinds: {
+        today: "Today",
+        weekly: "This week",
+        monthly: "This month",
+        trip: "Trip day",
+        test: "Test",
+      },
     },
     myRoute: {
       count: (count) => `${count}`,
@@ -1779,6 +2073,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     myRouteCard: {
       shared: "Shared",
       pastRoute: "Past Route",
+      routeCompleted: "Completed",
+      recordReviewNeeded: "Review Records",
+      recordIncomplete: "Incomplete",
+      correctionUntil: (dateLabel) => `Editable through ${dateLabel}`,
       dayTrip: "Day trip",
       nightTrip: (nights, days) => `${nights}N ${days}D`,
       completed: "Completed",
@@ -1823,11 +2121,19 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loadingTitle: "Finding history",
       emptyTitle: "No visited routes yet",
       emptyDescription: "Your travel history is empty.",
-      emptyFooter: "Completed schedules will appear here.",
+      emptyFooter: "Completed or ended schedules will appear here.",
       nextLoadingTitle: "Finding more history",
       making: "Creating",
       dayCard: "DAY Card",
       createPosterAria: (routeTitle) => `Create DAY poster for ${routeTitle}`,
+      notVisited: "Did not go",
+      notVisitedTitle: "Did you skip this trip?",
+      notVisitedDescription: (routeTitle) =>
+        `Remove ${routeTitle} from your visited routes.`,
+      notVisitedDetail:
+        "The schedule and its place records will be deleted permanently.",
+      notVisitedSuccess: "The skipped trip was removed.",
+      notVisitedError: "Could not remove the trip.",
     },
     sharedRoute: {
       feedTitle: "Shared Routes",

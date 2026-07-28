@@ -16,10 +16,13 @@ model User {
   avatarUrl    String?
   locale       String?
 
-  accounts AuthAccount[]
-  routes   Route[]
-  likes    RouteLike[]
-  saves    RouteSave[]
+  accounts            AuthAccount[]
+  routes              Route[]
+  likes               RouteLike[]
+  saves               RouteSave[]
+  notifications       UserNotification[]
+  notificationSetting UserNotificationSetting?
+  pushDevices         PushDevice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -319,6 +322,81 @@ model RouteSave {
   @@index([routeId])
 }
 
+model UserNotification {
+  id                   String                       @id @default(auto()) @map("_id") @db.ObjectId
+  userId               String                       @db.ObjectId
+  notificationKey      String
+  type                 UserNotificationType
+  festivalKind         FestivalNotificationKind?
+  regionCode           String?
+  regionLabel          String?
+  dateKey              String?
+  festivalIds          String[]                     @default([])
+  festivalTitles       String[]                     @default([])
+  festivalStartDates   String[]                     @default([])
+  festivalEndDates     String[]                     @default([])
+  routeReviewKind      RouteReviewNotificationKind?
+  routeId              String?                      @db.ObjectId
+  routeTitle           String?
+  dayId                String?                      @db.ObjectId
+  stopId               String?                      @db.ObjectId
+  placeTitle           String?
+  correctionDeadlineAt DateTime?
+  availableAt          DateTime
+  readAt               DateTime?
+  pushStatus           UserNotificationPushStatus?
+  pushAttemptCount     Int                          @default(0)
+  pushClaimedAt        DateTime?
+  pushSentAt           DateTime?
+  pushTicketIds        String[]                     @default([])
+  pushError            String?
+  nextPushAttemptAt    DateTime?
+  expiresAt            DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, notificationKey])
+  @@index([availableAt])
+  @@index([userId, availableAt, id])
+  @@index([userId, readAt, availableAt])
+  @@index([pushStatus, nextPushAttemptAt, availableAt])
+}
+
+model UserNotificationSetting {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId              String   @unique @db.ObjectId
+  festivalEnabled     Boolean  @default(false)
+  festivalRegionCodes String[] @default([])
+  routeReviewEnabled  Boolean  @default(true)
+  routeArrivalEnabled Boolean  @default(true)
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PushDevice {
+  id            String       @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String       @db.ObjectId
+  expoPushToken String       @unique
+  platform      PushPlatform
+  appVariant    String?
+  enabled       Boolean      @default(true)
+  lastSeenAt    DateTime     @default(now())
+  disabledAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, enabled])
+}
+
 type PlaceSnapshot {
   provider       PlaceProvider
   externalId     String?
@@ -377,6 +455,39 @@ enum PlaceProvider {
 
 enum PlacePhotoSource {
   VISIT_PHOTO
+}
+
+enum UserNotificationType {
+  FESTIVAL_SUMMARY
+  ROUTE_ARRIVAL
+  ROUTE_REVIEW
+}
+
+enum FestivalNotificationKind {
+  TODAY
+  WEEKLY
+  MONTHLY
+  TRIP
+  TEST
+}
+
+enum RouteReviewNotificationKind {
+  COMPLETED
+  INCOMPLETE
+  UNSTARTED
+}
+
+enum UserNotificationPushStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  CANCELED
+}
+
+enum PushPlatform {
+  IOS
+  ANDROID
 }
 
 enum PlacePhotoStatus {

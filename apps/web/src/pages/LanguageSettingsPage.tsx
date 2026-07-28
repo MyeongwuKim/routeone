@@ -86,7 +86,7 @@ function LanguageSettingsPage() {
               type="button"
               aria-pressed={isSelected}
               onClick={() => handleSelectLanguage(option.value)}
-              className={`flex w-full items-center gap-3 rounded-lg border bg-white px-4 py-4 text-left shadow-sm transition active:scale-[0.99] dark:bg-[#0b211f] ${
+              className={`flex min-h-24 w-full items-center gap-3 rounded-lg border bg-white px-4 py-4 text-left shadow-sm transition active:scale-[0.99] dark:bg-[#0b211f] ${
                 isSelected
                   ? "border-brand-500 ring-1 ring-brand-500/20 dark:border-brand-300"
                   : "border-slate-200 hover:border-brand-300 dark:border-brand-400/20 dark:hover:border-brand-300/60"
@@ -102,7 +102,7 @@ function LanguageSettingsPage() {
                 <MdLanguage />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="flex items-baseline gap-2">
+                <span className="flex min-h-5 items-baseline gap-2">
                   <span className="text-sm font-bold text-slate-900 dark:text-white">
                     {option.label}
                   </span>
@@ -110,7 +110,7 @@ function LanguageSettingsPage() {
                     {option.nativeLabel}
                   </span>
                 </span>
-                <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500 dark:text-slate-300">
+                <span className="mt-1 line-clamp-2 min-h-10 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-300">
                   {option.description}
                 </span>
               </span>

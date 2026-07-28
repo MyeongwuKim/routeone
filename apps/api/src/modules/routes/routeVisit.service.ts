@@ -51,11 +51,53 @@ const EARTH_RADIUS_METERS = 6_371_000;
 const DEFAULT_PLACE_PHOTO_LIMIT = 30;
 
 const MAX_PLACE_PHOTO_LIMIT = 60;
+const ROUTE_CORRECTION_GRACE_DAYS = 7;
+const ROUTE_CORRECTION_TIME_ZONE = "Asia/Seoul";
 
 const PUBLISHABLE_PLACE_PHOTO_STATUSES = new Set<RouteStopVerificationStatus>([
   "GPS_PHOTO",
   "MANUAL",
 ]);
+
+function getDateKey(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function getTodayDateKey() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: ROUTE_CORRECTION_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function getDateKeyDiffInDays(leftDateKey: string, rightDateKey: string) {
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  return Math.round(
+    (Date.parse(`${leftDateKey}T00:00:00.000Z`) -
+      Date.parse(`${rightDateKey}T00:00:00.000Z`)) /
+      dayMs
+  );
+}
+
+function assertRouteCorrectionWindow(route: Route) {
+  const routeEndDate = route.travelEndDate ?? route.travelStartDate;
+
+  if (!routeEndDate) {
+    return;
+  }
+
+  const daysSinceEnd = getDateKeyDiffInDays(
+    getTodayDateKey(),
+    getDateKey(routeEndDate)
+  );
+
+  if (daysSinceEnd > ROUTE_CORRECTION_GRACE_DAYS) {
+    throw new Error("루트 종료 후 7일이 지나 방문 기록을 수정할 수 없어요.");
+  }
+}
 
 function clampPlacePhotoLimit(value?: number | null) {
   if (value == null || !Number.isFinite(value)) {
@@ -470,6 +512,7 @@ export async function markRouteStopVisited(
   }
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
+  assertRouteCorrectionWindow(route);
 
   const visitData = buildRouteStopVisitData(
     stop,

@@ -1,0 +1,5 @@
+mutation UnregisterPushDevice($expoPushToken: String!) {
+  unregisterPushDevice(expoPushToken: $expoPushToken) {
+    updatedCount
+  }
+}

@@ -14,4 +14,6 @@ export type MapSheetPlace = {
   categoryName: string;
   icon: string;
   images: string[];
+  eventStartDate?: string;
+  eventEndDate?: string;
 };

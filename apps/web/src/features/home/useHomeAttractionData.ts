@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { festivalApi } from "@/api/festivalApi";
 import {
   GANGWON_SIGNGU_ADMIN_CODES,
   GANGWON_TATS_AREA_CODE,
@@ -23,7 +24,6 @@ import { useUiText } from "@/lib/uiText";
 import {
   buildLatestConcentrationMap,
   fetchGangwonAttractions,
-  fetchGangwonFestivals,
   fetchLclsSystemNameMap,
   fetchTouristConcentrationPoints,
   type GangwonAttraction,
@@ -47,6 +47,26 @@ type UseHomeAttractionDataOptions = {
 };
 
 const GANGWON_BOUNDARY_ASSET_PATH = "/gangwon-sigungu-boundary.json";
+const FESTIVAL_LOOK_AHEAD_DAYS = 6;
+
+function formatLocalDateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function getFestivalDateWindow() {
+  const startDate = new Date();
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + FESTIVAL_LOOK_AHEAD_DAYS);
+
+  return {
+    startDateKey: formatLocalDateKey(startDate),
+    endDateKey: formatLocalDateKey(endDate),
+  };
+}
 
 function getGangwonBoundaryAssetUrl() {
   if (GANGWON_BOUNDARY_ASSET_PATH.startsWith("data:")) {
@@ -70,6 +90,50 @@ export function useHomeAttractionData(
     useState<AttractionLoadingStage>("idle");
   const isUpdatingPlaceLabelsRef = useRef(false);
   const isAttractionQueryEnabled = options.enabled ?? true;
+  const festivalDateWindow = useMemo(() => getFestivalDateWindow(), []);
+  const festivalQueryKey = useMemo(
+    () =>
+      [
+        "gangwon-festivals",
+        "official-7-days",
+        festivalDateWindow.startDateKey,
+        festivalDateWindow.endDateKey,
+        appLanguage,
+      ] as const,
+    [appLanguage, festivalDateWindow]
+  );
+  const loadFestivals = useCallback(async () => {
+    const result = await festivalApi.list(
+      festivalDateWindow.startDateKey,
+      festivalDateWindow.endDateKey
+    );
+    const todayYmd = festivalDateWindow.startDateKey.replaceAll("-", "");
+    const festivals = result.gangwonFestivals.map((festival) => {
+      const eventStartDate = festival.startDate.replaceAll("-", "");
+      const eventEndDate = festival.endDate.replaceAll("-", "");
+
+      return {
+        id: festival.id,
+        title: festival.title,
+        address: festival.address || "주소 정보 없음",
+        lat: festival.lat,
+        lng: festival.lng,
+        contentTypeId: "15",
+        lclsSystm1: "",
+        lclsSystm2: "",
+        lclsSystm3: "",
+        firstImage: festival.imageUrl,
+        secondImage: "",
+        eventStartDate,
+        eventEndDate,
+        isTodayFestival:
+          eventStartDate <= todayYmd && eventEndDate >= todayYmd,
+        tourApiSigunguCode: festival.regionCode,
+      } satisfies GangwonAttraction;
+    });
+
+    return localizeTourPlaces(festivals, appLanguage);
+  }, [appLanguage, festivalDateWindow]);
 
   const loadLclsNameByCode = useCallback(async () => {
     try {
@@ -97,9 +161,10 @@ export function useHomeAttractionData(
         "gangwon-attractions",
         "source-first-v2",
         selectedSigunguCode,
+        festivalDateWindow.startDateKey,
         appLanguage,
       ] as const,
-    [appLanguage, selectedSigunguCode]
+    [appLanguage, festivalDateWindow.startDateKey, selectedSigunguCode]
   );
 
   const boundaryQuery = useQuery({
@@ -133,14 +198,21 @@ export function useHomeAttractionData(
             },
             "ko"
           ),
-          fetchGangwonFestivals(
-            TOUR_API_SERVICE_KEY,
-            {
-              sigunguCode: selectedSigunguCode || undefined,
-              lookAheadDays: 90,
-            },
-            "ko"
-          ).catch(() => [] as GangwonAttraction[]),
+          queryClient
+            .fetchQuery({
+              queryKey: festivalQueryKey,
+              queryFn: loadFestivals,
+              staleTime: 1000 * 60 * 60 * 6,
+            })
+            .then((items) =>
+              selectedSigunguCode
+                ? items.filter(
+                    (festival) =>
+                      festival.tourApiSigunguCode === selectedSigunguCode
+                  )
+                : items
+            )
+            .catch(() => [] as GangwonAttraction[]),
           fetchTouristConcentrationPoints(TOUR_API_SERVICE_KEY, {
             areaCode: GANGWON_TATS_AREA_CODE,
             signguCode,
@@ -349,17 +421,10 @@ export function useHomeAttractionData(
   ]);
 
   const festivalsQuery = useQuery({
-    queryKey: ["gangwon-festivals", "90-days", appLanguage],
+    queryKey: festivalQueryKey,
     enabled: Boolean(TOUR_API_SERVICE_KEY),
-    queryFn: async () => {
-      const festivals = await fetchGangwonFestivals(
-        TOUR_API_SERVICE_KEY,
-        { lookAheadDays: 90 },
-        "ko"
-      );
-      return localizeTourPlaces(festivals, appLanguage);
-    },
-    staleTime: 1000 * 60 * 60 * 12,
+    queryFn: loadFestivals,
+    staleTime: 1000 * 60 * 60 * 6,
     gcTime: 1000 * 60 * 60 * 24,
   });
 

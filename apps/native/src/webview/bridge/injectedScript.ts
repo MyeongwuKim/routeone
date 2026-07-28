@@ -188,7 +188,10 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   var pendingPhotoRequests = Object.create(null);
   var pendingPhotoUploadRequests = Object.create(null);
   var pendingRouteArrivalNotificationSyncRequests = Object.create(null);
+  var pendingDeliveredNotificationHistoryRequests = Object.create(null);
+  var pendingPushTokenRequests = Object.create(null);
   var pendingFestivalNotificationSyncRequests = Object.create(null);
+  var pendingRouteReviewNotificationSyncRequests = Object.create(null);
   var pendingSaveImageRequests = Object.create(null);
   var requestSeq = 0;
 
@@ -460,6 +463,46 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     });
   };
 
+  window.__ROUTEONE_NATIVE_DELIVERED_NOTIFICATION_HISTORY_RESPONSE__ = function handleNativeDeliveredNotificationHistoryResponse(id, payload) {
+    var handlers = pendingDeliveredNotificationHistoryRequests[id];
+
+    if (!handlers) {
+      return;
+    }
+
+    delete pendingDeliveredNotificationHistoryRequests[id];
+
+    if (!payload || !payload.ok) {
+      handlers.reject(new Error((payload && payload.error) || "Native delivered notification history lookup failed"));
+      return;
+    }
+
+    handlers.resolve(payload.notifications || []);
+  };
+
+  window.__ROUTEONE_NATIVE_PUSH_TOKEN_RESPONSE__ = function handleNativePushTokenResponse(id, payload) {
+    var handlers = pendingPushTokenRequests[id];
+
+    if (!handlers) {
+      return;
+    }
+
+    delete pendingPushTokenRequests[id];
+
+    if (!payload || !payload.ok) {
+      handlers.reject(new Error((payload && payload.error) || "Native push token lookup failed"));
+      return;
+    }
+
+    handlers.resolve({
+      expoPushToken: payload.expoPushToken,
+      platform: payload.platform,
+      appVariant: payload.appVariant,
+      permissionStatus: payload.permissionStatus,
+      reason: payload.reason
+    });
+  };
+
   window.__ROUTEONE_NATIVE_FESTIVAL_NOTIFICATIONS_SYNC_RESPONSE__ = function handleNativeFestivalNotificationsSyncResponse(id, payload) {
     var handlers = pendingFestivalNotificationSyncRequests[id];
 
@@ -471,6 +514,26 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 
     if (!payload || !payload.ok) {
       handlers.reject(new Error((payload && payload.error) || "Native festival notification sync failed"));
+      return;
+    }
+
+    handlers.resolve({
+      scheduledCount: payload.scheduledCount,
+      notificationStatus: payload.notificationStatus
+    });
+  };
+
+  window.__ROUTEONE_NATIVE_ROUTE_REVIEW_NOTIFICATIONS_SYNC_RESPONSE__ = function handleNativeRouteReviewNotificationsSyncResponse(id, payload) {
+    var handlers = pendingRouteReviewNotificationSyncRequests[id];
+
+    if (!handlers) {
+      return;
+    }
+
+    delete pendingRouteReviewNotificationSyncRequests[id];
+
+    if (!payload || !payload.ok) {
+      handlers.reject(new Error((payload && payload.error) || "Native route review notification sync failed"));
       return;
     }
 
@@ -603,6 +666,46 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
         );
       });
     },
+    getDeliveredNotifications: function getDeliveredNotifications(options) {
+      if (!window.ReactNativeWebView) {
+        return Promise.reject(new Error("Native bridge is not available"));
+      }
+
+      var requestId = "native-delivered-notification-history-" + Date.now() + "-" + requestSeq++;
+      var acknowledgedIds = options && Array.isArray(options.acknowledgedIds) ? options.acknowledgedIds : [];
+
+      return new Promise(function routeOneNativeDeliveredNotificationHistory(resolve, reject) {
+        pendingDeliveredNotificationHistoryRequests[requestId] = { resolve: resolve, reject: reject };
+
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: "routeone:native-delivered-notification-history",
+            id: requestId,
+            acknowledgedIds: acknowledgedIds
+          })
+        );
+      });
+    },
+    getPushToken: function getPushToken(options) {
+      if (!window.ReactNativeWebView) {
+        return Promise.reject(new Error("Native bridge is not available"));
+      }
+
+      var requestId = "native-push-token-" + Date.now() + "-" + requestSeq++;
+      var requestPermission = Boolean(options && options.requestPermission);
+
+      return new Promise(function routeOneNativePushToken(resolve, reject) {
+        pendingPushTokenRequests[requestId] = { resolve: resolve, reject: reject };
+
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: "routeone:native-push-token",
+            id: requestId,
+            requestPermission: requestPermission
+          })
+        );
+      });
+    },
     syncFestivalNotifications: function syncFestivalNotifications(options) {
       if (!window.ReactNativeWebView) {
         return Promise.reject(new Error("Native bridge is not available"));
@@ -617,6 +720,26 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
         window.ReactNativeWebView.postMessage(
           JSON.stringify({
             type: "routeone:native-festival-notifications-sync",
+            id: requestId,
+            notifications: notifications
+          })
+        );
+      });
+    },
+    syncRouteReviewNotifications: function syncRouteReviewNotifications(options) {
+      if (!window.ReactNativeWebView) {
+        return Promise.reject(new Error("Native bridge is not available"));
+      }
+
+      var requestId = "native-route-review-notifications-" + Date.now() + "-" + requestSeq++;
+      var notifications = options && Array.isArray(options.notifications) ? options.notifications : [];
+
+      return new Promise(function routeOneNativeRouteReviewNotifications(resolve, reject) {
+        pendingRouteReviewNotificationSyncRequests[requestId] = { resolve: resolve, reject: reject };
+
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: "routeone:native-route-review-notifications-sync",
             id: requestId,
             notifications: notifications
           })

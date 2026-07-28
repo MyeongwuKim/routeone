@@ -1,5 +1,6 @@
 import {
   getNextRouteStop,
+  getRouteTitle,
   getTodayDateKey,
   getTodayRouteDay,
 } from "../routeDisplay";
@@ -8,6 +9,7 @@ import {
   nativeBridge,
   type NativeArrivalNotificationPlace,
 } from "@/native-bridge";
+import { notificationApi } from "@/api/notificationApi";
 
 const ROUTE_ARRIVAL_NOTIFICATION_RADIUS_METERS = 100;
 
@@ -40,7 +42,7 @@ function getNativeRouteArrivalNotificationPlaces(
       {
         id: `${route.id}:${nextStop.id}`,
         routeId: route.id,
-        routeTitle: null,
+        routeTitle: getRouteTitle(route),
         dayId: todayRouteDay.id,
         dayIndex: todayRouteDay.dayIndex,
         stopId: nextStop.id,
@@ -53,9 +55,12 @@ function getNativeRouteArrivalNotificationPlaces(
 }
 
 export async function syncTodayRouteArrivalNotifications(routes: MyRoute[]) {
-  const places = getNativeRouteArrivalNotificationPlaces(routes);
-
   try {
+    const settings = await notificationApi.settings();
+    const places = settings.notificationSettings.routeArrivalEnabled
+      ? getNativeRouteArrivalNotificationPlaces(routes)
+      : [];
+
     return await nativeBridge.notifications.syncRouteArrivals({
       places,
       radiusMeters: ROUTE_ARRIVAL_NOTIFICATION_RADIUS_METERS,

@@ -1,0 +1,186 @@
+import {
+  PushPlatform,
+  type PrismaClient,
+  type User,
+} from "@prisma/client";
+
+export const GANGWON_REGION_BY_CODE = {
+  "1": "강릉",
+  "2": "고성",
+  "3": "동해",
+  "4": "삼척",
+  "5": "속초",
+  "6": "양구",
+  "7": "양양",
+  "8": "영월",
+  "9": "원주",
+  "10": "인제",
+  "11": "정선",
+  "12": "철원",
+  "13": "춘천",
+  "14": "태백",
+  "15": "평창",
+  "16": "홍천",
+  "17": "화천",
+  "18": "횡성",
+} as const;
+
+const GANGWON_REGION_CODES = new Set(Object.keys(GANGWON_REGION_BY_CODE));
+const MAX_FESTIVAL_REGION_COUNT = 2;
+const EXPO_PUSH_TOKEN_PATTERN =
+  /^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$/;
+
+export type UpdateNotificationSettingsInput = {
+  festivalEnabled?: boolean | null;
+  festivalRegionCodes?: string[] | null;
+  routeReviewEnabled?: boolean | null;
+  routeArrivalEnabled?: boolean | null;
+};
+
+export type RegisterPushDeviceInput = {
+  expoPushToken: string;
+  platform: PushPlatform;
+  appVariant?: string | null;
+};
+
+function normalizeRegionCodes(regionCodes: string[]) {
+  const normalized = [
+    ...new Set(regionCodes.map((regionCode) => regionCode.trim())),
+  ];
+
+  if (
+    normalized.length > MAX_FESTIVAL_REGION_COUNT ||
+    normalized.some((regionCode) => !GANGWON_REGION_CODES.has(regionCode))
+  ) {
+    throw new Error("축제 알림 지역은 강원 지역 중 최대 2곳까지 선택할 수 있습니다.");
+  }
+
+  return normalized;
+}
+
+function normalizeExpoPushToken(value: string) {
+  const token = value.trim();
+
+  if (!EXPO_PUSH_TOKEN_PATTERN.test(token)) {
+    throw new Error("Expo 푸시 토큰이 올바르지 않습니다.");
+  }
+
+  return token;
+}
+
+function normalizeAppVariant(value?: string | null) {
+  const appVariant = value?.trim() ?? "";
+
+  if (appVariant.length > 40) {
+    throw new Error("앱 환경 값이 올바르지 않습니다.");
+  }
+
+  return appVariant || null;
+}
+
+export function getNotificationSettings(prisma: PrismaClient, user: User) {
+  return prisma.userNotificationSetting.upsert({
+    where: {
+      userId: user.id,
+    },
+    create: {
+      userId: user.id,
+    },
+    update: {},
+  });
+}
+
+export async function updateNotificationSettings(
+  prisma: PrismaClient,
+  user: User,
+  input: UpdateNotificationSettingsInput
+) {
+  const current = await getNotificationSettings(prisma, user);
+  let festivalRegionCodes =
+    input.festivalRegionCodes == null
+      ? current.festivalRegionCodes
+      : normalizeRegionCodes(input.festivalRegionCodes);
+  let festivalEnabled =
+    input.festivalRegionCodes == null
+      ? input.festivalEnabled ?? current.festivalEnabled
+      : festivalRegionCodes.length > 0;
+
+  if (input.festivalEnabled === false && input.festivalRegionCodes == null) {
+    festivalRegionCodes = [];
+    festivalEnabled = false;
+  }
+
+  if (festivalEnabled && festivalRegionCodes.length === 0) {
+    throw new Error("축제 알림을 받을 지역을 1곳 이상 선택해 주세요.");
+  }
+
+  return prisma.userNotificationSetting.update({
+    where: {
+      userId: user.id,
+    },
+    data: {
+      festivalEnabled,
+      festivalRegionCodes,
+      routeReviewEnabled:
+        input.routeReviewEnabled ?? current.routeReviewEnabled,
+      routeArrivalEnabled:
+        input.routeArrivalEnabled ?? current.routeArrivalEnabled,
+    },
+  });
+}
+
+export async function registerPushDevice(
+  prisma: PrismaClient,
+  user: User,
+  input: RegisterPushDeviceInput
+) {
+  const expoPushToken = normalizeExpoPushToken(input.expoPushToken);
+  const now = new Date();
+
+  await getNotificationSettings(prisma, user);
+
+  return prisma.pushDevice.upsert({
+    where: {
+      expoPushToken,
+    },
+    create: {
+      userId: user.id,
+      expoPushToken,
+      platform: input.platform,
+      appVariant: normalizeAppVariant(input.appVariant),
+      enabled: true,
+      lastSeenAt: now,
+    },
+    update: {
+      userId: user.id,
+      platform: input.platform,
+      appVariant: normalizeAppVariant(input.appVariant),
+      enabled: true,
+      lastSeenAt: now,
+      disabledAt: null,
+    },
+  });
+}
+
+export async function unregisterPushDevice(
+  prisma: PrismaClient,
+  user: User,
+  expoPushTokenValue: string
+) {
+  const expoPushToken = normalizeExpoPushToken(expoPushTokenValue);
+  const result = await prisma.pushDevice.updateMany({
+    where: {
+      userId: user.id,
+      expoPushToken,
+      enabled: true,
+    },
+    data: {
+      enabled: false,
+      disabledAt: new Date(),
+    },
+  });
+
+  return {
+    updatedCount: result.count,
+  };
+}

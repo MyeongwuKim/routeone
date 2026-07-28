@@ -21,6 +21,7 @@ const FESTIVAL_NOTIFIED_STORAGE_KEY =
 const MAX_FESTIVAL_NOTIFICATION_COUNT = 48;
 const NOTIFIED_HISTORY_TTL_MS = 1000 * 60 * 60 * 24 * 120;
 const FESTIVAL_NOTIFICATION_KIND_PRIORITY = {
+  test: 5,
   trip: 4,
   today: 3,
   weekly: 2,
@@ -106,6 +107,12 @@ function getUniqueNotifications(
       ...notification,
       festivalIds: [...new Set(notification.festivalIds)],
       festivalTitles: [...new Set(notification.festivalTitles)],
+      festivalStartDates: notification.festivalStartDates
+        ? [...notification.festivalStartDates]
+        : undefined,
+      festivalEndDates: notification.festivalEndDates
+        ? [...notification.festivalEndDates]
+        : undefined,
     });
   }
 
@@ -154,15 +161,44 @@ function createFestivalNotificationSignature(
     dateKey: notification.dateKey,
     festivalIds: notification.festivalIds,
     festivalTitles: notification.festivalTitles,
+    festivalStartDates: notification.festivalStartDates ?? [],
+    festivalEndDates: notification.festivalEndDates ?? [],
     triggerAt: notification.triggerAt ?? null,
   });
+}
+
+function formatFestivalPeriod(startDate: string, endDate: string) {
+  const formatDate = (dateKey: string) => {
+    const date = new Date(`${dateKey}T00:00:00.000Z`);
+
+    if (!Number.isFinite(date.getTime())) {
+      return dateKey;
+    }
+
+    const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+    return `${date.getUTCMonth() + 1}.${date.getUTCDate()}(${weekdays[date.getUTCDay()]})`;
+  };
+
+  return startDate === endDate
+    ? formatDate(startDate)
+    : `${formatDate(startDate)}~${formatDate(endDate)}`;
 }
 
 function createFestivalNotificationContent(
   notification: NativeFestivalNotification
 ) {
   const festivalCount = notification.festivalTitles.length;
-  const visibleTitles = notification.festivalTitles.slice(0, 2).join(", ");
+  const visibleTitles = notification.festivalTitles
+    .slice(0, 2)
+    .map((title, index) => {
+      const startDate = notification.festivalStartDates?.[index];
+      const endDate = notification.festivalEndDates?.[index];
+
+      return startDate && endDate
+        ? `${title} ${formatFestivalPeriod(startDate, endDate)}`
+        : title;
+    })
+    .join(" · ");
   const remainingCount = Math.max(0, festivalCount - 2);
   const body = remainingCount
     ? `${visibleTitles} 외 ${remainingCount}개`
@@ -172,6 +208,7 @@ function createFestivalNotificationContent(
     weekly: `이번 주 ${notification.regionLabel} 축제 ${festivalCount}개`,
     monthly: `이번 달 ${notification.regionLabel} 축제 ${festivalCount}개`,
     trip: `${notification.regionLabel} 여행일 축제 ${festivalCount}개`,
+    test: `[테스트] ${notification.regionLabel} 축제 ${festivalCount}개`,
   } as const;
 
   return {
@@ -179,6 +216,7 @@ function createFestivalNotificationContent(
     body,
     data: {
       type: "festival-summary",
+      notificationId: notification.id,
       kind: notification.kind,
       regionCode: notification.regionCode,
       dateKey: notification.dateKey,

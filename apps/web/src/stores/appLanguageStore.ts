@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { updateNativeAppLanguage } from "@/native-bridge/language";
 
 export type AppLanguage = "ko" | "en";
 
@@ -42,6 +43,7 @@ export const useAppLanguageStore = create<AppLanguageState>((set) => ({
       // Keep the selected language in memory when storage is unavailable.
     }
 
+    updateNativeAppLanguage(language);
     set({ language });
   },
 }));

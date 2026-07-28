@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   useInfiniteQuery,
+  useMutation,
+  useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   MdArrowBack,
   MdClose,
@@ -18,7 +20,10 @@ import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
 import MyRouteCard from "@/features/my-route/components/MyRouteCard";
 import { useLocalizedMyRoutes } from "@/features/my-route/hooks/useLocalizedMyRoutes";
-import { MY_ROUTE_HISTORY_QUERY_KEY } from "@/features/my-route/myRouteCache";
+import {
+  MY_ROUTE_HISTORY_QUERY_KEY,
+  MY_ROUTES_QUERY_KEY,
+} from "@/features/my-route/myRouteCache";
 import {
   createRouteCompletionPosterCards,
   downloadRouteCompletionPoster,
@@ -34,8 +39,12 @@ import {
   getTodayDateKey,
 } from "@/features/my-route/routeDisplay";
 import type { MyRoute, MyRouteDay } from "@/features/my-route/types";
-import type { MyRouteHistoryConnectionQuery } from "@/generated/graphql";
+import type {
+  MyRouteHistoryConnectionQuery,
+  MyRoutesQuery,
+} from "@/generated/graphql";
 import { useUiText } from "@/lib/uiText";
+import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 type RoutePosterPreview = {
@@ -202,6 +211,9 @@ function RoutePosterGeneratingModal() {
 function MyRouteHistoryPage() {
   const text = useUiText();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openModal = useUiModalStore((state) => state.openModal);
   const showToast = useUiToastStore((state) => state.showToast);
   const [selectedHistoryRoute, setSelectedHistoryRoute] = useState<{
     routeId: string;
@@ -247,6 +259,45 @@ function MyRouteHistoryPage() {
     isLoading: isHistoryLocalizationLoading,
     isUpdating: isHistoryLocalizationUpdating,
   } = useLocalizedMyRoutes(sourceHistoryRoutes);
+  const deleteRouteMutation = useMutation({
+    mutationFn: (routeId: string) => routeApi.deleteRoute(routeId),
+    onSuccess: async (_data, routeId) => {
+      setSelectedHistoryRoute((current) =>
+        current?.routeId === routeId ? null : current
+      );
+      showToast(text.routeHistory.notVisitedSuccess);
+
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: MY_ROUTES_QUERY_KEY,
+        }),
+      ]);
+
+      try {
+        const routesResult = await routeApi.myRoutes();
+        queryClient.setQueryData<MyRoutesQuery>(
+          MY_ROUTES_QUERY_KEY,
+          routesResult
+        );
+      } catch (error) {
+        console.warn(
+          "[route-history] notification cleanup failed",
+          error instanceof Error ? error.message : error
+        );
+      }
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : text.routeHistory.notVisitedError,
+        2600
+      );
+    },
+  });
   const selectedRouteDay = useMemo(() => {
     if (!selectedHistoryRoute) {
       return null;
@@ -275,6 +326,50 @@ function MyRouteHistoryPage() {
   const canCompleteSelectedHistoryRoute = selectedRouteDay
     ? canCompletePastRoute(selectedRouteDay.route)
     : false;
+
+  useEffect(() => {
+    const routeId = searchParams.get("routeId")?.trim() ?? "";
+    const dayId = searchParams.get("dayId")?.trim() ?? "";
+
+    if (
+      !routeId ||
+      !dayId ||
+      historyRoutesQuery.isLoading ||
+      isHistoryLocalizationLoading
+    ) {
+      return;
+    }
+
+    const route = historyRoutes.find((candidate) => candidate.id === routeId);
+    const day = route?.days.find((candidate) => candidate.id === dayId);
+
+    if (!route || !day) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      setSelectedHistoryRoute({
+        routeId,
+        dayId,
+      });
+
+      const nextSearchParams = new URLSearchParams(searchParams);
+      nextSearchParams.delete("routeId");
+      nextSearchParams.delete("dayId");
+      nextSearchParams.delete("source");
+      setSearchParams(nextSearchParams, { replace: true });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [
+    historyRoutes,
+    historyRoutesQuery.isLoading,
+    isHistoryLocalizationLoading,
+    searchParams,
+    setSearchParams,
+  ]);
 
   useEffect(() => {
     const target = loadMoreTriggerRef.current;
@@ -324,6 +419,30 @@ function MyRouteHistoryPage() {
     setSelectedHistoryRoute({
       routeId: route.id,
       dayId: day.id,
+    });
+  };
+  const handleRequestNotVisited = (route: MyRoute) => {
+    if (deleteRouteMutation.isPending) {
+      return;
+    }
+
+    openModal({
+      title: text.routeHistory.notVisitedTitle,
+      description: text.routeHistory.notVisitedDescription(
+        getRouteTitle(route)
+      ),
+      detail: text.routeHistory.notVisitedDetail,
+      actions: [
+        {
+          label: text.common.cancel,
+          variant: "secondary",
+        },
+        {
+          label: text.routeHistory.notVisited,
+          variant: "danger",
+          onClick: () => deleteRouteMutation.mutate(route.id),
+        },
+      ],
     });
   };
 
@@ -524,6 +643,7 @@ function MyRouteHistoryPage() {
               variant="history"
               hideTimelineBadge
               onSelectDay={handleSelectHistoryDay}
+              onRequestDeleteRoute={handleRequestNotVisited}
             />
           ))}
 

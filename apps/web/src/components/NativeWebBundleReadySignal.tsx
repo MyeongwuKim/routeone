@@ -6,7 +6,7 @@ export default function NativeWebBundleReadySignal() {
     let isCancelled = false;
     let firstFrameId: number | null = null;
     let secondFrameId: number | null = null;
-    let timeoutId: number | null = null;
+    const retryTimeoutIds: number[] = [];
     const postReadySignal = () => {
       if (isCancelled) {
         return;
@@ -20,11 +20,24 @@ export default function NativeWebBundleReadySignal() {
         secondFrameId = window.requestAnimationFrame(postReadySignal);
       });
     } else {
-      timeoutId = window.setTimeout(postReadySignal, 0);
+      retryTimeoutIds.push(window.setTimeout(postReadySignal, 0));
     }
+
+    retryTimeoutIds.push(
+      window.setTimeout(postReadySignal, 250),
+      window.setTimeout(postReadySignal, 1_000),
+    );
+    window.addEventListener(
+      "routeone:native-request-web-bundle-ready",
+      postReadySignal,
+    );
 
     return () => {
       isCancelled = true;
+      window.removeEventListener(
+        "routeone:native-request-web-bundle-ready",
+        postReadySignal,
+      );
 
       if (firstFrameId !== null) {
         window.cancelAnimationFrame(firstFrameId);
@@ -34,9 +47,9 @@ export default function NativeWebBundleReadySignal() {
         window.cancelAnimationFrame(secondFrameId);
       }
 
-      if (timeoutId !== null) {
+      retryTimeoutIds.forEach((timeoutId) => {
         window.clearTimeout(timeoutId);
-      }
+      });
     };
   }, []);
 

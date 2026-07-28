@@ -20,13 +20,13 @@ type AppVariantResult = {
 const APP_VARIANT_CONFIG: Record<AppVariant, AppVariantConfig> = {
   dev: {
     displayName: "RouteOne(T)",
-    slug: "routeone-native-dev",
+    slug: "routeone",
     scheme: "routeone-dev",
     bundleIdentifier: "com.routeone.app.dev"
   },
   prod: {
     displayName: "RouteOne",
-    slug: "routeone-native",
+    slug: "routeone",
     scheme: "routeone",
     bundleIdentifier: "com.routeone.app"
   }
@@ -126,6 +126,10 @@ const webBundlePublicBaseUrl =
   process.env.R2_PUBLIC_BASE_URL?.trim() ||
   "";
 const shouldUseRemoteWebBundle = hasExplicitAppVariant;
+const easProjectId =
+  process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim() ||
+  process.env.EAS_PROJECT_ID?.trim() ||
+  "7c58c4b0-433d-4352-8a0a-b1897a90462a";
 const webBundleManifestUrl = getWebBundleManifestUrl(
   appVariant,
   shouldUseRemoteWebBundle
@@ -219,7 +223,14 @@ export default {
     platforms: ["ios", "android"],
     plugins,
     extra: {
-      routeone: routeoneExtra
+      routeone: routeoneExtra,
+      ...(easProjectId
+        ? {
+            eas: {
+              projectId: easProjectId
+            }
+          }
+        : {})
     },
     ios: {
       bundleIdentifier: appBundleIdentifier,

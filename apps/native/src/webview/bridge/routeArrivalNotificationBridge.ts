@@ -3,8 +3,13 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { Platform } from "react-native";
-import { postNativeRouteArrivalNotificationSyncResponse } from "./responses";
+import {
+  postNativeDeliveredNotificationHistoryResponse,
+  postNativeRouteArrivalNotificationSyncResponse,
+} from "./responses";
 import type {
+  NativeDeliveredNotificationHistoryRequest,
+  NativeDeliveredRouteArrivalNotification,
   NativeRouteArrivalNotificationPlace,
   NativeRouteArrivalNotificationSyncRequest,
   WebViewRef,
@@ -33,7 +38,12 @@ const ROUTE_ARRIVAL_PLACES_STORAGE_KEY =
   "routeone:native-route-arrival-places:v1";
 const ROUTE_ARRIVAL_NOTIFIED_STORAGE_KEY =
   "routeone:native-route-arrival-notified:v1";
+const DELIVERED_NOTIFICATION_HISTORY_STORAGE_KEY =
+  "routeone:native-delivered-notification-history:v1";
 const MAX_GEOFENCE_REGION_COUNT = 20;
+const MAX_DELIVERED_NOTIFICATION_HISTORY_COUNT = 120;
+const DELIVERED_NOTIFICATION_HISTORY_TTL_MS =
+  1000 * 60 * 60 * 24 * 180;
 const DEFAULT_GEOFENCE_RADIUS_METERS = 100;
 const MIN_GEOFENCE_RADIUS_METERS = 100;
 const MAX_GEOFENCE_RADIUS_METERS = 500;
@@ -83,7 +93,7 @@ function createStoredRouteArrivalPlace(
   return {
     ...place,
     notificationTitle: `${place.title} 근처예요`,
-    notificationBody: "도착했다면 RouteOne에서 방문 인증을 남겨보세요.",
+    notificationBody: "인증 사진을 남겨봐요.",
   };
 }
 
@@ -144,6 +154,77 @@ async function writeNotifiedRegionDates(value: Record<string, string>) {
   await AsyncStorage.setItem(
     ROUTE_ARRIVAL_NOTIFIED_STORAGE_KEY,
     JSON.stringify(value)
+  );
+}
+
+async function readDeliveredNotificationHistory() {
+  const rawHistory = await AsyncStorage.getItem(
+    DELIVERED_NOTIFICATION_HISTORY_STORAGE_KEY
+  );
+
+  if (!rawHistory) {
+    return [];
+  }
+
+  try {
+    const oldestAllowedTimestamp =
+      Date.now() - DELIVERED_NOTIFICATION_HISTORY_TTL_MS;
+    const notifications = JSON.parse(
+      rawHistory
+    ) as NativeDeliveredRouteArrivalNotification[];
+
+    return notifications
+      .filter((notification) => {
+        const deliveredTimestamp = Date.parse(notification.deliveredAt);
+
+        return (
+          notification.type === "route-arrival" &&
+          Boolean(
+            notification.id &&
+              notification.routeId &&
+              notification.dayId &&
+              notification.stopId &&
+              notification.placeTitle &&
+              notification.dateKey
+          ) &&
+          Number.isFinite(deliveredTimestamp) &&
+          deliveredTimestamp >= oldestAllowedTimestamp
+        );
+      })
+      .sort(
+        (left, right) =>
+          Date.parse(right.deliveredAt) - Date.parse(left.deliveredAt)
+      )
+      .slice(0, MAX_DELIVERED_NOTIFICATION_HISTORY_COUNT);
+  } catch {
+    return [];
+  }
+}
+
+async function appendDeliveredRouteArrivalNotification(
+  place: StoredRouteArrivalPlace,
+  dateKey: string
+) {
+  const notification: NativeDeliveredRouteArrivalNotification = {
+    id: `arrival:${place.routeId}:${place.stopId}:${dateKey}`,
+    type: "route-arrival",
+    routeId: place.routeId,
+    routeTitle: place.routeTitle ?? null,
+    dayId: place.dayId,
+    stopId: place.stopId,
+    placeTitle: place.title,
+    dateKey,
+    deliveredAt: new Date().toISOString(),
+  };
+  const history = await readDeliveredNotificationHistory();
+  const nextHistory = [
+    notification,
+    ...history.filter((item) => item.id !== notification.id),
+  ].slice(0, MAX_DELIVERED_NOTIFICATION_HISTORY_COUNT);
+
+  await AsyncStorage.setItem(
+    DELIVERED_NOTIFICATION_HISTORY_STORAGE_KEY,
+    JSON.stringify(nextHistory)
   );
 }
 
@@ -245,6 +326,7 @@ async function scheduleRouteArrivalNotification(
       title: place.notificationTitle,
       body: place.notificationBody,
       data: {
+        notificationId: `arrival:${place.routeId}:${place.stopId}:${todayKey}`,
         routeId: place.routeId,
         dayId: place.dayId,
         stopId: place.stopId,
@@ -254,6 +336,9 @@ async function scheduleRouteArrivalNotification(
     trigger: null,
   });
 
+  await appendDeliveredRouteArrivalNotification(place, todayKey).catch(
+    () => undefined
+  );
   notifiedRegionDates[regionId] = todayKey;
   await writeNotifiedRegionDates(notifiedRegionDates);
 }
@@ -337,6 +422,39 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
         error instanceof Error
           ? error.message
           : "Route arrival notification sync failed",
+    });
+  }
+}
+
+export async function handleNativeDeliveredNotificationHistoryRequest(
+  message: NativeDeliveredNotificationHistoryRequest,
+  webViewRef: WebViewRef
+) {
+  try {
+    const acknowledgedIds = new Set(message.acknowledgedIds ?? []);
+    const history = await readDeliveredNotificationHistory();
+    const notifications = history.filter(
+      (notification) => !acknowledgedIds.has(notification.id)
+    );
+
+    if (notifications.length !== history.length) {
+      await AsyncStorage.setItem(
+        DELIVERED_NOTIFICATION_HISTORY_STORAGE_KEY,
+        JSON.stringify(notifications)
+      );
+    }
+
+    postNativeDeliveredNotificationHistoryResponse(webViewRef, message.id, {
+      ok: true,
+      notifications,
+    });
+  } catch (error) {
+    postNativeDeliveredNotificationHistoryResponse(webViewRef, message.id, {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Delivered notification history lookup failed",
     });
   }
 }

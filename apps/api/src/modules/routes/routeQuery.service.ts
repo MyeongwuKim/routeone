@@ -89,22 +89,15 @@ function getMyRouteHistoryWhere(
         status: "COMPLETED",
       },
       {
-        startedAt: {
-          not: null,
+        travelEndDate: {
+          lt: todayStart,
         },
-        OR: [
-          {
-            travelEndDate: {
-              lt: todayStart,
-            },
-          },
-          {
-            travelEndDate: null,
-            travelStartDate: {
-              lt: todayStart,
-            },
-          },
-        ],
+      },
+      {
+        travelEndDate: null,
+        travelStartDate: {
+          lt: todayStart,
+        },
       },
     ],
   };

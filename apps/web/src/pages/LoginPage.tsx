@@ -4,6 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { MdLogin, MdPassword, MdRoute } from "react-icons/md";
 import { authApi, ME_QUERY_KEY } from "@/api/authApi";
 import {
+  NOTIFICATION_INBOX_QUERY_KEY,
+  NOTIFICATION_SETTINGS_QUERY_KEY,
+} from "@/api/notificationApi";
+import {
   consumeAuthSessionExpired,
   setAuthToken,
 } from "@/lib/authToken";
@@ -52,6 +56,12 @@ function LoginPage() {
       setAuthUser(payload.loginWithPassword.user);
       queryClient.setQueryData(ME_QUERY_KEY, {
         me: payload.loginWithPassword.user,
+      });
+      queryClient.removeQueries({
+        queryKey: NOTIFICATION_INBOX_QUERY_KEY,
+      });
+      queryClient.removeQueries({
+        queryKey: NOTIFICATION_SETTINGS_QUERY_KEY,
       });
       void queryClient.invalidateQueries({
         queryKey: ["my-routes"],

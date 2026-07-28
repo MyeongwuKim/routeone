@@ -30,6 +30,7 @@ import {
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import RoutePageHeader from "@/components/layout/RoutePageHeader";
+import NativeNotificationInboxSync from "@/features/notifications/NativeNotificationInboxSync";
 import BottomTabLayout from "@/layouts/BottomTabLayout";
 import {
   AUTH_SESSION_REFRESH_INTERVAL_MS,
@@ -78,6 +79,12 @@ const LanguageSettingsPage = lazyWithPreload(
   () => import("@/pages/LanguageSettingsPage")
 );
 const AppInfoPage = lazyWithPreload(() => import("@/pages/AppInfoPage"));
+const NotificationCenterPage = lazyWithPreload(
+  () => import("@/pages/NotificationCenterPage")
+);
+const NotificationSettingsPage = lazyWithPreload(
+  () => import("@/pages/NotificationSettingsPage")
+);
 const MyRouteHistoryPage = lazyWithPreload(
   () => import("@/features/my-route/pages/MyRouteHistoryPage")
 );
@@ -493,6 +500,8 @@ function preloadSecondaryRoutes() {
     MyAccountPage,
     LanguageSettingsPage,
     AppInfoPage,
+    NotificationCenterPage,
+    NotificationSettingsPage,
   ]);
 }
 
@@ -601,6 +610,7 @@ function AppRouter() {
   return (
     <Router>
       <AuthSessionTracker />
+      <NativeNotificationInboxSync />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route element={<RequireAuth />}>
@@ -623,6 +633,10 @@ function AppRouter() {
                 )}
               </RoutePageShell>
             }
+          />
+          <Route
+            path="/notifications"
+            element={withRouteSuspense(<NotificationCenterPage />)}
           />
           <Route
             path="/shared-route"
@@ -678,6 +692,10 @@ function AppRouter() {
               <LanguageSettingsPage />,
               <LanguageLazyFallback />
             )}
+          />
+          <Route
+            path="/me/notifications"
+            element={withRouteSuspense(<NotificationSettingsPage />)}
           />
           <Route
             path="/me/app-info"

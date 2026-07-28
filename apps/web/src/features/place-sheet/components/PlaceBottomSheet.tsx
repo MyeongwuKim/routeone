@@ -23,6 +23,7 @@ import PlaceSheetOverviewPanel from "./PlaceSheetOverviewPanel";
 import { CompactHoursBadge, SkeletonBar } from "./PlaceSheetPrimitives";
 import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
+import { formatFestivalPeriod } from "@/lib/festivalDate";
 import type { NearbyTouristPlace } from "@/lib/visitKoreaTourApi";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
@@ -53,6 +54,13 @@ function PlaceBottomSheet() {
   const [imageViewerTarget, setImageViewerTarget] =
     useState<PlaceImageViewerTarget | null>(null);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
+  const festivalPeriod = selectedPlace
+    ? formatFestivalPeriod(
+        selectedPlace.eventStartDate,
+        selectedPlace.eventEndDate,
+        appLanguage
+      )
+    : null;
 
   const fallbackDirectionRegion = selectedPlace
     ? GANGWON_REGIONS.find(
@@ -333,6 +341,11 @@ function PlaceBottomSheet() {
                       {selectedPlaceCategoryName}
                     </p>
                   ) : null}
+                  {festivalPeriod ? (
+                    <p className="mt-2 inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-xs font-black text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
+                      {festivalPeriod}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="mt-1 flex shrink-0 items-center gap-2">
                   {topRankBadge ? (
@@ -364,7 +377,7 @@ function PlaceBottomSheet() {
                 </div>
               </div>
 
-              <p className="mt-4 text-sm leading-6 text-slate-600">
+              <p className={`${festivalPeriod ? "mt-3" : "mt-4"} text-sm leading-6 text-slate-600`}>
                 {selectedPlace.address}
               </p>
 

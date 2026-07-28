@@ -1,0 +1,7 @@
+mutation SyncFestivalNotificationInbox(
+  $notifications: [FestivalNotificationSyncInput!]!
+) {
+  syncFestivalNotificationInbox(notifications: $notifications) {
+    syncedCount
+  }
+}

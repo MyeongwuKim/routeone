@@ -148,6 +148,11 @@ export function useNativeBoot() {
     [goToLocationOrNotificationOrLogin]
   );
 
+  const updateAppLanguage = useCallback(async (language: AppLanguage) => {
+    setAppLanguage(language);
+    await AsyncStorage.setItem(APP_LANGUAGE_STORAGE_KEY, language);
+  }, []);
+
   const requestLocationPermission = useCallback(async () => {
     setIsRequestingLocationPermission(true);
 
@@ -214,5 +219,6 @@ export function useNativeBoot() {
     requestLocationPermission,
     requestNotificationPermission,
     selectAppLanguage,
+    updateAppLanguage,
   };
 }

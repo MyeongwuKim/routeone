@@ -1,7 +1,9 @@
 import type {
+  NativeAppLanguageMessage,
   NativeAppInfoRequest,
-  NativeBridgeReadyMessage,
   NativeAuthTokenMessage,
+  NativeBridgeReadyMessage,
+  NativeDeliveredNotificationHistoryRequest,
   NativeExternalUrlRequest,
   NativeFestivalNotification,
   NativeFestivalNotificationSyncRequest,
@@ -9,16 +11,26 @@ import type {
   NativeLocationRequest,
   NativePhotoUploadRequest,
   NativePhotoRequest,
+  NativePushTokenRequest,
   NativeRouteArrivalNotificationPlace,
   NativeRouteArrivalNotificationSyncRequest,
+  NativeRouteReviewNotification,
+  NativeRouteReviewNotificationSyncRequest,
   NativeSaveImageRequest,
 } from "./types";
 
+const NATIVE_APP_LANGUAGES = new Set(["ko", "en"]);
 const NATIVE_FESTIVAL_NOTIFICATION_KINDS = new Set([
   "today",
   "weekly",
   "monthly",
   "trip",
+  "test",
+]);
+const NATIVE_ROUTE_REVIEW_NOTIFICATION_KINDS = new Set([
+  "completed",
+  "incomplete",
+  "unstarted",
 ]);
 
 export function isNativeAppInfoRequest(
@@ -74,6 +86,22 @@ export function isNativeAuthTokenMessage(
   const maybeMessage = value as Partial<NativeAuthTokenMessage>;
 
   return maybeMessage.type === "routeone:native-auth-token";
+}
+
+export function isNativeAppLanguageMessage(
+  value: unknown
+): value is NativeAppLanguageMessage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeMessage = value as Partial<NativeAppLanguageMessage>;
+
+  return (
+    maybeMessage.type === "routeone:native-app-language" &&
+    typeof maybeMessage.language === "string" &&
+    NATIVE_APP_LANGUAGES.has(maybeMessage.language)
+  );
 }
 
 export function isNativeLocationRequest(
@@ -164,6 +192,43 @@ export function isNativeRouteArrivalNotificationSyncRequest(
   );
 }
 
+export function isNativeDeliveredNotificationHistoryRequest(
+  value: unknown
+): value is NativeDeliveredNotificationHistoryRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeRequest =
+    value as Partial<NativeDeliveredNotificationHistoryRequest>;
+
+  return (
+    maybeRequest.type === "routeone:native-delivered-notification-history" &&
+    typeof maybeRequest.id === "string" &&
+    (maybeRequest.acknowledgedIds == null ||
+      (Array.isArray(maybeRequest.acknowledgedIds) &&
+        maybeRequest.acknowledgedIds.length <= 120 &&
+        maybeRequest.acknowledgedIds.every((id) => typeof id === "string")))
+  );
+}
+
+export function isNativePushTokenRequest(
+  value: unknown
+): value is NativePushTokenRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeRequest = value as Partial<NativePushTokenRequest>;
+
+  return (
+    maybeRequest.type === "routeone:native-push-token" &&
+    typeof maybeRequest.id === "string" &&
+    (maybeRequest.requestPermission == null ||
+      typeof maybeRequest.requestPermission === "boolean")
+  );
+}
+
 function isNativeFestivalNotification(
   value: unknown
 ): value is NativeFestivalNotification {
@@ -186,6 +251,16 @@ function isNativeFestivalNotification(
     maybeNotification.festivalTitles.every(
       (title) => typeof title === "string"
     ) &&
+    (maybeNotification.festivalStartDates == null ||
+      (Array.isArray(maybeNotification.festivalStartDates) &&
+        maybeNotification.festivalStartDates.every(
+          (date) => typeof date === "string"
+        ))) &&
+    (maybeNotification.festivalEndDates == null ||
+      (Array.isArray(maybeNotification.festivalEndDates) &&
+        maybeNotification.festivalEndDates.every(
+          (date) => typeof date === "string"
+        ))) &&
     (maybeNotification.triggerAt == null ||
       typeof maybeNotification.triggerAt === "string")
   );
@@ -206,6 +281,46 @@ export function isNativeFestivalNotificationSyncRequest(
     typeof maybeRequest.id === "string" &&
     Array.isArray(maybeRequest.notifications) &&
     maybeRequest.notifications.every(isNativeFestivalNotification)
+  );
+}
+
+function isNativeRouteReviewNotification(
+  value: unknown
+): value is NativeRouteReviewNotification {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeNotification = value as Partial<NativeRouteReviewNotification>;
+
+  return (
+    typeof maybeNotification.id === "string" &&
+    typeof maybeNotification.kind === "string" &&
+    NATIVE_ROUTE_REVIEW_NOTIFICATION_KINDS.has(maybeNotification.kind) &&
+    typeof maybeNotification.routeId === "string" &&
+    typeof maybeNotification.routeTitle === "string" &&
+    typeof maybeNotification.dayId === "string" &&
+    typeof maybeNotification.correctionDeadlineAt === "string" &&
+    (maybeNotification.triggerAt == null ||
+      typeof maybeNotification.triggerAt === "string")
+  );
+}
+
+export function isNativeRouteReviewNotificationSyncRequest(
+  value: unknown
+): value is NativeRouteReviewNotificationSyncRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeRequest =
+    value as Partial<NativeRouteReviewNotificationSyncRequest>;
+
+  return (
+    maybeRequest.type === "routeone:native-route-review-notifications-sync" &&
+    typeof maybeRequest.id === "string" &&
+    Array.isArray(maybeRequest.notifications) &&
+    maybeRequest.notifications.every(isNativeRouteReviewNotification)
   );
 }
 

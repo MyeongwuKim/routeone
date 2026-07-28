@@ -1,0 +1,13 @@
+query GangwonFestivals($startDate: String!, $endDate: String!) {
+  gangwonFestivals(startDate: $startDate, endDate: $endDate) {
+    id
+    title
+    startDate
+    endDate
+    regionCode
+    address
+    lat
+    lng
+    imageUrl
+  }
+}

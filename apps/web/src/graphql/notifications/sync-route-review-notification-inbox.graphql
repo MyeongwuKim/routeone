@@ -1,0 +1,7 @@
+mutation SyncRouteReviewNotificationInbox(
+  $notifications: [RouteReviewNotificationSyncInput!]!
+) {
+  syncRouteReviewNotificationInbox(notifications: $notifications) {
+    syncedCount
+  }
+}

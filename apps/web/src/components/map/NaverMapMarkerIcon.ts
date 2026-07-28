@@ -89,7 +89,7 @@ export function createBadgeMarkerIconHtml(
   const markerSize = isHighlighted ? 38 : 34;
   const borderWidth = isHighlighted ? 3 : 2;
   const fontSize = isHighlighted ? 17 : 15;
-  const highlightLabel = options.highlightLabel ?? "오늘";
+  const highlightLabel = options.highlightLabel ?? "진행 중";
 
   return `
     <div style="

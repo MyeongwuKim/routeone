@@ -17,8 +17,11 @@ import {
   TodayRouteDayCard,
 } from "./MyRouteDayItems";
 import {
+  addDaysToDateKey,
   formatRouteDate,
+  getDateKeyDiffInDays,
   getRouteDayState,
+  getRouteEndDateKey,
   getRouteTimelineLabel,
   getSelectableRouteDay,
   getRouteSubtitle,
@@ -116,10 +119,12 @@ function MyRouteHistoryCard({
   route,
   todayKey,
   onSelectDay,
+  onRequestDeleteRoute,
 }: {
   route: MyRoute;
   todayKey: string;
   onSelectDay: (route: MyRoute, day: MyRouteDay) => void;
+  onRequestDeleteRoute?: (route: MyRoute) => void;
 }) {
   const text = useUiText();
   const [isStopExpanded, setIsStopExpanded] = useState(false);
@@ -148,6 +153,32 @@ function MyRouteHistoryCard({
     visitedStops.length,
     route.totalStopCount
   );
+  const endDateKey = getRouteEndDateKey(route);
+  const daysSinceEnd = endDateKey
+    ? getDateKeyDiffInDays(todayKey, endDateKey)
+    : null;
+  const canCorrectRecords =
+    daysSinceEnd != null &&
+    daysSinceEnd >= 0 &&
+    daysSinceEnd <= 7;
+  const correctionDeadlineLabel =
+    canCorrectRecords && endDateKey
+      ? formatRouteDate(addDaysToDateKey(endDateKey, 7))
+      : null;
+  const statusLabel =
+    route.status === "COMPLETED"
+      ? text.myRouteCard.routeCompleted
+      : canCorrectRecords
+        ? text.myRouteCard.recordReviewNeeded
+        : text.myRouteCard.recordIncomplete;
+  const statusClassName =
+    route.status === "COMPLETED"
+      ? "bg-brand-50 text-brand-700 dark:bg-brand-400/15 dark:text-brand-100"
+      : canCorrectRecords
+        ? "bg-amber-50 text-amber-700 dark:bg-amber-400/15 dark:text-amber-100"
+        : "bg-slate-100 text-slate-600 dark:bg-slate-900/80 dark:text-slate-100";
+  const canMarkNotVisited =
+    visitedStops.length === 0 && Boolean(onRequestDeleteRoute);
 
   return (
     <article className="relative w-full overflow-hidden rounded-2xl border border-transparent bg-white bg-clip-padding text-left shadow-sm transition after:pointer-events-none after:absolute after:inset-0 after:rounded-2xl after:border after:border-brand-100 after:content-[''] hover:after:border-brand-200 dark:bg-[#071f1d] dark:shadow-[0_16px_34px_rgba(0,0,0,0.28)] dark:after:border-brand-300/50 dark:hover:after:border-brand-200/70">
@@ -164,9 +195,18 @@ function MyRouteHistoryCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
-                {text.myRouteCard.pastRoute}
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-black ${statusClassName}`}
+              >
+                {statusLabel}
               </span>
+              {correctionDeadlineLabel ? (
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700 dark:bg-amber-400/15 dark:text-amber-100">
+                  {text.myRouteCard.correctionUntil(
+                    correctionDeadlineLabel
+                  )}
+                </span>
+              ) : null}
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600 dark:bg-slate-900/80 dark:text-slate-100">
                 {route.tripDays <= 1
                   ? text.myRouteCard.dayTrip
@@ -219,6 +259,19 @@ function MyRouteHistoryCard({
           </div>
         </div>
       </button>
+
+      {canMarkNotVisited ? (
+        <div className="relative flex justify-end px-4 pb-3 before:pointer-events-none before:absolute before:left-4 before:right-4 before:top-0 before:h-px before:bg-brand-100 before:content-[''] dark:before:bg-brand-400/30">
+          <button
+            type="button"
+            onClick={() => onRequestDeleteRoute?.(route)}
+            className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50 active:scale-95 dark:text-rose-200 dark:hover:bg-rose-400/10"
+          >
+            <MdDeleteOutline className="text-base" />
+            {text.routeHistory.notVisited}
+          </button>
+        </div>
+      ) : null}
 
       {visibleStops.length > 0 ? (
         <div className="relative px-4 py-3 before:pointer-events-none before:absolute before:left-4 before:right-4 before:top-0 before:h-px before:bg-brand-100 before:content-[''] dark:bg-[#071f1d] dark:before:bg-brand-400/30">
@@ -529,6 +582,7 @@ function MyRouteCard({
         route={route}
         todayKey={todayKey}
         onSelectDay={onSelectDay}
+        onRequestDeleteRoute={onRequestDeleteRoute}
       />
     );
   }

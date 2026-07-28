@@ -9,6 +9,7 @@ React Native WebView로 `apps/web` 빌드 산출물을 감싸는 하이브리드
 | 상황 | 명령어 | 설명 |
 | --- | --- | --- |
 | 로컬 iOS 시뮬레이터 실행 | `pnpm native:ios:local` | `APP_VARIANT=none`으로 웹 번들을 동기화하고 iOS 앱을 빌드한 뒤 시뮬레이터까지 실행합니다. |
+| 로컬 iOS 실기기 설치 | `pnpm native:ios:device` | 연결된 iPhone을 선택하고 `APP_VARIANT=none` 로컬 앱을 새로 빌드해 설치합니다. |
 | dev 앱 Xcode 파일만 생성 | `pnpm native:ios:dev` | `APP_VARIANT=dev`로 `ios/` 프로젝트만 생성 또는 갱신합니다. |
 | 로컬 Android 실행 | `pnpm native:android` | `APP_VARIANT=none`으로 Android 앱을 빌드하고 실행합니다. |
 | 이미 설치된 dev client 실행 | `pnpm native:start` | 웹 번들을 다시 빌드하지 않고 Metro dev server를 실행합니다. |
@@ -35,6 +36,14 @@ pnpm native:ios:local
 - `expo run:ios`로 시뮬레이터 실행
 
 `APP_VARIANT=none`은 로컬 개발 모드입니다. dev 앱 식별자를 사용하지만, `EXPO_PUBLIC_WEB_BUNDLE_BASE_URL`이 있어도 R2 원격 웹 번들을 확인하지 않습니다. 이전에 설치된 원격 웹 번들도 무시하고 앱에 내장된 로컬 번들을 사용합니다.
+
+USB로 연결된 iPhone에 로컬 앱을 새로 빌드해 설치하려면 아래 명령어를 사용합니다.
+
+```bash
+pnpm native:ios:device
+```
+
+명령 실행 후 표시되는 기기 목록에서 설치할 iPhone을 선택합니다. 기존 앱이 설치되어 있으면 같은 앱 식별자의 새 빌드로 교체하며, `APP_VARIANT=none`을 사용하므로 R2 원격 웹 번들을 확인하지 않습니다.
 
 이미 앱이 설치되어 있고 Metro만 다시 띄우면 되는 상황에서는 아래 명령어를 사용합니다.
 

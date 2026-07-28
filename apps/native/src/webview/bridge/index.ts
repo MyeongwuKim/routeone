@@ -7,21 +7,34 @@ import { handleNativeFestivalNotificationSyncRequest } from "./festivalNotificat
 import { ROUTEONE_WEBVIEW_BRIDGE_SCRIPT } from "./injectedScript";
 import { handleNativeLocationRequest } from "./locationBridge";
 import {
+  isNativeAppLanguageMessage,
   isNativeAppInfoRequest,
   isNativeAuthTokenMessage,
   isNativeBridgeReadyMessage,
+  isNativeDeliveredNotificationHistoryRequest,
   isNativeExternalUrlRequest,
   isNativeFestivalNotificationSyncRequest,
   isNativeFetchRequest,
   isNativeLocationRequest,
   isNativePhotoUploadRequest,
   isNativePhotoRequest,
+  isNativePushTokenRequest,
   isNativeRouteArrivalNotificationSyncRequest,
+  isNativeRouteReviewNotificationSyncRequest,
   isNativeSaveImageRequest,
 } from "./messageGuards";
-import { handleNativeRouteArrivalNotificationSyncRequest } from "./routeArrivalNotificationBridge";
+import { handleNativePushTokenRequest } from "./pushTokenBridge";
+import {
+  handleNativeDeliveredNotificationHistoryRequest,
+  handleNativeRouteArrivalNotificationSyncRequest,
+} from "./routeArrivalNotificationBridge";
+import { handleNativeRouteReviewNotificationSyncRequest } from "./routeReviewNotificationBridge";
 import { handleNativeSaveImageRequest } from "./saveImageBridge";
-import type { NativeAppInfoContext, WebViewRef } from "./types";
+import type {
+  NativeAppInfoContext,
+  NativeAppLanguage,
+  WebViewRef
+} from "./types";
 import {
   handleNativePhotoRequest,
   handleNativePhotoUploadRequest,
@@ -30,6 +43,7 @@ import {
 export { ROUTEONE_WEBVIEW_BRIDGE_SCRIPT };
 
 type NativeBridgeHandlers = {
+  onAppLanguageChange?: (language: NativeAppLanguage) => Promise<void> | void;
   onAuthSessionChange?: (session: {
     token: string | null;
     expiresAt: number | null;
@@ -55,6 +69,11 @@ export async function handleNativeBridgeMessage(
     console.log(
       `[routeone-native-bridge] ready graphql=${message.graphqlEndpoint ?? "/graphql"} target=${NATIVE_GRAPHQL_ENDPOINT} variant=${message.appVariant ?? "dev"} webBundleChannel=${message.webBundleChannel ?? "dev"} manifest=${message.webBundleManifestUrl ?? "none"}`
     );
+    return;
+  }
+
+  if (isNativeAppLanguageMessage(message)) {
+    await handlers.onAppLanguageChange?.(message.language);
     return;
   }
 
@@ -89,8 +108,23 @@ export async function handleNativeBridgeMessage(
     return;
   }
 
+  if (isNativeDeliveredNotificationHistoryRequest(message)) {
+    await handleNativeDeliveredNotificationHistoryRequest(message, webViewRef);
+    return;
+  }
+
+  if (isNativePushTokenRequest(message)) {
+    await handleNativePushTokenRequest(message, webViewRef);
+    return;
+  }
+
   if (isNativeFestivalNotificationSyncRequest(message)) {
     await handleNativeFestivalNotificationSyncRequest(message, webViewRef);
+    return;
+  }
+
+  if (isNativeRouteReviewNotificationSyncRequest(message)) {
+    await handleNativeRouteReviewNotificationSyncRequest(message, webViewRef);
     return;
   }
 

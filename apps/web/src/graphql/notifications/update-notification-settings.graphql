@@ -1,0 +1,10 @@
+mutation UpdateNotificationSettings($input: UpdateNotificationSettingsInput!) {
+  updateNotificationSettings(input: $input) {
+    festivalEnabled
+    festivalRegionCodes
+    routeReviewEnabled
+    routeArrivalEnabled
+    createdAt
+    updatedAt
+  }
+}

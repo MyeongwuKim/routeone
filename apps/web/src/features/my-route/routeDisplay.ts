@@ -95,7 +95,7 @@ export function getRouteTimelineState(
   }
 
   if (todayKey > endDateKey) {
-    return route.startedAt ? "past" : "needsReview";
+    return "past";
   }
 
   if (route.startedAt) {

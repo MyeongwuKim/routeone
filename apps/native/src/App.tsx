@@ -61,6 +61,7 @@ export default function App() {
     requestLocationPermission,
     requestNotificationPermission,
     selectAppLanguage,
+    updateAppLanguage,
   } = useNativeBoot();
   const nativeLogin = useNativeLogin({
     onComplete: completeNativeLogin
@@ -220,6 +221,7 @@ export default function App() {
       appLanguage={appLanguage}
       nativeAuthExpiresAt={nativeAuthExpiresAt}
       nativeAuthToken={nativeAuthToken}
+      onAppLanguageChange={updateAppLanguage}
       onAuthSessionChange={handleNativeAuthSessionChange}
     />
   );

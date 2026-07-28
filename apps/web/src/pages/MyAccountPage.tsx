@@ -3,6 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { MdArrowBack, MdLogin, MdPassword } from "react-icons/md";
 import { authApi, ME_QUERY_KEY } from "@/api/authApi";
+import {
+  NOTIFICATION_INBOX_QUERY_KEY,
+  NOTIFICATION_SETTINGS_QUERY_KEY,
+} from "@/api/notificationApi";
 import { MY_ROUTES_QUERY_KEY } from "@/features/my-route/myRouteCache";
 import { setAuthToken } from "@/lib/authToken";
 import { useAuthUserStore } from "@/stores/authUserStore";
@@ -50,6 +54,12 @@ function MyAccountPage() {
       setAuthUser(payload.loginWithPassword.user);
       queryClient.setQueryData(ME_QUERY_KEY, {
         me: payload.loginWithPassword.user,
+      });
+      queryClient.removeQueries({
+        queryKey: NOTIFICATION_INBOX_QUERY_KEY,
+      });
+      queryClient.removeQueries({
+        queryKey: NOTIFICATION_SETTINGS_QUERY_KEY,
       });
       refreshAccountBoundData();
       showToast(

@@ -1,0 +1,33 @@
+query NotificationInbox($first: Int!, $after: String) {
+  notificationInbox(first: $first, after: $after) {
+    items {
+      id
+      notificationKey
+      type
+      festivalKind
+      regionCode
+      regionLabel
+      dateKey
+      festivalIds
+      festivalTitles
+      festivalStartDates
+      festivalEndDates
+      routeReviewKind
+      routeId
+      routeTitle
+      dayId
+      stopId
+      placeTitle
+      correctionDeadlineAt
+      availableAt
+      readAt
+      createdAt
+      updatedAt
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+  unreadNotificationCount
+}

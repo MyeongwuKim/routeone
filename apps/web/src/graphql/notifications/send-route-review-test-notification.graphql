@@ -1,0 +1,7 @@
+mutation SendRouteReviewTestNotification($pushDeviceId: ID!) {
+  sendRouteReviewTestNotification(pushDeviceId: $pushDeviceId) {
+    notificationKey
+    pushStatus
+    pushError
+  }
+}

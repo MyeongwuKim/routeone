@@ -8,6 +8,8 @@
     "dev:test": "ROUTEONE_DEV_VERIFICATION_BYPASS=1 tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "notifications:cleanup": "node dist/jobs/cleanupNotifications.js",
+    "notifications:cleanup:dev": "tsx src/jobs/cleanupNotifications.ts",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },

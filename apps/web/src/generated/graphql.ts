@@ -42,6 +42,26 @@ export type CreateRouteStopInput = {
   travelMinutesFromPrevious?: number | null | undefined;
 };
 
+export type FestivalNotificationKind =
+  | 'MONTHLY'
+  | 'TEST'
+  | 'TODAY'
+  | 'TRIP'
+  | 'WEEKLY';
+
+export type FestivalNotificationSyncInput = {
+  dateKey: string;
+  festivalEndDates?: Array<string> | null | undefined;
+  festivalIds: Array<string>;
+  festivalStartDates?: Array<string> | null | undefined;
+  festivalTitles: Array<string>;
+  kind: FestivalNotificationKind;
+  notificationKey: string;
+  regionCode: string;
+  regionLabel: string;
+  triggerAt?: string | null | undefined;
+};
+
 export type PasswordLoginInput = {
   accountId: string;
   displayName?: string | null | undefined;
@@ -91,10 +111,45 @@ export type PlaceSnapshotInput = {
   title: string;
 };
 
+export type PushPlatform =
+  | 'ANDROID'
+  | 'IOS';
+
+export type RegisterPushDeviceInput = {
+  appVariant?: string | null | undefined;
+  expoPushToken: string;
+  platform: PushPlatform;
+};
+
 export type ReorderRouteStopsInput = {
   dayId: string | number;
   routeId: string | number;
   stopIds: Array<string | number>;
+};
+
+export type RouteArrivalNotificationSyncInput = {
+  dateKey: string;
+  dayId: string | number;
+  deliveredAt: string;
+  placeTitle: string;
+  routeId: string | number;
+  routeTitle?: string | null | undefined;
+  stopId: string | number;
+};
+
+export type RouteReviewNotificationKind =
+  | 'COMPLETED'
+  | 'INCOMPLETE'
+  | 'UNSTARTED';
+
+export type RouteReviewNotificationSyncInput = {
+  correctionDeadlineAt: string;
+  dayId: string | number;
+  kind: RouteReviewNotificationKind;
+  notificationKey: string;
+  routeId: string | number;
+  routeTitle: string;
+  triggerAt?: string | null | undefined;
 };
 
 export type RouteStartLocationInput = {
@@ -153,15 +208,109 @@ export type TourPlaceOverviewLocalizationInput = {
   restDate?: string | null | undefined;
 };
 
+export type UpdateNotificationSettingsInput = {
+  festivalEnabled?: boolean | null | undefined;
+  festivalRegionCodes?: Array<string> | null | undefined;
+  routeArrivalEnabled?: boolean | null | undefined;
+  routeReviewEnabled?: boolean | null | undefined;
+};
+
 export type UpdateRouteStopStayMinutesInput = {
   stayMinutes: number;
   stopId: string | number;
 };
 
+export type UserNotificationType =
+  | 'FESTIVAL_SUMMARY'
+  | 'ROUTE_ARRIVAL'
+  | 'ROUTE_REVIEW';
+
 export type VisitStatus =
   | 'PENDING'
   | 'SKIPPED'
   | 'VISITED';
+
+export type GangwonFestivalsQueryVariables = Exact<{
+  startDate: string;
+  endDate: string;
+}>;
+
+
+export type GangwonFestivalsQuery = { gangwonFestivals: Array<{ id: string, title: string, startDate: string, endDate: string, regionCode: string, address: string, lat: number, lng: number, imageUrl: string }> };
+
+export type MarkNotificationInboxReadMutationVariables = Exact<{
+  ids?: Array<string | number> | string | number | null | undefined;
+}>;
+
+
+export type MarkNotificationInboxReadMutation = { markNotificationInboxRead: { updatedCount: number } };
+
+export type NotificationInboxQueryVariables = Exact<{
+  first: number;
+  after?: string | null | undefined;
+}>;
+
+
+export type NotificationInboxQuery = { unreadNotificationCount: number, notificationInbox: { items: Array<{ id: string, notificationKey: string, type: UserNotificationType, festivalKind: FestivalNotificationKind | null, regionCode: string | null, regionLabel: string | null, dateKey: string | null, festivalIds: Array<string>, festivalTitles: Array<string>, festivalStartDates: Array<string>, festivalEndDates: Array<string>, routeReviewKind: RouteReviewNotificationKind | null, routeId: string | null, routeTitle: string | null, dayId: string | null, stopId: string | null, placeTitle: string | null, correctionDeadlineAt: string | null, availableAt: string, readAt: string | null, createdAt: string, updatedAt: string }>, pageInfo: { hasNextPage: boolean, endCursor: string | null } } };
+
+export type NotificationSettingsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type NotificationSettingsQuery = { notificationSettings: { festivalEnabled: boolean, festivalRegionCodes: Array<string>, routeReviewEnabled: boolean, routeArrivalEnabled: boolean, createdAt: string, updatedAt: string } };
+
+export type RegisterPushDeviceMutationVariables = Exact<{
+  input: RegisterPushDeviceInput;
+}>;
+
+
+export type RegisterPushDeviceMutation = { registerPushDevice: { id: string, platform: PushPlatform, appVariant: string | null, enabled: boolean, lastSeenAt: string } };
+
+export type SendFestivalTestNotificationMutationVariables = Exact<{ [key: string]: never; }>;
+
+
+export type SendFestivalTestNotificationMutation = { sendFestivalTestNotification: { notificationKey: string, pushStatus: string, pushError: string | null } };
+
+export type SendRouteReviewTestNotificationMutationVariables = Exact<{
+  pushDeviceId: string | number;
+}>;
+
+
+export type SendRouteReviewTestNotificationMutation = { sendRouteReviewTestNotification: { notificationKey: string, pushStatus: string, pushError: string | null } };
+
+export type SyncFestivalNotificationInboxMutationVariables = Exact<{
+  notifications: Array<FestivalNotificationSyncInput> | FestivalNotificationSyncInput;
+}>;
+
+
+export type SyncFestivalNotificationInboxMutation = { syncFestivalNotificationInbox: { syncedCount: number } };
+
+export type SyncRouteArrivalNotificationInboxMutationVariables = Exact<{
+  notifications: Array<RouteArrivalNotificationSyncInput> | RouteArrivalNotificationSyncInput;
+}>;
+
+
+export type SyncRouteArrivalNotificationInboxMutation = { syncRouteArrivalNotificationInbox: { syncedCount: number, notificationKeys: Array<string> } };
+
+export type SyncRouteReviewNotificationInboxMutationVariables = Exact<{
+  notifications: Array<RouteReviewNotificationSyncInput> | RouteReviewNotificationSyncInput;
+}>;
+
+
+export type SyncRouteReviewNotificationInboxMutation = { syncRouteReviewNotificationInbox: { syncedCount: number } };
+
+export type UnregisterPushDeviceMutationVariables = Exact<{
+  expoPushToken: string;
+}>;
+
+
+export type UnregisterPushDeviceMutation = { unregisterPushDevice: { updatedCount: number } };
+
+export type UpdateNotificationSettingsMutationVariables = Exact<{
+  input: UpdateNotificationSettingsInput;
+}>;
+
+
+export type UpdateNotificationSettingsMutation = { updateNotificationSettings: { festivalEnabled: boolean, festivalRegionCodes: Array<string>, routeReviewEnabled: boolean, routeArrivalEnabled: boolean, createdAt: string, updatedAt: string } };
 
 export type CacheTourCategoryLocalizationsMutationVariables = Exact<{
   input: Array<TourCategoryLocalizationInput> | TourCategoryLocalizationInput;
@@ -417,6 +566,18 @@ export const RouteSummaryFieldsFragmentDoc = {"kind":"Document","definitions":[{
 export const RoutePlaceFieldsFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RoutePlaceFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PlaceSnapshot"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"provider"}},{"kind":"Field","name":{"kind":"Name","value":"externalId"}},{"kind":"Field","name":{"kind":"Name","value":"contentId"}},{"kind":"Field","name":{"kind":"Name","value":"contentTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"lat"}},{"kind":"Field","name":{"kind":"Name","value":"lng"}},{"kind":"Field","name":{"kind":"Name","value":"categoryLabel"}},{"kind":"Field","name":{"kind":"Name","value":"categoryName"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}},{"kind":"Field","name":{"kind":"Name","value":"regionCode"}},{"kind":"Field","name":{"kind":"Name","value":"regionLabelKey"}}]}}]} as unknown as DocumentNode<RoutePlaceFieldsFragment, unknown>;
 export const RouteStopFieldsFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RouteStopFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RouteStop"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"routeId"}},{"kind":"Field","name":{"kind":"Name","value":"dayId"}},{"kind":"Field","name":{"kind":"Name","value":"order"}},{"kind":"Field","name":{"kind":"Name","value":"place"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RoutePlaceFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"stayMinutes"}},{"kind":"Field","name":{"kind":"Name","value":"travelMinutesFromPrevious"}},{"kind":"Field","name":{"kind":"Name","value":"memo"}},{"kind":"Field","name":{"kind":"Name","value":"visitStatus"}},{"kind":"Field","name":{"kind":"Name","value":"visitedAt"}},{"kind":"Field","name":{"kind":"Name","value":"verificationStatus"}},{"kind":"Field","name":{"kind":"Name","value":"verifiedAt"}},{"kind":"Field","name":{"kind":"Name","value":"verificationPhotoImageId"}},{"kind":"Field","name":{"kind":"Name","value":"verificationPhotoUrl"}},{"kind":"Field","name":{"kind":"Name","value":"verificationLat"}},{"kind":"Field","name":{"kind":"Name","value":"verificationLng"}},{"kind":"Field","name":{"kind":"Name","value":"verificationAccuracyMeters"}},{"kind":"Field","name":{"kind":"Name","value":"checkedInAt"}},{"kind":"Field","name":{"kind":"Name","value":"checkedOutAt"}},{"kind":"Field","name":{"kind":"Name","value":"actualStayMinutes"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RoutePlaceFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PlaceSnapshot"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"provider"}},{"kind":"Field","name":{"kind":"Name","value":"externalId"}},{"kind":"Field","name":{"kind":"Name","value":"contentId"}},{"kind":"Field","name":{"kind":"Name","value":"contentTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"lat"}},{"kind":"Field","name":{"kind":"Name","value":"lng"}},{"kind":"Field","name":{"kind":"Name","value":"categoryLabel"}},{"kind":"Field","name":{"kind":"Name","value":"categoryName"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}},{"kind":"Field","name":{"kind":"Name","value":"regionCode"}},{"kind":"Field","name":{"kind":"Name","value":"regionLabelKey"}}]}}]} as unknown as DocumentNode<RouteStopFieldsFragment, unknown>;
 export const RouteDetailFieldsFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RouteDetailFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Route"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RouteSummaryFields"}},{"kind":"Field","name":{"kind":"Name","value":"days"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"routeId"}},{"kind":"Field","name":{"kind":"Name","value":"dayIndex"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"stops"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RouteStopFields"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"stops"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RouteStopFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RoutePlaceFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PlaceSnapshot"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"provider"}},{"kind":"Field","name":{"kind":"Name","value":"externalId"}},{"kind":"Field","name":{"kind":"Name","value":"contentId"}},{"kind":"Field","name":{"kind":"Name","value":"contentTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"lat"}},{"kind":"Field","name":{"kind":"Name","value":"lng"}},{"kind":"Field","name":{"kind":"Name","value":"categoryLabel"}},{"kind":"Field","name":{"kind":"Name","value":"categoryName"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}},{"kind":"Field","name":{"kind":"Name","value":"regionCode"}},{"kind":"Field","name":{"kind":"Name","value":"regionLabelKey"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RouteSummaryFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Route"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"sourceRouteId"}},{"kind":"Field","name":{"kind":"Name","value":"countryCode"}},{"kind":"Field","name":{"kind":"Name","value":"primaryRegionCode"}},{"kind":"Field","name":{"kind":"Name","value":"primaryRegionLabelKey"}},{"kind":"Field","name":{"kind":"Name","value":"tripDays"}},{"kind":"Field","name":{"kind":"Name","value":"travelStartDate"}},{"kind":"Field","name":{"kind":"Name","value":"travelEndDate"}},{"kind":"Field","name":{"kind":"Name","value":"dailyStartMinutes"}},{"kind":"Field","name":{"kind":"Name","value":"scheduleEndMinutes"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"visibility"}},{"kind":"Field","name":{"kind":"Name","value":"totalStopCount"}},{"kind":"Field","name":{"kind":"Name","value":"completedStopCount"}},{"kind":"Field","name":{"kind":"Name","value":"likeCount"}},{"kind":"Field","name":{"kind":"Name","value":"saveCount"}},{"kind":"Field","name":{"kind":"Name","value":"startedAt"}},{"kind":"Field","name":{"kind":"Name","value":"completedAt"}},{"kind":"Field","name":{"kind":"Name","value":"sharedAt"}},{"kind":"Field","name":{"kind":"Name","value":"shareTags"}},{"kind":"Field","name":{"kind":"Name","value":"isMine"}},{"kind":"Field","name":{"kind":"Name","value":"likedByMe"}},{"kind":"Field","name":{"kind":"Name","value":"startLocation"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"lat"}},{"kind":"Field","name":{"kind":"Name","value":"lng"}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RouteStopFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RouteStop"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"routeId"}},{"kind":"Field","name":{"kind":"Name","value":"dayId"}},{"kind":"Field","name":{"kind":"Name","value":"order"}},{"kind":"Field","name":{"kind":"Name","value":"place"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RoutePlaceFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"stayMinutes"}},{"kind":"Field","name":{"kind":"Name","value":"travelMinutesFromPrevious"}},{"kind":"Field","name":{"kind":"Name","value":"memo"}},{"kind":"Field","name":{"kind":"Name","value":"visitStatus"}},{"kind":"Field","name":{"kind":"Name","value":"visitedAt"}},{"kind":"Field","name":{"kind":"Name","value":"verificationStatus"}},{"kind":"Field","name":{"kind":"Name","value":"verifiedAt"}},{"kind":"Field","name":{"kind":"Name","value":"verificationPhotoImageId"}},{"kind":"Field","name":{"kind":"Name","value":"verificationPhotoUrl"}},{"kind":"Field","name":{"kind":"Name","value":"verificationLat"}},{"kind":"Field","name":{"kind":"Name","value":"verificationLng"}},{"kind":"Field","name":{"kind":"Name","value":"verificationAccuracyMeters"}},{"kind":"Field","name":{"kind":"Name","value":"checkedInAt"}},{"kind":"Field","name":{"kind":"Name","value":"checkedOutAt"}},{"kind":"Field","name":{"kind":"Name","value":"actualStayMinutes"}}]}}]} as unknown as DocumentNode<RouteDetailFieldsFragment, unknown>;
+export const GangwonFestivalsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GangwonFestivals"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"startDate"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"endDate"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"gangwonFestivals"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"startDate"},"value":{"kind":"Variable","name":{"kind":"Name","value":"startDate"}}},{"kind":"Argument","name":{"kind":"Name","value":"endDate"},"value":{"kind":"Variable","name":{"kind":"Name","value":"endDate"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"startDate"}},{"kind":"Field","name":{"kind":"Name","value":"endDate"}},{"kind":"Field","name":{"kind":"Name","value":"regionCode"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"lat"}},{"kind":"Field","name":{"kind":"Name","value":"lng"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}}]}}]}}]} as unknown as DocumentNode<GangwonFestivalsQuery, GangwonFestivalsQueryVariables>;
+export const MarkNotificationInboxReadDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"MarkNotificationInboxRead"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"ids"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"markNotificationInboxRead"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"ids"},"value":{"kind":"Variable","name":{"kind":"Name","value":"ids"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updatedCount"}}]}}]}}]} as unknown as DocumentNode<MarkNotificationInboxReadMutation, MarkNotificationInboxReadMutationVariables>;
+export const NotificationInboxDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"NotificationInbox"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"after"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"notificationInbox"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"after"},"value":{"kind":"Variable","name":{"kind":"Name","value":"after"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"notificationKey"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"festivalKind"}},{"kind":"Field","name":{"kind":"Name","value":"regionCode"}},{"kind":"Field","name":{"kind":"Name","value":"regionLabel"}},{"kind":"Field","name":{"kind":"Name","value":"dateKey"}},{"kind":"Field","name":{"kind":"Name","value":"festivalIds"}},{"kind":"Field","name":{"kind":"Name","value":"festivalTitles"}},{"kind":"Field","name":{"kind":"Name","value":"festivalStartDates"}},{"kind":"Field","name":{"kind":"Name","value":"festivalEndDates"}},{"kind":"Field","name":{"kind":"Name","value":"routeReviewKind"}},{"kind":"Field","name":{"kind":"Name","value":"routeId"}},{"kind":"Field","name":{"kind":"Name","value":"routeTitle"}},{"kind":"Field","name":{"kind":"Name","value":"dayId"}},{"kind":"Field","name":{"kind":"Name","value":"stopId"}},{"kind":"Field","name":{"kind":"Name","value":"placeTitle"}},{"kind":"Field","name":{"kind":"Name","value":"correctionDeadlineAt"}},{"kind":"Field","name":{"kind":"Name","value":"availableAt"}},{"kind":"Field","name":{"kind":"Name","value":"readAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"pageInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hasNextPage"}},{"kind":"Field","name":{"kind":"Name","value":"endCursor"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"unreadNotificationCount"}}]}}]} as unknown as DocumentNode<NotificationInboxQuery, NotificationInboxQueryVariables>;
+export const NotificationSettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"NotificationSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"notificationSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"festivalEnabled"}},{"kind":"Field","name":{"kind":"Name","value":"festivalRegionCodes"}},{"kind":"Field","name":{"kind":"Name","value":"routeReviewEnabled"}},{"kind":"Field","name":{"kind":"Name","value":"routeArrivalEnabled"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<NotificationSettingsQuery, NotificationSettingsQueryVariables>;
+export const RegisterPushDeviceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RegisterPushDevice"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RegisterPushDeviceInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"registerPushDevice"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"platform"}},{"kind":"Field","name":{"kind":"Name","value":"appVariant"}},{"kind":"Field","name":{"kind":"Name","value":"enabled"}},{"kind":"Field","name":{"kind":"Name","value":"lastSeenAt"}}]}}]}}]} as unknown as DocumentNode<RegisterPushDeviceMutation, RegisterPushDeviceMutationVariables>;
+export const SendFestivalTestNotificationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SendFestivalTestNotification"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sendFestivalTestNotification"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"notificationKey"}},{"kind":"Field","name":{"kind":"Name","value":"pushStatus"}},{"kind":"Field","name":{"kind":"Name","value":"pushError"}}]}}]}}]} as unknown as DocumentNode<SendFestivalTestNotificationMutation, SendFestivalTestNotificationMutationVariables>;
+export const SendRouteReviewTestNotificationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SendRouteReviewTestNotification"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"pushDeviceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sendRouteReviewTestNotification"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"pushDeviceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"pushDeviceId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"notificationKey"}},{"kind":"Field","name":{"kind":"Name","value":"pushStatus"}},{"kind":"Field","name":{"kind":"Name","value":"pushError"}}]}}]}}]} as unknown as DocumentNode<SendRouteReviewTestNotificationMutation, SendRouteReviewTestNotificationMutationVariables>;
+export const SyncFestivalNotificationInboxDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SyncFestivalNotificationInbox"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"notifications"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"FestivalNotificationSyncInput"}}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncFestivalNotificationInbox"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"notifications"},"value":{"kind":"Variable","name":{"kind":"Name","value":"notifications"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncedCount"}}]}}]}}]} as unknown as DocumentNode<SyncFestivalNotificationInboxMutation, SyncFestivalNotificationInboxMutationVariables>;
+export const SyncRouteArrivalNotificationInboxDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SyncRouteArrivalNotificationInbox"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"notifications"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RouteArrivalNotificationSyncInput"}}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncRouteArrivalNotificationInbox"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"notifications"},"value":{"kind":"Variable","name":{"kind":"Name","value":"notifications"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncedCount"}},{"kind":"Field","name":{"kind":"Name","value":"notificationKeys"}}]}}]}}]} as unknown as DocumentNode<SyncRouteArrivalNotificationInboxMutation, SyncRouteArrivalNotificationInboxMutationVariables>;
+export const SyncRouteReviewNotificationInboxDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SyncRouteReviewNotificationInbox"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"notifications"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RouteReviewNotificationSyncInput"}}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncRouteReviewNotificationInbox"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"notifications"},"value":{"kind":"Variable","name":{"kind":"Name","value":"notifications"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncedCount"}}]}}]}}]} as unknown as DocumentNode<SyncRouteReviewNotificationInboxMutation, SyncRouteReviewNotificationInboxMutationVariables>;
+export const UnregisterPushDeviceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UnregisterPushDevice"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"expoPushToken"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"unregisterPushDevice"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"expoPushToken"},"value":{"kind":"Variable","name":{"kind":"Name","value":"expoPushToken"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updatedCount"}}]}}]}}]} as unknown as DocumentNode<UnregisterPushDeviceMutation, UnregisterPushDeviceMutationVariables>;
+export const UpdateNotificationSettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateNotificationSettings"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateNotificationSettingsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateNotificationSettings"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"festivalEnabled"}},{"kind":"Field","name":{"kind":"Name","value":"festivalRegionCodes"}},{"kind":"Field","name":{"kind":"Name","value":"routeReviewEnabled"}},{"kind":"Field","name":{"kind":"Name","value":"routeArrivalEnabled"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}}]}}]} as unknown as DocumentNode<UpdateNotificationSettingsMutation, UpdateNotificationSettingsMutationVariables>;
 export const CacheTourCategoryLocalizationsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CacheTourCategoryLocalizations"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"TourCategoryLocalizationInput"}}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"cacheTourCategoryLocalizations"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"locale"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"sourceLabel"}},{"kind":"Field","name":{"kind":"Name","value":"cached"}}]}}]}}]} as unknown as DocumentNode<CacheTourCategoryLocalizationsMutation, CacheTourCategoryLocalizationsMutationVariables>;
 export const LocalizeTourPlaceOverviewDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"LocalizeTourPlaceOverview"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"TourPlaceOverviewLocalizationInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"localizeTourPlaceOverview"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"contentId"}},{"kind":"Field","name":{"kind":"Name","value":"overview"}},{"kind":"Field","name":{"kind":"Name","value":"operatingHours"}},{"kind":"Field","name":{"kind":"Name","value":"restDate"}},{"kind":"Field","name":{"kind":"Name","value":"infoCenter"}},{"kind":"Field","name":{"kind":"Name","value":"overviewSource"}},{"kind":"Field","name":{"kind":"Name","value":"cached"}}]}}]}}]} as unknown as DocumentNode<LocalizeTourPlaceOverviewMutation, LocalizeTourPlaceOverviewMutationVariables>;
 export const LocalizeTourPlacesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"LocalizeTourPlaces"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"TourPlaceLocalizationInput"}}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"localizeTourPlaces"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"contentId"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"titleSource"}},{"kind":"Field","name":{"kind":"Name","value":"addressSource"}},{"kind":"Field","name":{"kind":"Name","value":"cached"}}]}}]}}]} as unknown as DocumentNode<LocalizeTourPlacesMutation, LocalizeTourPlacesMutationVariables>;

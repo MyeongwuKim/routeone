@@ -1,0 +1,7 @@
+mutation SendFestivalTestNotification {
+  sendFestivalTestNotification {
+    notificationKey
+    pushStatus
+    pushError
+  }
+}

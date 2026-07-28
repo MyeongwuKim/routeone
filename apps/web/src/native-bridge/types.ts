@@ -80,11 +80,36 @@ export type NativeArrivalNotificationSyncResult = {
   notificationStatus: string;
 };
 
+export type NativeDeliveredRouteArrivalNotification = {
+  id: string;
+  type: "route-arrival";
+  routeId: string;
+  routeTitle?: string | null;
+  dayId: string;
+  stopId: string;
+  placeTitle: string;
+  dateKey: string;
+  deliveredAt: string;
+};
+
+export type NativePushTokenResult = {
+  expoPushToken: string | null;
+  platform: "ios" | "android" | "web" | "native" | string;
+  appVariant: string;
+  permissionStatus: NativePermissionStatus;
+  reason:
+    | "permission-not-granted"
+    | "missing-project-id"
+    | "unsupported-platform"
+    | null;
+};
+
 export type NativeFestivalNotificationKind =
   | "today"
   | "weekly"
   | "monthly"
-  | "trip";
+  | "trip"
+  | "test";
 
 export type NativeFestivalNotification = {
   id: string;
@@ -94,10 +119,32 @@ export type NativeFestivalNotification = {
   dateKey: string;
   festivalIds: string[];
   festivalTitles: string[];
+  festivalStartDates?: string[];
+  festivalEndDates?: string[];
   triggerAt?: string | null;
 };
 
 export type NativeFestivalNotificationSyncResult = {
+  scheduledCount: number;
+  notificationStatus: string;
+};
+
+export type NativeRouteReviewNotificationKind =
+  | "completed"
+  | "incomplete"
+  | "unstarted";
+
+export type NativeRouteReviewNotification = {
+  id: string;
+  kind: NativeRouteReviewNotificationKind;
+  routeId: string;
+  routeTitle: string;
+  dayId: string;
+  triggerAt?: string | null;
+  correctionDeadlineAt: string;
+};
+
+export type NativeRouteReviewNotificationSyncResult = {
   scheduledCount: number;
   notificationStatus: string;
 };
@@ -119,9 +166,18 @@ export type NativeBridgeApi = {
     places: NativeArrivalNotificationPlace[];
     radiusMeters?: number;
   }) => Promise<NativeArrivalNotificationSyncResult>;
+  getDeliveredNotifications?: (options?: {
+    acknowledgedIds?: string[];
+  }) => Promise<NativeDeliveredRouteArrivalNotification[]>;
+  getPushToken?: (options?: {
+    requestPermission?: boolean;
+  }) => Promise<NativePushTokenResult>;
   syncFestivalNotifications?: (options: {
     notifications: NativeFestivalNotification[];
   }) => Promise<NativeFestivalNotificationSyncResult>;
+  syncRouteReviewNotifications?: (options: {
+    notifications: NativeRouteReviewNotification[];
+  }) => Promise<NativeRouteReviewNotificationSyncResult>;
   saveImage?: (
     options: NativeSaveImageOptions
   ) => Promise<NativeSaveImageResult>;

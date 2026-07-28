@@ -70,6 +70,8 @@ const createSeedPlace = (
   contentTypeLabel: place.contentTypeLabel,
   categoryName: place.categoryName,
   icon: place.icon,
+  eventStartDate: place.eventStartDate,
+  eventEndDate: place.eventEndDate,
 });
 
 const DEV_GANGNEUNG_SEED_PLACES: MapSheetPlace[] = [

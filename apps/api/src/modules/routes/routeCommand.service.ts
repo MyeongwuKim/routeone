@@ -597,6 +597,12 @@ export async function deleteRoute(
         routeId: route.id,
       },
     });
+    await transaction.userNotification.deleteMany({
+      where: {
+        userId: user.id,
+        routeId: route.id,
+      },
+    });
     await transaction.route.delete({
       where: {
         id: route.id,

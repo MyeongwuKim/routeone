@@ -754,7 +754,7 @@ export function useHomeMap({
               rank ? `${rank}` : undefined,
               {
                 highlighted: isTodayFestival,
-                highlightLabel: text.home.today,
+                highlightLabel: text.home.ongoing,
               }
             ),
             anchor: new naverMaps.Point(markerAnchor, markerAnchor),

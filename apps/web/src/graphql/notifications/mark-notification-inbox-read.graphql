@@ -1,0 +1,5 @@
+mutation MarkNotificationInboxRead($ids: [ID!]) {
+  markNotificationInboxRead(ids: $ids) {
+    updatedCount
+  }
+}

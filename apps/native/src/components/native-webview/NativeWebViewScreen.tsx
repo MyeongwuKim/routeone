@@ -33,6 +33,7 @@ type NativeWebViewScreenProps = {
   appLanguage: AppLanguage;
   nativeAuthExpiresAt: number | null;
   nativeAuthToken: string | null;
+  onAppLanguageChange: (language: AppLanguage) => Promise<void> | void;
   onAuthSessionChange: (session: {
     token: string | null;
     expiresAt: number | null;
@@ -55,6 +56,35 @@ const APP_ACTIVE_EVENT_SCRIPT = `
   window.dispatchEvent(new Event("routeone:native-app-active"));
   true;
 `;
+const REQUEST_WEB_BUNDLE_READY_SCRIPT = `
+  window.dispatchEvent(
+    new Event("routeone:native-request-web-bundle-ready")
+  );
+  true;
+`;
+
+function createNotificationReceivedEventScript(
+  notification: Notifications.Notification
+) {
+  const data = notification.request.content.data ?? {};
+  const detail = {
+    notificationId:
+      typeof data.notificationId === "string"
+        ? data.notificationId
+        : null,
+    type: typeof data.type === "string" ? data.type : null
+  };
+
+  return `
+    window.dispatchEvent(
+      new CustomEvent(
+        "routeone:native-notification-received",
+        { detail: ${JSON.stringify(detail)} }
+      )
+    );
+    true;
+  `;
+}
 
 const WEB_VIEW_TEXT = {
   ko: {
@@ -208,9 +238,18 @@ function getNotificationWebPath(
   const type = typeof data.type === "string" ? data.type : null;
 
   if (type === "festival-summary") {
+    const notificationId =
+      typeof data.notificationId === "string" ? data.notificationId : null;
     const regionCode =
       typeof data.regionCode === "string" ? data.regionCode : null;
     const dateKey = typeof data.dateKey === "string" ? data.dateKey : null;
+
+    if (notificationId) {
+      return `/notifications?${new URLSearchParams({
+        notificationId,
+        source: "festival-notification"
+      }).toString()}`;
+    }
 
     if (!regionCode || !dateKey) {
       return null;
@@ -220,6 +259,14 @@ function getNotificationWebPath(
       festivalRegion: regionCode,
       festivalDate: dateKey,
       source: "festival-notification"
+    }).toString()}`;
+  }
+
+  if (type === "route-review" && routeId && dayId) {
+    return `/me/routes?${new URLSearchParams({
+      routeId,
+      dayId,
+      source: "route-review"
     }).toString()}`;
   }
 
@@ -288,6 +335,7 @@ export default function NativeWebViewScreen({
   appLanguage,
   nativeAuthExpiresAt,
   nativeAuthToken,
+  onAppLanguageChange,
   onAuthSessionChange
 }: NativeWebViewScreenProps) {
   const text = WEB_VIEW_TEXT[appLanguage];
@@ -295,8 +343,11 @@ export default function NativeWebViewScreen({
   const pendingNavigationPathRef = useRef<string | null>(null);
   const fatalExitAlertShownRef = useRef(false);
   const rollbackInProgressRef = useRef(false);
+  const readyBundleKeyRef = useRef<string | null>(null);
   const [resolvedBundle, setResolvedBundle] =
     useState<ResolvedWebBundle | null>(null);
+  const resolvedBundleRef = useRef<ResolvedWebBundle | null>(resolvedBundle);
+  resolvedBundleRef.current = resolvedBundle;
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [bundleProgress, setBundleProgress] = useState<WebBundleProgress>(
@@ -355,24 +406,38 @@ export default function NativeWebViewScreen({
     [text]
   );
 
+  const completeWebBundleLoad = useCallback(
+    (bundle: ResolvedWebBundle) => {
+      if (readyBundleKeyRef.current === bundle.key) {
+        return;
+      }
+
+      readyBundleKeyRef.current = bundle.key;
+      setBundleProgress({
+        stage: "ready",
+        progress: 1,
+        message: text.ready
+      });
+      setLoadError(null);
+      setIsLoading(false);
+      void markResolvedWebBundleReady(bundle).catch((error) => {
+        console.warn("[web-bundle] failed to confirm ready bundle", error);
+      });
+    },
+    [text]
+  );
+
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
+      const currentBundle = resolvedBundleRef.current;
+
       try {
         const message = JSON.parse(event.nativeEvent.data) as {
           type?: unknown;
         };
 
-        if (message.type === "routeone:web-bundle-ready" && resolvedBundle) {
-          setBundleProgress({
-            stage: "ready",
-            progress: 1,
-            message: text.ready
-          });
-          setLoadError(null);
-          setIsLoading(false);
-          void markResolvedWebBundleReady(resolvedBundle).catch((error) => {
-            console.warn("[web-bundle] failed to confirm ready bundle", error);
-          });
+        if (message.type === "routeone:web-bundle-ready" && currentBundle) {
+          completeWebBundleLoad(currentBundle);
         }
 
         if (message.type === "routeone:web-runtime-error") {
@@ -387,19 +452,26 @@ export default function NativeWebViewScreen({
         event,
         webViewRef,
         {
-          webBundleVersion: resolvedBundle?.version ?? null,
-          webBundleKind: resolvedBundle?.kind ?? "embedded"
+          webBundleVersion: currentBundle?.version ?? null,
+          webBundleKind: currentBundle?.kind ?? "embedded"
         },
         {
+          onAppLanguageChange,
           onAuthSessionChange
         }
       );
     },
-    [onAuthSessionChange, resolvedBundle, text]
+    [
+      completeWebBundleLoad,
+      onAppLanguageChange,
+      onAuthSessionChange,
+      text
+    ]
   );
 
   const handleWebViewProcessTerminated = useCallback(() => {
     console.warn("[web-bundle] webview content process terminated; reloading");
+    readyBundleKeyRef.current = null;
     setLoadError(null);
     setIsLoading(true);
     setBundleProgress({
@@ -457,6 +529,20 @@ export default function NativeWebViewScreen({
   }, []);
 
   useEffect(() => {
+    const subscription = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        webViewRef.current?.injectJavaScript(
+          createNotificationReceivedEventScript(notification)
+        );
+      }
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     const handleNotificationResponse = (
       response: Notifications.NotificationResponse | null
     ) => {
@@ -503,6 +589,10 @@ export default function NativeWebViewScreen({
     })
       .then((bundle) => {
         if (!cancelled) {
+          if (resolvedBundleRef.current?.key !== bundle.key) {
+            readyBundleKeyRef.current = null;
+          }
+          resolvedBundleRef.current = bundle;
           setBundleProgress({
             stage: "loading",
             progress: 0.93,
@@ -549,6 +639,8 @@ export default function NativeWebViewScreen({
       });
       void rollbackResolvedWebBundle(resolvedBundle)
         .then((fallbackBundle) => {
+          readyBundleKeyRef.current = null;
+          resolvedBundleRef.current = fallbackBundle;
           setLoadError(null);
           setIsLoading(true);
           setBundleProgress({
@@ -599,6 +691,10 @@ export default function NativeWebViewScreen({
           overScrollMode="never"
           onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
           onLoadStart={() => {
+            if (readyBundleKeyRef.current === resolvedBundle.key) {
+              return;
+            }
+
             setIsLoading(true);
             setLoadError(null);
             setBundleProgress({
@@ -630,27 +726,23 @@ export default function NativeWebViewScreen({
             });
           }}
           onLoadEnd={() => {
+            if (readyBundleKeyRef.current === resolvedBundle.key) {
+              return;
+            }
+
             if (resolvedBundle.readySignalRequired) {
               setBundleProgress({
                 stage: "loading",
                 progress: 0.98,
                 message: text.waitingReadySignal
               });
+              webViewRef.current?.injectJavaScript(
+                REQUEST_WEB_BUNDLE_READY_SCRIPT
+              );
               return;
             }
 
-            setBundleProgress({
-              stage: "ready",
-              progress: 1,
-              message: text.ready
-            });
-            setIsLoading(false);
-            void markResolvedWebBundleReady(resolvedBundle).catch((error) => {
-              console.warn(
-                "[web-bundle] failed to confirm loaded bundle",
-                error
-              );
-            });
+            completeWebBundleLoad(resolvedBundle);
           }}
           onError={(event) => {
             handleLoadError(event.nativeEvent.description);

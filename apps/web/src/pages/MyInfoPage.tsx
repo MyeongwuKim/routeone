@@ -10,6 +10,7 @@ import {
   MdLanguage,
   MdLightMode,
   MdLogout,
+  MdNotifications,
   MdOutlineAccountCircle,
 } from "react-icons/md";
 import {
@@ -17,6 +18,11 @@ import {
   ME_QUERY_KEY,
   ME_QUERY_STALE_TIME_MS,
 } from "@/api/authApi";
+import {
+  notificationApi,
+  NOTIFICATION_INBOX_QUERY_KEY,
+  NOTIFICATION_SETTINGS_QUERY_KEY,
+} from "@/api/notificationApi";
 import { MY_ROUTES_QUERY_KEY } from "@/features/my-route/myRouteCache";
 import {
   LIKED_SHARED_ROUTES_QUERY_KEY,
@@ -31,6 +37,7 @@ import {
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import { nativeBridge } from "@/native-bridge";
 
 function MyInfoMenuRow({
   icon,
@@ -155,7 +162,22 @@ function MyInfoPage() {
     }
   }, [meQuery.data?.me, setAuthUser]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const pushToken = await nativeBridge.notifications.getPushToken(false);
+
+      if (pushToken?.expoPushToken) {
+        await notificationApi.unregisterPushDevice(
+          pushToken.expoPushToken
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "[push-device] logout unregister failed",
+        error instanceof Error ? error.message : error
+      );
+    }
+
     clearAuthToken();
     clearAuthUser();
     queryClient.removeQueries({
@@ -169,6 +191,12 @@ function MyInfoPage() {
     });
     queryClient.removeQueries({
       queryKey: LIKED_SHARED_ROUTES_QUERY_KEY,
+    });
+    queryClient.removeQueries({
+      queryKey: NOTIFICATION_INBOX_QUERY_KEY,
+    });
+    queryClient.removeQueries({
+      queryKey: NOTIFICATION_SETTINGS_QUERY_KEY,
     });
     showToast(text.myInfo.logoutToast);
     navigate("/login", {
@@ -233,6 +261,15 @@ function MyInfoPage() {
           title={text.myInfo.language}
           description={language === "ko" ? text.myInfo.korean : text.myInfo.english}
           onClick={() => navigate("/me/language")}
+        />
+
+        <div className="border-b border-brand-50" />
+
+        <MyInfoMenuRow
+          icon={<MdNotifications />}
+          title={text.myInfo.notificationSettings}
+          description={text.myInfo.notificationSettingsDescription}
+          onClick={() => navigate("/me/notifications")}
         />
 
         <div className="border-b border-brand-50" />

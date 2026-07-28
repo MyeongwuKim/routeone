@@ -14,6 +14,18 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
+    "query GangwonFestivals($startDate: String!, $endDate: String!) {\n  gangwonFestivals(startDate: $startDate, endDate: $endDate) {\n    id\n    title\n    startDate\n    endDate\n    regionCode\n    address\n    lat\n    lng\n    imageUrl\n  }\n}": typeof types.GangwonFestivalsDocument,
+    "mutation MarkNotificationInboxRead($ids: [ID!]) {\n  markNotificationInboxRead(ids: $ids) {\n    updatedCount\n  }\n}": typeof types.MarkNotificationInboxReadDocument,
+    "query NotificationInbox($first: Int!, $after: String) {\n  notificationInbox(first: $first, after: $after) {\n    items {\n      id\n      notificationKey\n      type\n      festivalKind\n      regionCode\n      regionLabel\n      dateKey\n      festivalIds\n      festivalTitles\n      festivalStartDates\n      festivalEndDates\n      routeReviewKind\n      routeId\n      routeTitle\n      dayId\n      stopId\n      placeTitle\n      correctionDeadlineAt\n      availableAt\n      readAt\n      createdAt\n      updatedAt\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n  }\n  unreadNotificationCount\n}": typeof types.NotificationInboxDocument,
+    "query NotificationSettings {\n  notificationSettings {\n    festivalEnabled\n    festivalRegionCodes\n    routeReviewEnabled\n    routeArrivalEnabled\n    createdAt\n    updatedAt\n  }\n}": typeof types.NotificationSettingsDocument,
+    "mutation RegisterPushDevice($input: RegisterPushDeviceInput!) {\n  registerPushDevice(input: $input) {\n    id\n    platform\n    appVariant\n    enabled\n    lastSeenAt\n  }\n}": typeof types.RegisterPushDeviceDocument,
+    "mutation SendFestivalTestNotification {\n  sendFestivalTestNotification {\n    notificationKey\n    pushStatus\n    pushError\n  }\n}": typeof types.SendFestivalTestNotificationDocument,
+    "mutation SendRouteReviewTestNotification($pushDeviceId: ID!) {\n  sendRouteReviewTestNotification(pushDeviceId: $pushDeviceId) {\n    notificationKey\n    pushStatus\n    pushError\n  }\n}": typeof types.SendRouteReviewTestNotificationDocument,
+    "mutation SyncFestivalNotificationInbox($notifications: [FestivalNotificationSyncInput!]!) {\n  syncFestivalNotificationInbox(notifications: $notifications) {\n    syncedCount\n  }\n}": typeof types.SyncFestivalNotificationInboxDocument,
+    "mutation SyncRouteArrivalNotificationInbox($notifications: [RouteArrivalNotificationSyncInput!]!) {\n  syncRouteArrivalNotificationInbox(notifications: $notifications) {\n    syncedCount\n    notificationKeys\n  }\n}": typeof types.SyncRouteArrivalNotificationInboxDocument,
+    "mutation SyncRouteReviewNotificationInbox($notifications: [RouteReviewNotificationSyncInput!]!) {\n  syncRouteReviewNotificationInbox(notifications: $notifications) {\n    syncedCount\n  }\n}": typeof types.SyncRouteReviewNotificationInboxDocument,
+    "mutation UnregisterPushDevice($expoPushToken: String!) {\n  unregisterPushDevice(expoPushToken: $expoPushToken) {\n    updatedCount\n  }\n}": typeof types.UnregisterPushDeviceDocument,
+    "mutation UpdateNotificationSettings($input: UpdateNotificationSettingsInput!) {\n  updateNotificationSettings(input: $input) {\n    festivalEnabled\n    festivalRegionCodes\n    routeReviewEnabled\n    routeArrivalEnabled\n    createdAt\n    updatedAt\n  }\n}": typeof types.UpdateNotificationSettingsDocument,
     "mutation CacheTourCategoryLocalizations($input: [TourCategoryLocalizationInput!]!) {\n  cacheTourCategoryLocalizations(input: $input) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}": typeof types.CacheTourCategoryLocalizationsDocument,
     "mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {\n  localizeTourPlaceOverview(input: $input) {\n    contentId\n    overview\n    operatingHours\n    restDate\n    infoCenter\n    overviewSource\n    cached\n  }\n}": typeof types.LocalizeTourPlaceOverviewDocument,
     "mutation LocalizeTourPlaces($input: [TourPlaceLocalizationInput!]!) {\n  localizeTourPlaces(input: $input) {\n    contentId\n    title\n    address\n    titleSource\n    addressSource\n    cached\n  }\n}": typeof types.LocalizeTourPlacesDocument,
@@ -51,6 +63,18 @@ type Documents = {
     "mutation RefreshAuthSession {\n  refreshAuthSession {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      locale\n      createdAt\n      updatedAt\n    }\n  }\n}": typeof types.RefreshAuthSessionDocument,
 };
 const documents: Documents = {
+    "query GangwonFestivals($startDate: String!, $endDate: String!) {\n  gangwonFestivals(startDate: $startDate, endDate: $endDate) {\n    id\n    title\n    startDate\n    endDate\n    regionCode\n    address\n    lat\n    lng\n    imageUrl\n  }\n}": types.GangwonFestivalsDocument,
+    "mutation MarkNotificationInboxRead($ids: [ID!]) {\n  markNotificationInboxRead(ids: $ids) {\n    updatedCount\n  }\n}": types.MarkNotificationInboxReadDocument,
+    "query NotificationInbox($first: Int!, $after: String) {\n  notificationInbox(first: $first, after: $after) {\n    items {\n      id\n      notificationKey\n      type\n      festivalKind\n      regionCode\n      regionLabel\n      dateKey\n      festivalIds\n      festivalTitles\n      festivalStartDates\n      festivalEndDates\n      routeReviewKind\n      routeId\n      routeTitle\n      dayId\n      stopId\n      placeTitle\n      correctionDeadlineAt\n      availableAt\n      readAt\n      createdAt\n      updatedAt\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n  }\n  unreadNotificationCount\n}": types.NotificationInboxDocument,
+    "query NotificationSettings {\n  notificationSettings {\n    festivalEnabled\n    festivalRegionCodes\n    routeReviewEnabled\n    routeArrivalEnabled\n    createdAt\n    updatedAt\n  }\n}": types.NotificationSettingsDocument,
+    "mutation RegisterPushDevice($input: RegisterPushDeviceInput!) {\n  registerPushDevice(input: $input) {\n    id\n    platform\n    appVariant\n    enabled\n    lastSeenAt\n  }\n}": types.RegisterPushDeviceDocument,
+    "mutation SendFestivalTestNotification {\n  sendFestivalTestNotification {\n    notificationKey\n    pushStatus\n    pushError\n  }\n}": types.SendFestivalTestNotificationDocument,
+    "mutation SendRouteReviewTestNotification($pushDeviceId: ID!) {\n  sendRouteReviewTestNotification(pushDeviceId: $pushDeviceId) {\n    notificationKey\n    pushStatus\n    pushError\n  }\n}": types.SendRouteReviewTestNotificationDocument,
+    "mutation SyncFestivalNotificationInbox($notifications: [FestivalNotificationSyncInput!]!) {\n  syncFestivalNotificationInbox(notifications: $notifications) {\n    syncedCount\n  }\n}": types.SyncFestivalNotificationInboxDocument,
+    "mutation SyncRouteArrivalNotificationInbox($notifications: [RouteArrivalNotificationSyncInput!]!) {\n  syncRouteArrivalNotificationInbox(notifications: $notifications) {\n    syncedCount\n    notificationKeys\n  }\n}": types.SyncRouteArrivalNotificationInboxDocument,
+    "mutation SyncRouteReviewNotificationInbox($notifications: [RouteReviewNotificationSyncInput!]!) {\n  syncRouteReviewNotificationInbox(notifications: $notifications) {\n    syncedCount\n  }\n}": types.SyncRouteReviewNotificationInboxDocument,
+    "mutation UnregisterPushDevice($expoPushToken: String!) {\n  unregisterPushDevice(expoPushToken: $expoPushToken) {\n    updatedCount\n  }\n}": types.UnregisterPushDeviceDocument,
+    "mutation UpdateNotificationSettings($input: UpdateNotificationSettingsInput!) {\n  updateNotificationSettings(input: $input) {\n    festivalEnabled\n    festivalRegionCodes\n    routeReviewEnabled\n    routeArrivalEnabled\n    createdAt\n    updatedAt\n  }\n}": types.UpdateNotificationSettingsDocument,
     "mutation CacheTourCategoryLocalizations($input: [TourCategoryLocalizationInput!]!) {\n  cacheTourCategoryLocalizations(input: $input) {\n    code\n    locale\n    label\n    sourceLabel\n    cached\n  }\n}": types.CacheTourCategoryLocalizationsDocument,
     "mutation LocalizeTourPlaceOverview($input: TourPlaceOverviewLocalizationInput!) {\n  localizeTourPlaceOverview(input: $input) {\n    contentId\n    overview\n    operatingHours\n    restDate\n    infoCenter\n    overviewSource\n    cached\n  }\n}": types.LocalizeTourPlaceOverviewDocument,
     "mutation LocalizeTourPlaces($input: [TourPlaceLocalizationInput!]!) {\n  localizeTourPlaces(input: $input) {\n    contentId\n    title\n    address\n    titleSource\n    addressSource\n    cached\n  }\n}": types.LocalizeTourPlacesDocument,
@@ -102,6 +126,54 @@ const documents: Documents = {
  */
 export function graphql(source: string): unknown;
 
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "query GangwonFestivals($startDate: String!, $endDate: String!) {\n  gangwonFestivals(startDate: $startDate, endDate: $endDate) {\n    id\n    title\n    startDate\n    endDate\n    regionCode\n    address\n    lat\n    lng\n    imageUrl\n  }\n}"): (typeof documents)["query GangwonFestivals($startDate: String!, $endDate: String!) {\n  gangwonFestivals(startDate: $startDate, endDate: $endDate) {\n    id\n    title\n    startDate\n    endDate\n    regionCode\n    address\n    lat\n    lng\n    imageUrl\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation MarkNotificationInboxRead($ids: [ID!]) {\n  markNotificationInboxRead(ids: $ids) {\n    updatedCount\n  }\n}"): (typeof documents)["mutation MarkNotificationInboxRead($ids: [ID!]) {\n  markNotificationInboxRead(ids: $ids) {\n    updatedCount\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "query NotificationInbox($first: Int!, $after: String) {\n  notificationInbox(first: $first, after: $after) {\n    items {\n      id\n      notificationKey\n      type\n      festivalKind\n      regionCode\n      regionLabel\n      dateKey\n      festivalIds\n      festivalTitles\n      festivalStartDates\n      festivalEndDates\n      routeReviewKind\n      routeId\n      routeTitle\n      dayId\n      stopId\n      placeTitle\n      correctionDeadlineAt\n      availableAt\n      readAt\n      createdAt\n      updatedAt\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n  }\n  unreadNotificationCount\n}"): (typeof documents)["query NotificationInbox($first: Int!, $after: String) {\n  notificationInbox(first: $first, after: $after) {\n    items {\n      id\n      notificationKey\n      type\n      festivalKind\n      regionCode\n      regionLabel\n      dateKey\n      festivalIds\n      festivalTitles\n      festivalStartDates\n      festivalEndDates\n      routeReviewKind\n      routeId\n      routeTitle\n      dayId\n      stopId\n      placeTitle\n      correctionDeadlineAt\n      availableAt\n      readAt\n      createdAt\n      updatedAt\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n  }\n  unreadNotificationCount\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "query NotificationSettings {\n  notificationSettings {\n    festivalEnabled\n    festivalRegionCodes\n    routeReviewEnabled\n    routeArrivalEnabled\n    createdAt\n    updatedAt\n  }\n}"): (typeof documents)["query NotificationSettings {\n  notificationSettings {\n    festivalEnabled\n    festivalRegionCodes\n    routeReviewEnabled\n    routeArrivalEnabled\n    createdAt\n    updatedAt\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation RegisterPushDevice($input: RegisterPushDeviceInput!) {\n  registerPushDevice(input: $input) {\n    id\n    platform\n    appVariant\n    enabled\n    lastSeenAt\n  }\n}"): (typeof documents)["mutation RegisterPushDevice($input: RegisterPushDeviceInput!) {\n  registerPushDevice(input: $input) {\n    id\n    platform\n    appVariant\n    enabled\n    lastSeenAt\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation SendFestivalTestNotification {\n  sendFestivalTestNotification {\n    notificationKey\n    pushStatus\n    pushError\n  }\n}"): (typeof documents)["mutation SendFestivalTestNotification {\n  sendFestivalTestNotification {\n    notificationKey\n    pushStatus\n    pushError\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation SendRouteReviewTestNotification($pushDeviceId: ID!) {\n  sendRouteReviewTestNotification(pushDeviceId: $pushDeviceId) {\n    notificationKey\n    pushStatus\n    pushError\n  }\n}"): (typeof documents)["mutation SendRouteReviewTestNotification($pushDeviceId: ID!) {\n  sendRouteReviewTestNotification(pushDeviceId: $pushDeviceId) {\n    notificationKey\n    pushStatus\n    pushError\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation SyncFestivalNotificationInbox($notifications: [FestivalNotificationSyncInput!]!) {\n  syncFestivalNotificationInbox(notifications: $notifications) {\n    syncedCount\n  }\n}"): (typeof documents)["mutation SyncFestivalNotificationInbox($notifications: [FestivalNotificationSyncInput!]!) {\n  syncFestivalNotificationInbox(notifications: $notifications) {\n    syncedCount\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation SyncRouteArrivalNotificationInbox($notifications: [RouteArrivalNotificationSyncInput!]!) {\n  syncRouteArrivalNotificationInbox(notifications: $notifications) {\n    syncedCount\n    notificationKeys\n  }\n}"): (typeof documents)["mutation SyncRouteArrivalNotificationInbox($notifications: [RouteArrivalNotificationSyncInput!]!) {\n  syncRouteArrivalNotificationInbox(notifications: $notifications) {\n    syncedCount\n    notificationKeys\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation SyncRouteReviewNotificationInbox($notifications: [RouteReviewNotificationSyncInput!]!) {\n  syncRouteReviewNotificationInbox(notifications: $notifications) {\n    syncedCount\n  }\n}"): (typeof documents)["mutation SyncRouteReviewNotificationInbox($notifications: [RouteReviewNotificationSyncInput!]!) {\n  syncRouteReviewNotificationInbox(notifications: $notifications) {\n    syncedCount\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation UnregisterPushDevice($expoPushToken: String!) {\n  unregisterPushDevice(expoPushToken: $expoPushToken) {\n    updatedCount\n  }\n}"): (typeof documents)["mutation UnregisterPushDevice($expoPushToken: String!) {\n  unregisterPushDevice(expoPushToken: $expoPushToken) {\n    updatedCount\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation UpdateNotificationSettings($input: UpdateNotificationSettingsInput!) {\n  updateNotificationSettings(input: $input) {\n    festivalEnabled\n    festivalRegionCodes\n    routeReviewEnabled\n    routeArrivalEnabled\n    createdAt\n    updatedAt\n  }\n}"): (typeof documents)["mutation UpdateNotificationSettings($input: UpdateNotificationSettingsInput!) {\n  updateNotificationSettings(input: $input) {\n    festivalEnabled\n    festivalRegionCodes\n    routeReviewEnabled\n    routeArrivalEnabled\n    createdAt\n    updatedAt\n  }\n}"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
