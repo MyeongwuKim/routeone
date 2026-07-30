@@ -1,4 +1,5 @@
 import {
+  DeleteMyAccountDocument,
   LoginWithPasswordDocument,
   MeDocument,
   RefreshAuthSessionDocument,
@@ -20,5 +21,8 @@ export const authApi = {
   },
   refreshAuthSession() {
     return requestGraphQL(RefreshAuthSessionDocument);
+  },
+  deleteMyAccount() {
+    return requestGraphQL(DeleteMyAccountDocument);
   },
 };

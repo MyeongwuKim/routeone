@@ -11,17 +11,30 @@ import {
   type NativeOAuthLoginInput,
   type VerifiedOAuthIdentity,
 } from "../../lib/oauth.js";
+import { deleteUserAccount } from "./userAccount.service.js";
 
 export const userTypeDefs = gql`
+  enum AuthProvider {
+    PASSWORD
+    GOOGLE
+    APPLE
+    UNKNOWN
+  }
+
   type User {
     id: ID!
     accountId: String
     email: String
     displayName: String
     avatarUrl: String
+    authProviders: [AuthProvider!]!
     locale: String
     createdAt: DateTime!
     updatedAt: DateTime!
+  }
+
+  type DeletedUserPayload {
+    id: ID!
   }
 
   type AuthPayload {
@@ -56,6 +69,7 @@ export const userTypeDefs = gql`
     loginWithPassword(input: PasswordLoginInput!): AuthPayload!
     loginWithNativeOAuth(input: NativeOAuthLoginInput!): AuthPayload!
     refreshAuthSession: AuthPayload!
+    deleteMyAccount: DeletedUserPayload!
   }
 `;
 
@@ -166,6 +180,39 @@ async function findOrCreateOAuthUser(
 }
 
 export const userResolvers = {
+  User: {
+    async authProviders(
+      user: {
+        id: string;
+        accountId?: string | null;
+        passwordHash?: string | null;
+      },
+      _args: unknown,
+      context: GraphQLContext
+    ) {
+      const providers = new Set<"PASSWORD" | "GOOGLE" | "APPLE" | "UNKNOWN">();
+
+      if (user.accountId && user.passwordHash) {
+        providers.add("PASSWORD");
+      }
+
+      const authAccounts = await context.prisma.authAccount.findMany({
+        where: {
+          userId: user.id,
+        },
+        select: {
+          provider: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      });
+
+      authAccounts.forEach((account) => providers.add(account.provider));
+
+      return providers.size > 0 ? [...providers] : ["UNKNOWN"];
+    },
+  },
   Query: {
     me(_parent: unknown, _args: unknown, context: GraphQLContext) {
       return context.user;
@@ -250,6 +297,17 @@ export const userResolvers = {
         token: createAuthToken(context.authenticatedUserId),
         user: context.user,
       };
+    },
+    deleteMyAccount(
+      _parent: unknown,
+      _args: unknown,
+      context: GraphQLContext
+    ) {
+      if (!context.authenticatedUserId) {
+        throw new Error("로그인한 계정만 탈퇴할 수 있습니다.");
+      }
+
+      return deleteUserAccount(context.prisma, context.authenticatedUserId);
     },
   },
 };

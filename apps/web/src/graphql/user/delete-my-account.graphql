@@ -1,0 +1,5 @@
+mutation DeleteMyAccount {
+  deleteMyAccount {
+    id
+  }
+}

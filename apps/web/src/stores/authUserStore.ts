@@ -23,11 +23,10 @@ export const useAuthUserStore = create<AuthUserState>()(
       partialize: (state) => ({
         user: state.user,
       }),
-      version: 1,
+      version: 2,
+      migrate: () => ({
+        user: null,
+      }),
     }
   )
 );
-
-export function getAuthUserLabel(user: AuthUser | null) {
-  return user?.accountId ?? user?.displayName ?? user?.email ?? null;
-}

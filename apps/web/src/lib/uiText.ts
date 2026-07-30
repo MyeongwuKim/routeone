@@ -1,5 +1,6 @@
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import type { NativeFestivalNotificationKind } from "@/native-bridge";
+import type { AuthProvider } from "@/generated/graphql";
 import {
   useAppLanguageStore,
   type AppLanguage,
@@ -96,6 +97,44 @@ export type UiText = {
     logout: string;
     logoutDescription: string;
     logoutToast: string;
+  };
+  account: {
+    eyebrow: string;
+    title: string;
+    fallbackName: string;
+    accountSection: string;
+    email: string;
+    accountId: string;
+    loginMethods: string;
+    joinedAt: string;
+    providers: Record<AuthProvider, string>;
+    testAccountSection: string;
+    testAccountDescription: string;
+    openTestAccountSwitch: string;
+    closeTestAccountSwitch: string;
+    testAccountFormTitle: string;
+    accountIdLabel: string;
+    accountIdPlaceholder: string;
+    passwordLabel: string;
+    passwordPlaceholder: string;
+    displayNameLabel: string;
+    optional: string;
+    switching: string;
+    switchAccount: string;
+    switchToast: (name: string) => string;
+    requestError: string;
+    managementSection: string;
+    logout: string;
+    logoutDescription: string;
+    deleteAccount: string;
+    deleteAccountDescription: string;
+    deleteConfirmTitle: string;
+    deleteConfirmDescription: string;
+    deleteConfirmDetail: string;
+    deleteConfirmAction: string;
+    deleting: string;
+    deleteSuccess: string;
+    deleteError: string;
   };
   notificationSettings: {
     sectionTitle: string;
@@ -875,15 +914,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       routeHistoryLoadingTitle: "기록 찾는 중",
       likedRouteTitle: "좋아요한 공유 루트",
       likedRouteLoadingTitle: "하트 루트 찾는 중",
-      accountTitle: "계정 전환",
+      accountTitle: "계정 정보",
       appSettings: "앱 설정",
       languageTitle: "언어 설정",
       notificationSettingsTitle: "알림 설정",
       appInfoTitle: "버전 및 권한",
     },
     myInfo: {
-      menuSection: "내 정보 메뉴",
-      accountInfo: "아이디 정보",
+      menuSection: "나의 여행",
+      accountInfo: "계정 정보",
       accountChecking: "계정 확인 중",
       localTestAccount: "로컬 테스트 계정",
       visitedRoutes: "다녀온 루트",
@@ -904,6 +943,52 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       logout: "로그아웃",
       logoutDescription: "현재 계정에서 나가기",
       logoutToast: "로그아웃했어요.",
+    },
+    account: {
+      eyebrow: "내 정보",
+      title: "계정 정보",
+      fallbackName: "RouteOne 사용자",
+      accountSection: "현재 계정",
+      email: "이메일",
+      accountId: "테스트 아이디",
+      loginMethods: "연결된 로그인",
+      joinedAt: "가입일",
+      providers: {
+        PASSWORD: "테스트 계정",
+        GOOGLE: "Google",
+        APPLE: "Apple",
+        UNKNOWN: "로그인 계정",
+      },
+      testAccountSection: "테스트 계정",
+      testAccountDescription:
+        "다른 테스트 아이디로 로그인하거나 새 테스트 계정을 만들 수 있어요.",
+      openTestAccountSwitch: "다른 테스트 계정으로 전환",
+      closeTestAccountSwitch: "계정 전환 닫기",
+      testAccountFormTitle: "전환할 계정을 입력해요",
+      accountIdLabel: "아이디",
+      accountIdPlaceholder: "routeone",
+      passwordLabel: "비밀번호",
+      passwordPlaceholder: "4자 이상",
+      displayNameLabel: "닉네임",
+      optional: "선택",
+      switching: "전환 중...",
+      switchAccount: "테스트 계정으로 전환",
+      switchToast: (name) => `${name} 계정으로 전환했어요.`,
+      requestError: "계정 처리에 실패했어요. 다시 시도해 주세요.",
+      managementSection: "계정 관리",
+      logout: "로그아웃",
+      logoutDescription: "현재 계정에서 나가기",
+      deleteAccount: "회원 탈퇴",
+      deleteAccountDescription: "계정과 저장된 데이터를 모두 삭제",
+      deleteConfirmTitle: "RouteOne을 탈퇴할까요?",
+      deleteConfirmDescription:
+        "내 루트와 방문 기록, 인증 사진, 좋아요와 알림 설정이 모두 삭제돼요.",
+      deleteConfirmDetail:
+        "삭제한 계정과 여행 기록은 복구할 수 없어요.",
+      deleteConfirmAction: "탈퇴하기",
+      deleting: "탈퇴 처리 중...",
+      deleteSuccess: "회원 탈퇴가 완료됐어요.",
+      deleteError: "회원 탈퇴에 실패했어요. 다시 시도해 주세요.",
     },
     notificationSettings: {
       sectionTitle: "받을 알림",
@@ -1806,15 +1891,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       routeHistoryLoadingTitle: "Finding history",
       likedRouteTitle: "Liked Shared Routes",
       likedRouteLoadingTitle: "Finding liked routes",
-      accountTitle: "Switch Account",
+      accountTitle: "Account",
       appSettings: "App Settings",
       languageTitle: "Language",
       notificationSettingsTitle: "Notifications",
       appInfoTitle: "Version & Permissions",
     },
     myInfo: {
-      menuSection: "My Info Menu",
-      accountInfo: "Account ID",
+      menuSection: "My Trips",
+      accountInfo: "Account",
       accountChecking: "Checking account",
       localTestAccount: "Local test account",
       visitedRoutes: "Visited Routes",
@@ -1836,6 +1921,52 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       logout: "Log Out",
       logoutDescription: "Leave the current account",
       logoutToast: "Logged out.",
+    },
+    account: {
+      eyebrow: "My Info",
+      title: "Account",
+      fallbackName: "RouteOne user",
+      accountSection: "Current Account",
+      email: "Email",
+      accountId: "Test ID",
+      loginMethods: "Connected Sign-ins",
+      joinedAt: "Joined",
+      providers: {
+        PASSWORD: "Test account",
+        GOOGLE: "Google",
+        APPLE: "Apple",
+        UNKNOWN: "Sign-in account",
+      },
+      testAccountSection: "Test Account",
+      testAccountDescription:
+        "Sign in with another test ID or create a new test account.",
+      openTestAccountSwitch: "Switch test account",
+      closeTestAccountSwitch: "Close account switcher",
+      testAccountFormTitle: "Enter the account to use",
+      accountIdLabel: "ID",
+      accountIdPlaceholder: "routeone",
+      passwordLabel: "Password",
+      passwordPlaceholder: "At least 4 characters",
+      displayNameLabel: "Nickname",
+      optional: "Optional",
+      switching: "Switching...",
+      switchAccount: "Switch test account",
+      switchToast: (name) => `Switched to ${name}.`,
+      requestError: "Could not process the account. Try again.",
+      managementSection: "Account Management",
+      logout: "Log Out",
+      logoutDescription: "Leave the current account",
+      deleteAccount: "Delete Account",
+      deleteAccountDescription: "Delete the account and all saved data",
+      deleteConfirmTitle: "Delete your RouteOne account?",
+      deleteConfirmDescription:
+        "Your routes, visit records, verification photos, likes, and notification settings will be deleted.",
+      deleteConfirmDetail:
+        "Deleted accounts and trip records cannot be recovered.",
+      deleteConfirmAction: "Delete Account",
+      deleting: "Deleting account...",
+      deleteSuccess: "Your account has been deleted.",
+      deleteError: "Could not delete the account. Try again.",
     },
     notificationSettings: {
       sectionTitle: "Notifications",

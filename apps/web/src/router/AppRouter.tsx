@@ -319,23 +319,54 @@ function AccountLazyFallback() {
   const text = useUiText();
 
   return (
-    <section className="space-y-4 pb-4 text-slate-900 dark:text-slate-100">
+    <section className="space-y-4 pb-8 text-slate-900 dark:text-slate-100">
       <MyInfoSubpageFallbackHeader
         eyebrow={text.routeShell.myInfoTitle}
         title={text.routeShell.accountTitle}
       />
 
-      <div className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
-        <div className="h-4 w-32 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
-        <div className="mt-4 space-y-3">
-          {["account-id", "password", "nickname"].map((fieldKey) => (
-            <div key={fieldKey}>
-              <div className="h-3 w-14 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
-              <div className="mt-1 h-12 animate-pulse rounded-xl border border-slate-200 bg-white dark:border-brand-400/20 dark:bg-[#0b211f]" />
-            </div>
-          ))}
+      <div className="rounded-3xl border border-brand-100 bg-white p-5 shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
+        <div className="flex items-center gap-4">
+          <div className="size-20 shrink-0 animate-pulse rounded-full bg-brand-100 dark:bg-brand-400/15" />
+          <div className="min-w-0 flex-1">
+            <div className="h-5 w-32 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+            <div className="mt-2 h-3 w-44 max-w-full animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
+            <div className="mt-3 h-6 w-20 animate-pulse rounded-full bg-brand-100 dark:bg-brand-400/15" />
+          </div>
         </div>
-        <div className="mt-4 h-12 animate-pulse rounded-2xl bg-brand-100 dark:bg-brand-400/20" />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
+        <div className="border-b border-brand-50 px-4 py-3 dark:border-brand-400/15">
+          <div className="h-3 w-20 animate-pulse rounded-full bg-brand-100 dark:bg-brand-400/15" />
+        </div>
+        {["identifier", "provider", "joined-at"].map((rowKey, index) => (
+          <div key={rowKey}>
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className="size-9 shrink-0 animate-pulse rounded-xl bg-brand-50 dark:bg-brand-400/10" />
+              <div className="min-w-0 flex-1">
+                <div className="h-3 w-16 animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
+                <div className="mt-2 h-4 w-36 max-w-full animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+              </div>
+            </div>
+            {index < 2 ? (
+              <div className="border-b border-brand-50 dark:border-brand-400/15" />
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
+        <div className="border-b border-brand-50 px-4 py-3 dark:border-brand-400/15">
+          <div className="h-3 w-20 animate-pulse rounded-full bg-brand-100 dark:bg-brand-400/15" />
+        </div>
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          <div className="size-10 shrink-0 animate-pulse rounded-2xl bg-brand-50 dark:bg-brand-400/10" />
+          <div className="min-w-0 flex-1">
+            <div className="h-4 w-20 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+            <div className="mt-2 h-3 w-40 max-w-full animate-pulse rounded-full bg-slate-100 dark:bg-slate-800" />
+          </div>
+        </div>
       </div>
     </section>
   );

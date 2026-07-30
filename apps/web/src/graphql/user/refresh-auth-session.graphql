@@ -6,6 +6,8 @@ mutation RefreshAuthSession {
       accountId
       email
       displayName
+      avatarUrl
+      authProviders
       locale
       createdAt
       updatedAt

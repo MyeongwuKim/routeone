@@ -22,6 +22,7 @@ type CloudflareDirectUploadResponse = {
 };
 
 const CLOUDFLARE_DIRECT_UPLOAD_URL_EXPIRY_MS = 1000 * 60 * 30;
+const CLOUDFLARE_IMAGE_DELETE_TIMEOUT_MS = 10_000;
 const TEST_VISIT_PHOTO_URL_PREFIX = "routeone-test://visit-photo";
 
 function getUploadEnvironmentName() {
@@ -86,6 +87,17 @@ function getCloudflareDirectUploadError(
       ?.map((error) => error.message)
       .filter(Boolean)
       .join(", ") || "Cloudflare Images 업로드 URL 발급에 실패했습니다."
+  );
+}
+
+function getCloudflareImageDeleteError(
+  payload: CloudflareDirectUploadResponse
+) {
+  return (
+    payload.errors
+      ?.map((error) => error.message)
+      .filter(Boolean)
+      .join(", ") || "Cloudflare Images 원본 삭제에 실패했습니다."
   );
 }
 
@@ -209,4 +221,60 @@ export async function createRouteStopVisitPhotoUpload(
     environment,
     expiresAt,
   };
+}
+
+export async function deleteRouteVisitPhotoImages(imageIds: string[]) {
+  const uniqueImageIds = [
+    ...new Set(
+      imageIds
+        .map((imageId) => imageId.trim())
+        .filter((imageId) => imageId && !imageId.startsWith("test-"))
+    ),
+  ];
+
+  if (uniqueImageIds.length === 0) {
+    return;
+  }
+
+  try {
+    const cloudflareConfig = getCloudflareUploadConfig();
+
+    if (!cloudflareConfig) {
+      return;
+    }
+
+    await Promise.all(
+      uniqueImageIds.map(async (imageId) => {
+        const response = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${cloudflareConfig.accountId}/images/v1/${encodeURIComponent(imageId)}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${cloudflareConfig.token}`,
+            },
+            signal: AbortSignal.timeout(CLOUDFLARE_IMAGE_DELETE_TIMEOUT_MS),
+          }
+        );
+
+        if (response.status === 404) {
+          return;
+        }
+
+        const payload =
+          (await response.json()) as CloudflareDirectUploadResponse;
+
+        if (!response.ok || payload.success === false) {
+          throw new Error(getCloudflareImageDeleteError(payload));
+        }
+      })
+    );
+  } catch (error) {
+    console.error(
+      "[visit-photo] account image cleanup failed",
+      error instanceof Error ? error.message : error
+    );
+    throw new Error(
+      "인증 사진을 삭제하지 못해 탈퇴를 진행하지 않았습니다. 다시 시도해 주세요."
+    );
+  }
 }

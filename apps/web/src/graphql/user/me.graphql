@@ -4,6 +4,8 @@ query Me {
     accountId
     email
     displayName
+    avatarUrl
+    authProviders
     locale
     createdAt
     updatedAt

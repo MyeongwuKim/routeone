@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";
 import {
@@ -9,79 +9,47 @@ import {
   MdInfoOutline,
   MdLanguage,
   MdLightMode,
-  MdLogout,
   MdNotifications,
-  MdOutlineAccountCircle,
 } from "react-icons/md";
+import { authApi, ME_QUERY_KEY, ME_QUERY_STALE_TIME_MS } from "@/api/authApi";
+import AccountAvatar from "@/components/account/AccountAvatar";
 import {
-  authApi,
-  ME_QUERY_KEY,
-  ME_QUERY_STALE_TIME_MS,
-} from "@/api/authApi";
-import {
-  notificationApi,
-  NOTIFICATION_INBOX_QUERY_KEY,
-  NOTIFICATION_SETTINGS_QUERY_KEY,
-} from "@/api/notificationApi";
-import { MY_ROUTES_QUERY_KEY } from "@/features/my-route/myRouteCache";
-import {
-  LIKED_SHARED_ROUTES_QUERY_KEY,
-  SHARED_ROUTES_QUERY_KEY,
-} from "@/features/shared-route/queries/sharedRouteQueryKeys";
-import { clearAuthToken } from "@/lib/authToken";
+  getAccountDisplayName,
+  getAccountIdentifier,
+  getAccountProviderLabels,
+} from "@/lib/accountDisplay";
 import { useUiText } from "@/lib/uiText";
-import {
-  getAuthUserLabel,
-  useAuthUserStore,
-} from "@/stores/authUserStore";
-import { useUiThemeStore } from "@/stores/uiThemeStore";
-import { useUiToastStore } from "@/stores/uiToastStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
-import { nativeBridge } from "@/native-bridge";
+import { useAuthUserStore, type AuthUser } from "@/stores/authUserStore";
+import { useUiThemeStore } from "@/stores/uiThemeStore";
 
 function MyInfoMenuRow({
   icon,
   title,
   description,
-  tone = "default",
   onClick,
 }: {
   icon: ReactNode;
   title: string;
   description: string;
-  tone?: "default" | "danger";
   onClick: () => void;
 }) {
-  const isDanger = tone === "danger";
-
   return (
     <button
       type="button"
       onClick={onClick}
       className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 active:scale-[0.99] dark:hover:bg-slate-800/70"
     >
-      <span
-        className={`flex size-10 shrink-0 items-center justify-center rounded-2xl text-xl ${
-          isDanger ? "bg-rose-50 text-rose-500" : "bg-brand-50 text-brand-700"
-        }`}
-      >
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span
-          className={`block text-sm font-bold ${
-            isDanger ? "text-rose-600" : "text-slate-900"
-          }`}
-        >
-          {title}
-        </span>
+        <span className="block text-sm font-bold text-slate-900">{title}</span>
         <span className="mt-0.5 block truncate text-xs font-semibold text-slate-500">
           {description}
         </span>
       </span>
-      {isDanger ? null : (
-        <MdChevronRight className="shrink-0 text-2xl text-slate-300" />
-      )}
+      <MdChevronRight className="shrink-0 text-2xl text-slate-300" />
     </button>
   );
 }
@@ -122,11 +90,58 @@ function MyInfoToggleRow({
         }`}
       >
         <span
-          className={`absolute top-1 size-5 rounded-full shadow-sm transition ${
+          className={`absolute top-1 size-5 rounded-full bg-white shadow-sm transition ${
             checked ? "translate-x-6" : "translate-x-1"
           }`}
-          style={{ backgroundColor: "#fff" }}
         />
+      </span>
+    </button>
+  );
+}
+
+function AccountSummaryCard({
+  user,
+  isLoading,
+  onClick,
+}: {
+  user: AuthUser | null;
+  isLoading: boolean;
+  onClick: () => void;
+}) {
+  const text = useUiText();
+  const displayName = getAccountDisplayName(user, text.account.fallbackName);
+  const identifier = isLoading
+    ? text.myInfo.accountChecking
+    : (getAccountIdentifier(user) ?? text.myInfo.localTestAccount);
+  const providerSummary = isLoading
+    ? text.myInfo.accountChecking
+    : getAccountProviderLabels(user, text.account.providers).join(" · ");
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-center gap-4 overflow-hidden rounded-3xl border border-brand-200 bg-gradient-to-br from-white via-white to-brand-50 px-4 py-5 text-left shadow-sm transition hover:border-brand-300 active:scale-[0.99] dark:border-brand-400/25 dark:from-[#0d2926] dark:via-[#0b211f] dark:to-[#0f3431]"
+    >
+      <AccountAvatar
+        user={user}
+        fallbackName={text.account.fallbackName}
+        className="size-[4.5rem]"
+        textClassName="text-2xl"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-lg font-black text-slate-900">
+          {displayName}
+        </span>
+        <span className="mt-1 block truncate text-sm font-semibold text-slate-500">
+          {identifier}
+        </span>
+        <span className="mt-2 inline-flex rounded-full bg-brand-100 px-2.5 py-1 text-[11px] font-black text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
+          {providerSummary}
+        </span>
+      </span>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/80 text-2xl text-brand-700 shadow-sm transition group-hover:translate-x-0.5 dark:bg-brand-400/10 dark:text-brand-100">
+        <MdChevronRight />
       </span>
     </button>
   );
@@ -135,14 +150,11 @@ function MyInfoToggleRow({
 function MyInfoPage() {
   const text = useUiText();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const showToast = useUiToastStore((state) => state.showToast);
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const toggleDarkMode = useUiThemeStore((state) => state.toggleDarkMode);
   const language = useAppLanguageStore((state) => state.language);
   const authUser = useAuthUserStore((state) => state.user);
   const setAuthUser = useAuthUserStore((state) => state.setUser);
-  const clearAuthUser = useAuthUserStore((state) => state.clearUser);
   const meQuery = useQuery({
     queryKey: ME_QUERY_KEY,
     queryFn: authApi.me,
@@ -150,11 +162,6 @@ function MyInfoPage() {
     staleTime: ME_QUERY_STALE_TIME_MS,
   });
   const user = authUser ?? meQuery.data?.me ?? null;
-  const activeAccountLabel =
-    getAuthUserLabel(user) ??
-    (meQuery.isLoading
-      ? text.myInfo.accountChecking
-      : text.myInfo.localTestAccount);
 
   useEffect(() => {
     if (meQuery.data?.me) {
@@ -162,65 +169,20 @@ function MyInfoPage() {
     }
   }, [meQuery.data?.me, setAuthUser]);
 
-  const handleLogout = async () => {
-    try {
-      const pushToken = await nativeBridge.notifications.getPushToken(false);
-
-      if (pushToken?.expoPushToken) {
-        await notificationApi.unregisterPushDevice(
-          pushToken.expoPushToken
-        );
-      }
-    } catch (error) {
-      console.warn(
-        "[push-device] logout unregister failed",
-        error instanceof Error ? error.message : error
-      );
-    }
-
-    clearAuthToken();
-    clearAuthUser();
-    queryClient.removeQueries({
-      queryKey: ME_QUERY_KEY,
-    });
-    queryClient.removeQueries({
-      queryKey: MY_ROUTES_QUERY_KEY,
-    });
-    queryClient.removeQueries({
-      queryKey: SHARED_ROUTES_QUERY_KEY,
-    });
-    queryClient.removeQueries({
-      queryKey: LIKED_SHARED_ROUTES_QUERY_KEY,
-    });
-    queryClient.removeQueries({
-      queryKey: NOTIFICATION_INBOX_QUERY_KEY,
-    });
-    queryClient.removeQueries({
-      queryKey: NOTIFICATION_SETTINGS_QUERY_KEY,
-    });
-    showToast(text.myInfo.logoutToast);
-    navigate("/login", {
-      replace: true,
-    });
-  };
-
   return (
-    <section className="space-y-4 text-slate-900">
+    <section className="space-y-4 pb-8 text-slate-900">
+      <AccountSummaryCard
+        user={user}
+        isLoading={meQuery.isLoading}
+        onClick={() => navigate("/me/account")}
+      />
+
       <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm">
         <div className="border-b border-brand-50 px-4 py-3">
           <p className="text-xs font-black text-brand-700">
             {text.myInfo.menuSection}
           </p>
         </div>
-
-        <MyInfoMenuRow
-          icon={<MdOutlineAccountCircle />}
-          title={text.myInfo.accountInfo}
-          description={activeAccountLabel}
-          onClick={() => navigate("/me/account")}
-        />
-
-        <div className="border-b border-brand-50" />
 
         <MyInfoMenuRow
           icon={<MdHistory />}
@@ -249,7 +211,9 @@ function MyInfoPage() {
         <MyInfoToggleRow
           icon={isDarkMode ? <MdDarkMode /> : <MdLightMode />}
           title={text.myInfo.darkMode}
-          description={isDarkMode ? text.myInfo.darkModeOn : text.myInfo.darkModeOff}
+          description={
+            isDarkMode ? text.myInfo.darkModeOn : text.myInfo.darkModeOff
+          }
           checked={isDarkMode}
           onToggle={toggleDarkMode}
         />
@@ -259,7 +223,9 @@ function MyInfoPage() {
         <MyInfoMenuRow
           icon={<MdLanguage />}
           title={text.myInfo.language}
-          description={language === "ko" ? text.myInfo.korean : text.myInfo.english}
+          description={
+            language === "ko" ? text.myInfo.korean : text.myInfo.english
+          }
           onClick={() => navigate("/me/language")}
         />
 
@@ -279,16 +245,6 @@ function MyInfoPage() {
           title={text.myInfo.appInfo}
           description={text.myInfo.appInfoDescription}
           onClick={() => navigate("/me/app-info")}
-        />
-
-        <div className="border-b border-brand-50" />
-
-        <MyInfoMenuRow
-          icon={<MdLogout />}
-          title={text.myInfo.logout}
-          description={text.myInfo.logoutDescription}
-          tone="danger"
-          onClick={handleLogout}
         />
       </section>
     </section>
