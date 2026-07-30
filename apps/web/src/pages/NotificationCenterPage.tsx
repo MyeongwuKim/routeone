@@ -27,6 +27,7 @@ import {
   NOTIFICATION_INBOX_PAGE_SIZE,
   type NotificationInboxPageParam,
 } from "@/api/notificationApi";
+import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import { festivalApi } from "@/api/festivalApi";
 import {
   GANGWON_REGIONS,
@@ -817,16 +818,14 @@ function NotificationCenterPage() {
 
     if (orderedItems.length === 0 && !hasNextPage && !isFetchingNextPage) {
       return (
-        <section className="flex h-full min-h-72 flex-col items-center justify-center px-6 text-center">
-          <span className="flex size-14 items-center justify-center rounded-full bg-brand-50 text-3xl text-brand-600 dark:bg-brand-400/15 dark:text-brand-200">
-            <MdNotificationsNone />
-          </span>
-          <h2 className="mt-4 text-base font-black text-slate-900 dark:text-white">
-            {text.notifications.emptyTitle}
-          </h2>
-          <p className="mt-2 max-w-xs text-sm font-semibold leading-6 text-slate-500 dark:text-slate-300">
-            {text.notifications.emptyDescription}
-          </p>
+        <section className="flex h-full min-h-72 flex-col justify-center">
+          <PotatoLoadingCard
+            title={text.notifications.emptyTitle}
+            description={text.notifications.emptyDescription}
+            animation="empty"
+            compact
+            className="shadow-sm"
+          />
         </section>
       );
     }

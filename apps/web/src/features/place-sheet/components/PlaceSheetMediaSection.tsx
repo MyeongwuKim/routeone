@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { IoTimeOutline } from "react-icons/io5";
+import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import type { UiText } from "@/lib/uiText";
 import type { MapSheetPlace } from "@/types/place";
 import type { PlaceSheetData } from "../hooks/usePlaceSheetData";
@@ -190,16 +191,14 @@ function PlaceSheetMediaSection({
               </button>
             ))
           ) : (
-            <div className="flex h-32 w-full min-w-full shrink-0 snap-start flex-col items-center justify-center rounded-2xl border border-dashed border-brand-200 bg-brand-50/70 px-4 text-center dark:border-brand-400/25 dark:bg-slate-950/35">
-              <div className="flex size-10 items-center justify-center rounded-full bg-white text-lg shadow-sm dark:bg-brand-400/15">
-                {selectedPlace.icon}
-              </div>
-              <p className="mt-3 text-sm font-black text-slate-700 dark:text-slate-100">
-                {text.placeSheet.noUserPhotosTitle}
-              </p>
-              <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">
-                {text.placeSheet.noUserPhotosDescription}
-              </p>
+            <div className="w-full min-w-full shrink-0 snap-start">
+              <PotatoLoadingCard
+                title={text.placeSheet.noUserPhotosTitle}
+                description={text.placeSheet.noUserPhotosDescription}
+                animation="empty"
+                compact
+                className="shadow-sm"
+              />
             </div>
           )}
         </div>

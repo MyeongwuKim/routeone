@@ -8,8 +8,6 @@ import {
   DEV_VERIFICATION_BYPASS_ENV,
   isDevVerificationBypassEnabled,
 } from "./lib/devVerification.js";
-import { prisma } from "./lib/prisma.js";
-import { startNotificationScheduler } from "./modules/notifications/notificationScheduler.service.js";
 
 function loadLocalFestivalServiceKey() {
   if (
@@ -40,11 +38,6 @@ loadLocalFestivalServiceKey();
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
 const app = await buildApp();
-let stopNotificationScheduler = () => {};
-
-app.addHook("onClose", async () => {
-  stopNotificationScheduler();
-});
 
 function getLanGraphqlUrls(port: number) {
   return Object.values(os.networkInterfaces())
@@ -62,8 +55,6 @@ await app.listen({
   port,
   host: process.env.API_HOST ?? "0.0.0.0",
 });
-
-stopNotificationScheduler = startNotificationScheduler(prisma);
 
 console.log(`RouteOne API ready at http://localhost:${port}/graphql`);
 

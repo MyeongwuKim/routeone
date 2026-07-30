@@ -448,34 +448,3 @@ export async function runNotificationSchedulerOnce(
     },
   });
 }
-
-export function startNotificationScheduler(prisma: PrismaClient) {
-  const parsedInterval = Number(
-    process.env.NOTIFICATION_SCHEDULER_INTERVAL_MS
-  );
-  const intervalMs = Number.isFinite(parsedInterval)
-    ? Math.max(15_000, parsedInterval)
-    : 60_000;
-  let isRunning = false;
-
-  const run = async () => {
-    if (isRunning) {
-      return;
-    }
-
-    isRunning = true;
-    try {
-      await runNotificationSchedulerOnce(prisma);
-    } catch (error) {
-      console.error("[notification-scheduler] run failed", error);
-    } finally {
-      isRunning = false;
-    }
-  };
-
-  void run();
-  const intervalId = setInterval(() => void run(), intervalMs);
-  intervalId.unref();
-
-  return () => clearInterval(intervalId);
-}

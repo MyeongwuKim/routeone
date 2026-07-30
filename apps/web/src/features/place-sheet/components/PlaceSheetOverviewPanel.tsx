@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
 import { localizePlaceCategoryLabel, type UiText } from "@/lib/uiText";
 import type { NearbyTouristPlace } from "@/lib/visitKoreaTourApi";
@@ -193,10 +194,17 @@ function PlaceSheetOverviewPanel({
                 );
               })}
             </div>
-          ) : (
+          ) : nearbyTouristError ? (
             <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50 px-3 py-4 text-center text-sm text-slate-500 dark:border-brand-400/30 dark:bg-slate-950/35 dark:text-slate-300">
-              {nearbyTouristError ?? text.placeSheet.nearbyEmpty}
+              {nearbyTouristError}
             </div>
+          ) : (
+            <PotatoLoadingCard
+              title={text.placeSheet.nearbyEmpty}
+              animation="empty"
+              compact
+              className="shadow-sm"
+            />
           )}
           <p className="mt-3 text-xs leading-5 text-slate-500">
             {text.placeSheet.nearbyFootnote}

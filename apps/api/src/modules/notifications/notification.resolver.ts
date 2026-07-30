@@ -4,10 +4,7 @@ import type {
   RouteReviewNotificationKind,
 } from "@prisma/client";
 import type { GraphQLContext } from "../../context.js";
-import {
-  normalizeAccountId,
-  requireUser,
-} from "../../lib/auth.js";
+import { requireUser } from "../../lib/auth.js";
 import {
   getNotificationInbox,
   getUnreadNotificationCount,
@@ -287,23 +284,6 @@ function requireAuthenticatedNotificationUser(context: GraphQLContext) {
     context.authenticatedUserId !== context.user.id
   ) {
     throw new Error("로그인이 필요합니다.");
-  }
-
-  const configuredAccountIds =
-    process.env.NOTIFICATION_TEST_ACCOUNT_IDS ??
-    (process.env.NODE_ENV === "production" ? "" : "mw1993");
-  const allowedAccountIds = new Set(
-    configuredAccountIds
-      .split(",")
-      .map(normalizeAccountId)
-      .filter(Boolean)
-  );
-  const accountId = context.user.accountId
-    ? normalizeAccountId(context.user.accountId)
-    : null;
-
-  if (!accountId || !allowedAccountIds.has(accountId)) {
-    throw new Error("테스트 알림을 보낼 권한이 없습니다.");
   }
 
   return context.user;
