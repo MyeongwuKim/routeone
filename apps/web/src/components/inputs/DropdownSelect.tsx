@@ -14,6 +14,7 @@ type DropdownSelectProps<TValue extends string> = {
   value: TValue;
   onChange: (value: TValue) => void;
   ariaLabel?: string;
+  valuePrefix?: ReactNode;
   className?: string;
   buttonClassName?: string;
   menuClassName?: string;
@@ -28,6 +29,7 @@ function DropdownSelect<TValue extends string>({
   value,
   onChange,
   ariaLabel,
+  valuePrefix,
   className,
   buttonClassName,
   menuClassName,
@@ -79,7 +81,14 @@ function DropdownSelect<TValue extends string>({
               {selectedOption.icon}
             </span>
           ) : null}
-          <span className="min-w-0 truncate">{selectedOption?.label}</span>
+          <span className="min-w-0 truncate">
+            {valuePrefix ? (
+              <span className="text-slate-500 dark:text-slate-300">
+                {valuePrefix}
+              </span>
+            ) : null}
+            {selectedOption?.label}
+          </span>
         </span>
         <MdKeyboardArrowDown
           className={`shrink-0 text-xl transition ${isOpen ? "rotate-180" : ""}`}

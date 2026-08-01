@@ -9,10 +9,12 @@ import {
 import type { NotificationInboxQuery } from "@/generated/graphql";
 import { getAuthToken } from "@/lib/authToken";
 import { nativeBridge } from "@/native-bridge";
+import { useAppLanguageStore } from "@/stores/appLanguageStore";
 
 function NativeNotificationInboxSync() {
   const location = useLocation();
   const queryClient = useQueryClient();
+  const appLanguage = useAppLanguageStore((state) => state.language);
   const optimisticallyCountedNotificationIdsRef = useRef(
     new Set<string>()
   );
@@ -117,6 +119,7 @@ function NativeNotificationInboxSync() {
             platform:
               pushToken.platform === "ios" ? "IOS" : "ANDROID",
             appVariant: pushToken.appVariant,
+            locale: appLanguage,
           });
 
           if (isActive) {
@@ -141,7 +144,7 @@ function NativeNotificationInboxSync() {
       isActive = false;
       unsubscribeAppActive();
     };
-  }, [location.pathname, queryClient]);
+  }, [appLanguage, location.pathname, queryClient]);
 
   useEffect(() => {
     if (!getAuthToken() || !nativeBridge.runtime.isAvailable()) {

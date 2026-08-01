@@ -1,12 +1,15 @@
 import { MdDragIndicator } from "react-icons/md";
 import PlaceCartRouteMapPopup from "@/features/route-checkout/components/cart-steps/PlaceCartRouteMapPopup";
 import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupController";
+import GpsTestLocationPopup from "./GpsTestLocationPopup";
 import {
   ActualStayMinutesPopup,
   EarlyRouteCompletionPopup,
+  PhotoPublicationPopup,
   StayMinutesPopup,
   VerificationPhotoPreviewPopup,
   VisitCompletionPopup,
+  VisitTimesEditPopup,
 } from "./DayRouteDialogs";
 
 type DayRoutePopupOverlaysProps = {
@@ -36,17 +39,34 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
     handleCompleteEarlyRouteAsIs,
     handleCompleteEarlyRouteWithStartDate,
     visitCompletionTarget,
+    visitTimesEditTarget,
     visitSavingStopId,
     visitCompletionMode,
     setVisitCompletionTarget,
+    setVisitTimesEditTarget,
+    handleUpdateVisitTimes,
     handleCompleteStopVisitWithGps,
     handleCompleteStopVisitWithPhoto,
     handleCompleteStopVisitManually,
     actualStayMinutesTarget,
-    handleSkipActualStayMinutes,
+    setActualStayMinutesTarget,
+    handleCancelStopCheckIn,
     handleSaveActualStayMinutes,
     verificationPhotoPreviewTarget,
+    canManageVerificationPhoto,
+    canReplaceVerificationPhoto,
     setVerificationPhotoPreviewTarget,
+    photoPublicationTarget,
+    handleSetPhotoPublication,
+    handleDeleteVerificationPhoto,
+    handleReplaceVerificationPhoto,
+    handleKeepPhotoPrivate,
+    gpsTestTarget,
+    gpsTestLocation,
+    isGpsTestApplying,
+    setGpsTestTarget,
+    handleApplyGpsTestLocation,
+    handleClearGpsTestLocation,
   } = controller;
 
   return (
@@ -137,11 +157,30 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
           }}
         />
       ) : null}
+      {visitTimesEditTarget ? (
+        <VisitTimesEditPopup
+          key={visitTimesEditTarget.stop.id}
+          target={visitTimesEditTarget}
+          isSaving={visitSavingStopId === visitTimesEditTarget.stop.id}
+          onClose={() => {
+            if (!visitSavingStopId) {
+              setVisitTimesEditTarget(null);
+            }
+          }}
+          onApply={(target, checkedInAt, checkedOutAt) => {
+            void handleUpdateVisitTimes(target, checkedInAt, checkedOutAt);
+          }}
+        />
+      ) : null}
       {actualStayMinutesTarget ? (
         <ActualStayMinutesPopup
+          key={actualStayMinutesTarget.stop.id}
           target={actualStayMinutesTarget}
           isSaving={visitSavingStopId === actualStayMinutesTarget.stop.id}
-          onSkip={handleSkipActualStayMinutes}
+          onClose={() => setActualStayMinutesTarget(null)}
+          onCancelCheckIn={(target) => {
+            void handleCancelStopCheckIn(target);
+          }}
           onApply={(target, actualStayMinutes) => {
             void handleSaveActualStayMinutes(target, actualStayMinutes);
           }}
@@ -150,7 +189,44 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
       {verificationPhotoPreviewTarget ? (
         <VerificationPhotoPreviewPopup
           target={verificationPhotoPreviewTarget}
-          onClose={() => setVerificationPhotoPreviewTarget(null)}
+          canManage={canManageVerificationPhoto}
+          canReplace={canReplaceVerificationPhoto}
+          isSaving={visitSavingStopId === verificationPhotoPreviewTarget.stop.id}
+          onClose={() => {
+            if (!visitSavingStopId) {
+              setVerificationPhotoPreviewTarget(null);
+            }
+          }}
+          onChangePublication={handleSetPhotoPublication}
+          onDelete={handleDeleteVerificationPhoto}
+          onReplace={handleReplaceVerificationPhoto}
+        />
+      ) : null}
+      {photoPublicationTarget ? (
+        <PhotoPublicationPopup
+          target={photoPublicationTarget}
+          isSaving={visitSavingStopId === photoPublicationTarget.stop.id}
+          onKeepPrivate={() => {
+            if (!visitSavingStopId) {
+              handleKeepPhotoPrivate();
+            }
+          }}
+          onPublish={(target) => handleSetPhotoPublication(target, true)}
+        />
+      ) : null}
+      {gpsTestTarget ? (
+        <GpsTestLocationPopup
+          key={gpsTestTarget.stop.id}
+          target={gpsTestTarget}
+          activeLocation={gpsTestLocation}
+          isApplying={isGpsTestApplying}
+          onApply={handleApplyGpsTestLocation}
+          onClear={handleClearGpsTestLocation}
+          onClose={() => {
+            if (!isGpsTestApplying) {
+              setGpsTestTarget(null);
+            }
+          }}
         />
       ) : null}
     </>

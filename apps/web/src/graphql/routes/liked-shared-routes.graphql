@@ -1,6 +1,9 @@
 query LikedSharedRoutes {
   likedRoutes {
     ...RouteSummaryFields
+    owner {
+      ...SharedRouteOwnerFields
+    }
     stops {
       id
       place {

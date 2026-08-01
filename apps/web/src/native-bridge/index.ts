@@ -14,6 +14,7 @@ import {
 import {
   getNativeDeliveredNotifications,
   getNativePushToken,
+  setNativeRouteArrivalTestLocation,
   syncNativeFestivalNotifications,
   syncNativeRouteArrivalNotifications,
   syncNativeRouteReviewNotifications,
@@ -45,6 +46,7 @@ export const nativeBridge = {
   notifications: {
     getDelivered: getNativeDeliveredNotifications,
     getPushToken: getNativePushToken,
+    setRouteArrivalTestLocation: setNativeRouteArrivalTestLocation,
     syncRouteArrivals: syncNativeRouteArrivalNotifications,
     syncFestivals: syncNativeFestivalNotifications,
     syncRouteReviews: syncNativeRouteReviewNotifications,
@@ -68,6 +70,7 @@ export type {
   NativeAppInfo,
   NativeArrivalNotificationPlace,
   NativeArrivalNotificationSyncResult,
+  NativeArrivalTestLocationResult,
   NativeAuthSessionEndReason,
   NativeBridgeApi,
   NativeDeliveredRouteArrivalNotification,

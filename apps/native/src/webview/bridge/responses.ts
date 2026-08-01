@@ -8,6 +8,7 @@ import type {
   NativePhotoResponse,
   NativePushTokenResponse,
   NativeRouteArrivalNotificationSyncResponse,
+  NativeRouteArrivalTestLocationResponse,
   NativeRouteReviewNotificationSyncResponse,
   NativeSaveImageResponse,
   WebViewRef,
@@ -99,6 +100,19 @@ export function postNativeRouteArrivalNotificationSyncResponse(
   postNativeResponse(
     webViewRef,
     "__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_SYNC_RESPONSE__",
+    id,
+    payload
+  );
+}
+
+export function postNativeRouteArrivalTestLocationResponse(
+  webViewRef: WebViewRef,
+  id: string,
+  payload: NativeRouteArrivalTestLocationResponse
+) {
+  postNativeResponse(
+    webViewRef,
+    "__ROUTEONE_NATIVE_ROUTE_ARRIVAL_TEST_LOCATION_RESPONSE__",
     id,
     payload
   );

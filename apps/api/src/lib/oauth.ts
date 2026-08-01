@@ -45,7 +45,10 @@ export type VerifiedOAuthIdentity = {
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys";
 const JWKS_CACHE_TTL_MS = 1000 * 60 * 60;
-const DEFAULT_APPLE_CLIENT_ID = "com.routeone.app";
+const DEFAULT_APPLE_CLIENT_IDS = [
+  "com.routeone.app",
+  "com.routeone.app.dev",
+];
 
 const jwksCache = new Map<
   string,
@@ -201,7 +204,7 @@ function getAppleClientIds() {
         "APPLE_SERVICE_ID",
         "EXPO_PUBLIC_APPLE_CLIENT_ID"
       ),
-      DEFAULT_APPLE_CLIENT_ID,
+      ...DEFAULT_APPLE_CLIENT_IDS,
     ])
   );
 }

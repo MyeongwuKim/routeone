@@ -41,6 +41,7 @@ export type RegisterPushDeviceInput = {
   expoPushToken: string;
   platform: PushPlatform;
   appVariant?: string | null;
+  locale?: string | null;
 };
 
 function normalizeRegionCodes(regionCodes: string[]) {
@@ -76,6 +77,20 @@ function normalizeAppVariant(value?: string | null) {
   }
 
   return appVariant || null;
+}
+
+function normalizeNotificationLocale(value?: string | null) {
+  const locale = value?.trim().toLowerCase() ?? "";
+
+  if (!locale) {
+    return null;
+  }
+
+  if (locale !== "ko" && locale !== "en") {
+    throw new Error("알림 언어 값이 올바르지 않습니다.");
+  }
+
+  return locale;
 }
 
 export function getNotificationSettings(prisma: PrismaClient, user: User) {
@@ -135,9 +150,22 @@ export async function registerPushDevice(
   input: RegisterPushDeviceInput
 ) {
   const expoPushToken = normalizeExpoPushToken(input.expoPushToken);
+  const locale = normalizeNotificationLocale(input.locale);
   const now = new Date();
 
-  await getNotificationSettings(prisma, user);
+  await Promise.all([
+    getNotificationSettings(prisma, user),
+    locale && locale !== user.locale
+      ? prisma.user.update({
+          where: {
+            id: user.id,
+          },
+          data: {
+            locale,
+          },
+        })
+      : Promise.resolve(),
+  ]);
 
   return prisma.pushDevice.upsert({
     where: {

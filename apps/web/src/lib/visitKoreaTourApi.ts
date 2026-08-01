@@ -112,6 +112,11 @@ export type TourPlaceDetail = {
   infoCenter: string;
 };
 
+export type TourPlaceBasicInfo = {
+  title: string;
+  address: string;
+};
+
 export type TouristConcentrationPoint = {
   touristName: string;
   baseYmd: string;
@@ -1167,6 +1172,59 @@ export async function fetchTourPlaceDetail(
     images,
     ...introFields,
   } satisfies TourPlaceDetail;
+}
+
+export async function fetchTourPlaceBasicInfo(
+  serviceKey: string,
+  contentId: string,
+  language: AppLanguage = "ko"
+) {
+  if (!serviceKey || !contentId) {
+    throw new Error("Tour place basic info params are missing.");
+  }
+
+  const query = new URLSearchParams({
+    serviceKey: normalizeServiceKey(serviceKey),
+    MobileOS: "ETC",
+    MobileApp: "RouteOne",
+    _type: "json",
+    contentId,
+    numOfRows: "10",
+    pageNo: "1",
+  });
+  const response = await fetch(
+    `${getTourApiUrl(language, "detailCommon2")}?${query.toString()}`
+  );
+
+  if (!response.ok) {
+    const errorText = (await response.text()).trim();
+    throw new Error(
+      `Tour basic info request failed: ${response.status}${
+        errorText ? ` (${errorText})` : ""
+      }`
+    );
+  }
+
+  const data = (await response.json()) as TourApiResponse;
+  const resultCode = data.response?.header?.resultCode;
+
+  if (resultCode && resultCode !== "0000") {
+    const resultMsg = data.response?.header?.resultMsg ?? "Unknown error";
+    throw new Error(`Tour basic info API error: ${resultCode} ${resultMsg}`);
+  }
+
+  const item = toArray(data.response?.body?.items?.item)[0];
+  const title = stripHtml(item?.title);
+  const address = stripHtml(item?.addr1);
+
+  if (!title && !address) {
+    throw new Error("Tour place basic info is empty.");
+  }
+
+  return {
+    title,
+    address,
+  } satisfies TourPlaceBasicInfo;
 }
 
 export async function fetchNearbyTouristPlaces(

@@ -234,7 +234,6 @@ export type UiText = {
     emptyTitle: string;
     emptyDescription: string;
     loadError: string;
-    viewAll: string;
     collapse: string;
     showMore: (count: number) => string;
     openFestivalAria: (festivalTitle: string) => string;
@@ -246,6 +245,7 @@ export type UiText = {
     routeReviewCompletedTitle: (routeTitle: string) => string;
     routeReviewIncompleteTitle: (routeTitle: string) => string;
     routeReviewUnstartedTitle: (routeTitle: string) => string;
+    routeReviewCompletedDescription: (deadlineAt: string) => string;
     routeReviewDescription: (deadlineAt: string) => string;
     formatDate: (dateKey: string) => string;
     formatTimestamp: (value: string) => string;
@@ -378,14 +378,13 @@ export type UiText = {
     likedError: string;
     likedEmpty: string;
     sortAria: string;
+    sortButtonLabel: string;
     sortSharedDescLabel: string;
     sortSharedDescDescription: string;
     sortSharedAscLabel: string;
     sortSharedAscDescription: string;
     sortLikesDescLabel: string;
     sortLikesDescDescription: string;
-    sortLikesAscLabel: string;
-    sortLikesAscDescription: string;
     filterButton: (count: number) => string;
     clearActiveFilters: string;
     filterTitle: string;
@@ -498,6 +497,7 @@ export type UiText = {
     emptyStartDescription: string;
     start: string;
     firstPlace: string;
+    nextPlace: string;
     noStartGps: string;
     firstPlaceTravel: (label: string) => string;
     nextPlaceTravel: (label: string) => string;
@@ -512,10 +512,64 @@ export type UiText = {
     nextDayClock: (clock: string) => string;
     dayOffsetClock: (days: number, clock: string) => string;
     visited: string;
+    visiting: string;
     notVisited: string;
+    arrivedAt: (clock: string) => string;
+    actualTimeRange: (start: string, end: string) => string;
+    ongoingTimeRange: (start: string) => string;
+    estimatedTimeRange: (start: string, end: string) => string;
+    actualStay: (duration: string) => string;
+    plannedStay: (duration: string) => string;
+    editVisitTimesAria: (title: string) => string;
+    visitTimeEdited: string;
+    visitTimeEditTitle: string;
+    visitTimeEditDescription: string;
+    arrivalTime: string;
+    completionTime: string;
+    gpsVerificationTimePreserved: string;
+    stayTimeAfterEdit: (duration: string) => string;
+    visitTimeFutureError: string;
+    visitTimeOrderError: string;
+    visitTimeMaxError: string;
+    visitTimePreviousStopError: (title: string) => string;
+    visitTimePreviousStopOngoingError: (title: string) => string;
+    visitTimeNextStopError: (title: string) => string;
+    saveVisitTimes: string;
     placeFallback: string;
     gpsVerification: string;
     gpsVerificationPhoto: string;
+    photoPublicationQuestion: string;
+    photoPublicationDescription: (title: string) => string;
+    photoPublicationPrivacy: string;
+    publishPhoto: string;
+    keepPhotoPrivate: string;
+    photoPublished: string;
+    photoPrivate: string;
+    unpublishPhoto: string;
+    deletePhoto: string;
+    deletePhotoQuestion: string;
+    deletePhotoDescription: string;
+    cancelPhotoDelete: string;
+    addVisitPhoto: string;
+    replaceVisitPhoto: string;
+    gpsTestTitle: (title: string) => string;
+    gpsTestDescription: string;
+    gpsTestButton: string;
+    gpsTestActiveButton: string;
+    gpsTestOpenAria: (title: string) => string;
+    gpsTestCloseAria: string;
+    gpsTestPlaceLegend: string;
+    gpsTestLocationLegend: string;
+    gpsTestInsideRadius: (distance: string) => string;
+    gpsTestOutsideRadius: (distance: string) => string;
+    gpsTestApplying: string;
+    gpsTestApplyLocation: string;
+    gpsTestAppliedWithNotification: string;
+    gpsTestAppliedWithoutNotification: string;
+    gpsTestUseRealLocation: string;
+    gpsTestCleared: string;
+    gpsTestMoveFailed: string;
+    gpsTestUnavailable: string;
     photoRecord: string;
     manualCompletion: string;
     noGps: string;
@@ -525,13 +579,33 @@ export type UiText = {
     moveOrderAria: (title: string) => string;
     cancelVisitAria: (title: string) => string;
     markVisitAria: (title: string) => string;
+    checkInAria: (title: string) => string;
+    finishVisitAria: (title: string) => string;
     cancelVisitTitle: string;
     markVisitTitle: string;
+    checkInTitle: string;
+    finishVisitTitle: string;
+    arrivalCheckTitle: string;
+    arrivalCheckDescription: string;
+    gpsCheckIn: string;
+    manualVisitCompletion: string;
+    visitFinishQuestion: string;
+    elapsedSinceArrival: (duration: string) => string;
+    actualStayQuestion: string;
+    actualStayDescription: string;
+    continueStay: string;
+    completeVisit: string;
+    cancelCheckIn: string;
+    skipActualStay: string;
+    saveActualStay: string;
     allPlacesCompleted: string;
     remainingPlaces: (count: number) => string;
     expectedStart: string;
     expectedEnd: string;
     totalDuration: string;
+    actualStart: string;
+    actualEnd: string;
+    actualTotalDuration: string;
     dragGuide: string;
     dropHere: string;
     dropToEnd: string;
@@ -565,6 +639,7 @@ export type UiText = {
     predictionTop: (rank: number) => string;
     addToRouteAria: string;
     addToCartToast: string;
+    viewSharedRoutesWithPlace: string;
     userAverageStay: string;
     placeImageAlt: (title: string, index: number) => string;
     searchMore: string;
@@ -1107,7 +1182,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       emptyDescription:
         "축제 소식, 장소 도착, 루트 기록 안내가 도착하면 여기에 모여요.",
       loadError: "알림을 불러오지 못했어요",
-      viewAll: "축제 전체 보기",
       collapse: "접기",
       showMore: (count) => `${count}개 더 보기`,
       openFestivalAria: (festivalTitle) => `${festivalTitle} 축제 보기`,
@@ -1115,14 +1189,22 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       openRouteAria: (routeTitle) => `${routeTitle} 기록 보기`,
       summaryTitle: (regionLabel, count) =>
         `${regionLabel} 축제 ${count}개`,
-      arrivalTitle: (placeTitle) => `${placeTitle} 근처에 도착했어요`,
-      arrivalDescription: "인증 사진을 남겨봐요.",
+      arrivalTitle: (placeTitle) => `${placeTitle}에 도착했어요`,
+      arrivalDescription: "방문 인증 사진을 남겨보세요.",
       routeReviewCompletedTitle: (routeTitle) =>
-        `${routeTitle} 여행을 마쳤어요`,
+        `${routeTitle}, 무사히 잘 마쳤네요`,
       routeReviewIncompleteTitle: (routeTitle) =>
         `${routeTitle} 기록을 마무리해 보세요`,
       routeReviewUnstartedTitle: (routeTitle) =>
         `${routeTitle} 일정이 끝났어요`,
+      routeReviewCompletedDescription: (deadlineAt) => {
+        const date = new Date(deadlineAt);
+        const correctionText = Number.isFinite(date.getTime())
+          ? `빠진 기록은 ${date.getMonth() + 1}월 ${date.getDate()}일까지 보완할 수 있어요.`
+          : "빠진 기록은 종료 후 7일 안에 보완할 수 있어요.";
+
+        return `${correctionText} DAY 카드를 만들거나 내 루트를 공유해 보세요.`;
+      },
       routeReviewDescription: (deadlineAt) => {
         const date = new Date(deadlineAt);
         return Number.isFinite(date.getTime())
@@ -1211,7 +1293,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       dayTrip: "당일치기",
       nightTrip: (nights, days) => `${nights}박 ${days}일`,
       completed: "완료",
-      proof: "증빙",
+      proof: "인증",
       average: "평균",
       durationMinutes: (minutes) => `${minutes}분`,
       durationHours: (hours) => `${hours}시간`,
@@ -1275,14 +1357,13 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       likedError: "좋아요한 공유 루트를 불러오지 못했어요.",
       likedEmpty: "아직 좋아요한 공유 루트가 없어요.",
       sortAria: "공유 루트 정렬",
-      sortSharedDescLabel: "최근 공유순",
+      sortButtonLabel: "정렬",
+      sortSharedDescLabel: "최신순",
       sortSharedDescDescription: "최근 공유된 루트 먼저",
-      sortSharedAscLabel: "오래된 공유순",
+      sortSharedAscLabel: "오래된순",
       sortSharedAscDescription: "오래전에 공유된 루트 먼저",
-      sortLikesDescLabel: "하트 많은순",
+      sortLikesDescLabel: "인기순",
       sortLikesDescDescription: "하트가 많은 루트 먼저",
-      sortLikesAscLabel: "하트 적은순",
-      sortLikesAscDescription: "하트가 적은 루트 먼저",
       filterButton: (count) => `필터${count > 0 ? ` ${count}` : ""}`,
       clearActiveFilters: "전체 해제",
       filterTitle: "필터 옵션",
@@ -1411,6 +1492,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       emptyStartDescription: "장소를 추가하면 첫 장소가 출발 기준으로 표시돼요.",
       start: "출발",
       firstPlace: "첫 장소",
+      nextPlace: "다음 장소",
       noStartGps: "출발 GPS 없음",
       firstPlaceTravel: (label) => `첫 장소까지 ${label}`,
       nextPlaceTravel: (label) => `다음 장소까지 ${label}`,
@@ -1425,10 +1507,77 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       nextDayClock: (clock) => `다음날 ${clock}`,
       dayOffsetClock: (days, clock) => `+${days}일 ${clock}`,
       visited: "완료됨",
+      visiting: "머무는 중",
       notVisited: "방문 전",
+      arrivedAt: (clock) => `${clock} 도착`,
+      actualTimeRange: (start, end) => `${start} 도착 · ${end} 완료`,
+      ongoingTimeRange: (start) => `${start} 도착 · 머무는 중`,
+      estimatedTimeRange: (start, end) => `예상 ${start}-${end}`,
+      actualStay: (duration) => `실제 ${duration}`,
+      plannedStay: (duration) => `계획 ${duration}`,
+      editVisitTimesAria: (title) => `${title} 도착 및 완료시간 수정`,
+      visitTimeEdited: "수정됨",
+      visitTimeEditTitle: "방문시간 수정",
+      visitTimeEditDescription:
+        "일정 날짜는 그대로 두고 실제 도착·완료시간만 수정해요.",
+      arrivalTime: "도착시간",
+      completionTime: "완료시간",
+      gpsVerificationTimePreserved:
+        "GPS 인증 시각과 인증 위치는 원본 기록으로 그대로 보관돼요.",
+      stayTimeAfterEdit: (duration) => `수정 후 실제 체류시간 ${duration}`,
+      visitTimeFutureError: "현재보다 이후 시간은 입력할 수 없어요.",
+      visitTimeOrderError: "완료시간은 도착시간보다 빠를 수 없어요.",
+      visitTimeMaxError: "체류시간은 최대 8시간까지 기록할 수 있어요.",
+      visitTimePreviousStopError: (title) =>
+        `도착시간은 앞 장소 '${title}'의 완료시간보다 빠를 수 없어요.`,
+      visitTimePreviousStopOngoingError: (title) =>
+        `앞 장소 '${title}' 방문을 먼저 완료해 주세요.`,
+      visitTimeNextStopError: (title) =>
+        `방문시간은 다음 장소 '${title}'의 도착시간보다 늦을 수 없어요.`,
+      saveVisitTimes: "시간 저장",
       placeFallback: "장소",
       gpsVerification: "GPS 인증",
       gpsVerificationPhoto: "GPS 인증 사진",
+      photoPublicationQuestion: "이 사진을 장소 사진에 공개할까요?",
+      photoPublicationDescription: (title) =>
+        `공개하면 ${title} 상세의 ‘사용자들이 올린 사진’에서 다른 사용자가 볼 수 있어요.`,
+      photoPublicationPrivacy:
+        "사진만 공개되며 비공개 루트와 일정은 공개되지 않아요.",
+      publishPhoto: "사진 공개하기",
+      keepPhotoPrivate: "나만 보기",
+      photoPublished: "장소 사진에 공개 중",
+      photoPrivate: "나만 보는 사진",
+      unpublishPhoto: "공개 취소",
+      deletePhoto: "사진 삭제",
+      deletePhotoQuestion: "인증 사진을 삭제할까요?",
+      deletePhotoDescription:
+        "사진은 완전히 삭제되지만 방문과 체류 기록은 유지돼요.",
+      cancelPhotoDelete: "취소",
+      addVisitPhoto: "사진 추가",
+      replaceVisitPhoto: "사진 변경",
+      gpsTestTitle: (title) => `${title} GPS 테스트`,
+      gpsTestDescription:
+        "보라색 GPS 마커를 끌거나 지도를 눌러 테스트 위치를 옮겨보세요. 초록색 원이 도착 반경 100m예요.",
+      gpsTestButton: "테스트",
+      gpsTestActiveButton: "테스트 중",
+      gpsTestOpenAria: (title) => `${title} GPS 테스트 지도 열기`,
+      gpsTestCloseAria: "GPS 테스트 지도 닫기",
+      gpsTestPlaceLegend: "장소",
+      gpsTestLocationLegend: "테스트 위치",
+      gpsTestInsideRadius: (distance) =>
+        `장소까지 ${distance} · GPS 성공 예상`,
+      gpsTestOutsideRadius: (distance) =>
+        `장소까지 ${distance} · GPS 실패 예상`,
+      gpsTestApplying: "적용 중",
+      gpsTestApplyLocation: "이 위치 적용",
+      gpsTestAppliedWithNotification:
+        "테스트 위치를 적용했고 도착 알림도 보냈어요.",
+      gpsTestAppliedWithoutNotification:
+        "테스트 위치를 적용했어요. 도착 반경 밖이라 알림은 보내지 않았어요.",
+      gpsTestUseRealLocation: "실제 GPS로 복귀",
+      gpsTestCleared: "테스트 위치를 해제하고 실제 GPS로 돌아왔어요.",
+      gpsTestMoveFailed: "테스트 위치를 바꾸지 못했어요.",
+      gpsTestUnavailable: "이 앱에서는 GPS 테스트를 사용할 수 없어요.",
       photoRecord: "사진 기록",
       manualCompletion: "수동",
       noGps: "GPS 없음",
@@ -1438,13 +1587,35 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       moveOrderAria: (title) => `${title} 순서 이동`,
       cancelVisitAria: (title) => `${title} 완료 취소`,
       markVisitAria: (title) => `${title} 완료 처리`,
+      checkInAria: (title) => `${title} 도착 인증`,
+      finishVisitAria: (title) => `${title} 방문 완료`,
       cancelVisitTitle: "완료 취소",
       markVisitTitle: "완료 처리",
+      checkInTitle: "도착 인증",
+      finishVisitTitle: "방문 완료",
+      arrivalCheckTitle: "도착을 인증할까요?",
+      arrivalCheckDescription:
+        "장소 반경 100m 안에서 GPS로 도착을 확인해요. 사진을 남기면 사진 인증도 함께 저장돼요.",
+      gpsCheckIn: "GPS로 도착 인증",
+      manualVisitCompletion: "인증 없이 방문 완료",
+      visitFinishQuestion: "방문을 마칠까요?",
+      elapsedSinceArrival: (duration) =>
+        `도착 후 ${duration}이 지났어요. 완료하면 실제 체류시간으로 기록돼요.`,
+      actualStayQuestion: "얼마나 머물렀나요?",
+      actualStayDescription: "실제로 머문 시간을 입력해 주세요.",
+      continueStay: "계속 머물기",
+      completeVisit: "방문 완료",
+      cancelCheckIn: "도착 인증 취소",
+      skipActualStay: "건너뛰기",
+      saveActualStay: "저장",
       allPlacesCompleted: "모든 장소 완료",
       remainingPlaces: (count) => `${count}곳 남음`,
       expectedStart: "예상 출발",
       expectedEnd: "예상 종료",
       totalDuration: "총 소요",
+      actualStart: "실제 시작",
+      actualEnd: "실제 종료",
+      actualTotalDuration: "실제 소요",
       dragGuide: "오른쪽 핸들을 잡고 원하는 위치로 옮겨 주세요.",
       dropHere: "여기에 놓기",
       dropToEnd: "맨 뒤에 놓기",
@@ -1483,6 +1654,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       predictionTop: (rank) => `예측 TOP ${rank}`,
       addToRouteAria: "내 루트 담기",
       addToCartToast: "여행지 카트에 담았습니다",
+      viewSharedRoutesWithPlace: "이 장소가 포함된 루트 보기",
       userAverageStay: "유저 평균 체류",
       placeImageAlt: (title, index) => `${title} 이미지 ${index}`,
       searchMore: "더 찾아보기",
@@ -1658,7 +1830,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       appendResultDescription: (title) =>
         `${title}에 붙일 새 DAY입니다. 체류시간과 순서를 확인한 뒤 추가해요.`,
       resultDescription: (tempoLabel) =>
-        `${tempoLabel} 템포 기준 추천 체류시간과 거리 기반 차량 이동 추정치로 배치한 일정입니다. 체류시간은 역 카드에서 직접 수정할 수 있어요.`,
+        `추천 루트는 ${tempoLabel} 템포의 예상 체류시간과 장소 간 거리를 바탕으로 계산한 참고 일정이에요. 실제 이동 시간과 현장 상황에 따라 달라질 수 있으니, 일정과 체류시간을 확인한 뒤 조정해 주세요.`,
       overScheduleWarning: (clock) =>
         `담은 장소가 많아 일부 일정이 희망 종료 시간 ${clock}을 넘습니다. 여행 일수를 늘리거나 체류시간을 줄여 주세요.`,
       startLocationLabel: "출발 위치",
@@ -2092,7 +2264,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       emptyDescription:
         "Festival, arrival, and route record updates will appear here.",
       loadError: "Could not load notifications",
-      viewAll: "View all festivals",
       collapse: "Show less",
       showMore: (count) => `Show ${count} more`,
       openFestivalAria: (festivalTitle) => `View ${festivalTitle}`,
@@ -2103,11 +2274,22 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       arrivalTitle: (placeTitle) => `You arrived near ${placeTitle}`,
       arrivalDescription: "Leave a verification photo.",
       routeReviewCompletedTitle: (routeTitle) =>
-        `${routeTitle} is complete`,
+        `${routeTitle}—you made it!`,
       routeReviewIncompleteTitle: (routeTitle) =>
         `Finish your ${routeTitle} record`,
       routeReviewUnstartedTitle: (routeTitle) =>
         `${routeTitle} has ended`,
+      routeReviewCompletedDescription: (deadlineAt) => {
+        const date = new Date(deadlineAt);
+        const correctionText = Number.isFinite(date.getTime())
+          ? `Update any missing details through ${date.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            })}.`
+          : "Update any missing details within 7 days.";
+
+        return `${correctionText} Make a DAY card or share your route.`;
+      },
       routeReviewDescription: (deadlineAt) => {
         const date = new Date(deadlineAt);
         return Number.isFinite(date.getTime())
@@ -2211,7 +2393,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       dayTrip: "Day trip",
       nightTrip: (nights, days) => `${nights}N ${days}D`,
       completed: "Completed",
-      proof: "Proof",
+      proof: "Verification",
       average: "Average",
       durationMinutes: (minutes) => `${minutes}m`,
       durationHours: (hours) => `${hours}h`,
@@ -2276,14 +2458,13 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       likedError: "Could not load liked shared routes.",
       likedEmpty: "No liked shared routes yet",
       sortAria: "Sort shared routes",
-      sortSharedDescLabel: "Newest shared",
+      sortButtonLabel: "Sort",
+      sortSharedDescLabel: "Newest",
       sortSharedDescDescription: "Recently shared routes first",
-      sortSharedAscLabel: "Oldest shared",
+      sortSharedAscLabel: "Oldest",
       sortSharedAscDescription: "Older shared routes first",
-      sortLikesDescLabel: "Most hearts",
+      sortLikesDescLabel: "Popular",
       sortLikesDescDescription: "Routes with more hearts first",
-      sortLikesAscLabel: "Fewest hearts",
-      sortLikesAscDescription: "Routes with fewer hearts first",
       filterButton: (count) => `Filter${count > 0 ? ` ${count}` : ""}`,
       clearActiveFilters: "Clear all",
       filterTitle: "Filter Options",
@@ -2412,6 +2593,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       emptyStartDescription: "Add places to use the first place as the start.",
       start: "Start",
       firstPlace: "First place",
+      nextPlace: "Next place",
       noStartGps: "No start GPS",
       firstPlaceTravel: (label) => `To first place: ${label}`,
       nextPlaceTravel: (label) => `To next place: ${label}`,
@@ -2426,10 +2608,77 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       nextDayClock: (clock) => `Next day ${clock}`,
       dayOffsetClock: (days, clock) => `+${days}d ${clock}`,
       visited: "Done",
+      visiting: "Visiting",
       notVisited: "Not visited",
+      arrivedAt: (clock) => `Arrived ${clock}`,
+      actualTimeRange: (start, end) => `Arrived ${start} · done ${end}`,
+      ongoingTimeRange: (start) => `Arrived ${start} · visiting`,
+      estimatedTimeRange: (start, end) => `Est. ${start}-${end}`,
+      actualStay: (duration) => `Actual ${duration}`,
+      plannedStay: (duration) => `Planned ${duration}`,
+      editVisitTimesAria: (title) => `Edit arrival and completion times for ${title}`,
+      visitTimeEdited: "Edited",
+      visitTimeEditTitle: "Edit visit time",
+      visitTimeEditDescription:
+        "Keep the schedule date and edit only the arrival and completion times.",
+      arrivalTime: "Arrival time",
+      completionTime: "Completion time",
+      gpsVerificationTimePreserved:
+        "The original GPS verification time and location will be preserved.",
+      stayTimeAfterEdit: (duration) => `Actual stay after edit: ${duration}`,
+      visitTimeFutureError: "Visit times cannot be in the future.",
+      visitTimeOrderError: "Completion time cannot be before arrival time.",
+      visitTimeMaxError: "A stay can be recorded for up to 8 hours.",
+      visitTimePreviousStopError: (title) =>
+        `Arrival cannot be before the completion time for the previous stop, '${title}'.`,
+      visitTimePreviousStopOngoingError: (title) =>
+        `Finish the previous stop, '${title}', first.`,
+      visitTimeNextStopError: (title) =>
+        `This visit cannot end after the arrival time for the next stop, '${title}'.`,
+      saveVisitTimes: "Save time",
       placeFallback: "Place",
       gpsVerification: "GPS verified",
       gpsVerificationPhoto: "GPS verification photo",
+      photoPublicationQuestion: "Share this photo on the place page?",
+      photoPublicationDescription: (title) =>
+        `Other users will be able to see it in the community photos for ${title}.`,
+      photoPublicationPrivacy:
+        "Only the photo is shared. Your private route and schedule stay private.",
+      publishPhoto: "Share photo",
+      keepPhotoPrivate: "Keep private",
+      photoPublished: "Shared on place page",
+      photoPrivate: "Private photo",
+      unpublishPhoto: "Stop sharing",
+      deletePhoto: "Delete photo",
+      deletePhotoQuestion: "Delete this verification photo?",
+      deletePhotoDescription:
+        "The photo will be permanently deleted, but your visit and stay record will remain.",
+      cancelPhotoDelete: "Cancel",
+      addVisitPhoto: "Add photo",
+      replaceVisitPhoto: "Change photo",
+      gpsTestTitle: (title) => `${title} GPS test`,
+      gpsTestDescription:
+        "Drag the purple GPS marker or tap the map. The green circle is the 100 m arrival radius.",
+      gpsTestButton: "Test",
+      gpsTestActiveButton: "Testing",
+      gpsTestOpenAria: (title) => `Open the GPS test map for ${title}`,
+      gpsTestCloseAria: "Close GPS test map",
+      gpsTestPlaceLegend: "Place",
+      gpsTestLocationLegend: "Test location",
+      gpsTestInsideRadius: (distance) =>
+        `${distance} from place · GPS should pass`,
+      gpsTestOutsideRadius: (distance) =>
+        `${distance} from place · GPS should fail`,
+      gpsTestApplying: "Applying",
+      gpsTestApplyLocation: "Apply location",
+      gpsTestAppliedWithNotification:
+        "The test location was applied and the arrival alert was sent.",
+      gpsTestAppliedWithoutNotification:
+        "The test location was applied. No alert was sent outside the arrival radius.",
+      gpsTestUseRealLocation: "Use real GPS",
+      gpsTestCleared: "The test location was cleared. Using real GPS.",
+      gpsTestMoveFailed: "Could not change the test location.",
+      gpsTestUnavailable: "GPS testing is unavailable in this app.",
       photoRecord: "Photo record",
       manualCompletion: "Manual",
       noGps: "No GPS",
@@ -2439,13 +2688,35 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       moveOrderAria: (title) => `Move ${title}`,
       cancelVisitAria: (title) => `Mark ${title} incomplete`,
       markVisitAria: (title) => `Mark ${title} complete`,
+      checkInAria: (title) => `Verify arrival at ${title}`,
+      finishVisitAria: (title) => `Complete visit to ${title}`,
       cancelVisitTitle: "Mark incomplete",
       markVisitTitle: "Mark complete",
+      checkInTitle: "Verify arrival",
+      finishVisitTitle: "Complete visit",
+      arrivalCheckTitle: "Verify your arrival?",
+      arrivalCheckDescription:
+        "Verify your arrival with GPS within 100 m. Add a photo to save photo verification too.",
+      gpsCheckIn: "Verify arrival with GPS",
+      manualVisitCompletion: "Complete without verification",
+      visitFinishQuestion: "Finish this visit?",
+      elapsedSinceArrival: (duration) =>
+        `${duration} has passed since arrival. Completing records it as your actual stay.`,
+      actualStayQuestion: "How long did you stay?",
+      actualStayDescription: "Enter the time you actually spent here.",
+      continueStay: "Keep visiting",
+      completeVisit: "Complete visit",
+      cancelCheckIn: "Cancel arrival",
+      skipActualStay: "Skip",
+      saveActualStay: "Save",
       allPlacesCompleted: "All places completed",
       remainingPlaces: (count) => `${count} left`,
       expectedStart: "Expected Start",
       expectedEnd: "Expected End",
       totalDuration: "Total Time",
+      actualStart: "Actual Start",
+      actualEnd: "Actual End",
+      actualTotalDuration: "Actual Time",
       dragGuide: "Grab the handle on the right and move it where you want.",
       dropHere: "Drop here",
       dropToEnd: "Drop at end",
@@ -2484,6 +2755,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       predictionTop: (rank) => `TOP ${rank}`,
       addToRouteAria: "Add to my route",
       addToCartToast: "Added to your travel cart",
+      viewSharedRoutesWithPlace: "View routes with this place",
       userAverageStay: "Average User Stay",
       placeImageAlt: (title, index) => `${title} image ${index}`,
       searchMore: "Find more",
@@ -2661,7 +2933,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       appendResultDescription: (title) =>
         `This new DAY will be added to ${title}. Review the stay times and order before adding it.`,
       resultDescription: (tempoLabel) =>
-        `This schedule uses the ${tempoLabel} tempo, recommended stay times, and car travel estimates based on distance. You can edit stay time from each station card.`,
+        `This recommended route is a reference schedule based on estimated stay times for the ${tempoLabel} tempo and distances between places. Actual travel times and on-site conditions may vary, so review and adjust the schedule and stay times.`,
       overScheduleWarning: (clock) =>
         `Some stops go past your preferred end time of ${clock}. Add more trip days or shorten stay times.`,
       startLocationLabel: "Start point",
@@ -2742,7 +3014,23 @@ function findMappedPlaceCategory(label: string, text: UiText) {
     ([source]) => source.replace(/\s+/g, "") === compactLabel
   );
 
-  return compactMatch?.[1] ?? null;
+  if (compactMatch) {
+    return compactMatch[1];
+  }
+
+  if (text === UI_TEXT.ko) {
+    const koreanSourceMatch = Object.entries(
+      UI_TEXT.en.labels.placeCategories
+    ).find(
+      ([, englishLabel]) =>
+        englishLabel.replace(/\s+/g, "").toLowerCase() ===
+        compactLabel.toLowerCase()
+    );
+
+    return koreanSourceMatch?.[0] ?? null;
+  }
+
+  return null;
 }
 
 export function localizePlaceCategoryLabel(

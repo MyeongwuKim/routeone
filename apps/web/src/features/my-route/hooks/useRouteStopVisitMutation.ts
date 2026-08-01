@@ -22,9 +22,12 @@ import {
 } from "../services/visitPhotoService";
 import type {
   ActualStayMinutesTarget,
+  PhotoPublicationTarget,
+  VerificationPhotoPreviewTarget,
   VisitCompletionTarget,
+  VisitTimesEditTarget,
 } from "../models/dayRouteDialogTypes";
-import type { MyRouteDay, MyRouteStop } from "../types";
+import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
 import { isVisitedStop } from "../routeDisplay";
 
 type UseRouteStopVisitMutationOptions = {
@@ -38,6 +41,13 @@ type UseRouteStopVisitMutationOptions = {
   setActualStayMinutesTarget: (
     value: ActualStayMinutesTarget | null
   ) => void;
+  setPhotoPublicationTarget: (
+    value: PhotoPublicationTarget | null
+  ) => void;
+  setVerificationPhotoPreviewTarget: (
+    value: VerificationPhotoPreviewTarget | null
+  ) => void;
+  setVisitTimesEditTarget: (value: VisitTimesEditTarget | null) => void;
 };
 
 type PersistVisitVariables = {
@@ -63,6 +73,29 @@ type PrepareVisitPhotoVariables = {
   source: VisitPhotoSource;
 };
 
+type CheckInVariables = {
+  target: VisitCompletionTarget;
+  verification: RouteStopVisitVerificationInput;
+};
+
+type CompleteVisitVariables = {
+  target: ActualStayMinutesTarget;
+  actualStayMinutes: number | null;
+};
+
+type PhotoPublicationVariables = {
+  target: PhotoPublicationTarget;
+  published: boolean;
+};
+
+type ReplaceVisitPhotoVariables = VerificationPhotoPreviewTarget;
+
+type UpdateVisitTimesVariables = {
+  target: VisitTimesEditTarget;
+  checkedInAt: string;
+  checkedOutAt: string | null;
+};
+
 export function useRouteStopVisitMutation({
   routeId,
   activeDayId,
@@ -72,9 +105,115 @@ export function useRouteStopVisitMutation({
   setBaseStopIds,
   setVisitCompletionTarget,
   setActualStayMinutesTarget,
+  setPhotoPublicationTarget,
+  setVerificationPhotoPreviewTarget,
+  setVisitTimesEditTarget,
 }: UseRouteStopVisitMutationOptions) {
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
+  const invalidatePlaceVisitQueries = (stop: MyRouteStop) => {
+    const contentId =
+      stop.place.contentId?.trim() ||
+      stop.place.externalId?.trim() ||
+      stop.id;
+    const contentTypeId = stop.place.contentTypeId?.trim() ?? "";
+    const placeDetailKey = `${contentId}-${contentTypeId}`;
+
+    void queryClient.invalidateQueries({
+      queryKey: ["place-photos", placeDetailKey],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["place-stay-summary", placeDetailKey],
+    });
+  };
+  const applyRouteResult = (
+    nextRoute: MyRoute,
+    target: VisitCompletionTarget
+  ) => {
+    const nextDay = nextRoute.days.find(
+      (candidateDay) => candidateDay.id === target.routeDay.id
+    );
+    const nextStops = nextDay?.stops ?? target.routeDay.stops;
+
+    if (target.routeDay.id === activeDayId) {
+      setOrderedStops(nextStops);
+      setBaseStopIds(nextStops.map((nextStop) => nextStop.id));
+    }
+
+    queryClient.setQueryData<MyRoutesQuery>(
+      MY_ROUTES_QUERY_KEY,
+      (currentData) => upsertMyRouteCache(currentData, nextRoute)
+    );
+
+    return nextStops;
+  };
+  const checkInMutation = useMutation({
+    mutationFn: ({ target, verification }: CheckInVariables) =>
+      routeApi.checkInRouteStop(target.stop.id, verification),
+    onSuccess: (result, variables) => {
+      const nextStops = applyRouteResult(
+        result.checkInRouteStop,
+        variables.target
+      );
+      const nextStop = nextStops.find(
+        (candidateStop) => candidateStop.id === variables.target.stop.id
+      );
+      setVisitCompletionTarget(null);
+      if (variables.verification.photoUrl && nextStop) {
+        setPhotoPublicationTarget({
+          routeDay: variables.target.routeDay,
+          stop: nextStop,
+        });
+      } else {
+        showToast("도착 인증이 완료됐어요. 머무는 시간을 기록할게요.");
+      }
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "도착 인증을 저장하지 못했어요.",
+        2600
+      );
+    },
+  });
+  const completeVisitMutation = useMutation({
+    mutationFn: ({ target, actualStayMinutes }: CompleteVisitVariables) =>
+      routeApi.completeRouteStopVisit(target.stop.id, actualStayMinutes),
+    onSuccess: (result, variables) => {
+      const previousStops =
+        variables.target.routeDay.id === activeDayId
+          ? orderedStops
+          : variables.target.routeDay.stops;
+      const wasDayCompleted =
+        previousStops.length > 0 &&
+        previousStops.filter(isVisitedStop).length === previousStops.length;
+      const nextStops = applyRouteResult(
+        result.completeRouteStopVisit,
+        variables.target
+      );
+      const nextIsDayCompleted =
+        nextStops.length > 0 &&
+        nextStops.filter(isVisitedStop).length === nextStops.length;
+
+      setActualStayMinutesTarget(null);
+      showToast(
+        !wasDayCompleted && nextIsDayCompleted
+          ? `DAY ${variables.target.routeDay.dayIndex} 클리어`
+          : "방문을 완료했어요."
+      );
+      void queryClient.invalidateQueries({
+        queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
+      });
+      invalidatePlaceVisitQueries(variables.target.stop);
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error ? error.message : "방문을 완료하지 못했어요.",
+        2600
+      );
+    },
+  });
   const visitMutation = useMutation({
     mutationFn: ({
       stop,
@@ -148,7 +287,9 @@ export function useRouteStopVisitMutation({
               : variables.hasPhotoRecord
                 ? "사진 기록으로 완료 처리했어요."
                 : "장소를 완료 처리했어요."
-            : "완료를 취소했어요."
+            : variables.stop.checkedInAt
+              ? "도착 인증을 취소했어요."
+              : "완료를 취소했어요."
         );
       }
 
@@ -160,6 +301,20 @@ export function useRouteStopVisitMutation({
       void queryClient.invalidateQueries({
         queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
       });
+      invalidatePlaceVisitQueries(variables.stop);
+
+      if (variables.nextVisited && variables.hasPhotoRecord) {
+        const nextStop = nextStops.find(
+          (candidateStop) => candidateStop.id === variables.stop.id
+        );
+
+        if (nextStop) {
+          setPhotoPublicationTarget({
+            routeDay: variables.routeDay,
+            stop: nextStop,
+          });
+        }
+      }
     },
     onError: (error, variables, context) => {
       if (context?.previousRoutes) {
@@ -227,8 +382,16 @@ export function useRouteStopVisitMutation({
       return { ...target, verification } satisfies ActualStayMinutesTarget;
     },
     onSuccess: (target) => {
-      setActualStayMinutesTarget(target);
-      setVisitCompletionTarget(null);
+      if (isRetrospectiveCompletion) {
+        setActualStayMinutesTarget(target);
+        setVisitCompletionTarget(null);
+        return;
+      }
+
+      checkInMutation.mutate({
+        target,
+        verification: target.verification,
+      });
     },
     onError: (error) => {
       showToast(
@@ -256,8 +419,10 @@ export function useRouteStopVisitMutation({
       } satisfies ActualStayMinutesTarget;
     },
     onSuccess: (target) => {
-      setActualStayMinutesTarget(target);
-      setVisitCompletionTarget(null);
+      checkInMutation.mutate({
+        target,
+        verification: target.verification,
+      });
     },
     onError: (error) => {
       showToast(
@@ -268,13 +433,150 @@ export function useRouteStopVisitMutation({
       );
     },
   });
-  const visitSavingStopId = photoMutation.isPending
+  const photoPublicationMutation = useMutation({
+    mutationFn: ({ target, published }: PhotoPublicationVariables) =>
+      routeApi.setRouteStopPhotoPublication(target.stop.id, published),
+    onSuccess: (result, variables) => {
+      applyRouteResult(
+        result.setRouteStopPhotoPublication,
+        variables.target
+      );
+      setPhotoPublicationTarget(null);
+      setVerificationPhotoPreviewTarget(null);
+      invalidatePlaceVisitQueries(variables.target.stop);
+      showToast(
+        variables.published
+          ? "장소 사진에 공개했어요."
+          : "사진 공개를 취소했어요."
+      );
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "사진 공개 설정을 바꾸지 못했어요.",
+        2600
+      );
+    },
+  });
+  const replacePhotoMutation = useMutation({
+    mutationFn: async (target: ReplaceVisitPhotoVariables) => {
+      const photo = await requestVisitPhoto("library");
+      const uploadPayload = await routeApi.createRouteStopVisitPhotoUpload(
+        target.stop.id
+      );
+      const photoUrl = await uploadVerifiedVisitPhoto(
+        uploadPayload.createRouteStopVisitPhotoUpload,
+        photo
+      );
+
+      cacheRouteStopVerificationPhotoDataUrl({
+        stopId: target.stop.id,
+        photoUrl,
+        dataUrl: photo.dataUrl,
+      });
+
+      const result = await routeApi.setRouteStopVisitPhoto(
+        target.stop.id,
+        uploadPayload.createRouteStopVisitPhotoUpload.imageId,
+        photoUrl
+      );
+
+      return result.setRouteStopVisitPhoto;
+    },
+    onSuccess: (nextRoute, target) => {
+      const nextStops = applyRouteResult(nextRoute, target);
+      const nextStop = nextStops.find(
+        (candidateStop) => candidateStop.id === target.stop.id
+      );
+
+      setVerificationPhotoPreviewTarget(null);
+      void queryClient.invalidateQueries({
+        queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
+      });
+      invalidatePlaceVisitQueries(target.stop);
+
+      if (nextStop) {
+        setPhotoPublicationTarget({
+          routeDay: target.routeDay,
+          stop: nextStop,
+        });
+      } else {
+        showToast("사진 기록을 저장했어요.");
+      }
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "사진 기록을 저장하지 못했어요.",
+        2600
+      );
+    },
+  });
+  const deletePhotoMutation = useMutation({
+    mutationFn: (target: VerificationPhotoPreviewTarget) =>
+      routeApi.deleteRouteStopVisitPhoto(target.stop.id),
+    onSuccess: (result, target) => {
+      applyRouteResult(result.deleteRouteStopVisitPhoto, target);
+      setPhotoPublicationTarget(null);
+      setVerificationPhotoPreviewTarget(null);
+      invalidatePlaceVisitQueries(target.stop);
+      showToast("인증 사진을 삭제했어요. 방문 기록은 유지돼요.");
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "인증 사진을 삭제하지 못했어요.",
+        2600
+      );
+    },
+  });
+  const updateVisitTimesMutation = useMutation({
+    mutationFn: ({ target, checkedInAt, checkedOutAt }: UpdateVisitTimesVariables) =>
+      routeApi.updateRouteStopVisitTimes({
+        stopId: target.stop.id,
+        checkedInAt,
+        checkedOutAt,
+      }),
+    onSuccess: (result, variables) => {
+      applyRouteResult(result.updateRouteStopVisitTimes, variables.target);
+      setVisitTimesEditTarget(null);
+      void queryClient.invalidateQueries({
+        queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
+      });
+      invalidatePlaceVisitQueries(variables.target.stop);
+      showToast("방문시간을 수정했어요.");
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "방문시간을 수정하지 못했어요.",
+        2600
+      );
+    },
+  });
+  const visitSavingStopId = replacePhotoMutation.isPending
+    ? (replacePhotoMutation.variables?.stop.id ?? null)
+    : photoMutation.isPending
     ? (photoMutation.variables?.target.stop.id ?? null)
     : gpsMutation.isPending
       ? (gpsMutation.variables?.stop.id ?? null)
-    : visitMutation.isPending
-      ? (visitMutation.variables?.stop.id ?? null)
-      : null;
+      : checkInMutation.isPending
+        ? (checkInMutation.variables?.target.stop.id ?? null)
+        : completeVisitMutation.isPending
+          ? (completeVisitMutation.variables?.target.stop.id ?? null)
+          : visitMutation.isPending
+            ? (visitMutation.variables?.stop.id ?? null)
+            : photoPublicationMutation.isPending
+              ? (photoPublicationMutation.variables?.target.stop.id ?? null)
+              : deletePhotoMutation.isPending
+                ? (deletePhotoMutation.variables?.stop.id ?? null)
+                : updateVisitTimesMutation.isPending
+                  ? (updateVisitTimesMutation.variables?.target.stop.id ?? null)
+                  : null;
 
   const persistStopVisit = async (
     routeDay: MyRouteDay,
@@ -351,19 +653,6 @@ export function useRouteStopVisitMutation({
     }
   };
 
-  const completeStopVisitManually = async (target: VisitCompletionTarget) => {
-    const isSaved = await persistStopVisit(
-      target.routeDay,
-      target.stop,
-      true,
-      { status: "MANUAL" }
-    );
-
-    if (isSaved) {
-      setVisitCompletionTarget(null);
-    }
-  };
-
   const completeStopVisitWithPhoto = (
     target: VisitCompletionTarget,
     source: VisitPhotoSource
@@ -387,25 +676,109 @@ export function useRouteStopVisitMutation({
     target: ActualStayMinutesTarget,
     actualStayMinutes: number | null
   ) => {
+    if (target.stop.checkedInAt) {
+      try {
+        await completeVisitMutation.mutateAsync({
+          target,
+          actualStayMinutes,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     const isSaved = await persistStopVisit(
       target.routeDay,
       target.stop,
       true,
-      target.verification,
+      target.verification ?? { status: "MANUAL" },
       actualStayMinutes
     );
 
     if (isSaved) {
       setActualStayMinutesTarget(null);
     }
+
+    return isSaved;
+  };
+
+  const cancelStopCheckIn = async (target: ActualStayMinutesTarget) => {
+    const isSaved = await persistStopVisit(
+      target.routeDay,
+      target.stop,
+      false
+    );
+
+    if (isSaved) {
+      setActualStayMinutesTarget(null);
+    }
+
+    return isSaved;
+  };
+
+  const setPhotoPublication = (
+    target: PhotoPublicationTarget,
+    published: boolean
+  ) => {
+    if (visitSavingStopId) {
+      return;
+    }
+
+    photoPublicationMutation.mutate({ target, published });
+  };
+
+  const deleteVerificationPhoto = (
+    target: VerificationPhotoPreviewTarget
+  ) => {
+    if (visitSavingStopId) {
+      return;
+    }
+
+    deletePhotoMutation.mutate(target);
+  };
+
+  const replaceVerificationPhoto = (
+    target: VerificationPhotoPreviewTarget
+  ) => {
+    if (visitSavingStopId) {
+      return;
+    }
+
+    replacePhotoMutation.mutate(target);
+  };
+
+  const updateVisitTimes = async (
+    target: VisitTimesEditTarget,
+    checkedInAt: string,
+    checkedOutAt: string | null
+  ) => {
+    if (visitSavingStopId) {
+      return false;
+    }
+
+    try {
+      await updateVisitTimesMutation.mutateAsync({
+        target,
+        checkedInAt,
+        checkedOutAt,
+      });
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   return {
-    completeStopVisitManually,
+    cancelStopCheckIn,
     completeStopVisitWithGps,
     completeStopVisitWithPhoto,
     persistStopVisit,
     saveActualStayMinutes,
+    setPhotoPublication,
+    deleteVerificationPhoto,
+    replaceVerificationPhoto,
+    updateVisitTimes,
     visitSavingStopId,
   };
 }

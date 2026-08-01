@@ -6,6 +6,9 @@ query SharedRouteConnection($regionCode: String, $limit: Int, $cursor: String) {
   ) {
     nodes {
       ...RouteSummaryFields
+      owner {
+        ...SharedRouteOwnerFields
+      }
       stops {
         id
         place {

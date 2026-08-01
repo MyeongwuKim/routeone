@@ -20,6 +20,7 @@ import {
   isNativePhotoRequest,
   isNativePushTokenRequest,
   isNativeRouteArrivalNotificationSyncRequest,
+  isNativeRouteArrivalTestLocationRequest,
   isNativeRouteReviewNotificationSyncRequest,
   isNativeSaveImageRequest,
 } from "./messageGuards";
@@ -27,6 +28,7 @@ import { handleNativePushTokenRequest } from "./pushTokenBridge";
 import {
   handleNativeDeliveredNotificationHistoryRequest,
   handleNativeRouteArrivalNotificationSyncRequest,
+  handleNativeRouteArrivalTestLocationRequest,
 } from "./routeArrivalNotificationBridge";
 import { handleNativeRouteReviewNotificationSyncRequest } from "./routeReviewNotificationBridge";
 import { handleNativeSaveImageRequest } from "./saveImageBridge";
@@ -105,6 +107,11 @@ export async function handleNativeBridgeMessage(
 
   if (isNativeRouteArrivalNotificationSyncRequest(message)) {
     await handleNativeRouteArrivalNotificationSyncRequest(message, webViewRef);
+    return;
+  }
+
+  if (isNativeRouteArrivalTestLocationRequest(message)) {
+    await handleNativeRouteArrivalTestLocationRequest(message, webViewRef);
     return;
   }
 

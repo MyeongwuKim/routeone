@@ -14,6 +14,7 @@ import type {
   NativePushTokenRequest,
   NativeRouteArrivalNotificationPlace,
   NativeRouteArrivalNotificationSyncRequest,
+  NativeRouteArrivalTestLocationRequest,
   NativeRouteReviewNotification,
   NativeRouteReviewNotificationSyncRequest,
   NativeSaveImageRequest,
@@ -187,8 +188,37 @@ export function isNativeRouteArrivalNotificationSyncRequest(
     maybeRequest.type ===
       "routeone:native-route-arrival-notifications-sync" &&
     typeof maybeRequest.id === "string" &&
+    typeof maybeRequest.language === "string" &&
+    NATIVE_APP_LANGUAGES.has(maybeRequest.language) &&
     Array.isArray(maybeRequest.places) &&
     maybeRequest.places.every(isNativeRouteArrivalNotificationPlace)
+  );
+}
+
+export function isNativeRouteArrivalTestLocationRequest(
+  value: unknown
+): value is NativeRouteArrivalTestLocationRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeRequest = value as Partial<NativeRouteArrivalTestLocationRequest>;
+  const hasValidPosition =
+    maybeRequest.position == null ||
+    (typeof maybeRequest.position === "object" &&
+      typeof maybeRequest.position.lat === "number" &&
+      Number.isFinite(maybeRequest.position.lat) &&
+      typeof maybeRequest.position.lng === "number" &&
+      Number.isFinite(maybeRequest.position.lng));
+
+  return (
+    maybeRequest.type === "routeone:native-route-arrival-test-location" &&
+    typeof maybeRequest.id === "string" &&
+    typeof maybeRequest.language === "string" &&
+    NATIVE_APP_LANGUAGES.has(maybeRequest.language) &&
+    hasValidPosition &&
+    (maybeRequest.place === null ||
+      isNativeRouteArrivalNotificationPlace(maybeRequest.place))
   );
 }
 

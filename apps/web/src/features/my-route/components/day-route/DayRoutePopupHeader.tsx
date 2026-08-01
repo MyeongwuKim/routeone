@@ -13,6 +13,8 @@ function DayRoutePopupHeader({ controller }: DayRoutePopupHeaderProps) {
     activeDay,
     headerLabel,
     headerBadge,
+    headerIdentity,
+    headerMeta,
     isRouteShared,
     shouldShowSharedStatusText,
     routeCompletedStopCount,
@@ -37,7 +39,12 @@ function DayRoutePopupHeader({ controller }: DayRoutePopupHeaderProps) {
             </span>
           ) : null}
         </div>
-        <h2 className="mt-0.5 truncate text-lg font-bold text-slate-900">
+        {headerIdentity ? <div className="mt-2">{headerIdentity}</div> : null}
+        <h2
+          className={`truncate text-lg font-bold text-slate-900 ${
+            headerIdentity ? "mt-1" : "mt-0.5"
+          }`}
+        >
           {routeTitle}
         </h2>
         <p className="mt-0.5 text-xs font-semibold text-slate-500">
@@ -53,6 +60,7 @@ function DayRoutePopupHeader({ controller }: DayRoutePopupHeaderProps) {
             getLocalizedDayDateLabel(activeDay, text)
           )}
         </p>
+        {headerMeta ? <div className="mt-2">{headerMeta}</div> : null}
       </div>
       <button
         type="button"

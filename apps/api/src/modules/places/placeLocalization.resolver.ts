@@ -82,7 +82,10 @@ export const placeLocalizationTypeDefs = gql`
   }
 
   extend type Mutation {
-    localizeTourPlaces(input: [TourPlaceLocalizationInput!]!): [TourPlaceLocalization!]!
+    localizeTourPlaces(
+      input: [TourPlaceLocalizationInput!]!
+      waitForFresh: Boolean = false
+    ): [TourPlaceLocalization!]!
     localizeTourPlaceOverview(input: TourPlaceOverviewLocalizationInput!): TourPlaceOverviewLocalization!
     cacheTourCategoryLocalizations(input: [TourCategoryLocalizationInput!]!): [TourCategoryLocalization!]!
   }
@@ -90,6 +93,7 @@ export const placeLocalizationTypeDefs = gql`
 
 type LocalizeTourPlacesArgs = {
   input: TourPlaceLocalizationInput[];
+  waitForFresh?: boolean | null;
 };
 
 type LocalizeTourPlaceOverviewArgs = {
@@ -120,7 +124,9 @@ export const placeLocalizationResolvers = {
       args: LocalizeTourPlacesArgs,
       context: GraphQLContext
     ) {
-      return localizeTourPlaces(context.prisma, args.input);
+      return localizeTourPlaces(context.prisma, args.input, {
+        waitForFresh: args.waitForFresh ?? false,
+      });
     },
     localizeTourPlaceOverview(
       _parent: unknown,

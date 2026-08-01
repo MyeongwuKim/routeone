@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PlannedRouteDay } from "@/features/route-checkout/models/routePlanTypes";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
@@ -6,6 +6,7 @@ import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useUiText } from "@/lib/uiText";
+import { nativeBridge } from "@/native-bridge";
 import {
   addDaysToDateKey,
   getDateKeyDiffInDays,
@@ -49,8 +50,12 @@ export function useDayRoutePopupController({
   visitCompletionMode = "live",
   headerLabel = "MY ROUTE",
   headerBadge,
+  headerIdentity,
+  headerTitle,
+  headerMeta,
   enableStartPreview = false,
   enableVerificationPhotoPreview = false,
+  onRequestPlaceRouteFilter,
   onRequestCheckout,
   readOnlyFooterAction,
   readOnlyPosterAction,
@@ -61,6 +66,16 @@ export function useDayRoutePopupController({
   const openModal = useUiModalStore((state) => state.openModal);
   const openSheet = useMapSheetStore((state) => state.openSheet);
   const showToast = useUiToastStore((state) => state.showToast);
+  const [gpsTestLocationStopId, setGpsTestLocationStopId] = useState<
+    string | null
+  >(null);
+  const [gpsTestLocation, setGpsTestLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [gpsTestTarget, setGpsTestTarget] =
+    useState<VisitCompletionTarget | null>(null);
+  const [isGpsTestApplying, setIsGpsTestApplying] = useState(false);
   const sortedDays = useMemo(() => getSortedRouteDays(route), [route]);
   const {
     activeDayId,
@@ -69,7 +84,9 @@ export function useDayRoutePopupController({
     isOrderEditing,
     stayMinutesEditTarget,
     visitCompletionTarget,
+    visitTimesEditTarget,
     verificationPhotoPreviewTarget,
+    photoPublicationTarget,
     actualStayMinutesTarget,
     earlyRouteCompletionTarget,
     orderedStops,
@@ -79,7 +96,9 @@ export function useDayRoutePopupController({
     setIsOrderEditing,
     setStayMinutesEditTarget,
     setVisitCompletionTarget,
+    setVisitTimesEditTarget,
     setVerificationPhotoPreviewTarget,
+    setPhotoPublicationTarget,
     setActualStayMinutesTarget,
     setEarlyRouteCompletionTarget,
     setOrderedStops,
@@ -157,11 +176,15 @@ export function useDayRoutePopupController({
     useRouteStartDateMutation(route.id);
   const isRetrospectiveCompletion = visitCompletionMode === "retrospective";
   const {
-    completeStopVisitManually: handleCompleteStopVisitManually,
+    cancelStopCheckIn: handleCancelStopCheckIn,
     completeStopVisitWithGps: handleCompleteStopVisitWithGps,
     completeStopVisitWithPhoto: handleCompleteStopVisitWithPhoto,
+    deleteVerificationPhoto: handleDeleteVerificationPhoto,
+    replaceVerificationPhoto: handleReplaceVerificationPhoto,
     persistStopVisit,
     saveActualStayMinutes: handleSaveActualStayMinutes,
+    setPhotoPublication: handleSetPhotoPublication,
+    updateVisitTimes: handleUpdateVisitTimes,
     visitSavingStopId,
   } = useRouteStopVisitMutation({
     routeId: route.id,
@@ -172,10 +195,23 @@ export function useDayRoutePopupController({
     setBaseStopIds,
     setVisitCompletionTarget,
     setActualStayMinutesTarget,
+    setPhotoPublicationTarget,
+    setVerificationPhotoPreviewTarget,
+    setVisitTimesEditTarget,
   });
   const isRouteCompleted =
     routeStopCount > 0 && routeCompletedStopCount === routeStopCount;
   const canToggleVisitStatus = !isReadOnly || allowVisitCompletion;
+  const visitEnabledDayIds = new Set(
+    sortedDays
+      .filter(
+        (routeDay) =>
+          isRetrospectiveCompletion ||
+          (Boolean(route.startedAt) &&
+            getRouteDateKey(routeDay.date) === todayKey)
+      )
+      .map((routeDay) => routeDay.id)
+  );
   const routeActualStartDateKey = getRouteDateKey(route.startedAt) ?? todayKey;
   const earlyCompletionStartedAt =
     earlyRouteCompletionTarget?.startedAt || routeActualStartDateKey || todayKey;
@@ -254,10 +290,6 @@ export function useDayRoutePopupController({
     setIsOrderEditing(false);
   };
 
-  const handleSkipActualStayMinutes = (target: ActualStayMinutesTarget) => {
-    void handleSaveActualStayMinutes(target, null);
-  };
-
   const shouldConfirmEarlyRouteCompletion = (stop: MyRouteStop) => {
     const isLastRouteStopToComplete =
       routeStopCount > 0 &&
@@ -276,9 +308,14 @@ export function useDayRoutePopupController({
     setVisitCompletionTarget(target);
   };
 
+  const openActualStayMinutesTarget = (target: ActualStayMinutesTarget) => {
+    setEarlyRouteCompletionTarget(null);
+    setActualStayMinutesTarget(target);
+  };
+
   const handleCompleteEarlyRouteAsIs = () => {
     if (earlyRouteCompletionTarget) {
-      openVisitCompletionTarget(earlyRouteCompletionTarget);
+      openActualStayMinutesTarget(earlyRouteCompletionTarget);
     }
   };
 
@@ -295,7 +332,7 @@ export function useDayRoutePopupController({
     const didUpdate = await updateRouteStartDate(target.startedAt);
 
     if (didUpdate) {
-      openVisitCompletionTarget(target);
+      openActualStayMinutesTarget(target);
     }
   };
 
@@ -310,6 +347,11 @@ export function useDayRoutePopupController({
     if (!isVisitedStop(stop)) {
       const nextVisitCompletionTarget = { routeDay, stop };
 
+      if (!stop.checkedInAt) {
+        openVisitCompletionTarget(nextVisitCompletionTarget);
+        return;
+      }
+
       if (shouldConfirmEarlyRouteCompletion(stop)) {
         setEarlyRouteCompletionTarget({
           ...nextVisitCompletionTarget,
@@ -318,11 +360,40 @@ export function useDayRoutePopupController({
         return;
       }
 
-      setVisitCompletionTarget(nextVisitCompletionTarget);
+      openActualStayMinutesTarget(nextVisitCompletionTarget);
       return;
     }
 
     void persistStopVisit(routeDay, stop, false);
+  };
+
+  const handleCompleteStopVisitManually = (
+    target: VisitCompletionTarget
+  ) => {
+    const actualStayTarget: ActualStayMinutesTarget = {
+      ...target,
+      verification: { status: "MANUAL" },
+    };
+
+    setVisitCompletionTarget(null);
+
+    if (
+      !isRetrospectiveCompletion &&
+      shouldConfirmEarlyRouteCompletion(target.stop)
+    ) {
+      setEarlyRouteCompletionTarget({
+        ...actualStayTarget,
+        startedAt: routeActualStartDateKey,
+      });
+      return;
+    }
+
+    setActualStayMinutesTarget(actualStayTarget);
+  };
+
+  const handleKeepPhotoPrivate = () => {
+    setPhotoPublicationTarget(null);
+    showToast("인증 사진은 나만 볼 수 있게 저장했어요.");
   };
 
   const handleShareRoute = () => {
@@ -363,7 +434,7 @@ export function useDayRoutePopupController({
       description:
         "한 번 공유하면 현재 앱에서는 직접 삭제하거나 공유를 되돌릴 수 없어요.",
       detail:
-        "완료한 일정과 사진 인증 이미지가 공개돼요. 부적절한 사진이나 내용은 관리자에 의해 삭제 조치될 수 있어요.",
+        "완료한 일정이 공개돼요. 장소 사진 공개를 선택한 인증 이미지만 함께 표시되며, 비공개 사진은 공개되지 않아요.",
       actions: [
         { label: "취소", variant: "secondary" },
         {
@@ -459,7 +530,107 @@ export function useDayRoutePopupController({
   const handleOpenPlaceDetail = (stop: MyRouteStop) => {
     openSheet(createMapSheetPlaceFromRouteStop(stop), {
       mode: "full-popup",
+      contextAction: onRequestPlaceRouteFilter
+        ? {
+            label: text.placeSheet.viewSharedRoutesWithPlace,
+            onSelect: onRequestPlaceRouteFilter,
+          }
+        : undefined,
     });
+  };
+
+  const isGpsTestEnabled =
+    !isReadOnly &&
+    !isRetrospectiveCompletion &&
+    route.isMine &&
+    window.RouteOneRuntimeConfig?.arrivalNotificationTestMode === true &&
+    nativeBridge.runtime.isAvailable();
+
+  const handleApplyGpsTestLocation = async (
+    target: VisitCompletionTarget,
+    position: { lat: number; lng: number }
+  ) => {
+    if (!isGpsTestEnabled || isGpsTestApplying) {
+      return null;
+    }
+
+    const request = nativeBridge.notifications.setRouteArrivalTestLocation({
+      place: {
+        id: `${route.id}:${target.stop.id}`,
+        routeId: route.id,
+        routeTitle: getLocalizedRouteTitle(route, text),
+        dayId: target.routeDay.id,
+        dayIndex: target.routeDay.dayIndex,
+        stopId: target.stop.id,
+        title: target.stop.place.title,
+        lat: target.stop.place.lat,
+        lng: target.stop.place.lng,
+      },
+      position,
+      language: appLanguage,
+    });
+
+    if (!request) {
+      showToast(text.dayRoute.gpsTestUnavailable);
+      return null;
+    }
+
+    setIsGpsTestApplying(true);
+
+    try {
+      const result = await request;
+      setGpsTestLocationStopId(target.stop.id);
+      setGpsTestLocation(
+        result.lat != null && result.lng != null
+          ? { lat: result.lat, lng: result.lng }
+          : null
+      );
+      return result;
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : text.dayRoute.gpsTestMoveFailed
+      );
+      return null;
+    } finally {
+      setIsGpsTestApplying(false);
+    }
+  };
+
+  const handleClearGpsTestLocation = async () => {
+    if (!isGpsTestEnabled || isGpsTestApplying) {
+      return null;
+    }
+
+    const request = nativeBridge.notifications.setRouteArrivalTestLocation({
+      place: null,
+      language: appLanguage,
+    });
+
+    if (!request) {
+      showToast(text.dayRoute.gpsTestUnavailable);
+      return null;
+    }
+
+    setIsGpsTestApplying(true);
+
+    try {
+      const result = await request;
+      setGpsTestLocationStopId(null);
+      setGpsTestLocation(null);
+      showToast(text.dayRoute.gpsTestCleared);
+      return result;
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : text.dayRoute.gpsTestMoveFailed
+      );
+      return null;
+    } finally {
+      setIsGpsTestApplying(false);
+    }
   };
 
   return {
@@ -469,11 +640,13 @@ export function useDayRoutePopupController({
       activeDay,
       headerLabel,
       headerBadge,
+      headerIdentity,
+      headerMeta,
       isRouteShared,
       shouldShowSharedStatusText,
       routeCompletedStopCount,
       routeStopCount,
-      routeTitle: getLocalizedRouteTitle(route, text),
+      routeTitle: headerTitle ?? getLocalizedRouteTitle(route, text),
       onClose,
     },
     schedule: {
@@ -488,15 +661,26 @@ export function useDayRoutePopupController({
       visitSavingStopId,
       staySavingStopId,
       isReadOnly,
+      canEditVisitTimes:
+        route.isMine &&
+        (!isRetrospectiveCompletion || allowVisitCompletion),
+      canEditVerificationPhoto:
+        route.isMine && isRetrospectiveCompletion && allowVisitCompletion,
       canToggleVisitStatus,
+      visitEnabledDayIds,
       enableVerificationPhotoPreview,
+      isGpsTestEnabled,
+      gpsTestLocationStopId,
       travelSegmentByKey,
       registerDropZone,
       startDragStop,
       handleSelectDay,
       setStayMinutesEditTarget,
+      setVisitTimesEditTarget,
       handleToggleStopVisited,
       handleOpenPlaceDetail,
+      handleReplaceVerificationPhoto,
+      setGpsTestTarget,
       setVerificationPhotoPreviewTarget,
     },
     footer: {
@@ -544,17 +728,38 @@ export function useDayRoutePopupController({
       handleCompleteEarlyRouteAsIs,
       handleCompleteEarlyRouteWithStartDate,
       visitCompletionTarget,
+      visitTimesEditTarget,
       visitSavingStopId,
       visitCompletionMode,
       setVisitCompletionTarget,
+      setVisitTimesEditTarget,
+      handleUpdateVisitTimes,
       handleCompleteStopVisitWithGps,
       handleCompleteStopVisitWithPhoto,
       handleCompleteStopVisitManually,
       actualStayMinutesTarget,
-      handleSkipActualStayMinutes,
+      setActualStayMinutesTarget,
+      handleCancelStopCheckIn,
       handleSaveActualStayMinutes,
       verificationPhotoPreviewTarget,
+      canManageVerificationPhoto: route.isMine,
+      canReplaceVerificationPhoto:
+        route.isMine && isRetrospectiveCompletion && allowVisitCompletion,
       setVerificationPhotoPreviewTarget,
+      photoPublicationTarget,
+      handleSetPhotoPublication,
+      handleDeleteVerificationPhoto,
+      handleReplaceVerificationPhoto,
+      handleKeepPhotoPrivate,
+      gpsTestTarget,
+      gpsTestLocation:
+        gpsTestTarget?.stop.id === gpsTestLocationStopId
+          ? gpsTestLocation
+          : null,
+      isGpsTestApplying,
+      setGpsTestTarget,
+      handleApplyGpsTestLocation,
+      handleClearGpsTestLocation,
     },
   };
 }

@@ -1,0 +1,8 @@
+mutation CheckInRouteStop(
+  $stopId: ID!
+  $verification: RouteStopVisitVerificationInput!
+) {
+  checkInRouteStop(stopId: $stopId, verification: $verification) {
+    ...RouteDetailFields
+  }
+}

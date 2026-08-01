@@ -9,6 +9,7 @@ export type {
   RouteStopVisitVerificationInput,
   StartRouteInput,
   UpdateRouteStopStayMinutesInput,
+  UpdateRouteStopVisitTimesInput,
 } from "./route.types.js";
 
 export {
@@ -24,10 +25,16 @@ export {
 } from "./routeCommand.service.js";
 export { fetchPosterImageDataUrl } from "./routeImage.service.js";
 export {
+  checkInRouteStop,
+  completeRouteStopVisit,
+  deleteRouteStopVisitPhoto,
   getPlacePhotos,
   getPlaceStaySummaries,
   getPlaceStaySummary,
   markRouteStopVisited,
+  setRouteStopPhotoPublication,
+  setRouteStopVisitPhoto,
+  updateRouteStopVisitTimes,
 } from "./routeVisit.service.js";
 export {
   setRouteLike,

@@ -8,9 +8,11 @@ import type {
 export function syncNativeRouteArrivalNotifications({
   places,
   radiusMeters,
+  language,
 }: {
   places: NativeArrivalNotificationPlace[];
   radiusMeters?: number;
+  language?: "ko" | "en";
 }) {
   const syncNotifications =
     getNativeBridgeApi()?.syncRouteArrivalNotifications;
@@ -19,7 +21,24 @@ export function syncNativeRouteArrivalNotifications({
     ? syncNotifications({
         places,
         radiusMeters,
+        language,
       })
+    : null;
+}
+
+export function setNativeRouteArrivalTestLocation({
+  place,
+  position,
+  language,
+}: {
+  place: NativeArrivalNotificationPlace | null;
+  position?: { lat: number; lng: number } | null;
+  language?: "ko" | "en";
+}) {
+  const setTestLocation = getNativeBridgeApi()?.setRouteArrivalTestLocation;
+
+  return setTestLocation
+    ? setTestLocation({ place, position, language })
     : null;
 }
 

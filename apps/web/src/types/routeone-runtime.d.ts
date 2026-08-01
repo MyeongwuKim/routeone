@@ -9,6 +9,7 @@ declare global {
       graphqlEndpoint?: string;
       routerMode?: "browser" | "hash";
       devVerificationBypass?: boolean;
+      arrivalNotificationTestMode?: boolean;
       webBundlePublicOrigin?: string | null;
       nativeAppVariant?: string;
       webBundleChannel?: string;

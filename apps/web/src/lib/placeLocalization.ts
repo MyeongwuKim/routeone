@@ -20,6 +20,7 @@ type LocalizeTourPlacesOptions = {
   retryUncached?: boolean;
   retryAttempts?: number;
   retryDelayMs?: number;
+  waitForFresh?: boolean;
 };
 
 const LOCALIZATION_REQUEST_BATCH_SIZE = 200;
@@ -87,25 +88,40 @@ export async function localizeTourPlaces<T extends LocalizableTourPlace>(
               contentTypeId: place.contentTypeId,
               title: place.title,
               address: place.address,
-            }))
+            })),
+            options.waitForFresh
           )
         )
       );
-    let responses = await requestLocalizations();
     const retryAttempts = options.retryAttempts ?? 2;
     const retryDelayMs = options.retryDelayMs ?? 1200;
+    let responses: Awaited<ReturnType<typeof requestLocalizations>> = [];
 
-    for (let attempt = 0; options.retryUncached && attempt < retryAttempts; attempt += 1) {
+    for (let attempt = 0; attempt <= retryAttempts; attempt += 1) {
+      try {
+        responses = await requestLocalizations();
+      } catch (error) {
+        if (!options.retryUncached || attempt === retryAttempts) {
+          throw error;
+        }
+
+        await delay(retryDelayMs);
+        continue;
+      }
+
       const hasUncachedLocalization = responses
         .flatMap((response) => response.localizeTourPlaces)
         .some((localization) => !localization.cached);
 
-      if (!hasUncachedLocalization) {
+      if (
+        !options.retryUncached ||
+        !hasUncachedLocalization ||
+        attempt === retryAttempts
+      ) {
         break;
       }
 
       await delay(retryDelayMs);
-      responses = await requestLocalizations();
     }
 
     const localizedById = new Map(

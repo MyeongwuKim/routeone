@@ -1,5 +1,8 @@
-mutation LocalizeTourPlaces($input: [TourPlaceLocalizationInput!]!) {
-  localizeTourPlaces(input: $input) {
+mutation LocalizeTourPlaces(
+  $input: [TourPlaceLocalizationInput!]!
+  $waitForFresh: Boolean = false
+) {
+  localizeTourPlaces(input: $input, waitForFresh: $waitForFresh) {
     contentId
     title
     address

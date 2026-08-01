@@ -6,7 +6,6 @@ import {
   MdOutlinePlace,
   MdSell,
 } from "react-icons/md";
-import type { RouteSummaryFieldsFragment } from "@/generated/graphql";
 import { useUiText } from "@/lib/uiText";
 import {
   getDisplayPlaceOptions,
@@ -16,15 +15,16 @@ import {
   type SharedRoute,
   type SharedRouteFilterCandidate,
 } from "../sharedRouteCardModel";
+import SharedRouteAuthor from "./SharedRouteAuthor";
 
-const VISIBLE_SHARE_TAG_COUNT = 3;
-const VISIBLE_PLACE_CHIP_COUNT = 3;
+const VISIBLE_SHARE_TAG_COUNT = 2;
+const VISIBLE_PLACE_CHIP_COUNT = 2;
 
 type SharedRouteCardProps = {
   route: SharedRoute;
   isLiked: boolean;
   isLikePending?: boolean;
-  onToggleLike: (route: RouteSummaryFieldsFragment) => void | Promise<void>;
+  onToggleLike: (route: SharedRoute) => void | Promise<void>;
   onOpen?: (route: SharedRoute) => void;
   onRequestFilter?: (filter: SharedRouteFilterCandidate) => void;
 };
@@ -84,15 +84,9 @@ const SharedRouteCard = memo(function SharedRouteCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="flex min-w-0 items-center gap-1.5 text-base font-black text-slate-900 dark:text-white">
-            {isMine ? (
-              <span className="shrink-0 rounded-full border border-brand-200 bg-white px-2 py-0.5 text-[10px] font-black leading-5 text-brand-700 dark:border-brand-400/35 dark:bg-slate-950 dark:text-brand-100">
-                {text.sharedRouteCard.myShare}
-              </span>
-            ) : null}
-            <span className="min-w-0 truncate">
-              {getSharedRouteTitle(route, text)}
-            </span>
+          <SharedRouteAuthor owner={route.owner} isMine={isMine} />
+          <p className="mt-2 truncate text-base font-black text-slate-900 dark:text-white">
+            {getSharedRouteTitle(route, text)}
           </p>
           <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-200/80">
             <MdOutlineCalendarToday className="text-sm dark:text-brand-200" />
@@ -129,7 +123,11 @@ const SharedRouteCard = memo(function SharedRouteCard({
 
       {shareTags.length > 0 ? (
         <div className="mt-3 min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <div
+            className={`flex min-w-0 items-center gap-1.5 ${
+              isTagExpanded ? "flex-wrap" : "flex-nowrap"
+            }`}
+          >
             {visibleTags.map((tag) => (
               <button
                 key={tag}
@@ -141,14 +139,18 @@ const SharedRouteCard = memo(function SharedRouteCard({
                     value: tag,
                   });
                 }}
-                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                className={`inline-flex min-w-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                  isTagExpanded
+                    ? "max-w-full shrink-0"
+                    : "max-w-[9rem] flex-[0_1_auto]"
+                } ${
                   isMine
                     ? "bg-white text-brand-700 ring-1 ring-brand-100 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25"
                     : "bg-slate-50 text-slate-600 ring-1 ring-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"
                 } transition hover:border-brand-300 hover:text-brand-700 dark:hover:text-brand-100`}
               >
-                <MdSell className="text-xs" />
-                {tag}
+                <MdSell className="shrink-0 text-xs" />
+                <span className="min-w-0 truncate">{tag}</span>
               </button>
             ))}
             {hiddenTagCount > 0 ? (
@@ -189,7 +191,11 @@ const SharedRouteCard = memo(function SharedRouteCard({
 
       {placeOptions.length > 0 ? (
         <div className="mt-2 min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <div
+            className={`flex min-w-0 items-center gap-1.5 ${
+              isPlaceExpanded ? "flex-wrap" : "flex-nowrap"
+            }`}
+          >
             {visiblePlaceOptions.map((placeOption) => (
               <button
                 key={`${placeOption.region}:${placeOption.name}`}
@@ -202,7 +208,11 @@ const SharedRouteCard = memo(function SharedRouteCard({
                     region: placeOption.region,
                   });
                 }}
-                className={`inline-flex max-w-full shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                className={`inline-flex min-w-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
+                  isPlaceExpanded
+                    ? "max-w-full shrink-0"
+                    : "max-w-[11rem] flex-[0_1_auto]"
+                } ${
                   isMine
                     ? "bg-brand-100 text-brand-800 ring-1 ring-brand-200 dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25"
                     : "bg-white text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700"

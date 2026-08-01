@@ -2,6 +2,9 @@ query LikedSharedRouteConnection($limit: Int, $cursor: String) {
   likedRouteConnection(limit: $limit, cursor: $cursor) {
     nodes {
       ...RouteSummaryFields
+      owner {
+        ...SharedRouteOwnerFields
+      }
       stops {
         id
         place {

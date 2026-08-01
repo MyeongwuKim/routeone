@@ -67,15 +67,23 @@ export function useRouteDayDeleteMutation({
 
       return { previousRoutes };
     },
-    onSuccess: (result, { day }) => {
+    onSuccess: async (result, { day }) => {
       showToast(`DAY ${day.dayIndex}를 삭제했어요.`);
       queryClient.setQueryData<MyRoutesQuery>(
         MY_ROUTES_QUERY_KEY,
         (currentData) => upsertMyRouteCache(currentData, result.deleteRouteDay)
       );
-      void queryClient.invalidateQueries({
-        queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["place-photos"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["place-stay-summary"],
+        }),
+      ]);
     },
     onError: (error, { day }, context) => {
       if (context?.previousRoutes) {

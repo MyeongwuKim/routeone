@@ -24,6 +24,11 @@ type SharedRouteFilterAction =
       filter: SharedRouteFilterCandidate;
     }
   | {
+      type: "replace-with-candidate";
+      language: AppLanguage;
+      filter: SharedRouteFilterCandidate;
+    }
+  | {
       type: "toggle-draft";
       language: AppLanguage;
       filter: SharedRouteFilterCandidate;
@@ -69,6 +74,19 @@ function sharedRouteFilterReducer(
         draftFilters: addFilterCandidate(state.activeFilters, action.filter),
         isDialogOpen: true,
       };
+    case "replace-with-candidate": {
+      const filters = addFilterCandidate(
+        EMPTY_SHARED_ROUTE_FILTERS,
+        action.filter
+      );
+
+      return {
+        ...state,
+        activeFilters: filters,
+        draftFilters: filters,
+        isDialogOpen: false,
+      };
+    }
     case "toggle-draft":
       return {
         ...state,
@@ -137,6 +155,13 @@ export function useSharedRouteFilters(language: AppLanguage) {
     [language]
   );
 
+  const replaceActiveFiltersWithCandidate = useCallback(
+    (filter: SharedRouteFilterCandidate) => {
+      dispatch({ type: "replace-with-candidate", language, filter });
+    },
+    [language]
+  );
+
   const applyFilters = useCallback(() => {
     dispatch({ type: "apply", language });
   }, [language]);
@@ -170,6 +195,7 @@ export function useSharedRouteFilters(language: AppLanguage) {
     closeFilterDialog,
     openFilterDialog,
     openFilterDialogWithCandidate,
+    replaceActiveFiltersWithCandidate,
     removeActiveFilter,
     toggleDraftFilter,
   };

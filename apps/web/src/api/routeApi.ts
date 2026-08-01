@@ -1,11 +1,14 @@
 import {
   AppendRouteDaysDocument,
+  CheckInRouteStopDocument,
   ClearRouteDocument,
   CloneRouteDocument,
+  CompleteRouteStopVisitDocument,
   CreateRouteStopVisitPhotoUploadDocument,
   CreateRouteDocument,
   DeleteRouteDayDocument,
   DeleteRouteDocument,
+  DeleteRouteStopVisitPhotoDocument,
   LikedSharedRoutesDocument,
   LikedSharedRouteConnectionDocument,
   LikeRouteDocument,
@@ -19,6 +22,8 @@ import {
   ReorderRouteStopsDocument,
   RouteByIdDocument,
   SaveRouteDocument,
+  SetRouteStopPhotoPublicationDocument,
+  SetRouteStopVisitPhotoDocument,
   ShareRouteDocument,
   SharedRoutesDocument,
   SharedRouteConnectionDocument,
@@ -26,6 +31,7 @@ import {
   UnlikeRouteDocument,
   UnsaveRouteDocument,
   UpdateRouteStopStayMinutesDocument,
+  UpdateRouteStopVisitTimesDocument,
   type AppendRouteDaysInput,
   type CloneRouteInput,
   type CreateRouteInput,
@@ -37,6 +43,7 @@ import {
   type SharedRoutesQueryVariables,
   type StartRouteInput,
   type UpdateRouteStopStayMinutesInput,
+  type UpdateRouteStopVisitTimesInput,
 } from "@/generated/graphql";
 import { requestGraphQL } from "@/lib/graphqlClient";
 
@@ -139,6 +146,46 @@ export const routeApi = {
       actualStayMinutes,
     });
   },
+  checkInRouteStop(
+    stopId: RouteId,
+    verification: RouteStopVisitVerificationInput
+  ) {
+    return requestGraphQL(CheckInRouteStopDocument, {
+      stopId,
+      verification,
+    });
+  },
+  completeRouteStopVisit(
+    stopId: RouteId,
+    actualStayMinutes?: number | null
+  ) {
+    return requestGraphQL(CompleteRouteStopVisitDocument, {
+      stopId,
+      actualStayMinutes,
+    });
+  },
+  setRouteStopPhotoPublication(stopId: RouteId, published: boolean) {
+    return requestGraphQL(SetRouteStopPhotoPublicationDocument, {
+      stopId,
+      published,
+    });
+  },
+  setRouteStopVisitPhoto(
+    stopId: RouteId,
+    imageId: string,
+    imageUrl: string
+  ) {
+    return requestGraphQL(SetRouteStopVisitPhotoDocument, {
+      stopId,
+      imageId,
+      imageUrl,
+    });
+  },
+  deleteRouteStopVisitPhoto(stopId: RouteId) {
+    return requestGraphQL(DeleteRouteStopVisitPhotoDocument, {
+      stopId,
+    });
+  },
   reorderRouteStops(input: ReorderRouteStopsInput) {
     return requestGraphQL(ReorderRouteStopsDocument, {
       input,
@@ -146,6 +193,11 @@ export const routeApi = {
   },
   updateRouteStopStayMinutes(input: UpdateRouteStopStayMinutesInput) {
     return requestGraphQL(UpdateRouteStopStayMinutesDocument, {
+      input,
+    });
+  },
+  updateRouteStopVisitTimes(input: UpdateRouteStopVisitTimesInput) {
+    return requestGraphQL(UpdateRouteStopVisitTimesDocument, {
       input,
     });
   },

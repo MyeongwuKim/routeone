@@ -1,0 +1,5 @@
+mutation UpdateRouteStopVisitTimes($input: UpdateRouteStopVisitTimesInput!) {
+  updateRouteStopVisitTimes(input: $input) {
+    ...RouteDetailFields
+  }
+}

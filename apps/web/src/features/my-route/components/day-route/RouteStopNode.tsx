@@ -6,9 +6,13 @@ import {
   MdClose,
   MdDirectionsCar,
   MdDragIndicator,
+  MdEdit,
+  MdGpsFixed,
   MdImage,
+  MdLockOutline,
   MdMyLocation,
   MdOutlinePlace,
+  MdPublic,
 } from "react-icons/md";
 import {
   localizePlaceCategoryLabel,
@@ -78,12 +82,19 @@ type RouteStopNodeProps = {
   isReadOnly: boolean;
   canToggleVisited: boolean;
   enableVerificationPhotoPreview: boolean;
+  isGpsTestEnabled: boolean;
+  isGpsTestLocationActive: boolean;
   travelSegmentToNext: TravelSegmentState | null;
   scheduleLabel: string | null;
+  canEditVisitTimes: boolean;
+  canEditVerificationPhoto: boolean;
   onStartDrag: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onRequestStayMinutesEdit: (stop: MyRouteStop) => void;
+  onRequestVisitTimesEdit: (stop: MyRouteStop) => void;
   onToggleVisited: (stop: MyRouteStop) => void;
   onOpenPlace: (stop: MyRouteStop) => void;
+  onEditVerificationPhoto: (stop: MyRouteStop) => void;
+  onOpenGpsTest: (stop: MyRouteStop) => void;
   onOpenVerificationPhoto: (stop: MyRouteStop) => void;
 };
 
@@ -98,21 +109,43 @@ function RouteStopNode({
   isReadOnly,
   canToggleVisited,
   enableVerificationPhotoPreview,
+  isGpsTestEnabled,
+  isGpsTestLocationActive,
   travelSegmentToNext,
   scheduleLabel,
+  canEditVisitTimes,
+  canEditVerificationPhoto,
   onStartDrag,
   onRequestStayMinutesEdit,
+  onRequestVisitTimesEdit,
   onToggleVisited,
   onOpenPlace,
+  onEditVerificationPhoto,
+  onOpenGpsTest,
   onOpenVerificationPhoto,
 }: RouteStopNodeProps) {
   const text = useUiText();
   const isVisited = isVisitedStop(stop);
+  const isCheckedIn = !isVisited && Boolean(stop.checkedInAt);
   const stayMinutes = stop.stayMinutes ?? 60;
+  const hasActualStayMinutes =
+    isVisited && Boolean(stop.actualStayMinutes && stop.actualStayMinutes > 0);
+  const displayedStayMinutes = hasActualStayMinutes
+    ? (stop.actualStayMinutes ?? stayMinutes)
+    : stayMinutes;
+  const stayDurationLabel = hasActualStayMinutes
+    ? text.dayRoute.actualStay(
+        formatStayMinutes(displayedStayMinutes, text)
+      )
+    : text.dayRoute.plannedStay(
+        formatStayMinutes(displayedStayMinutes, text)
+      );
   const statusLabel = isVisited
     ? text.dayRoute.visited
-    : text.dayRoute.notVisited;
-  const verificationBadge = isVisited
+    : isCheckedIn
+      ? text.dayRoute.visiting
+      : text.dayRoute.notVisited;
+  const verificationBadge = isVisited || isCheckedIn
     ? getRouteStopVerificationBadge(stop, text)
     : null;
   const canOpenVerificationPhoto =
@@ -125,7 +158,9 @@ function RouteStopNode({
       {!isLast ? (
         <div
           className={`absolute left-[19px] top-10 h-[calc(100%-1.75rem)] w-0.5 rounded-full ${
-            isVisited ? "bg-brand-500" : "bg-slate-200 dark:bg-slate-700"
+            isVisited || isCheckedIn
+              ? "bg-brand-500"
+              : "bg-slate-200 dark:bg-slate-700"
           }`}
         />
       ) : null}
@@ -133,10 +168,18 @@ function RouteStopNode({
         className={`relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-white text-xs font-black shadow-sm ${
           isVisited
             ? "bg-brand-600 text-white shadow-brand-200"
+            : isCheckedIn
+              ? "bg-brand-100 text-brand-700 ring-2 ring-brand-400 dark:bg-brand-400/15 dark:text-brand-100"
             : "bg-white text-slate-400 ring-2 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700"
         }`}
       >
-        {isVisited ? <MdCheckCircle className="text-lg" /> : index + 1}
+        {isVisited ? (
+          <MdCheckCircle className="text-lg" />
+        ) : isCheckedIn ? (
+          <MdMyLocation className="text-lg" />
+        ) : (
+          index + 1
+        )}
       </div>
       <div className="min-w-0 flex-1 pb-5">
         <div
@@ -163,13 +206,15 @@ function RouteStopNode({
               ? "border-brand-200 bg-white shadow-sm dark:border-brand-400/30 dark:bg-slate-950"
               : isVisited
                 ? "cursor-pointer border-brand-500 bg-brand-50 shadow-sm active:scale-[0.99] dark:border-brand-400/40 dark:bg-brand-400/10"
+                : isCheckedIn
+                  ? "cursor-pointer border-brand-400 bg-brand-50/60 shadow-sm active:scale-[0.99] dark:border-brand-400/40 dark:bg-brand-400/10"
                 : "cursor-pointer border-slate-200 bg-white active:scale-[0.99] dark:border-slate-700 dark:bg-slate-950"
           }`}
         >
           <div className="flex items-start gap-3">
             <div
               className={`relative size-12 shrink-0 overflow-hidden rounded-xl ${
-                isVisited
+                isVisited || isCheckedIn
                   ? "ring-2 ring-brand-400"
                   : "bg-slate-50 dark:bg-slate-900"
               }`}
@@ -179,7 +224,7 @@ function RouteStopNode({
                   src={stop.place.imageUrl}
                   alt=""
                   className={`h-full w-full object-cover ${
-                    isVisited ? "brightness-95" : ""
+                    isVisited || isCheckedIn ? "brightness-95" : ""
                   }`}
                   loading="lazy"
                 />
@@ -192,6 +237,10 @@ function RouteStopNode({
                 <span className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-brand-600 text-xs text-white shadow-sm">
                   <MdCheck />
                 </span>
+              ) : isCheckedIn ? (
+                <span className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-white text-xs text-brand-700 shadow-sm">
+                  <MdMyLocation />
+                </span>
               ) : null}
             </div>
             <div className="min-w-0 flex-1">
@@ -203,11 +252,15 @@ function RouteStopNode({
                   className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
                     isVisited
                       ? "bg-brand-600 text-white"
+                      : isCheckedIn
+                        ? "bg-brand-100 text-brand-700 ring-1 ring-brand-300 dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/30"
                       : "bg-slate-100 text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700"
                   }`}
                 >
                   {isVisited ? (
                     <MdCheckCircle className="text-sm" />
+                  ) : isCheckedIn ? (
+                    <MdMyLocation className="text-sm" />
                   ) : (
                     <span className="size-1.5 rounded-full bg-slate-400" />
                   )}
@@ -227,13 +280,29 @@ function RouteStopNode({
                       }}
                       className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full py-1 pl-1 pr-2.5 text-[11px] font-black ring-1 transition active:scale-95 ${verificationBadge.className}`}
                     >
-                      <span className="size-5 overflow-hidden rounded-full bg-white ring-1 ring-white/80">
+                      <span className="relative size-5 shrink-0 rounded-full bg-white ring-1 ring-white/80">
                         <img
                           src={stop.verificationPhotoUrl ?? ""}
                           alt=""
-                          className="h-full w-full object-cover"
+                          className="h-full w-full rounded-full object-cover"
                           loading="lazy"
                         />
+                        {stop.verificationPhotoPublicationConsent === true ||
+                        stop.verificationPhotoPublishedAt ? (
+                          <span
+                            aria-label={text.dayRoute.photoPublished}
+                            className="absolute -bottom-0.5 -right-0.5 flex size-3 items-center justify-center rounded-full bg-emerald-700 text-[8px] text-white ring-1 ring-white dark:ring-[#0b211f]"
+                          >
+                            <MdPublic />
+                          </span>
+                        ) : stop.verificationPhotoPublicationConsent === false ? (
+                          <span
+                            aria-label={text.dayRoute.photoPrivate}
+                            className="absolute -bottom-0.5 -right-0.5 flex size-3 items-center justify-center rounded-full bg-slate-600 text-[8px] text-white ring-1 ring-white dark:ring-[#0b211f]"
+                          >
+                            <MdLockOutline />
+                          </span>
+                        ) : null}
                       </span>
                       {verificationBadge.kind === "gps-photo" ? (
                         <MdMyLocation className="text-sm" />
@@ -255,25 +324,85 @@ function RouteStopNode({
                     </span>
                   )
                 ) : null}
-                <span className="min-w-0 truncate text-xs font-semibold text-slate-500 dark:text-slate-300">
-                  {localizePlaceCategoryLabel(
-                    stop.place.categoryLabel ?? stop.place.categoryName,
-                    text
-                  )}
-                </span>
+                {canEditVerificationPhoto &&
+                isVisited &&
+                !stop.verificationPhotoUrl ? (
+                  <button
+                    type="button"
+                    disabled={isVisitSaving}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onEditVerificationPhoto(stop);
+                    }}
+                    className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700 ring-1 ring-amber-200 transition active:scale-95 disabled:opacity-50 dark:bg-amber-400/10 dark:text-amber-100 dark:ring-amber-400/30"
+                  >
+                    {isVisitSaving ? (
+                      <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                      <MdImage className="text-sm" />
+                    )}
+                    {text.dayRoute.addVisitPhoto}
+                  </button>
+                ) : null}
               </div>
+              <p className="mt-1 truncate text-xs font-semibold text-slate-500 dark:text-slate-300">
+                {localizePlaceCategoryLabel(
+                  stop.place.categoryLabel ?? stop.place.categoryName,
+                  text
+                )}
+              </p>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {scheduleLabel ? (
-                  <span className={stayTimeClass}>
-                    <MdAccessTime className="text-sm" />
-                    <span className="whitespace-nowrap">{scheduleLabel}</span>
-                  </span>
+                  canEditVisitTimes && (stop.checkedInAt || isVisited) ? (
+                    <>
+                      <button
+                        type="button"
+                        aria-label={text.dayRoute.editVisitTimesAria(
+                          stop.place.title
+                        )}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRequestVisitTimesEdit(stop);
+                        }}
+                        disabled={isVisitSaving}
+                        className={stayTimeClass}
+                      >
+                        {isVisitSaving ? (
+                          <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        ) : (
+                          <MdEdit className="text-sm" />
+                        )}
+                        <span className="whitespace-nowrap">
+                          {scheduleLabel}
+                        </span>
+                      </button>
+                      {stop.visitTimeEditedAt ? (
+                        <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-brand-100 px-2 py-1 text-[9px] font-black text-brand-700 dark:bg-brand-400/20 dark:text-brand-100">
+                          {text.dayRoute.visitTimeEdited}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <span className={stayTimeClass}>
+                        <MdAccessTime className="text-sm" />
+                        <span className="whitespace-nowrap">
+                          {scheduleLabel}
+                        </span>
+                      </span>
+                      {stop.visitTimeEditedAt ? (
+                        <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-brand-100 px-2 py-1 text-[9px] font-black text-brand-700 dark:bg-brand-400/20 dark:text-brand-100">
+                          {text.dayRoute.visitTimeEdited}
+                        </span>
+                      ) : null}
+                    </>
+                  )
                 ) : null}
-                {isReadOnly ? (
+                {isReadOnly || isVisited ? (
                   <span className={stayTimeClass}>
                     <MdAccessTime className="text-sm" />
                     <span className="whitespace-nowrap">
-                      {formatStayMinutes(stayMinutes, text)}
+                      {stayDurationLabel}
                     </span>
                   </span>
                 ) : (
@@ -292,7 +421,7 @@ function RouteStopNode({
                       <MdAccessTime className="text-sm" />
                     )}
                     <span className="whitespace-nowrap">
-                      {formatStayMinutes(stayMinutes, text)}
+                      {stayDurationLabel}
                     </span>
                   </button>
                 )}
@@ -322,38 +451,72 @@ function RouteStopNode({
               >
                 <MdDragIndicator />
               </button>
-            ) : !canToggleVisited ? null : (
-              <button
-                type="button"
-                aria-label={
-                  isVisited
-                    ? text.dayRoute.cancelVisitAria(stop.place.title)
-                    : text.dayRoute.markVisitAria(stop.place.title)
-                }
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggleVisited(stop);
-                }}
-                disabled={isVisitSaving}
-                title={
-                  isVisited
-                    ? text.dayRoute.cancelVisitTitle
-                    : text.dayRoute.markVisitTitle
-                }
-                className={`flex size-8 shrink-0 items-center justify-center rounded-full border text-base transition active:scale-95 disabled:opacity-40 ${
-                  isVisited
-                    ? "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                    : "border-brand-500 bg-brand-600 text-white"
-                }`}
-              >
-                {isVisitSaving ? (
-                  <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : isVisited ? (
-                  <MdClose />
-                ) : (
-                  <MdCheck />
-                )}
-              </button>
+            ) : (
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                {isGpsTestEnabled ? (
+                  <button
+                    type="button"
+                    aria-label={text.dayRoute.gpsTestOpenAria(
+                      stop.place.title
+                    )}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpenGpsTest(stop);
+                    }}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-black ring-1 transition active:scale-95 ${
+                      isGpsTestLocationActive
+                        ? "bg-violet-600 text-white ring-violet-600"
+                        : "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-400/10 dark:text-violet-100 dark:ring-violet-400/30"
+                    }`}
+                  >
+                    <MdGpsFixed className="text-sm" />
+                    {isGpsTestLocationActive
+                      ? text.dayRoute.gpsTestActiveButton
+                      : text.dayRoute.gpsTestButton}
+                  </button>
+                ) : null}
+                {canToggleVisited ? (
+                  <button
+                    type="button"
+                    aria-label={
+                      isVisited
+                        ? text.dayRoute.cancelVisitAria(stop.place.title)
+                        : isCheckedIn
+                          ? text.dayRoute.finishVisitAria(stop.place.title)
+                          : text.dayRoute.checkInAria(stop.place.title)
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleVisited(stop);
+                    }}
+                    disabled={isVisitSaving}
+                    title={
+                      isVisited
+                        ? text.dayRoute.cancelVisitTitle
+                        : isCheckedIn
+                          ? text.dayRoute.finishVisitTitle
+                          : text.dayRoute.checkInTitle
+                    }
+                    className={`flex size-8 shrink-0 items-center justify-center rounded-full border text-base transition active:scale-95 disabled:opacity-40 ${
+                      isVisited
+                        ? "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                        : isCheckedIn
+                          ? "border-brand-500 bg-brand-600 text-white"
+                          : "border-brand-300 bg-brand-50 text-brand-700"
+                    }`}
+                  >
+                    {isVisitSaving ? (
+                      <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : isVisited ? (
+                      <MdClose />
+                    ) : isCheckedIn ? (
+                      <MdCheck />
+                    ) : (
+                      <MdMyLocation />
+                    )}
+                  </button>
+                ) : null}
+              </div>
             )}
           </div>
         </div>

@@ -78,6 +78,12 @@ export type UpdateRouteStopStayMinutesInput = {
   stayMinutes: number;
 };
 
+export type UpdateRouteStopVisitTimesInput = {
+  stopId: string;
+  checkedInAt: Date;
+  checkedOutAt?: Date | null;
+};
+
 export type PlaceStaySummary = {
   averageActualStayMinutes: number | null;
   visitCount: number;

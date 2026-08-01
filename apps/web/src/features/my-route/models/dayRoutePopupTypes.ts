@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { PlannedRouteDay } from "@/features/route-checkout/models/routePlanTypes";
+import type { MapSheetPlace } from "@/types/place";
 import type { MyRoute, MyRouteDay } from "../types";
 
 export type DayRoutePopupProps = {
@@ -11,8 +12,12 @@ export type DayRoutePopupProps = {
   visitCompletionMode?: "live" | "retrospective";
   headerLabel?: string;
   headerBadge?: string;
+  headerIdentity?: ReactNode;
+  headerTitle?: string;
+  headerMeta?: ReactNode;
   enableStartPreview?: boolean;
   enableVerificationPhotoPreview?: boolean;
+  onRequestPlaceRouteFilter?: (place: MapSheetPlace) => void;
   onRequestCheckout?: (routePlan: PlannedRouteDay[]) => void;
   readOnlyFooterAction?: {
     label: string;

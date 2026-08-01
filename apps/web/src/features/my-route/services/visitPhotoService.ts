@@ -43,6 +43,13 @@ export function isVisitVerificationBypassEnabled() {
   );
 }
 
+function isArrivalLocationTestEnabled() {
+  return (
+    window.RouteOneRuntimeConfig?.arrivalNotificationTestMode === true &&
+    nativeBridge.runtime.isAvailable()
+  );
+}
+
 function toRadians(degree: number) {
   return (degree * Math.PI) / 180;
 }
@@ -93,7 +100,10 @@ export async function requestCurrentPosition() {
 export async function requestVisitVerificationPosition(
   place: VisitPlaceCoordinates
 ) {
-  if (isVisitVerificationBypassEnabled()) {
+  if (
+    isVisitVerificationBypassEnabled() &&
+    !isArrivalLocationTestEnabled()
+  ) {
     return {
       lat: place.lat,
       lng: place.lng,

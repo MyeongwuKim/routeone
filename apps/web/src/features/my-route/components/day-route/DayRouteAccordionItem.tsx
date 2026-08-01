@@ -28,12 +28,36 @@ import {
 type RouteStopSchedule = {
   startMinutes: number;
   endMinutes: number;
+  kind: "actual" | "ongoing" | "estimated";
 };
 
 const DEFAULT_ROUTE_DAY_START_MINUTES = 9 * 60;
 
 function getStopStayMinutes(stop: MyRouteStop) {
   return stop.stayMinutes ?? 60;
+}
+
+function getDateTimeClockMinutes(
+  value: string | null,
+  referenceMinutes: number
+) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  let minutes = date.getHours() * 60 + date.getMinutes();
+
+  while (minutes < referenceMinutes - 12 * 60) {
+    minutes += 24 * 60;
+  }
+
+  return minutes;
 }
 
 function getStopTravelMinutes(
@@ -55,6 +79,44 @@ function buildRouteStopSchedules(
   let currentMinutes = DEFAULT_ROUTE_DAY_START_MINUTES;
 
   return stops.map((stop, index): RouteStopSchedule => {
+    const actualEndMinutes = getDateTimeClockMinutes(
+      stop.checkedOutAt ?? stop.visitedAt,
+      currentMinutes
+    );
+    const checkedInMinutes = getDateTimeClockMinutes(
+      stop.checkedInAt,
+      actualEndMinutes ?? currentMinutes
+    );
+
+    if (isVisitedStop(stop) && actualEndMinutes != null) {
+      const actualStartMinutes =
+        checkedInMinutes ??
+        (stop.actualStayMinutes
+          ? actualEndMinutes - stop.actualStayMinutes
+          : null);
+
+      if (actualStartMinutes != null) {
+        currentMinutes = actualEndMinutes;
+
+        return {
+          startMinutes: actualStartMinutes,
+          endMinutes: actualEndMinutes,
+          kind: "actual",
+        };
+      }
+    }
+
+    if (!isVisitedStop(stop) && checkedInMinutes != null) {
+      const endMinutes = checkedInMinutes + getStopStayMinutes(stop);
+      currentMinutes = endMinutes;
+
+      return {
+        startMinutes: checkedInMinutes,
+        endMinutes,
+        kind: "ongoing",
+      };
+    }
+
     currentMinutes += getStopTravelMinutes(stop, index, startLocation);
 
     const startMinutes = currentMinutes;
@@ -64,15 +126,24 @@ function buildRouteStopSchedules(
     return {
       startMinutes,
       endMinutes,
+      kind: "estimated",
     };
   });
 }
 
 function formatRouteStopSchedule(schedule: RouteStopSchedule, text: UiText) {
-  return `${formatClock(schedule.startMinutes, text)}-${formatClock(
-    schedule.endMinutes,
-    text
-  )}`;
+  const start = formatClock(schedule.startMinutes, text);
+  const end = formatClock(schedule.endMinutes, text);
+
+  if (schedule.kind === "actual") {
+    return text.dayRoute.actualTimeRange(start, end);
+  }
+
+  if (schedule.kind === "ongoing") {
+    return text.dayRoute.ongoingTimeRange(start);
+  }
+
+  return text.dayRoute.estimatedTimeRange(start, end);
 }
 
 function getDayStartTitle(
@@ -115,8 +186,13 @@ type DayRouteAccordionItemProps = {
   visitSavingStopId: string | null;
   staySavingStopId: string | null;
   isReadOnly: boolean;
+  canEditVisitTimes: boolean;
+  canEditVerificationPhoto: boolean;
   canToggleVisited: boolean;
+  isVisitDateAllowed: boolean;
   enableVerificationPhotoPreview: boolean;
+  isGpsTestEnabled: boolean;
+  gpsTestLocationStopId: string | null;
   travelSegmentByKey: Record<string, TravelSegmentState>;
   onSelect: (day: MyRouteDay) => void;
   onRegisterDropZone: (index: number, node: HTMLDivElement | null) => void;
@@ -126,8 +202,11 @@ type DayRouteAccordionItemProps = {
     event: ReactPointerEvent<HTMLButtonElement>
   ) => void;
   onRequestStayMinutesEdit: (stop: MyRouteStop) => void;
+  onRequestVisitTimesEdit: (stop: MyRouteStop) => void;
   onToggleVisited: (stop: MyRouteStop) => void;
   onOpenPlace: (stop: MyRouteStop) => void;
+  onEditVerificationPhoto: (stop: MyRouteStop) => void;
+  onOpenGpsTest: (stop: MyRouteStop) => void;
   onOpenVerificationPhoto: (target: VerificationPhotoPreviewTarget) => void;
 };
 
@@ -142,15 +221,23 @@ function DayRouteAccordionItem({
   visitSavingStopId,
   staySavingStopId,
   isReadOnly,
+  canEditVisitTimes,
+  canEditVerificationPhoto,
   canToggleVisited,
+  isVisitDateAllowed,
   enableVerificationPhotoPreview,
+  isGpsTestEnabled,
+  gpsTestLocationStopId,
   travelSegmentByKey,
   onSelect,
   onRegisterDropZone,
   onStartDrag,
   onRequestStayMinutesEdit,
+  onRequestVisitTimesEdit,
   onToggleVisited,
   onOpenPlace,
+  onEditVerificationPhoto,
+  onOpenGpsTest,
   onOpenVerificationPhoto,
 }: DayRouteAccordionItemProps) {
   const text = useUiText();
@@ -162,8 +249,13 @@ function DayRouteAccordionItem({
   );
   const firstStopSchedule = stopSchedules[0] ?? null;
   const lastStopSchedule = stopSchedules.at(-1) ?? null;
+  const scheduleStartMinutes =
+    firstStopSchedule?.kind === "actual" ||
+    firstStopSchedule?.kind === "ongoing"
+      ? firstStopSchedule.startMinutes
+      : DEFAULT_ROUTE_DAY_START_MINUTES;
   const totalScheduleMinutes = lastStopSchedule
-    ? lastStopSchedule.endMinutes - DEFAULT_ROUTE_DAY_START_MINUTES
+    ? Math.max(0, lastStopSchedule.endMinutes - scheduleStartMinutes)
     : 0;
   const dayStartTitle = getDayStartTitle(dayStops, startLocation, text);
   const dayStartDescription = getDayStartDescription(
@@ -191,6 +283,11 @@ function DayRouteAccordionItem({
     ? Math.round((completedStopCount / dayStops.length) * 100)
     : 0;
   const isDayCleared = hasDayStops && completedStopCount === dayStops.length;
+  const hasActualStart =
+    firstStopSchedule?.kind === "actual" ||
+    firstStopSchedule?.kind === "ongoing";
+  const hasActualEnd =
+    isDayCleared && lastStopSchedule?.kind === "actual";
 
   return (
     <section
@@ -342,15 +439,19 @@ function DayRouteAccordionItem({
                 <div className="mb-4 grid grid-cols-3 gap-2">
                   <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400">
-                      {text.dayRoute.expectedStart}
+                      {hasActualStart
+                        ? text.dayRoute.actualStart
+                        : text.dayRoute.expectedStart}
                     </p>
                     <p className="mt-0.5 text-sm font-black text-slate-900">
-                      {formatClock(DEFAULT_ROUTE_DAY_START_MINUTES, text)}
+                      {formatClock(firstStopSchedule.startMinutes, text)}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400">
-                      {text.dayRoute.expectedEnd}
+                      {hasActualEnd
+                        ? text.dayRoute.actualEnd
+                        : text.dayRoute.expectedEnd}
                     </p>
                     <p className="mt-0.5 text-sm font-black text-slate-900">
                       {formatClock(lastStopSchedule.endMinutes, text)}
@@ -358,7 +459,9 @@ function DayRouteAccordionItem({
                   </div>
                   <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400">
-                      {text.dayRoute.totalDuration}
+                      {hasActualEnd
+                        ? text.dayRoute.actualTotalDuration
+                        : text.dayRoute.totalDuration}
                     </p>
                     <p className="mt-0.5 text-sm font-black text-slate-900">
                       {formatTravelMinutes(totalScheduleMinutes, text)}
@@ -386,9 +489,18 @@ function DayRouteAccordionItem({
                     isVisitSaving={visitSavingStopId === stop.id}
                     isStaySaving={staySavingStopId === stop.id}
                     isReadOnly={isReadOnly}
-                    canToggleVisited={canToggleVisited}
+                    canToggleVisited={
+                      canToggleVisited &&
+                      (isVisitDateAllowed ||
+                        (isGpsTestEnabled &&
+                          gpsTestLocationStopId === stop.id))
+                    }
                     enableVerificationPhotoPreview={
                       enableVerificationPhotoPreview
+                    }
+                    isGpsTestEnabled={isGpsTestEnabled}
+                    isGpsTestLocationActive={
+                      gpsTestLocationStopId === stop.id
                     }
                     travelSegmentToNext={
                       getStoredTravelSegment(dayStops[index + 1]) ??
@@ -404,10 +516,15 @@ function DayRouteAccordionItem({
                         ? formatRouteStopSchedule(stopSchedules[index], text)
                         : null
                     }
+                    canEditVisitTimes={canEditVisitTimes}
+                    canEditVerificationPhoto={canEditVerificationPhoto}
                     onStartDrag={(event) => onStartDrag(stop, index, event)}
                     onRequestStayMinutesEdit={onRequestStayMinutesEdit}
+                    onRequestVisitTimesEdit={onRequestVisitTimesEdit}
                     onToggleVisited={onToggleVisited}
                     onOpenPlace={onOpenPlace}
+                    onEditVerificationPhoto={onEditVerificationPhoto}
+                    onOpenGpsTest={onOpenGpsTest}
                     onOpenVerificationPhoto={(selectedStop) =>
                       onOpenVerificationPhoto({
                         routeDay,

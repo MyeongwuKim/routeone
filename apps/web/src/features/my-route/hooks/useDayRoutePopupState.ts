@@ -2,9 +2,11 @@ import { useMemo, useReducer, type SetStateAction } from "react";
 import type {
   ActualStayMinutesTarget,
   EarlyRouteCompletionTarget,
+  PhotoPublicationTarget,
   StayMinutesEditTarget,
   VerificationPhotoPreviewTarget,
   VisitCompletionTarget,
+  VisitTimesEditTarget,
 } from "../models/dayRouteDialogTypes";
 import type { MyRouteDay, MyRouteStop } from "../types";
 
@@ -15,7 +17,9 @@ type DayRoutePopupState = {
   isOrderEditing: boolean;
   stayMinutesEditTarget: StayMinutesEditTarget | null;
   visitCompletionTarget: VisitCompletionTarget | null;
+  visitTimesEditTarget: VisitTimesEditTarget | null;
   verificationPhotoPreviewTarget: VerificationPhotoPreviewTarget | null;
+  photoPublicationTarget: PhotoPublicationTarget | null;
   actualStayMinutesTarget: ActualStayMinutesTarget | null;
   earlyRouteCompletionTarget: EarlyRouteCompletionTarget | null;
   orderedStops: MyRouteStop[];
@@ -28,9 +32,14 @@ type DayRoutePopupAction =
   | { type: "set-order-editing"; value: boolean }
   | { type: "set-stay-minutes-edit-target"; value: StayMinutesEditTarget | null }
   | { type: "set-visit-completion-target"; value: VisitCompletionTarget | null }
+  | { type: "set-visit-times-edit-target"; value: VisitTimesEditTarget | null }
   | {
       type: "set-verification-photo-preview-target";
       value: VerificationPhotoPreviewTarget | null;
+    }
+  | {
+      type: "set-photo-publication-target";
+      value: PhotoPublicationTarget | null;
     }
   | { type: "set-actual-stay-minutes-target"; value: ActualStayMinutesTarget | null }
   | {
@@ -55,7 +64,9 @@ function createDayRoutePopupState(day: MyRouteDay): DayRoutePopupState {
     isOrderEditing: false,
     stayMinutesEditTarget: null,
     visitCompletionTarget: null,
+    visitTimesEditTarget: null,
     verificationPhotoPreviewTarget: null,
+    photoPublicationTarget: null,
     actualStayMinutesTarget: null,
     earlyRouteCompletionTarget: null,
     orderedStops: day.stops,
@@ -84,8 +95,12 @@ function dayRoutePopupReducer(
       return { ...state, stayMinutesEditTarget: action.value };
     case "set-visit-completion-target":
       return { ...state, visitCompletionTarget: action.value };
+    case "set-visit-times-edit-target":
+      return { ...state, visitTimesEditTarget: action.value };
     case "set-verification-photo-preview-target":
       return { ...state, verificationPhotoPreviewTarget: action.value };
+    case "set-photo-publication-target":
+      return { ...state, photoPublicationTarget: action.value };
     case "set-actual-stay-minutes-target":
       return { ...state, actualStayMinutesTarget: action.value };
     case "set-early-route-completion-target":
@@ -110,6 +125,9 @@ function dayRoutePopupReducer(
         mapTargetDayId: null,
         isOrderEditing: false,
         stayMinutesEditTarget: null,
+        visitTimesEditTarget: null,
+        verificationPhotoPreviewTarget: null,
+        photoPublicationTarget: null,
         actualStayMinutesTarget: null,
         orderedStops: action.day.stops,
         baseStopIds: action.day.stops.map((stop) => stop.id),
@@ -137,9 +155,13 @@ export function useDayRoutePopupState(day: MyRouteDay) {
         dispatch({ type: "set-stay-minutes-edit-target", value }),
       setVisitCompletionTarget: (value: VisitCompletionTarget | null) =>
         dispatch({ type: "set-visit-completion-target", value }),
+      setVisitTimesEditTarget: (value: VisitTimesEditTarget | null) =>
+        dispatch({ type: "set-visit-times-edit-target", value }),
       setVerificationPhotoPreviewTarget: (
         value: VerificationPhotoPreviewTarget | null
       ) => dispatch({ type: "set-verification-photo-preview-target", value }),
+      setPhotoPublicationTarget: (value: PhotoPublicationTarget | null) =>
+        dispatch({ type: "set-photo-publication-target", value }),
       setActualStayMinutesTarget: (value: ActualStayMinutesTarget | null) =>
         dispatch({ type: "set-actual-stay-minutes-target", value }),
       setEarlyRouteCompletionTarget: (

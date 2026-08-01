@@ -4,6 +4,7 @@ import {
   MdCheckCircle,
   MdChevronRight,
   MdFlag,
+  MdMyLocation,
   MdOutlinePlace,
 } from "react-icons/md";
 import {
@@ -185,6 +186,7 @@ function TodayRoutePreview({ day }: { day: MyRouteDay }) {
 function TodayNextStopCard({ day }: { day: MyRouteDay }) {
   const text = useUiText();
   const nextStop = getNextRouteStop(day);
+  const isCheckedIn = Boolean(nextStop?.checkedInAt);
 
   if (!nextStop) {
     return (
@@ -218,8 +220,12 @@ function TodayNextStopCard({ day }: { day: MyRouteDay }) {
       </div>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1 text-[11px] font-bold text-brand-700">
-          <MdFlag className="text-sm" />
-          다음 장소
+          {isCheckedIn ? (
+            <MdMyLocation className="text-sm" />
+          ) : (
+            <MdFlag className="text-sm" />
+          )}
+          {isCheckedIn ? text.dayRoute.visiting : text.dayRoute.nextPlace}
         </p>
         <p className="truncate text-sm font-black text-white">
           {nextStop.place.title}

@@ -274,7 +274,7 @@ export async function deleteRouteVisitPhotoImages(imageIds: string[]) {
       error instanceof Error ? error.message : error
     );
     throw new Error(
-      "인증 사진을 삭제하지 못해 탈퇴를 진행하지 않았습니다. 다시 시도해 주세요."
+      "인증 사진을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요."
     );
   }
 }

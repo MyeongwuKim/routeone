@@ -8,6 +8,7 @@ import {
   IoBagAddOutline,
   IoClose,
   IoInformationCircleOutline,
+  IoSearch,
 } from "react-icons/io5";
 import { usePlaceSheetLayout } from "../hooks/usePlaceSheetLayout";
 import { usePlaceSheetData } from "../hooks/usePlaceSheetData";
@@ -43,6 +44,7 @@ function PlaceBottomSheet() {
     sheetMode,
     sheetResetVersion,
     directionOrigin,
+    contextAction,
     selectedPlace,
     openSheet,
     updateSelectedPlace,
@@ -201,6 +203,7 @@ function PlaceBottomSheet() {
       }),
       {
         directionOrigin: resolvedDirectionOrigin,
+        contextAction: contextAction ?? undefined,
         mode: sheetMode,
       }
     );
@@ -364,7 +367,11 @@ function PlaceBottomSheet() {
                     onClick={() => {
                       if (selectedPlace) {
                         const willAddToCart = !isCurrentPlaceSaved;
-                        toggleSavedPlace(selectedPlace, activeImageList[0] ?? "");
+                        toggleSavedPlace(
+                          selectedPlace,
+                          activeImageList[0] ?? "",
+                          appLanguage
+                        );
                         if (willAddToCart) {
                           showToast(text.placeSheet.addToCartToast);
                         }
@@ -408,6 +415,18 @@ function PlaceBottomSheet() {
               text={text}
             />
           </div>
+          {contextAction ? (
+            <div className="shrink-0 border-t border-brand-100 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:border-brand-400/20 dark:bg-[#071718]">
+              <button
+                type="button"
+                onClick={() => contextAction.onSelect(selectedPlace)}
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-brand-700 active:scale-[0.99]"
+              >
+                <IoSearch className="text-lg" />
+                {contextAction.label}
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
 

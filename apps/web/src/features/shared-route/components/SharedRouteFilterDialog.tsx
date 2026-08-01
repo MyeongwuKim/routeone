@@ -142,9 +142,9 @@ function SharedRouteFilterDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="shared-route-filter-title"
-        className="shared-route-filter-panel-enter max-h-[min(82vh,42rem)] w-full max-w-sm overflow-hidden rounded-[1.4rem] border border-brand-200 bg-white shadow-2xl dark:border-brand-400/30 dark:bg-[#102a27]"
+        className="shared-route-filter-panel-enter flex max-h-[min(82dvh,42rem)] w-full max-w-sm flex-col overflow-hidden rounded-[1.4rem] border border-brand-200 bg-white shadow-2xl dark:border-brand-400/30 dark:bg-[#102a27]"
       >
-        <div className="flex items-start justify-between gap-3 p-4 pb-3">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 p-4 pb-3 dark:border-brand-400/20">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
               <MdFilterAlt />
@@ -171,7 +171,7 @@ function SharedRouteFilterDialog({
           </button>
         </div>
 
-        <div className="max-h-[52vh] space-y-5 overflow-y-auto px-4 pb-4">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-4 [-webkit-overflow-scrolling:touch]">
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-sm font-black text-slate-800 dark:text-white">
@@ -289,7 +289,7 @@ function SharedRouteFilterDialog({
           </div>
         </div>
 
-        <div className="grid grid-cols-[auto,1fr] gap-2 border-t border-slate-100 p-4 dark:border-brand-400/20">
+        <div className="grid shrink-0 grid-cols-[auto,1fr] gap-2 border-t border-slate-100 bg-white p-4 dark:border-brand-400/20 dark:bg-[#102a27]">
           <button
             type="button"
             onClick={onClear}

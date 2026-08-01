@@ -1,0 +1,5 @@
+mutation DeleteRouteStopVisitPhoto($stopId: ID!) {
+  deleteRouteStopVisitPhoto(stopId: $stopId) {
+    ...RouteDetailFields
+  }
+}

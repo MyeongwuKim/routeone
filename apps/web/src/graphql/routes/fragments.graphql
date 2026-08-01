@@ -31,12 +31,21 @@ fragment RouteStopFields on RouteStop {
   verifiedAt
   verificationPhotoImageId
   verificationPhotoUrl
+  verificationPhotoPublicationConsent
+  verificationPhotoPublishedAt
   verificationLat
   verificationLng
   verificationAccuracyMeters
   checkedInAt
   checkedOutAt
   actualStayMinutes
+  visitTimeEditedAt
+}
+
+fragment SharedRouteOwnerFields on User {
+  id
+  displayName
+  avatarUrl
 }
 
 fragment RouteSummaryFields on Route {

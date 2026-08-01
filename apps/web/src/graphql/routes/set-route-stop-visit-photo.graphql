@@ -1,0 +1,13 @@
+mutation SetRouteStopVisitPhoto(
+  $stopId: ID!
+  $imageId: String!
+  $imageUrl: String!
+) {
+  setRouteStopVisitPhoto(
+    stopId: $stopId
+    imageId: $imageId
+    imageUrl: $imageUrl
+  ) {
+    ...RouteDetailFields
+  }
+}

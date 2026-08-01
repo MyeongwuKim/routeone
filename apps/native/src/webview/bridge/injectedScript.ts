@@ -19,7 +19,10 @@ const ROUTEONE_RUNTIME_CONFIG = {
     : {}),
   devVerificationBypass:
     readTruthyPublicEnv("EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS") ||
-    readTruthyPublicEnv("EXPO_PUBLIC_DEV_VERIFICATION_BYPASS")
+    readTruthyPublicEnv("EXPO_PUBLIC_DEV_VERIFICATION_BYPASS"),
+  arrivalNotificationTestMode: readTruthyPublicEnv(
+    "EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE"
+  )
 };
 
 export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
@@ -50,7 +53,8 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
         webBundleChannel: window.RouteOneRuntimeConfig.webBundleChannel,
         webBundleManifestUrl: window.RouteOneRuntimeConfig.webBundleManifestUrl,
         webBundlePublicOrigin: window.RouteOneRuntimeConfig.webBundlePublicOrigin,
-        devVerificationBypass: window.RouteOneRuntimeConfig.devVerificationBypass
+        devVerificationBypass: window.RouteOneRuntimeConfig.devVerificationBypass,
+        arrivalNotificationTestMode: window.RouteOneRuntimeConfig.arrivalNotificationTestMode
       })
     );
   }
@@ -188,6 +192,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   var pendingPhotoRequests = Object.create(null);
   var pendingPhotoUploadRequests = Object.create(null);
   var pendingRouteArrivalNotificationSyncRequests = Object.create(null);
+  var pendingRouteArrivalTestLocationRequests = Object.create(null);
   var pendingDeliveredNotificationHistoryRequests = Object.create(null);
   var pendingPushTokenRequests = Object.create(null);
   var pendingFestivalNotificationSyncRequests = Object.create(null);
@@ -463,6 +468,31 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     });
   };
 
+  window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_TEST_LOCATION_RESPONSE__ = function handleNativeRouteArrivalTestLocationResponse(id, payload) {
+    var handlers = pendingRouteArrivalTestLocationRequests[id];
+
+    if (!handlers) {
+      return;
+    }
+
+    delete pendingRouteArrivalTestLocationRequests[id];
+
+    if (!payload || !payload.ok) {
+      handlers.reject(new Error((payload && payload.error) || "Native route arrival location test failed"));
+      return;
+    }
+
+    handlers.resolve({
+      active: payload.active,
+      stopId: payload.stopId,
+      lat: payload.lat,
+      lng: payload.lng,
+      distanceMeters: payload.distanceMeters,
+      withinRadius: payload.withinRadius,
+      notificationScheduled: payload.notificationScheduled
+    });
+  };
+
   window.__ROUTEONE_NATIVE_DELIVERED_NOTIFICATION_HISTORY_RESPONSE__ = function handleNativeDeliveredNotificationHistoryResponse(id, payload) {
     var handlers = pendingDeliveredNotificationHistoryRequests[id];
 
@@ -652,6 +682,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
       var requestId = "native-route-arrival-notifications-" + Date.now() + "-" + requestSeq++;
       var places = options && Array.isArray(options.places) ? options.places : [];
       var radiusMeters = options && typeof options.radiusMeters === "number" ? options.radiusMeters : null;
+      var language = options && options.language === "en" ? "en" : "ko";
 
       return new Promise(function routeOneNativeRouteArrivalNotifications(resolve, reject) {
         pendingRouteArrivalNotificationSyncRequests[requestId] = { resolve: resolve, reject: reject };
@@ -661,7 +692,32 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
             type: "routeone:native-route-arrival-notifications-sync",
             id: requestId,
             places: places,
-            radiusMeters: radiusMeters
+            radiusMeters: radiusMeters,
+            language: language
+          })
+        );
+      });
+    },
+    setRouteArrivalTestLocation: function setRouteArrivalTestLocation(options) {
+      if (!window.ReactNativeWebView) {
+        return Promise.reject(new Error("Native bridge is not available"));
+      }
+
+      var requestId = "native-route-arrival-test-location-" + Date.now() + "-" + requestSeq++;
+      var place = options && options.place ? options.place : null;
+      var position = options && options.position ? options.position : null;
+      var language = options && options.language === "en" ? "en" : "ko";
+
+      return new Promise(function routeOneNativeRouteArrivalTestLocation(resolve, reject) {
+        pendingRouteArrivalTestLocationRequests[requestId] = { resolve: resolve, reject: reject };
+
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: "routeone:native-route-arrival-test-location",
+            id: requestId,
+            place: place,
+            position: position,
+            language: language
           })
         );
       });

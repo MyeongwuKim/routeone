@@ -1,0 +1,5 @@
+mutation SetRouteStopPhotoPublication($stopId: ID!, $published: Boolean!) {
+  setRouteStopPhotoPublication(stopId: $stopId, published: $published) {
+    ...RouteDetailFields
+  }
+}

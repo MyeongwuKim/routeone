@@ -1,6 +1,8 @@
 import { useState } from "react";
-import type { AuthUser } from "@/stores/authUserStore";
-import { getAccountAvatarFallback } from "@/lib/accountDisplay";
+import {
+  getAccountAvatarFallback,
+  type AccountDisplayUser,
+} from "@/lib/accountDisplay";
 
 function AccountAvatar({
   user,
@@ -8,7 +10,7 @@ function AccountAvatar({
   className = "size-16",
   textClassName = "text-2xl",
 }: {
-  user: AuthUser | null;
+  user: AccountDisplayUser | null;
   fallbackName: string;
   className?: string;
   textClassName?: string;

@@ -27,6 +27,10 @@ export { localizeTourPlaceOverview } from "./placeOverviewLocalization.service.j
 
 const refreshingPlaceLocalizationKeys = new Set<string>();
 
+type LocalizeTourPlacesOptions = {
+  waitForFresh?: boolean;
+};
+
 async function storeTourPlaceLocalizations(
   prisma: PrismaClient,
   inputs: TourPlaceLocalizationInput[]
@@ -122,7 +126,8 @@ function refreshTourPlaceLocalizationsInBackground(
 
 export async function localizeTourPlaces(
   prisma: PrismaClient,
-  rawInputs: TourPlaceLocalizationInput[]
+  rawInputs: TourPlaceLocalizationInput[],
+  options: LocalizeTourPlacesOptions = {}
 ) {
   const inputById = new Map<string, TourPlaceLocalizationInput>();
   rawInputs.forEach((input) => {
@@ -153,20 +158,38 @@ export async function localizeTourPlaces(
       externalId: { in: inputs.map((input) => input.contentId) },
     },
   });
+  let localizedRows = cachedRows;
   const cachedById = new Map(cachedRows.map((row) => [row.externalId, row]));
   const refreshInputs = inputs.filter((input) => {
     const cached = cachedById.get(input.contentId);
     return (
       !cached ||
       cached.sourceHash !== createSourceHash(input) ||
-      (cached.addressSource === "SOURCE" && Boolean(input.address))
+      (cached.titleSource === "SOURCE" && /[가-힣]/u.test(input.title)) ||
+      (cached.addressSource === "SOURCE" &&
+        /[가-힣]/u.test(input.address ?? ""))
     );
   });
 
-  refreshTourPlaceLocalizationsInBackground(prisma, refreshInputs);
+  if (options.waitForFresh && refreshInputs.length > 0) {
+    await storeTourPlaceLocalizations(prisma, refreshInputs);
+    localizedRows = await prisma.placeLocalization.findMany({
+      where: {
+        provider: "TOUR_API",
+        locale: "en",
+        externalId: { in: inputs.map((input) => input.contentId) },
+      },
+    });
+  } else {
+    refreshTourPlaceLocalizationsInBackground(prisma, refreshInputs);
+  }
+
+  const localizedById = new Map(
+    localizedRows.map((row) => [row.externalId, row])
+  );
 
   return inputs.map((input) => {
-    const row = cachedById.get(input.contentId);
+    const row = localizedById.get(input.contentId);
     return {
       contentId: input.contentId,
       title: row?.title || input.title,

@@ -5,6 +5,7 @@ import {
   GANGWON_AREA_CODE,
 } from "@/data/gangwonRegions";
 import { isSamePlaceDuplicate } from "@/lib/placeDuplicate";
+import type { AppLanguage } from "@/stores/appLanguageStore";
 import type { MapSheetPlace } from "@/types/place";
 
 export type SavedPlaceItem = {
@@ -12,6 +13,14 @@ export type SavedPlaceItem = {
   place: MapSheetPlace;
   thumbnailUrl: string;
   savedAt: number;
+  labelLanguage?: AppLanguage;
+};
+
+export type SavedPlaceLabelUpdate = {
+  id: string;
+  title: string;
+  address: string;
+  language: AppLanguage;
 };
 
 type PlaceCartState = {
@@ -20,7 +29,12 @@ type PlaceCartState = {
   savedPlaces: SavedPlaceItem[];
   openSavedList: () => void;
   closeSavedList: () => void;
-  toggleSavedPlace: (place: MapSheetPlace, thumbnailUrl?: string) => void;
+  toggleSavedPlace: (
+    place: MapSheetPlace,
+    thumbnailUrl?: string,
+    language?: AppLanguage
+  ) => void;
+  updateSavedPlaceLabels: (updates: SavedPlaceLabelUpdate[]) => void;
   removeSavedPlace: (placeId: string) => void;
   clearSavedPlaces: () => void;
 };
@@ -34,6 +48,21 @@ const getSavedPlaceThumbnailUrl = (
   place: MapSheetPlace,
   thumbnailUrl: string
 ) => thumbnailUrl || place.images[0] || "";
+
+const hasKoreanText = (value: string) => /[가-힣]/u.test(value);
+
+const getSavedPlaceLabelLanguage = (
+  place: MapSheetPlace,
+  language?: AppLanguage
+) => {
+  if (language !== "en") {
+    return language;
+  }
+
+  return hasKoreanText(`${place.title} ${place.address}`)
+    ? undefined
+    : language;
+};
 
 const isPersistedPlaceCartState = (
   value: unknown
@@ -211,7 +240,7 @@ export const usePlaceCartStore = create<PlaceCartState>()(
         set({
           isSavedListOpen: false,
         }),
-      toggleSavedPlace: (place, thumbnailUrl = "") =>
+      toggleSavedPlace: (place, thumbnailUrl = "", language) =>
         set((state) => {
           const exists = state.savedPlaces.some((item) =>
             isSamePlaceDuplicate(item.place, place)
@@ -226,6 +255,7 @@ export const usePlaceCartStore = create<PlaceCartState>()(
                   place,
                   thumbnailUrl: getSavedPlaceThumbnailUrl(place, thumbnailUrl),
                   savedAt: Date.now(),
+                  labelLanguage: getSavedPlaceLabelLanguage(place, language),
                 },
                 ...state.savedPlaces.filter(
                   (item) => !isSamePlaceDuplicate(item.place, place)
@@ -235,6 +265,37 @@ export const usePlaceCartStore = create<PlaceCartState>()(
           return {
             savedPlaceIds: nextSavedPlaces.map((item) => item.id),
             savedPlaces: nextSavedPlaces,
+          };
+        }),
+      updateSavedPlaceLabels: (updates) =>
+        set((state) => {
+          if (updates.length === 0) {
+            return state;
+          }
+
+          const updateById = new Map(
+            updates.map((update) => [update.id, update])
+          );
+          const savedPlaces = state.savedPlaces.map((item) => {
+            const update = updateById.get(item.id);
+
+            if (!update) {
+              return item;
+            }
+
+            return {
+              ...item,
+              place: {
+                ...item.place,
+                title: update.title,
+                address: update.address,
+              },
+              labelLanguage: update.language,
+            };
+          });
+
+          return {
+            savedPlaces,
           };
         }),
       removeSavedPlace: (placeId) =>

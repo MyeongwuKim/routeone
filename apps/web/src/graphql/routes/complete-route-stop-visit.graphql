@@ -1,0 +1,11 @@
+mutation CompleteRouteStopVisit(
+  $stopId: ID!
+  $actualStayMinutes: Int
+) {
+  completeRouteStopVisit(
+    stopId: $stopId
+    actualStayMinutes: $actualStayMinutes
+  ) {
+    ...RouteDetailFields
+  }
+}

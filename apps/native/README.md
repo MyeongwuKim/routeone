@@ -172,9 +172,11 @@ EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS=1
 EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE=1
 ```
 
-`EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS=1`이면 WebView가 현재 GPS를 요청하지 않고 장소 좌표로 방문 인증 위치를 만듭니다. API 서버도 같은 테스트를 허용하려면 서버에 `ROUTEONE_DEV_VERIFICATION_BYPASS=1`이 켜져 있어야 합니다.
+`EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS=1`이면 WebView가 현재 GPS를 요청하지 않고 장소 좌표로 방문 인증 위치를 만듭니다. API 서버도 같은 테스트를 허용하려면 서버에 `ROUTEONE_DEV_VERIFICATION_BYPASS=1`이 켜져 있어야 합니다. 도착 알림 테스트 모드가 함께 켜진 경우에는 장소별로 선택한 테스트 위치가 우선되어 다른 장소의 GPS 인증 실패 케이스도 확인할 수 있습니다.
 
-`EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE=1`이면 오늘 날짜의 다음 방문지를 동기화한 뒤 100m 근처에 온 것처럼 테스트 알림을 한 번 발송합니다.
+`EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE=1`이면 DAY 상세의 각 장소에 GPS 테스트 버튼이 표시됩니다. 버튼을 누르면 장소의 100m 도착 반경과 드래그 가능한 테스트 위치 마커가 있는 지도가 열립니다. 마커를 끌거나 지도를 눌러 좌표를 정한 뒤 적용하면 WebView에서 조회하는 현재 위치가 해당 좌표로 바뀝니다. 장소 반경 안이면 같은 도착 알림 생성 경로로 로컬 알림을 발송하고, 반경 밖이면 위치만 적용해 GPS 실패 케이스를 확인할 수 있습니다. `실제 GPS로 복귀`를 누르거나 앱 프로세스를 다시 시작하면 위치 덮어쓰기가 해제됩니다. 운영 빌드에는 이 플래그를 설정하지 않습니다.
+
+이 버튼으로 알림 내용, 포그라운드 표시, 알림함 동기화, 알림 탭 이동과 GPS 방문 인증을 확인할 수 있습니다. OS의 백그라운드 지오펜스 진입 이벤트 자체는 iOS 시뮬레이터의 위치 시뮬레이션이나 Android 모의 위치로 별도 확인해야 합니다.
 
 ## 앱 버전
 

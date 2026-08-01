@@ -1,6 +1,9 @@
 query SharedRoutes($regionCode: String, $limit: Int) {
   sharedRoutes(regionCode: $regionCode, limit: $limit) {
     ...RouteSummaryFields
+    owner {
+      ...SharedRouteOwnerFields
+    }
     stops {
       id
       place {

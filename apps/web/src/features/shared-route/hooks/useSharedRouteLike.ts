@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { routeApi } from "@/api/routeApi";
 import type {
   RouteByIdQuery,
-  RouteSummaryFieldsFragment,
 } from "@/generated/graphql";
 import { useUiText } from "@/lib/uiText";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -26,7 +25,7 @@ type UseSharedRouteLikeOptions = {
 };
 
 type ToggleLikeVariables = {
-  route: RouteSummaryFieldsFragment;
+  route: SharedRoute;
   wasLiked: boolean;
   nextLiked: boolean;
   previousLikeCount: number;
@@ -227,7 +226,7 @@ export function useSharedRouteLike({
   });
 
   const toggleLike = useCallback(
-    (route: RouteSummaryFieldsFragment) => {
+    (route: SharedRoute) => {
       if (route.isMine || pendingLikeRouteIdsRef.current.has(route.id)) {
         return;
       }

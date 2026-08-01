@@ -266,6 +266,8 @@ function StationNode({
   const longPressPointerRef = useRef<LongPressPointer | null>(null);
   const didLongPressRef = useRef(false);
   const isOverSchedule = station.item?.isOverSchedule ?? false;
+  const thumbnailUrl =
+    station.item?.place.images.find((imageUrl) => imageUrl.trim()) ?? "";
   const averageStaySummaryLabel =
     getAverageStaySummaryLabel(averageStaySummary, text);
   const orderLabel =
@@ -293,9 +295,23 @@ function StationNode({
                 : "border-brand-500"
         }`}
       >
-        {station.icon}
+        <span className="flex h-full w-full items-center justify-center rounded-full">
+          {station.icon}
+        </span>
+        {thumbnailUrl ? (
+          <img
+            src={thumbnailUrl}
+            alt=""
+            className="absolute inset-[2px] h-[calc(100%-4px)] w-[calc(100%-4px)] rounded-full object-cover"
+            loading="lazy"
+            decoding="async"
+            onError={(event) => {
+              event.currentTarget.hidden = true;
+            }}
+          />
+        ) : null}
         {isOrderEditing ? (
-          <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-black text-white shadow-sm">
+          <span className="absolute -right-2 -top-2 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-black text-white shadow-sm">
             {orderLabel}
           </span>
         ) : null}

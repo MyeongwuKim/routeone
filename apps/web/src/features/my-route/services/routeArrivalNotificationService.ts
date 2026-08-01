@@ -10,6 +10,7 @@ import {
   type NativeArrivalNotificationPlace,
 } from "@/native-bridge";
 import { notificationApi } from "@/api/notificationApi";
+import type { AppLanguage } from "@/stores/appLanguageStore";
 
 const ROUTE_ARRIVAL_NOTIFICATION_RADIUS_METERS = 100;
 
@@ -54,7 +55,10 @@ function getNativeRouteArrivalNotificationPlaces(
   });
 }
 
-export async function syncTodayRouteArrivalNotifications(routes: MyRoute[]) {
+export async function syncTodayRouteArrivalNotifications(
+  routes: MyRoute[],
+  language: AppLanguage
+) {
   try {
     const settings = await notificationApi.settings();
     const places = settings.notificationSettings.routeArrivalEnabled
@@ -64,6 +68,7 @@ export async function syncTodayRouteArrivalNotifications(routes: MyRoute[]) {
     return await nativeBridge.notifications.syncRouteArrivals({
       places,
       radiusMeters: ROUTE_ARRIVAL_NOTIFICATION_RADIUS_METERS,
+      language,
     });
   } catch (error) {
     console.warn(

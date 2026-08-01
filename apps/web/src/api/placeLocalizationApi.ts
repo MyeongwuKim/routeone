@@ -14,6 +14,11 @@ const LOCALIZATION_REQUEST_OPTIONS = {
   maxRetryCount: 0,
 };
 
+const FRESH_LOCALIZATION_REQUEST_OPTIONS = {
+  timeoutMs: 30_000,
+  maxRetryCount: 0,
+};
+
 const OVERVIEW_LOCALIZATION_REQUEST_OPTIONS = {
   timeoutMs: 25_000,
   maxRetryCount: 0,
@@ -32,11 +37,16 @@ export const placeLocalizationApi = {
       OVERVIEW_LOCALIZATION_REQUEST_OPTIONS
     );
   },
-  localizeTourPlaces(input: TourPlaceLocalizationInput[]) {
+  localizeTourPlaces(
+    input: TourPlaceLocalizationInput[],
+    waitForFresh = false
+  ) {
     return requestGraphQL(
       LocalizeTourPlacesDocument,
-      { input },
-      LOCALIZATION_REQUEST_OPTIONS
+      { input, waitForFresh },
+      waitForFresh
+        ? FRESH_LOCALIZATION_REQUEST_OPTIONS
+        : LOCALIZATION_REQUEST_OPTIONS
     );
   },
   cacheTourCategoryLocalizations(input: TourCategoryLocalizationInput[]) {

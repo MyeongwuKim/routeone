@@ -18,15 +18,23 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
     visitSavingStopId,
     staySavingStopId,
     isReadOnly,
+    canEditVisitTimes,
+    canEditVerificationPhoto,
     canToggleVisitStatus,
+    visitEnabledDayIds,
     enableVerificationPhotoPreview,
+    isGpsTestEnabled,
+    gpsTestLocationStopId,
     travelSegmentByKey,
     registerDropZone,
     startDragStop,
     handleSelectDay,
     setStayMinutesEditTarget,
+    setVisitTimesEditTarget,
     handleToggleStopVisited,
     handleOpenPlaceDetail,
+    handleReplaceVerificationPhoto,
+    setGpsTestTarget,
     setVerificationPhotoPreviewTarget,
   } = controller;
 
@@ -52,10 +60,15 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               visitSavingStopId={visitSavingStopId}
               staySavingStopId={staySavingStopId}
               isReadOnly={isReadOnly}
+              canEditVisitTimes={canEditVisitTimes}
+              canEditVerificationPhoto={canEditVerificationPhoto}
               canToggleVisited={canToggleVisitStatus}
+              isVisitDateAllowed={visitEnabledDayIds.has(routeDay.id)}
               enableVerificationPhotoPreview={
                 enableVerificationPhotoPreview
               }
+              isGpsTestEnabled={isGpsTestEnabled}
+              gpsTestLocationStopId={gpsTestLocationStopId}
               travelSegmentByKey={travelSegmentByKey}
               onSelect={handleSelectDay}
               onRegisterDropZone={
@@ -71,10 +84,19 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
                   setStayMinutesEditTarget({ routeDay, stop });
                 }
               }}
+              onRequestVisitTimesEdit={(stop) => {
+                setVisitTimesEditTarget({ routeDay, stop });
+              }}
               onToggleVisited={(stop) =>
                 handleToggleStopVisited(routeDay, stop)
               }
               onOpenPlace={handleOpenPlaceDetail}
+              onEditVerificationPhoto={(stop) =>
+                handleReplaceVerificationPhoto({ routeDay, stop })
+              }
+              onOpenGpsTest={(stop) =>
+                setGpsTestTarget({ routeDay, stop })
+              }
               onOpenVerificationPhoto={setVerificationPhotoPreviewTarget}
             />
           );

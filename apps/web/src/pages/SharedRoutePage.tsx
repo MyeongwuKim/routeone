@@ -16,13 +16,19 @@ import { routeApi } from "@/api/routeApi";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import { DropdownSelect } from "@/components/inputs";
-import type { GangwonRegionLabel } from "@/data/gangwonRegions";
+import {
+  GANGWON_REGIONS,
+  type GangwonRegionLabel,
+} from "@/data/gangwonRegions";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
 import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
 import type { PlannedRouteDay } from "@/features/route-checkout/models/routePlanTypes";
 import SharedRouteCard from "@/features/shared-route/components/SharedRouteCard";
 import SharedRouteFilterDialog from "@/features/shared-route/components/SharedRouteFilterDialog";
 import SharedRouteDetailSkeleton from "@/features/shared-route/components/SharedRouteDetailSkeleton";
+import SharedRouteDetailMeta from "@/features/shared-route/components/SharedRouteDetailMeta";
+import SharedRouteAuthor from "@/features/shared-route/components/SharedRouteAuthor";
+import { getSharedRouteTitle } from "@/features/shared-route/sharedRouteCardModel";
 import {
   createSavedPlacesFromRoutePlan,
   getRoutePlanStartLocation,
@@ -67,7 +73,9 @@ import { getSortedRouteDays } from "@/features/my-route/routeDisplay";
 import { getCurrentPosition } from "@/lib/currentPosition";
 import { localizeTourPlaces } from "@/lib/placeLocalization";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useUiText } from "@/lib/uiText";
+import type { MapSheetPlace } from "@/types/place";
 
 type SharedRoutePageProps = {
   mode?: SharedRoutePageMode;
@@ -77,6 +85,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const text = useUiText();
   const appLanguage = useAppLanguageStore((state) => state.language);
   const navigate = useNavigate();
+  const resetMapSheet = useMapSheetStore((state) => state.resetSheet);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [checkoutRoutePlan, setCheckoutRoutePlan] = useState<
     PlannedRouteDay[] | null
@@ -92,6 +101,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     closeFilterDialog,
     openFilterDialog,
     openFilterDialogWithCandidate,
+    replaceActiveFiltersWithCandidate,
     removeActiveFilter: handleRemoveActiveFilter,
     toggleDraftFilter: handleToggleDraftFilter,
   } = useSharedRouteFilters(appLanguage);
@@ -181,16 +191,49 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     () => getSharedRouteFilterOptions(displayRoutes, text),
     [displayRoutes, text]
   );
+  const handleRequestPlaceRouteFilter = useCallback(
+    (place: MapSheetPlace) => {
+      const codedRegion = GANGWON_REGIONS.find(
+        (region) =>
+          region.sigunguCode === place.signguCode ||
+          region.adminCode === place.signguCode ||
+          place.address.includes(region.label)
+      )?.label;
+      const optionRegion = filterOptions.placeRegions.find((regionOption) =>
+        regionOption.categories.some((category) =>
+          category.places.includes(place.title)
+        )
+      )?.region;
+
+      replaceActiveFiltersWithCandidate({
+        type: "place",
+        value: place.title,
+        region: codedRegion ?? optionRegion ?? defaultFilterRegion,
+      });
+      resetMapSheet();
+      setSelectedRouteId(null);
+
+      window.requestAnimationFrame(() => {
+        routeListScrollRef.current?.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+      });
+    },
+    [
+      defaultFilterRegion,
+      filterOptions.placeRegions,
+      replaceActiveFiltersWithCandidate,
+      resetMapSheet,
+    ]
+  );
   const activeFilterCount = getActiveFilterCount(activeFilters);
   const filteredRoutes = useMemo(() => {
     return displayRoutes
       .filter((route) => routeMatchesFilters(route, activeFilters, text))
       .sort((left, right) => {
-        if (sortKey === "likes-desc" || sortKey === "likes-asc") {
-          const likeCountDifference =
-            sortKey === "likes-desc"
-              ? right.likeCount - left.likeCount
-              : left.likeCount - right.likeCount;
+        if (sortKey === "likes-desc") {
+          const likeCountDifference = right.likeCount - left.likeCount;
 
           return (
             likeCountDifference ||
@@ -452,10 +495,11 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         <div className="flex items-center gap-2">
           <DropdownSelect
             ariaLabel={text.sharedRoute.sortAria}
+            valuePrefix={`${text.sharedRoute.sortButtonLabel} · `}
             options={sortOptions}
             value={sortKey}
             onChange={setSortKey}
-            className="w-40 shrink-0"
+            className="w-[8.75rem] shrink-0"
             buttonClassName="min-h-10 rounded-full px-3 py-2 text-xs"
             menuClassName="left-0 right-auto"
           />
@@ -685,8 +729,14 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           headerBadge={
             displaySelectedRoute.isMine ? text.sharedRoute.mineBadge : undefined
           }
+          headerIdentity={
+            <SharedRouteAuthor owner={displaySelectedRoute.owner} />
+          }
+          headerTitle={getSharedRouteTitle(displaySelectedRoute, text)}
+          headerMeta={<SharedRouteDetailMeta route={displaySelectedRoute} />}
           enableStartPreview
           enableVerificationPhotoPreview
+          onRequestPlaceRouteFilter={handleRequestPlaceRouteFilter}
           onRequestCheckout={handleRequestCheckoutFromSharedRoute}
           readOnlyFooterAction={
             displaySelectedRoute.isMine

@@ -6,12 +6,16 @@ import { Platform } from "react-native";
 import {
   postNativeDeliveredNotificationHistoryResponse,
   postNativeRouteArrivalNotificationSyncResponse,
+  postNativeRouteArrivalTestLocationResponse,
 } from "./responses";
+import { setNativeRouteArrivalTestPosition } from "./locationBridge";
 import type {
+  NativeAppLanguage,
   NativeDeliveredNotificationHistoryRequest,
   NativeDeliveredRouteArrivalNotification,
   NativeRouteArrivalNotificationPlace,
   NativeRouteArrivalNotificationSyncRequest,
+  NativeRouteArrivalTestLocationRequest,
   WebViewRef,
 } from "./types";
 
@@ -28,6 +32,7 @@ type RouteArrivalTaskBody = {
 };
 
 type StoredRouteArrivalPlace = NativeRouteArrivalNotificationPlace & {
+  language: NativeAppLanguage;
   notificationTitle: string;
   notificationBody: string;
 };
@@ -47,6 +52,7 @@ const DELIVERED_NOTIFICATION_HISTORY_TTL_MS =
 const DEFAULT_GEOFENCE_RADIUS_METERS = 100;
 const MIN_GEOFENCE_RADIUS_METERS = 100;
 const MAX_GEOFENCE_RADIUS_METERS = 500;
+const EARTH_RADIUS_METERS = 6_371_000;
 const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 const ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE = TRUTHY_ENV_VALUES.has(
   process.env.EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE
@@ -87,18 +93,47 @@ function getRouteArrivalRegionId(place: NativeRouteArrivalNotificationPlace) {
   return `${place.routeId}:${place.stopId}`;
 }
 
+function toRadians(degree: number) {
+  return (degree * Math.PI) / 180;
+}
+
+function calculateDistanceMeters(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number }
+) {
+  const latDelta = toRadians(to.lat - from.lat);
+  const lngDelta = toRadians(to.lng - from.lng);
+  const fromLat = toRadians(from.lat);
+  const toLat = toRadians(to.lat);
+  const a =
+    Math.sin(latDelta / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(lngDelta / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return EARTH_RADIUS_METERS * c;
+}
+
 function createStoredRouteArrivalPlace(
-  place: NativeRouteArrivalNotificationPlace
+  place: NativeRouteArrivalNotificationPlace,
+  language: NativeAppLanguage
 ): StoredRouteArrivalPlace {
   return {
     ...place,
-    notificationTitle: `${place.title} 근처예요`,
-    notificationBody: "인증 사진을 남겨봐요.",
+    language,
+    notificationTitle:
+      language === "en"
+        ? `You've arrived at ${place.title}`
+        : `${place.title}에 도착했어요`,
+    notificationBody:
+      language === "en"
+        ? "Leave a verification photo."
+        : "방문 인증 사진을 남겨보세요.",
   };
 }
 
 function getUniqueStoredPlaces(
-  places: NativeRouteArrivalNotificationPlace[]
+  places: NativeRouteArrivalNotificationPlace[],
+  language: NativeAppLanguage
 ) {
   const storedPlaceByRegionId = new Map<string, StoredRouteArrivalPlace>();
 
@@ -110,7 +145,10 @@ function getUniqueStoredPlaces(
     const regionId = getRouteArrivalRegionId(place);
 
     if (!storedPlaceByRegionId.has(regionId)) {
-      storedPlaceByRegionId.set(regionId, createStoredRouteArrivalPlace(place));
+      storedPlaceByRegionId.set(
+        regionId,
+        createStoredRouteArrivalPlace(place, language)
+      );
     }
   }
 
@@ -228,7 +266,7 @@ async function appendDeliveredRouteArrivalNotification(
   );
 }
 
-async function ensureNotificationChannel() {
+async function ensureNotificationChannel(language?: NativeAppLanguage) {
   if (Platform.OS !== "android") {
     return;
   }
@@ -237,14 +275,16 @@ async function ensureNotificationChannel() {
     ROUTE_ARRIVAL_NOTIFICATION_CHANNEL_ID,
     {
       importance: Notifications.AndroidImportance.HIGH,
-      name: "장소 도착 알림",
+      name: language === "en" ? "Place arrival alerts" : "장소 도착 알림",
       vibrationPattern: [0, 250, 250, 250],
     }
   );
 }
 
-async function ensureRouteArrivalPermissions() {
-  await ensureNotificationChannel();
+async function ensureRouteArrivalNotificationPermission(
+  language: NativeAppLanguage
+) {
+  await ensureNotificationChannel(language);
 
   const currentNotificationPermission =
     await Notifications.getPermissionsAsync();
@@ -259,8 +299,19 @@ async function ensureRouteArrivalPermissions() {
       });
 
   if (!notificationPermission.granted) {
-    throw new Error("알림 권한을 허용해야 장소 근처 알림을 받을 수 있어요.");
+    throw new Error(
+      language === "en"
+        ? "Allow notifications to receive alerts near your destinations."
+        : "알림 권한을 허용해야 장소 근처 알림을 받을 수 있어요."
+    );
   }
+
+  return notificationPermission;
+}
+
+async function ensureRouteArrivalPermissions(language: NativeAppLanguage) {
+  const notificationPermission =
+    await ensureRouteArrivalNotificationPermission(language);
 
   const foregroundLocationPermission =
     await Location.getForegroundPermissionsAsync();
@@ -270,7 +321,11 @@ async function ensureRouteArrivalPermissions() {
       : await Location.requestForegroundPermissionsAsync();
 
   if (nextForegroundLocationPermission.status !== "granted") {
-    throw new Error("위치 권한을 허용해야 장소 근처 알림을 받을 수 있어요.");
+    throw new Error(
+      language === "en"
+        ? "Allow location access to receive alerts near your destinations."
+        : "위치 권한을 허용해야 장소 근처 알림을 받을 수 있어요."
+    );
   }
 
   const backgroundLocationPermission =
@@ -282,7 +337,9 @@ async function ensureRouteArrivalPermissions() {
 
   if (nextBackgroundLocationPermission.status !== "granted") {
     throw new Error(
-      "백그라운드 위치 권한을 허용해야 앱을 닫아도 장소 근처 알림을 받을 수 있어요."
+      language === "en"
+        ? "Allow background location access to receive nearby alerts when the app is closed."
+        : "백그라운드 위치 권한을 허용해야 앱을 닫아도 장소 근처 알림을 받을 수 있어요."
     );
   }
 
@@ -302,14 +359,11 @@ async function stopRouteArrivalGeofencingIfStarted() {
   }
 }
 
-async function scheduleRouteArrivalNotification(
-  regionId: string,
-  options: { force?: boolean } = {}
-) {
+async function scheduleRouteArrivalNotification(regionId: string) {
   const todayKey = getTodayDateKey();
   const notifiedRegionDates = await readNotifiedRegionDates();
 
-  if (!options.force && notifiedRegionDates[regionId] === todayKey) {
+  if (notifiedRegionDates[regionId] === todayKey) {
     return;
   }
 
@@ -320,13 +374,22 @@ async function scheduleRouteArrivalNotification(
     return;
   }
 
-  await ensureNotificationChannel();
+  await deliverRouteArrivalNotification(place, todayKey);
+  notifiedRegionDates[regionId] = todayKey;
+  await writeNotifiedRegionDates(notifiedRegionDates);
+}
+
+async function deliverRouteArrivalNotification(
+  place: StoredRouteArrivalPlace,
+  dateKey: string
+) {
+  await ensureNotificationChannel(place.language);
   await Notifications.scheduleNotificationAsync({
     content: {
       title: place.notificationTitle,
       body: place.notificationBody,
       data: {
-        notificationId: `arrival:${place.routeId}:${place.stopId}:${todayKey}`,
+        notificationId: `arrival:${place.routeId}:${place.stopId}:${dateKey}`,
         routeId: place.routeId,
         dayId: place.dayId,
         stopId: place.stopId,
@@ -336,11 +399,9 @@ async function scheduleRouteArrivalNotification(
     trigger: null,
   });
 
-  await appendDeliveredRouteArrivalNotification(place, todayKey).catch(
+  await appendDeliveredRouteArrivalNotification(place, dateKey).catch(
     () => undefined
   );
-  notifiedRegionDates[regionId] = todayKey;
-  await writeNotifiedRegionDates(notifiedRegionDates);
 }
 
 if (!TaskManager.isTaskDefined(ROUTE_ARRIVAL_GEOFENCE_TASK)) {
@@ -371,7 +432,7 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
   webViewRef: WebViewRef
 ) {
   try {
-    const places = getUniqueStoredPlaces(message.places);
+    const places = getUniqueStoredPlaces(message.places, message.language);
 
     if (places.length === 0) {
       await stopRouteArrivalGeofencingIfStarted();
@@ -385,7 +446,9 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
       return;
     }
 
-    const permissionStatus = await ensureRouteArrivalPermissions();
+    const permissionStatus = await ensureRouteArrivalPermissions(
+      message.language
+    );
     const radius = clampGeofenceRadiusMeters(message.radiusMeters);
 
     await AsyncStorage.setItem(
@@ -404,12 +467,6 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
       }))
     );
 
-    if (ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE) {
-      await scheduleRouteArrivalNotification(getRouteArrivalRegionId(places[0]), {
-        force: true,
-      });
-    }
-
     postNativeRouteArrivalNotificationSyncResponse(webViewRef, message.id, {
       ok: true,
       activeCount: places.length,
@@ -422,6 +479,73 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
         error instanceof Error
           ? error.message
           : "Route arrival notification sync failed",
+    });
+  }
+}
+
+export async function handleNativeRouteArrivalTestLocationRequest(
+  message: NativeRouteArrivalTestLocationRequest,
+  webViewRef: WebViewRef
+) {
+  try {
+    if (!ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE) {
+      throw new Error(
+        message.language === "en"
+          ? "Arrival location testing is disabled in this build."
+          : "이 빌드에서는 도착 위치 테스트를 사용할 수 없어요."
+      );
+    }
+
+    if (!message.place) {
+      setNativeRouteArrivalTestPosition(null);
+      postNativeRouteArrivalTestLocationResponse(webViewRef, message.id, {
+        ok: true,
+        active: false,
+        stopId: null,
+        lat: null,
+        lng: null,
+        distanceMeters: null,
+        withinRadius: null,
+        notificationScheduled: false,
+      });
+      return;
+    }
+
+    const place = createStoredRouteArrivalPlace(
+      message.place,
+      message.language
+    );
+    const testPosition = message.position ?? {
+      lat: place.lat,
+      lng: place.lng,
+    };
+    const distanceMeters = calculateDistanceMeters(testPosition, place);
+    const withinRadius =
+      distanceMeters <= DEFAULT_GEOFENCE_RADIUS_METERS;
+
+    if (withinRadius) {
+      await ensureRouteArrivalNotificationPermission(message.language);
+      await deliverRouteArrivalNotification(place, getTodayDateKey());
+    }
+
+    setNativeRouteArrivalTestPosition(testPosition);
+    postNativeRouteArrivalTestLocationResponse(webViewRef, message.id, {
+      ok: true,
+      active: true,
+      stopId: place.stopId,
+      lat: testPosition.lat,
+      lng: testPosition.lng,
+      distanceMeters,
+      withinRadius,
+      notificationScheduled: withinRadius,
+    });
+  } catch (error) {
+    postNativeRouteArrivalTestLocationResponse(webViewRef, message.id, {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Route arrival location test failed",
     });
   }
 }

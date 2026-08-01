@@ -34,6 +34,7 @@ import {
 
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
 const LOCALIZATION_RETRY_ATTEMPTS = 5;
+const FRESH_LOCALIZATION_RETRY_ATTEMPTS = 2;
 const LOCALIZATION_RETRY_DELAY_MS = 1500;
 const LOCALIZATION_REFETCH_INTERVAL_MS = 3000;
 const LOCALIZATION_MAX_BACKGROUND_REFETCHES = 6;
@@ -45,6 +46,10 @@ type PlaceTextCandidate = {
 
 function hasKoreanPlaceText(place: PlaceTextCandidate | null | undefined) {
   return Boolean(place && /[가-힣]/u.test(`${place.title} ${place.address}`));
+}
+
+function hasKoreanText(value: string) {
+  return /[가-힣]/u.test(value);
 }
 
 function hasKoreanPlaceTexts(
@@ -103,8 +108,9 @@ export function usePlaceSheetData({
       appLanguage,
       {
         retryUncached: true,
-        retryAttempts: LOCALIZATION_RETRY_ATTEMPTS,
+        retryAttempts: FRESH_LOCALIZATION_RETRY_ATTEMPTS,
         retryDelayMs: LOCALIZATION_RETRY_DELAY_MS,
+        waitForFresh: true,
       }
     )
       .then((localizedPlaces) => {
@@ -117,15 +123,25 @@ export function usePlaceSheetData({
           return;
         }
 
+        const localizedTitle = localizedPlace.title.trim();
+        const localizedAddress = localizedPlace.address.trim();
+        const nextTitle =
+          localizedTitle && !hasKoreanText(localizedTitle)
+            ? localizedTitle
+            : selectedPlace.title;
+        const nextAddress =
+          localizedAddress && !hasKoreanText(localizedAddress)
+            ? localizedAddress
+            : selectedPlace.address;
+
         if (
-          !hasKoreanPlaceText(localizedPlace) &&
-          (localizedPlace.title !== selectedPlace.title ||
-            localizedPlace.address !== selectedPlace.address)
+          nextTitle !== selectedPlace.title ||
+          nextAddress !== selectedPlace.address
         ) {
           updateSelectedPlace({
             ...selectedPlace,
-            title: localizedPlace.title || selectedPlace.title,
-            address: localizedPlace.address || selectedPlace.address,
+            title: nextTitle,
+            address: nextAddress,
           });
         }
       })

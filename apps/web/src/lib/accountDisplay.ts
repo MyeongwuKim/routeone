@@ -1,8 +1,15 @@
 import type { AuthProvider } from "@/generated/graphql";
 import type { AuthUser } from "@/stores/authUserStore";
 
+export type AccountDisplayUser = {
+  accountId?: string | null;
+  email?: string | null;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+};
+
 export function getAccountDisplayName(
-  user: AuthUser | null,
+  user: AccountDisplayUser | null,
   fallback: string
 ) {
   const displayName = user?.displayName?.trim();
@@ -16,7 +23,7 @@ export function getAccountDisplayName(
   return emailName || user?.accountId?.trim() || fallback;
 }
 
-export function getAccountIdentifier(user: AuthUser | null) {
+export function getAccountIdentifier(user: AccountDisplayUser | null) {
   return user?.email?.trim() || user?.accountId?.trim() || null;
 }
 
@@ -32,7 +39,7 @@ export function getAccountProviderLabels(
 }
 
 export function getAccountAvatarFallback(
-  user: AuthUser | null,
+  user: AccountDisplayUser | null,
   fallback: string
 ) {
   return getAccountDisplayName(user, fallback).slice(0, 1).toUpperCase();

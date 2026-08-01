@@ -10,11 +10,14 @@ import type { GraphQLContext } from "../../context.js";
 import { requireUser } from "../../lib/auth.js";
 import {
   appendRouteDays,
+  checkInRouteStop,
   clearRoute,
   cloneRoute,
+  completeRouteStopVisit,
   createRoute,
   deleteRoute,
   deleteRouteDay,
+  deleteRouteStopVisitPhoto,
   fetchPosterImageDataUrl,
   getPublicRoutes,
   getPublicRouteConnection,
@@ -27,11 +30,14 @@ import {
   getPlaceStaySummaries,
   markRouteStopVisited,
   reorderRouteStops,
+  setRouteStopPhotoPublication,
+  setRouteStopVisitPhoto,
   setRouteLike,
   setRouteSave,
   shareRoute,
   startRoute,
   updateRouteStopStayMinutes,
+  updateRouteStopVisitTimes,
   type CloneRouteInput,
   type AppendRouteDaysInput,
   type CreateRouteInput,
@@ -40,6 +46,7 @@ import {
   type RouteStopVisitVerificationInput,
   type StartRouteInput,
   type UpdateRouteStopStayMinutesInput,
+  type UpdateRouteStopVisitTimesInput,
 } from "./route.service.js";
 import { ensureDevHistoryRoutes } from "./devHistorySeed.js";
 
@@ -162,12 +169,15 @@ export const routeTypeDefs = gql`
     verifiedAt: DateTime
     verificationPhotoImageId: String
     verificationPhotoUrl: String
+    verificationPhotoPublicationConsent: Boolean
+    verificationPhotoPublishedAt: DateTime
     verificationLat: Float
     verificationLng: Float
     verificationAccuracyMeters: Float
     checkedInAt: DateTime
     checkedOutAt: DateTime
     actualStayMinutes: Int
+    visitTimeEditedAt: DateTime
     createdAt: DateTime!
     updatedAt: DateTime!
   }
@@ -301,6 +311,12 @@ export const routeTypeDefs = gql`
     stayMinutes: Int!
   }
 
+  input UpdateRouteStopVisitTimesInput {
+    stopId: ID!
+    checkedInAt: DateTime!
+    checkedOutAt: DateTime
+  }
+
   input RouteStopVisitVerificationInput {
     status: RouteStopVerificationStatus
     lat: Float
@@ -345,8 +361,21 @@ export const routeTypeDefs = gql`
       verification: RouteStopVisitVerificationInput
       actualStayMinutes: Int
     ): Route!
+    checkInRouteStop(
+      stopId: ID!
+      verification: RouteStopVisitVerificationInput!
+    ): Route!
+    completeRouteStopVisit(stopId: ID!, actualStayMinutes: Int): Route!
+    setRouteStopPhotoPublication(stopId: ID!, published: Boolean!): Route!
+    setRouteStopVisitPhoto(
+      stopId: ID!
+      imageId: String!
+      imageUrl: String!
+    ): Route!
+    deleteRouteStopVisitPhoto(stopId: ID!): Route!
     reorderRouteStops(input: ReorderRouteStopsInput!): Route!
     updateRouteStopStayMinutes(input: UpdateRouteStopStayMinutesInput!): Route!
+    updateRouteStopVisitTimes(input: UpdateRouteStopVisitTimesInput!): Route!
     clearRoute(routeId: ID!): Route!
     shareRoute(routeId: ID!): Route!
     likeRoute(routeId: ID!): RouteInteractionPayload!
@@ -412,6 +441,63 @@ type MarkRouteStopVisitedArgs = {
   verification?: RouteStopVisitVerificationInput | null;
   actualStayMinutes?: number | null;
 };
+
+type CheckInRouteStopArgs = {
+  stopId: string;
+  verification: RouteStopVisitVerificationInput;
+};
+
+type CompleteRouteStopVisitArgs = {
+  stopId: string;
+  actualStayMinutes?: number | null;
+};
+
+type SetRouteStopPhotoPublicationArgs = {
+  stopId: string;
+  published: boolean;
+};
+
+type SetRouteStopVisitPhotoArgs = {
+  stopId: string;
+  imageId: string;
+  imageUrl: string;
+};
+
+type DeleteRouteStopVisitPhotoArgs = {
+  stopId: string;
+};
+
+type UpdateRouteStopVisitTimesArgs = {
+  input: UpdateRouteStopVisitTimesInput;
+};
+
+function sanitizeRouteStopPhotoForViewer(
+  stop: RouteStop,
+  route: Pick<Route, "ownerId" | "visibility">,
+  viewerId: string
+) {
+  const isOwner = route.ownerId === viewerId;
+  const isPhotoPublic =
+    stop.verificationPhotoPublicationConsent === true ||
+    (stop.verificationPhotoPublicationConsent == null &&
+      route.visibility === "PUBLIC");
+
+  if (isOwner || isPhotoPublic || !stop.verificationPhotoUrl) {
+    return stop;
+  }
+
+  return {
+    ...stop,
+    verificationStatus:
+      stop.verificationStatus === "GPS_PHOTO"
+        ? ("GPS" as RouteStopVerificationStatus)
+        : stop.verificationStatus,
+    verificationPhotoImageId: null,
+    verificationPhotoUrl: null,
+    verificationPhotoPublicationConsent: null,
+    verificationPhotoPublishedAt: null,
+  };
+}
 
 type RouteIdArgs = {
   routeId: string;
@@ -610,6 +696,75 @@ export const routeResolvers = {
         args.actualStayMinutes
       );
     },
+    checkInRouteStop(
+      _parent: unknown,
+      args: CheckInRouteStopArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return checkInRouteStop(
+        context.prisma,
+        user,
+        args.stopId,
+        args.verification
+      );
+    },
+    completeRouteStopVisit(
+      _parent: unknown,
+      args: CompleteRouteStopVisitArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return completeRouteStopVisit(
+        context.prisma,
+        user,
+        args.stopId,
+        args.actualStayMinutes
+      );
+    },
+    setRouteStopPhotoPublication(
+      _parent: unknown,
+      args: SetRouteStopPhotoPublicationArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return setRouteStopPhotoPublication(
+        context.prisma,
+        user,
+        args.stopId,
+        args.published
+      );
+    },
+    setRouteStopVisitPhoto(
+      _parent: unknown,
+      args: SetRouteStopVisitPhotoArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return setRouteStopVisitPhoto(
+        context.prisma,
+        user,
+        args.stopId,
+        args.imageId,
+        args.imageUrl
+      );
+    },
+    deleteRouteStopVisitPhoto(
+      _parent: unknown,
+      args: DeleteRouteStopVisitPhotoArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return deleteRouteStopVisitPhoto(context.prisma, user, args.stopId);
+    },
+    updateRouteStopVisitTimes(
+      _parent: unknown,
+      args: UpdateRouteStopVisitTimesArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return updateRouteStopVisitTimes(context.prisma, user, args.input);
+    },
     reorderRouteStops(
       _parent: unknown,
       args: ReorderRouteStopsArgs,
@@ -699,8 +854,8 @@ export const routeResolvers = {
         },
       });
     },
-    stops(parent: Route, _args: unknown, context: GraphQLContext) {
-      return context.prisma.routeStop.findMany({
+    async stops(parent: Route, _args: unknown, context: GraphQLContext) {
+      const stops = await context.prisma.routeStop.findMany({
         where: {
           routeId: parent.id,
         },
@@ -708,18 +863,37 @@ export const routeResolvers = {
           order: "asc",
         },
       });
+
+      return stops.map((stop) =>
+        sanitizeRouteStopPhotoForViewer(stop, parent, context.user.id)
+      );
     },
   },
   RouteDay: {
-    stops(parent: RouteDay, _args: unknown, context: GraphQLContext) {
-      return context.prisma.routeStop.findMany({
-        where: {
-          dayId: parent.id,
-        },
-        orderBy: {
-          order: "asc",
-        },
-      });
+    async stops(parent: RouteDay, _args: unknown, context: GraphQLContext) {
+      const [route, stops] = await Promise.all([
+        context.prisma.route.findUnique({
+          where: {
+            id: parent.routeId,
+          },
+        }),
+        context.prisma.routeStop.findMany({
+          where: {
+            dayId: parent.id,
+          },
+          orderBy: {
+            order: "asc",
+          },
+        }),
+      ]);
+
+      if (!route) {
+        return [];
+      }
+
+      return stops.map((stop) =>
+        sanitizeRouteStopPhotoForViewer(stop, route, context.user.id)
+      );
     },
   },
   RouteStop: {

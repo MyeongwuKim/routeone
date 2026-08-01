@@ -4,6 +4,9 @@ mutation LikeRoute($routeId: ID!) {
     saved
     route {
       ...RouteSummaryFields
+      owner {
+        ...SharedRouteOwnerFields
+      }
     }
   }
 }

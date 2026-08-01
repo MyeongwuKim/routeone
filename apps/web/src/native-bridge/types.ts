@@ -80,6 +80,16 @@ export type NativeArrivalNotificationSyncResult = {
   notificationStatus: string;
 };
 
+export type NativeArrivalTestLocationResult = {
+  active: boolean;
+  stopId: string | null;
+  lat: number | null;
+  lng: number | null;
+  distanceMeters: number | null;
+  withinRadius: boolean | null;
+  notificationScheduled: boolean;
+};
+
 export type NativeDeliveredRouteArrivalNotification = {
   id: string;
   type: "route-arrival";
@@ -165,7 +175,13 @@ export type NativeBridgeApi = {
   syncRouteArrivalNotifications?: (options: {
     places: NativeArrivalNotificationPlace[];
     radiusMeters?: number;
+    language?: "ko" | "en";
   }) => Promise<NativeArrivalNotificationSyncResult>;
+  setRouteArrivalTestLocation?: (options: {
+    place: NativeArrivalNotificationPlace | null;
+    position?: { lat: number; lng: number } | null;
+    language?: "ko" | "en";
+  }) => Promise<NativeArrivalTestLocationResult>;
   getDeliveredNotifications?: (options?: {
     acknowledgedIds?: string[];
   }) => Promise<NativeDeliveredRouteArrivalNotification[]>;

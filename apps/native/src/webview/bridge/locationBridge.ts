@@ -5,6 +5,22 @@ import type { NativeLocationRequest, NativeLocationResponse, WebViewRef } from "
 const LAST_KNOWN_POSITION_MAX_AGE_MS = 1000 * 15;
 const LAST_KNOWN_POSITION_REQUIRED_ACCURACY_METERS = 50;
 
+let routeArrivalTestPosition: NativeLocationResponse | null = null;
+
+export function setNativeRouteArrivalTestPosition(
+  position: { lat: number; lng: number } | null
+) {
+  routeArrivalTestPosition = position
+    ? {
+        ok: true,
+        lat: position.lat,
+        lng: position.lng,
+        accuracyMeters: 1,
+        timestamp: Date.now(),
+      }
+    : null;
+}
+
 function buildNativeLocationResponse(
   position: Location.LocationObject
 ): NativeLocationResponse {
@@ -18,6 +34,13 @@ function buildNativeLocationResponse(
 }
 
 async function getNativeCurrentPosition(): Promise<NativeLocationResponse> {
+  if (routeArrivalTestPosition?.ok) {
+    return {
+      ...routeArrivalTestPosition,
+      timestamp: Date.now(),
+    };
+  }
+
   const permission = await Location.getForegroundPermissionsAsync();
   const nextPermission =
     permission.status === "granted"

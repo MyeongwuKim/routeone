@@ -193,6 +193,7 @@ export const notificationTypeDefs = gql`
     expoPushToken: String!
     platform: PushPlatform!
     appVariant: String
+    locale: String
   }
 
   extend type Query {

@@ -46,6 +46,7 @@ const TEMPO_STAY_MINUTES: Record<TravelTempo, Record<string, number>> = {
 };
 
 const ROUTE_BEAM_WIDTH = 80;
+const DAY_PLACE_COUNT_DEVIATION_PENALTY = 90;
 const LUNCH_START_MINUTES = 11 * 60 + 30;
 const LUNCH_END_MINUTES = 13 * 60 + 20;
 const DINNER_START_MINUTES = 17 * 60 + 30;
@@ -351,14 +352,29 @@ function getDayBreakPenalty(options: {
   currentMinutes: number;
   dailyStartMinutes: number;
   dailyEndMinutes: number;
+  currentDayPlaceCount: number;
+  remainingPlaceCount: number;
+  remainingDayCount: number;
 }) {
   const usedMinutes = options.currentMinutes - options.dailyStartMinutes;
   const unusedMinutes = Math.max(
     0,
     options.dailyEndMinutes - options.currentMinutes
   );
+  const balancedPlaceCount = Math.ceil(
+    (options.currentDayPlaceCount + options.remainingPlaceCount) /
+      (options.remainingDayCount + 1)
+  );
+  const placeCountDeviation = Math.abs(
+    options.currentDayPlaceCount - balancedPlaceCount
+  );
 
-  return 35 + Math.max(0, 120 - usedMinutes) * 0.7 + unusedMinutes * 0.07;
+  return (
+    35 +
+    Math.max(0, 120 - usedMinutes) * 0.7 +
+    unusedMinutes * 0.07 +
+    placeCountDeviation * DAY_PLACE_COUNT_DEVIATION_PENALTY
+  );
 }
 
 export function buildRoutePlan(options: {
@@ -428,6 +444,14 @@ export function buildRoutePlan(options: {
         const canMoveToNextDay =
           state.dayIndex < emptyDays.length - 1 &&
           state.days[state.dayIndex].items.length > 0;
+        const currentDayPlaceCount =
+          state.days[state.dayIndex].items.length;
+        const remainingDayCount =
+          emptyDays.length - state.dayIndex - 1;
+        const balancedPlaceCount = Math.ceil(
+          (currentDayPlaceCount + state.remainingPlaces.length) /
+            (remainingDayCount + 1)
+        );
         const hasFoodRemaining = state.remainingPlaces.some(
           (item) => item.category === "food"
         );
@@ -439,7 +463,8 @@ export function buildRoutePlan(options: {
           currentDayState.currentMinutes > options.dailyEndMinutes ||
           state.currentMinutes >= options.dailyEndMinutes - 120 ||
           (hasFoodRemaining && state.currentMinutes > LUNCH_END_MINUTES) ||
-          (hasCafeRemaining && state.currentMinutes > cafeWindow.end);
+          (hasCafeRemaining && state.currentMinutes > cafeWindow.end) ||
+          currentDayPlaceCount >= balancedPlaceCount;
 
         nextBeam.push(currentDayState);
 
@@ -453,6 +478,9 @@ export function buildRoutePlan(options: {
                 currentMinutes: state.currentMinutes,
                 dailyStartMinutes: options.dailyStartMinutes,
                 dailyEndMinutes: options.dailyEndMinutes,
+                currentDayPlaceCount,
+                remainingPlaceCount: state.remainingPlaces.length,
+                remainingDayCount,
               }),
               dailyStartMinutes: options.dailyStartMinutes,
               dailyEndMinutes: options.dailyEndMinutes,

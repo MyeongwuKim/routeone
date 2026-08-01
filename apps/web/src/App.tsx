@@ -3,6 +3,7 @@ import AppRouter from "./router/AppRouter";
 import GlobalModal from "./components/feedback/GlobalModal";
 import TopToast from "./components/feedback/TopToast";
 import PotatoLoadingOverlay from "./components/feedback/PotatoLoadingOverlay";
+import { usePlaceCartLanguageSync } from "./features/route-checkout/hooks/usePlaceCartLanguageSync";
 import { initializeUiTheme } from "./stores/uiThemeStore";
 
 const PlaceBottomSheet = lazy(
@@ -10,6 +11,8 @@ const PlaceBottomSheet = lazy(
 );
 
 function App() {
+  usePlaceCartLanguageSync();
+
   useEffect(() => {
     initializeUiTheme();
   }, []);

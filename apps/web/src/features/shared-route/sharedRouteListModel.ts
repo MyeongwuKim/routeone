@@ -7,8 +7,7 @@ export type SharedRoutePageMode = "feed" | "liked";
 export type SharedRouteSortKey =
   | "shared-desc"
   | "shared-asc"
-  | "likes-desc"
-  | "likes-asc";
+  | "likes-desc";
 
 export const SHARED_ROUTE_PAGE_SIZE = 20;
 
@@ -30,11 +29,6 @@ export function getSharedRouteSortOptions(
       value: "likes-desc",
       label: text.sharedRoute.sortLikesDescLabel,
       description: text.sharedRoute.sortLikesDescDescription,
-    },
-    {
-      value: "likes-asc",
-      label: text.sharedRoute.sortLikesAscLabel,
-      description: text.sharedRoute.sortLikesAscDescription,
     },
   ];
 }

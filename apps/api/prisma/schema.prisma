@@ -125,17 +125,20 @@ model RouteStop {
   visitStatus VisitStatus @default(PENDING)
   visitedAt   DateTime?
 
-  verificationStatus         RouteStopVerificationStatus @default(NONE)
-  verifiedAt                 DateTime?
-  verificationPhotoImageId   String?
-  verificationPhotoUrl       String?
-  verificationLat            Float?
-  verificationLng            Float?
-  verificationAccuracyMeters Float?
-  checkedInAt                DateTime?
-  checkedOutAt               DateTime?
-  actualStayMinutes          Int?
-  stayStatSyncedAt           DateTime?
+  verificationStatus                  RouteStopVerificationStatus @default(NONE)
+  verifiedAt                          DateTime?
+  verificationPhotoImageId            String?
+  verificationPhotoUrl                String?
+  verificationPhotoPublicationConsent Boolean?
+  verificationPhotoPublishedAt        DateTime?
+  verificationLat                     Float?
+  verificationLng                     Float?
+  verificationAccuracyMeters          Float?
+  checkedInAt                         DateTime?
+  checkedOutAt                        DateTime?
+  actualStayMinutes                   Int?
+  visitTimeEditedAt                   DateTime?
+  stayStatSyncedAt                    DateTime?
 
   route Route     @relation(fields: [routeId], references: [id])
   day   RouteDay? @relation(fields: [dayId], references: [id])
@@ -271,13 +274,15 @@ model PlacePhoto {
   routeDayId      String?         @db.ObjectId
   routeVisibility RouteVisibility @default(PRIVATE)
 
-  imageId      String?
-  imageUrl     String
-  thumbnailUrl String?
-  variant      String?
-  source       PlacePhotoSource @default(VISIT_PHOTO)
-  status       PlacePhotoStatus @default(ACTIVE)
-  verifiedAt   DateTime?
+  imageId            String?
+  imageUrl           String
+  thumbnailUrl       String?
+  variant            String?
+  source             PlacePhotoSource @default(VISIT_PHOTO)
+  status             PlacePhotoStatus @default(ACTIVE)
+  publicationConsent Boolean?
+  publishedAt        DateTime?
+  verifiedAt         DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

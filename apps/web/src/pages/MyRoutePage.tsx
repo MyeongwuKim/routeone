@@ -34,6 +34,7 @@ import { syncTodayRouteArrivalNotifications } from "@/features/my-route/services
 import type { MyRoute, MyRouteDay } from "@/features/my-route/types";
 import { useUiText, type UiText } from "@/lib/uiText";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
+import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import type { MyRoutesQuery, StartRouteInput } from "@/generated/graphql";
@@ -206,6 +207,7 @@ function StartRouteDatePickerModal({
 
 function MyRoutePage() {
   const text = useUiText();
+  const appLanguage = useAppLanguageStore((state) => state.language);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -273,8 +275,16 @@ function MyRoutePage() {
         previousSelectedDayRoute,
       };
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       showToast(text.myRoute.deleteSuccess);
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["place-photos"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["place-stay-summary"],
+        }),
+      ]);
     },
     onError: (error, _routeId, context) => {
       if (context?.previousRoutes) {
@@ -373,8 +383,9 @@ function MyRoutePage() {
       return;
     }
 
-    void syncTodayRouteArrivalNotifications(localizedMyRoutes);
+    void syncTodayRouteArrivalNotifications(localizedMyRoutes, appLanguage);
   }, [
+    appLanguage,
     isMyRouteLocalizationLoading,
     localizedMyRoutes,
     myRoutesQuery.isError,

@@ -23,6 +23,7 @@ export type NativeBridgeReadyMessage = {
   webBundleChannel?: string;
   webBundleManifestUrl?: string | null;
   devVerificationBypass?: boolean;
+  arrivalNotificationTestMode?: boolean;
 };
 
 export type NativeAuthTokenMessage = {
@@ -99,6 +100,18 @@ export type NativeRouteArrivalNotificationSyncRequest = {
   id: string;
   places: NativeRouteArrivalNotificationPlace[];
   radiusMeters?: number | null;
+  language: NativeAppLanguage;
+};
+
+export type NativeRouteArrivalTestLocationRequest = {
+  type: "routeone:native-route-arrival-test-location";
+  id: string;
+  place: NativeRouteArrivalNotificationPlace | null;
+  position?: {
+    lat: number;
+    lng: number;
+  } | null;
+  language: NativeAppLanguage;
 };
 
 export type NativeDeliveredRouteArrivalNotification = {
@@ -249,6 +262,22 @@ export type NativeRouteArrivalNotificationSyncResponse =
       activeCount: number;
       backgroundLocationStatus: string;
       notificationStatus: string;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type NativeRouteArrivalTestLocationResponse =
+  | {
+      ok: true;
+      active: boolean;
+      stopId: string | null;
+      lat: number | null;
+      lng: number | null;
+      distanceMeters: number | null;
+      withinRadius: boolean | null;
+      notificationScheduled: boolean;
     }
   | {
       ok: false;

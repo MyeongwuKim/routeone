@@ -14,6 +14,7 @@ type TimeWheelInputProps = {
   placeholder?: string;
   title: string;
   description?: string;
+  disabled?: boolean;
   onChange: (value: string) => void;
 };
 
@@ -68,7 +69,7 @@ function toTimeValue(period: WheelValue, hour12Text: string, minuteText: string)
   return `${String(hour24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function formatTimeLabel(timeValue: string, text: UiText) {
+function formatTimeWheelLabel(timeValue: string, text: UiText) {
   const { period, hour12, minute } = parseTimeValue(timeValue);
   return `${period === "pm" ? text.inputs.pm : text.inputs.am} ${hour12}:${minute}`;
 }
@@ -431,11 +432,76 @@ function WheelColumn({
         {repeatedOptions.map((option) => (
           <div
             key={option.key}
-            className="flex h-[46px] items-center justify-center text-[26px] font-bold leading-none text-slate-500"
+            className={`relative z-10 flex h-[46px] items-center justify-center text-[26px] font-bold leading-none transition-colors ${
+              option.value === selectedValue
+                ? "text-slate-950 dark:text-white"
+                : "text-slate-400 dark:text-slate-500"
+            }`}
           >
             {getOptionLabel ? getOptionLabel(option.value) : option.value}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+type TimeWheelPickerProps = {
+  value: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+};
+
+export function TimeWheelPicker({
+  value,
+  disabled = false,
+  onChange,
+}: TimeWheelPickerProps) {
+  const text = useUiText();
+  const selected = parseTimeValue(value);
+  const getPeriodLabel = (period: string) =>
+    period === "pm" ? text.inputs.pm : text.inputs.am;
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-3xl border border-brand-200 bg-brand-50/55 dark:border-brand-400/30 dark:bg-slate-950/70 ${
+        disabled ? "pointer-events-none opacity-50" : ""
+      }`}
+    >
+      <div
+        className="pointer-events-none absolute left-3 right-3 top-1/2 z-0 -translate-y-1/2 rounded-xl border border-brand-300 bg-brand-100/90 dark:border-brand-400/60 dark:bg-brand-400/20"
+        style={{ height: ROW_HEIGHT }}
+      />
+      <div className="relative z-10 flex">
+        <WheelColumn
+          options={PERIOD_OPTIONS}
+          selectedValue={selected.period}
+          onSelect={(next) =>
+            onChange(
+              toTimeValue(
+                next as WheelValue,
+                selected.hour12,
+                selected.minute
+              )
+            )
+          }
+          getOptionLabel={getPeriodLabel}
+          loop={false}
+        />
+        <WheelColumn
+          options={HOUR_OPTIONS}
+          selectedValue={selected.hour12}
+          onSelect={(next) =>
+            onChange(toTimeValue(selected.period, next, selected.minute))
+          }
+        />
+        <WheelColumn
+          options={MINUTE_OPTIONS}
+          selectedValue={selected.minute}
+          onSelect={(next) =>
+            onChange(toTimeValue(selected.period, selected.hour12, next))
+          }
+        />
       </div>
     </div>
   );
@@ -446,22 +512,19 @@ function TimeWheelInput({
   placeholder,
   title,
   description,
+  disabled = false,
   onChange,
 }: TimeWheelInputProps) {
   const text = useUiText();
   const [isOpen, setIsOpen] = useState(false);
-  const [draftPeriod, setDraftPeriod] = useState<WheelValue>("am");
-  const [draftHour, setDraftHour] = useState("9");
-  const [draftMinute, setDraftMinute] = useState("00");
-  const getPeriodLabel = (period: string) =>
-    period === "pm" ? text.inputs.pm : text.inputs.am;
+  const [draftValue, setDraftValue] = useState("09:00");
 
   const openTimePicker = () => {
-    const parsed = parseTimeValue(value);
+    if (disabled) {
+      return;
+    }
 
-    setDraftPeriod(parsed.period);
-    setDraftHour(parsed.hour12);
-    setDraftMinute(parsed.minute);
+    setDraftValue(value || "09:00");
     setIsOpen(true);
   };
 
@@ -486,11 +549,12 @@ function TimeWheelInput({
     <>
       <button
         type="button"
+        disabled={disabled}
         onClick={openTimePicker}
-        className="w-full rounded-2xl border border-brand-200 bg-white px-3 py-3 text-left text-sm text-slate-700"
+        className="w-full rounded-2xl border border-brand-200 bg-white px-3 py-3 text-left text-sm text-slate-700 disabled:opacity-50 dark:border-brand-400/30 dark:bg-slate-900 dark:text-white"
       >
         {hasValue ? (
-          formatTimeLabel(value, text)
+          formatTimeWheelLabel(value, text)
         ) : (
           <span className="text-slate-400">
             {placeholder ?? text.inputs.timePlaceholder}
@@ -502,42 +566,30 @@ function TimeWheelInput({
         <div
           className={`fixed inset-0 ${UI_LAYER_CLASS.inputDialog} flex items-center justify-center bg-slate-900/45 px-4`}
         >
-          <div className="w-full max-w-[360px] rounded-[26px] border border-brand-200 bg-white p-3.5 text-slate-900 shadow-2xl">
+          <div className="w-full max-w-[360px] rounded-[26px] border border-brand-200 bg-white p-3.5 text-slate-900 shadow-2xl dark:border-brand-400/30 dark:bg-[#102a27] dark:text-white">
             <div className="mb-2.5">
               <p className="text-[28px] font-bold leading-tight">{title}</p>
-              {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
+              {description ? (
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">
+                  {description}
+                </p>
+              ) : null}
             </div>
 
-            <div className="relative overflow-hidden rounded-3xl border border-brand-200 bg-brand-50/55">
-              <div
-                className="pointer-events-none absolute left-3 right-3 top-1/2 z-10 -translate-y-1/2 rounded-xl border border-brand-300 bg-brand-100/90"
-                style={{ height: ROW_HEIGHT }}
-              />
-              <div className="flex">
-                <WheelColumn
-                  options={PERIOD_OPTIONS}
-                  selectedValue={draftPeriod}
-                  onSelect={(next) => setDraftPeriod(next as WheelValue)}
-                  getOptionLabel={getPeriodLabel}
-                  loop={false}
-                />
-                <WheelColumn options={HOUR_OPTIONS} selectedValue={draftHour} onSelect={setDraftHour} />
-                <WheelColumn options={MINUTE_OPTIONS} selectedValue={draftMinute} onSelect={setDraftMinute} />
-              </div>
-            </div>
+            <TimeWheelPicker value={draftValue} onChange={setDraftValue} />
 
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="rounded-2xl border border-brand-200 bg-white px-4 py-2.5 text-base font-semibold text-slate-600"
+                className="rounded-2xl border border-brand-200 bg-white px-4 py-2.5 text-base font-semibold text-slate-600 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-200"
               >
                 {text.common.cancel}
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  onChange(toTimeValue(draftPeriod, draftHour, draftMinute));
+                  onChange(draftValue);
                   setIsOpen(false);
                 }}
                 className="rounded-2xl bg-brand-600 px-4 py-2.5 text-base font-bold text-white"

@@ -12,14 +12,18 @@ export type VisitCompletionTarget = {
 };
 
 export type ActualStayMinutesTarget = VisitCompletionTarget & {
-  verification: RouteStopVisitVerificationInput;
+  verification?: RouteStopVisitVerificationInput | null;
 };
+
+export type VisitTimesEditTarget = VisitCompletionTarget;
 
 export type VerificationPhotoPreviewTarget = {
   routeDay: MyRouteDay;
   stop: MyRouteStop;
 };
 
-export type EarlyRouteCompletionTarget = VisitCompletionTarget & {
+export type PhotoPublicationTarget = VerificationPhotoPreviewTarget;
+
+export type EarlyRouteCompletionTarget = ActualStayMinutesTarget & {
   startedAt: string;
 };

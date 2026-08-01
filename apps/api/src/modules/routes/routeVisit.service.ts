@@ -8,6 +8,7 @@ import type {
   VisitStatus,
 } from "@prisma/client";
 import { isDevVerificationBypassEnabled } from "../../lib/devVerification.js";
+import { deleteRouteVisitPhotoImages } from "./routeVisitPhoto.service.js";
 import {
   VERIFIED_ROUTE_STOP_STATUSES,
   assertRouteOwner,
@@ -26,6 +27,7 @@ import type {
   PlaceSnapshotInput,
   PlaceStaySummary,
   RouteStopVisitVerificationInput,
+  UpdateRouteStopVisitTimesInput,
 } from "./route.types.js";
 
 type RouteServicePrisma = PrismaClient | Prisma.TransactionClient;
@@ -56,6 +58,7 @@ const ROUTE_CORRECTION_TIME_ZONE = "Asia/Seoul";
 
 const PUBLISHABLE_PLACE_PHOTO_STATUSES = new Set<RouteStopVerificationStatus>([
   "GPS_PHOTO",
+  "GPS",
   "MANUAL",
 ]);
 
@@ -96,6 +99,70 @@ function assertRouteCorrectionWindow(route: Route) {
 
   if (daysSinceEnd > ROUTE_CORRECTION_GRACE_DAYS) {
     throw new Error("루트 종료 후 7일이 지나 방문 기록을 수정할 수 없어요.");
+  }
+}
+
+function assertRoutePhotoCorrectionWindow(route: Route) {
+  const routeEndDate = route.travelEndDate ?? route.travelStartDate;
+
+  if (!routeEndDate) {
+    throw new Error("완료 일정의 날짜를 확인할 수 없어요.");
+  }
+
+  const daysSinceEnd = getDateKeyDiffInDays(
+    getTodayDateKey(),
+    getDateKey(routeEndDate)
+  );
+
+  if (daysSinceEnd < 0 || daysSinceEnd > ROUTE_CORRECTION_GRACE_DAYS) {
+    throw new Error("일정 종료 후 7일 동안만 인증 사진을 수정할 수 있어요.");
+  }
+}
+
+async function assertRouteStopVisitDate(
+  prisma: RouteServicePrisma,
+  route: Route,
+  stop: RouteStop,
+  options: { allowPast: boolean }
+) {
+  if (isDevVerificationBypassEnabled()) {
+    return;
+  }
+
+  if (!route.startedAt) {
+    throw new Error("루트를 먼저 시작한 뒤 인증해 주세요.");
+  }
+
+  if (!stop.dayId) {
+    throw new Error("일정 날짜가 없는 장소는 인증할 수 없어요.");
+  }
+
+  const routeDay = await prisma.routeDay.findUnique({
+    where: {
+      id: stop.dayId,
+    },
+    select: {
+      date: true,
+    },
+  });
+  const routeDayDateKey = routeDay?.date ? getDateKey(routeDay.date) : null;
+
+  if (!routeDayDateKey) {
+    throw new Error("DAY 날짜를 먼저 설정한 뒤 인증해 주세요.");
+  }
+
+  const todayDateKey = getTodayDateKey();
+
+  if (routeDayDateKey > todayDateKey) {
+    throw new Error(
+      `해당 DAY 날짜에만 인증할 수 있어요. 일정 날짜는 ${routeDayDateKey}예요.`
+    );
+  }
+
+  if (!options.allowPast && routeDayDateKey < todayDateKey) {
+    throw new Error(
+      `지난 DAY에서는 실시간 인증을 진행할 수 없어요. 일정 날짜는 ${routeDayDateKey}예요.`
+    );
   }
 }
 
@@ -214,12 +281,109 @@ function getActualStayMinutes(checkedInAt: Date | null, checkedOutAt: Date | nul
   );
 }
 
+function getRecordedRouteStopArrivalAt(stop: RouteStop) {
+  if (stop.checkedInAt) {
+    return stop.checkedInAt;
+  }
+
+  const completedAt = stop.checkedOutAt ?? stop.visitedAt;
+
+  if (!completedAt || !stop.actualStayMinutes) {
+    return null;
+  }
+
+  return new Date(
+    completedAt.getTime() - stop.actualStayMinutes * 60_000
+  );
+}
+
+function getRecordedRouteStopCompletionAt(stop: RouteStop) {
+  return stop.checkedOutAt ??
+    (stop.visitStatus === "VISITED" ? stop.visitedAt : null);
+}
+
+async function assertRouteStopVisitTimeOrder(
+  prisma: PrismaClient,
+  stop: RouteStop,
+  checkedInAt: Date,
+  checkedOutAt: Date | null
+) {
+  const siblingStops = await prisma.routeStop.findMany({
+    where: {
+      routeId: stop.routeId,
+      dayId: stop.dayId,
+    },
+    orderBy: {
+      order: "asc",
+    },
+  });
+  const stopIndex = siblingStops.findIndex(
+    (candidateStop) => candidateStop.id === stop.id
+  );
+
+  if (stopIndex < 0) {
+    return;
+  }
+
+  const previousTimedStop = siblingStops
+    .slice(0, stopIndex)
+    .reverse()
+    .find(
+      (candidateStop) =>
+        getRecordedRouteStopCompletionAt(candidateStop) ||
+        getRecordedRouteStopArrivalAt(candidateStop)
+    );
+
+  if (previousTimedStop) {
+    const previousCompletionAt =
+      getRecordedRouteStopCompletionAt(previousTimedStop);
+
+    if (!previousCompletionAt) {
+      throw new Error(
+        `앞 장소 '${previousTimedStop.place.title}' 방문을 먼저 완료해 주세요.`
+      );
+    }
+
+    if (checkedInAt.getTime() < previousCompletionAt.getTime()) {
+      throw new Error(
+        `도착시간은 앞 장소 '${previousTimedStop.place.title}'의 완료시간보다 빠를 수 없어요.`
+      );
+    }
+  }
+
+  const nextTimedStop = siblingStops
+    .slice(stopIndex + 1)
+    .find(
+      (candidateStop) =>
+        getRecordedRouteStopArrivalAt(candidateStop) ||
+        getRecordedRouteStopCompletionAt(candidateStop)
+    );
+
+  if (!nextTimedStop) {
+    return;
+  }
+
+  const nextBoundaryAt =
+    getRecordedRouteStopArrivalAt(nextTimedStop) ??
+    getRecordedRouteStopCompletionAt(nextTimedStop);
+  const currentBoundaryAt = checkedOutAt ?? checkedInAt;
+
+  if (
+    nextBoundaryAt &&
+    currentBoundaryAt.getTime() > nextBoundaryAt.getTime()
+  ) {
+    throw new Error(
+      `방문시간은 다음 장소 '${nextTimedStop.place.title}'의 도착시간보다 늦을 수 없어요.`
+    );
+  }
+}
+
 function normalizeActualStayMinutes(value?: number | null) {
   if (value == null || !Number.isFinite(value)) {
     return null;
   }
 
-  return Math.max(10, Math.min(480, Math.round(value)));
+  return Math.max(1, Math.min(480, Math.round(value)));
 }
 
 function buildRouteStopVisitData(
@@ -236,12 +400,15 @@ function buildRouteStopVisitData(
       verifiedAt: null,
       verificationPhotoImageId: null,
       verificationPhotoUrl: null,
+      verificationPhotoPublicationConsent: false,
+      verificationPhotoPublishedAt: null,
       verificationLat: null,
       verificationLng: null,
       verificationAccuracyMeters: null,
       checkedInAt: null,
       checkedOutAt: null,
       actualStayMinutes: null,
+      visitTimeEditedAt: null,
     };
   }
 
@@ -271,6 +438,8 @@ function buildRouteStopVisitData(
         : null,
     verificationPhotoUrl:
       verificationStatus === "GPS_PHOTO" || hasPhotoRecord ? photoUrl : null,
+    verificationPhotoPublicationConsent: hasPhotoRecord ? false : null,
+    verificationPhotoPublishedAt: null,
     verificationLat: isGpsVerified ? (verification?.lat ?? null) : null,
     verificationLng: isGpsVerified ? (verification?.lng ?? null) : null,
     verificationAccuracyMeters: isGpsVerified
@@ -281,6 +450,78 @@ function buildRouteStopVisitData(
     actualStayMinutes:
       normalizedActualStayMinutes ??
       getActualStayMinutes(checkedInAt, checkedOutAt),
+    visitTimeEditedAt: null,
+  };
+}
+
+function buildRouteStopCheckInData(
+  stop: RouteStop,
+  verification: RouteStopVisitVerificationInput
+): RouteStopVisitData {
+  const checkedInAt = new Date();
+  const verificationStatus = getVisitVerificationStatus(verification);
+
+  if (verificationStatus !== "GPS" && verificationStatus !== "GPS_PHOTO") {
+    throw new Error("도착 인증은 GPS 확인이 필요해요.");
+  }
+
+  assertRouteStopGpsVerification(stop, verification, verificationStatus);
+
+  return {
+    visitStatus: "PENDING",
+    visitedAt: null,
+    verificationStatus,
+    verifiedAt: checkedInAt,
+    verificationPhotoImageId:
+      verificationStatus === "GPS_PHOTO"
+        ? nullableString(verification.photoImageId)
+        : null,
+    verificationPhotoUrl:
+      verificationStatus === "GPS_PHOTO"
+        ? nullableString(verification.photoUrl)
+        : null,
+    verificationPhotoPublicationConsent:
+      verificationStatus === "GPS_PHOTO" ? false : null,
+    verificationPhotoPublishedAt: null,
+    verificationLat: verification.lat ?? null,
+    verificationLng: verification.lng ?? null,
+    verificationAccuracyMeters: verification.accuracyMeters ?? null,
+    checkedInAt,
+    checkedOutAt: null,
+    actualStayMinutes: null,
+    visitTimeEditedAt: null,
+  };
+}
+
+function buildRouteStopCompletionData(
+  stop: RouteStop,
+  actualStayMinutes?: number | null
+): RouteStopVisitData {
+  if (!stop.checkedInAt) {
+    throw new Error("먼저 장소 도착 인증을 진행해 주세요.");
+  }
+
+  const checkedOutAt = new Date();
+
+  return {
+    visitStatus: "VISITED",
+    visitedAt: checkedOutAt,
+    verificationStatus: stop.verificationStatus ?? "NONE",
+    verifiedAt: stop.verifiedAt,
+    verificationPhotoImageId: stop.verificationPhotoImageId,
+    verificationPhotoUrl: stop.verificationPhotoUrl,
+    verificationPhotoPublicationConsent:
+      stop.verificationPhotoPublicationConsent,
+    verificationPhotoPublishedAt: stop.verificationPhotoPublishedAt,
+    verificationLat: stop.verificationLat,
+    verificationLng: stop.verificationLng,
+    verificationAccuracyMeters: stop.verificationAccuracyMeters,
+    checkedInAt: stop.checkedInAt,
+    checkedOutAt,
+    actualStayMinutes:
+      normalizeActualStayMinutes(actualStayMinutes) ??
+      getActualStayMinutes(stop.checkedInAt, checkedOutAt),
+    visitTimeEditedAt: stop.visitTimeEditedAt,
   };
 }
 
@@ -291,12 +532,15 @@ export type RouteStopVisitData = {
   verifiedAt: Date | null;
   verificationPhotoImageId: string | null;
   verificationPhotoUrl: string | null;
+  verificationPhotoPublicationConsent: boolean | null;
+  verificationPhotoPublishedAt: Date | null;
   verificationLat: number | null;
   verificationLng: number | null;
   verificationAccuracyMeters: number | null;
   checkedInAt: Date | null;
   checkedOutAt: Date | null;
   actualStayMinutes: number | null;
+  visitTimeEditedAt: Date | null;
 };
 
 export function buildRouteStopVisitDataFromStop(stop: RouteStop): RouteStopVisitData {
@@ -307,12 +551,16 @@ export function buildRouteStopVisitDataFromStop(stop: RouteStop): RouteStopVisit
     verifiedAt: stop.verifiedAt,
     verificationPhotoImageId: stop.verificationPhotoImageId,
     verificationPhotoUrl: stop.verificationPhotoUrl,
+    verificationPhotoPublicationConsent:
+      stop.verificationPhotoPublicationConsent,
+    verificationPhotoPublishedAt: stop.verificationPhotoPublishedAt,
     verificationLat: stop.verificationLat,
     verificationLng: stop.verificationLng,
     verificationAccuracyMeters: stop.verificationAccuracyMeters,
     checkedInAt: stop.checkedInAt,
     checkedOutAt: stop.checkedOutAt,
     actualStayMinutes: stop.actualStayMinutes,
+    visitTimeEditedAt: stop.visitTimeEditedAt,
   };
 }
 
@@ -435,6 +683,37 @@ async function markPlacePhotoDeletedForRouteStop(
     },
     data: {
       status: "DELETED",
+      publicationConsent: false,
+      publishedAt: null,
+    },
+  });
+}
+
+async function refreshRouteAfterVisitChange(
+  prisma: PrismaClient,
+  route: Route
+) {
+  const refreshedRoute = await refreshRouteProgress(prisma, route.id);
+
+  if (route.visibility !== "PUBLIC") {
+    return refreshedRoute;
+  }
+
+  const routeStops = await prisma.routeStop.findMany({
+    where: {
+      routeId: route.id,
+    },
+    orderBy: {
+      order: "asc",
+    },
+  });
+
+  return prisma.route.update({
+    where: {
+      id: route.id,
+    },
+    data: {
+      shareTags: buildRouteShareTags(refreshedRoute, routeStops),
     },
   });
 }
@@ -465,6 +744,11 @@ export async function syncPlacePhotoForRouteStopVisit(
   }
 
   const verifiedAt = visitData.verifiedAt ?? visitData.visitedAt ?? new Date();
+  const publicationConsent =
+    visitData.verificationPhotoPublicationConsent;
+  const isPublished =
+    publicationConsent === true ||
+    (publicationConsent == null && route.visibility === "PUBLIC");
   const thumbnailUrl = buildPlacePhotoThumbnailUrl(photoUrl);
   const placePhotoData = {
     placeKey,
@@ -480,7 +764,11 @@ export async function syncPlacePhotoForRouteStopVisit(
     thumbnailUrl: thumbnailUrl ?? photoUrl,
     variant: getImageDeliveryVariantName(photoUrl),
     source: "VISIT_PHOTO" as const,
-    status: "ACTIVE" as const,
+    status: isPublished ? ("ACTIVE" as const) : ("HIDDEN" as const),
+    publicationConsent,
+    publishedAt: isPublished
+      ? (visitData.verificationPhotoPublishedAt ?? verifiedAt)
+      : null,
     verifiedAt,
   };
 
@@ -491,6 +779,387 @@ export async function syncPlacePhotoForRouteStopVisit(
     create: placePhotoData,
     update: placePhotoData,
   });
+}
+
+export async function checkInRouteStop(
+  prisma: PrismaClient,
+  user: User,
+  stopId: string,
+  verification: RouteStopVisitVerificationInput
+) {
+  const stop = await prisma.routeStop.findUnique({
+    where: {
+      id: stopId,
+    },
+  });
+
+  if (!stop) {
+    throw new Error("장소를 찾을 수 없습니다.");
+  }
+
+  const route = await assertRouteOwner(prisma, stop.routeId, user.id);
+  assertRouteCorrectionWindow(route);
+  await assertRouteStopVisitDate(prisma, route, stop, { allowPast: false });
+
+  if (stop.visitStatus === "VISITED") {
+    throw new Error("이미 방문 완료한 장소예요.");
+  }
+
+  if (stop.checkedInAt) {
+    return refreshRouteProgress(prisma, route.id);
+  }
+
+  const checkInData = buildRouteStopCheckInData(stop, verification);
+
+  await prisma.routeStop.update({
+    where: {
+      id: stopId,
+    },
+    data: {
+      ...checkInData,
+      stayStatSyncedAt: null,
+    },
+  });
+
+  return refreshRouteProgress(prisma, route.id);
+}
+
+export async function setRouteStopPhotoPublication(
+  prisma: PrismaClient,
+  user: User,
+  stopId: string,
+  published: boolean
+) {
+  const stop = await prisma.routeStop.findUnique({
+    where: {
+      id: stopId,
+    },
+  });
+
+  if (!stop) {
+    throw new Error("장소를 찾을 수 없습니다.");
+  }
+
+  const route = await assertRouteOwner(prisma, stop.routeId, user.id);
+
+  if (
+    !nullableString(stop.verificationPhotoUrl) ||
+    !PUBLISHABLE_PLACE_PHOTO_STATUSES.has(stop.verificationStatus)
+  ) {
+    throw new Error("공개할 인증 사진이 없어요.");
+  }
+
+  const publishedAt = published ? new Date() : null;
+
+  await prisma.$transaction(async (transaction) => {
+    const nextStop = await transaction.routeStop.update({
+      where: {
+        id: stop.id,
+      },
+      data: {
+        verificationPhotoPublicationConsent: published,
+        verificationPhotoPublishedAt: publishedAt,
+      },
+    });
+
+    await syncPlacePhotoForRouteStopVisit(
+      transaction,
+      user,
+      route,
+      nextStop,
+      buildRouteStopVisitDataFromStop(nextStop)
+    );
+  });
+
+  return refreshRouteProgress(prisma, route.id);
+}
+
+export async function setRouteStopVisitPhoto(
+  prisma: PrismaClient,
+  user: User,
+  stopId: string,
+  imageId: string,
+  imageUrl: string
+) {
+  const stop = await prisma.routeStop.findUnique({
+    where: {
+      id: stopId,
+    },
+  });
+
+  if (!stop) {
+    throw new Error("장소를 찾을 수 없습니다.");
+  }
+
+  const route = await assertRouteOwner(prisma, stop.routeId, user.id);
+  assertRoutePhotoCorrectionWindow(route);
+
+  if (stop.visitStatus !== "VISITED") {
+    throw new Error("완료한 장소에서만 인증 사진을 수정할 수 있어요.");
+  }
+
+  const normalizedImageId = nullableString(imageId);
+  const normalizedImageUrl = nullableString(imageUrl);
+
+  if (!normalizedImageId || !normalizedImageUrl) {
+    throw new Error("저장할 인증 사진 정보가 올바르지 않아요.");
+  }
+
+  const nextVerificationStatus: RouteStopVerificationStatus =
+    stop.verificationStatus === "GPS_PHOTO"
+      ? "GPS"
+      : stop.verificationStatus === "NONE"
+        ? "MANUAL"
+        : stop.verificationStatus;
+
+  await prisma.$transaction(async (transaction) => {
+    const nextStop = await transaction.routeStop.update({
+      where: {
+        id: stop.id,
+      },
+      data: {
+        verificationStatus: nextVerificationStatus,
+        verificationPhotoImageId: normalizedImageId,
+        verificationPhotoUrl: normalizedImageUrl,
+        verificationPhotoPublicationConsent: false,
+        verificationPhotoPublishedAt: null,
+      },
+    });
+
+    await syncPlacePhotoForRouteStopVisit(
+      transaction,
+      user,
+      route,
+      nextStop,
+      buildRouteStopVisitDataFromStop(nextStop)
+    );
+  });
+
+  if (
+    stop.verificationPhotoImageId &&
+    stop.verificationPhotoImageId !== normalizedImageId
+  ) {
+    try {
+      await deleteRouteVisitPhotoImages([stop.verificationPhotoImageId]);
+    } catch (error) {
+      console.error(
+        "[visit-photo] replaced image cleanup failed",
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
+  return refreshRouteAfterVisitChange(prisma, route);
+}
+
+export async function deleteRouteStopVisitPhoto(
+  prisma: PrismaClient,
+  user: User,
+  stopId: string
+) {
+  const stop = await prisma.routeStop.findUnique({
+    where: {
+      id: stopId,
+    },
+  });
+
+  if (!stop) {
+    throw new Error("장소를 찾을 수 없습니다.");
+  }
+
+  const route = await assertRouteOwner(prisma, stop.routeId, user.id);
+
+  if (!stop.verificationPhotoUrl) {
+    return refreshRouteProgress(prisma, route.id);
+  }
+
+  if (stop.verificationPhotoImageId) {
+    await deleteRouteVisitPhotoImages([stop.verificationPhotoImageId]);
+  }
+
+  await prisma.$transaction(async (transaction) => {
+    await transaction.routeStop.update({
+      where: {
+        id: stop.id,
+      },
+      data: {
+        verificationStatus:
+          stop.verificationStatus === "GPS_PHOTO"
+            ? "GPS"
+            : stop.verificationStatus,
+        verificationPhotoImageId: null,
+        verificationPhotoUrl: null,
+        verificationPhotoPublicationConsent: false,
+        verificationPhotoPublishedAt: null,
+      },
+    });
+    await markPlacePhotoDeletedForRouteStop(transaction, stop.id);
+  });
+
+  return refreshRouteProgress(prisma, route.id);
+}
+
+export async function completeRouteStopVisit(
+  prisma: PrismaClient,
+  user: User,
+  stopId: string,
+  actualStayMinutes?: number | null
+) {
+  const stop = await prisma.routeStop.findUnique({
+    where: {
+      id: stopId,
+    },
+  });
+
+  if (!stop) {
+    throw new Error("장소를 찾을 수 없습니다.");
+  }
+
+  const route = await assertRouteOwner(prisma, stop.routeId, user.id);
+  assertRouteCorrectionWindow(route);
+  await assertRouteStopVisitDate(prisma, route, stop, { allowPast: false });
+
+  if (stop.visitStatus === "VISITED") {
+    return refreshRouteAfterVisitChange(prisma, route);
+  }
+
+  const visitData = buildRouteStopCompletionData(stop, actualStayMinutes);
+  const nextStop: RouteStopStayContributionSource = {
+    place: stop.place,
+    visitStatus: visitData.visitStatus,
+    visitedAt: visitData.visitedAt,
+    actualStayMinutes: visitData.actualStayMinutes,
+  };
+  const shouldSyncNextStayStat =
+    Boolean(getRouteStopStayContribution(nextStop)) &&
+    Boolean(getPrimaryPlaceStayStatKey(stop.place));
+  const nextStayStatSyncedAt = shouldSyncNextStayStat ? new Date() : null;
+
+  await prisma.$transaction(async (transaction) => {
+    await transaction.routeStop.update({
+      where: {
+        id: stopId,
+      },
+      data: {
+        ...visitData,
+        stayStatSyncedAt: nextStayStatSyncedAt,
+      },
+    });
+
+    await syncPlaceStayStatForRouteStopChange(transaction, stop, nextStop);
+    await syncPlacePhotoForRouteStopVisit(
+      transaction,
+      user,
+      route,
+      stop,
+      visitData
+    );
+  });
+
+  return refreshRouteAfterVisitChange(prisma, route);
+}
+
+export async function updateRouteStopVisitTimes(
+  prisma: PrismaClient,
+  user: User,
+  input: UpdateRouteStopVisitTimesInput
+) {
+  const stop = await prisma.routeStop.findUnique({
+    where: {
+      id: input.stopId,
+    },
+  });
+
+  if (!stop) {
+    throw new Error("장소를 찾을 수 없습니다.");
+  }
+
+  const route = await assertRouteOwner(prisma, stop.routeId, user.id);
+  assertRouteCorrectionWindow(route);
+
+  if (!stop.checkedInAt && stop.visitStatus !== "VISITED") {
+    throw new Error("도착 기록이 있는 장소만 시간을 수정할 수 있어요.");
+  }
+
+  const checkedInAt = new Date(input.checkedInAt);
+  const checkedOutAt = input.checkedOutAt
+    ? new Date(input.checkedOutAt)
+    : null;
+
+  if (Number.isNaN(checkedInAt.getTime())) {
+    throw new Error("도착시간을 다시 확인해 주세요.");
+  }
+
+  if (checkedOutAt && Number.isNaN(checkedOutAt.getTime())) {
+    throw new Error("완료시간을 다시 확인해 주세요.");
+  }
+
+  if (stop.visitStatus === "VISITED" && !checkedOutAt) {
+    throw new Error("완료된 방문은 완료시간도 입력해 주세요.");
+  }
+
+  if (stop.visitStatus !== "VISITED" && checkedOutAt) {
+    throw new Error("머무는 중인 장소에는 완료시간을 입력할 수 없어요.");
+  }
+
+  const nowWithTolerance = Date.now() + 60_000;
+
+  if (
+    checkedInAt.getTime() > nowWithTolerance ||
+    (checkedOutAt && checkedOutAt.getTime() > nowWithTolerance)
+  ) {
+    throw new Error("현재보다 이후 시간으로는 수정할 수 없어요.");
+  }
+
+  if (checkedOutAt && checkedOutAt.getTime() < checkedInAt.getTime()) {
+    throw new Error("완료시간은 도착시간보다 빠를 수 없어요.");
+  }
+
+  const actualStayMinutes = checkedOutAt
+    ? getActualStayMinutes(checkedInAt, checkedOutAt)
+    : null;
+
+  if (actualStayMinutes && actualStayMinutes > 480) {
+    throw new Error("체류시간은 최대 8시간까지 기록할 수 있어요.");
+  }
+
+  await assertRouteStopVisitTimeOrder(
+    prisma,
+    stop,
+    checkedInAt,
+    checkedOutAt
+  );
+
+  const nextStop: RouteStopStayContributionSource = {
+    place: stop.place,
+    visitStatus: stop.visitStatus,
+    visitedAt: checkedOutAt ?? stop.visitedAt,
+    actualStayMinutes,
+  };
+  const shouldSyncNextStayStat =
+    Boolean(getRouteStopStayContribution(nextStop)) &&
+    Boolean(getPrimaryPlaceStayStatKey(stop.place));
+  const nextStayStatSyncedAt = shouldSyncNextStayStat ? new Date() : null;
+
+  await prisma.$transaction(async (transaction) => {
+    await transaction.routeStop.update({
+      where: {
+        id: stop.id,
+      },
+      data: {
+        checkedInAt,
+        checkedOutAt,
+        visitedAt: checkedOutAt ?? stop.visitedAt,
+        actualStayMinutes,
+        visitTimeEditedAt: new Date(),
+        stayStatSyncedAt: nextStayStatSyncedAt,
+      },
+    });
+
+    await syncPlaceStayStatForRouteStopChange(transaction, stop, nextStop);
+  });
+
+  return refreshRouteAfterVisitChange(prisma, route);
 }
 
 export async function markRouteStopVisited(
@@ -513,6 +1182,14 @@ export async function markRouteStopVisited(
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
   assertRouteCorrectionWindow(route);
+
+  if (visited) {
+    const verificationStatus = getVisitVerificationStatus(verification);
+
+    await assertRouteStopVisitDate(prisma, route, stop, {
+      allowPast: !VERIFIED_ROUTE_STOP_STATUSES.has(verificationStatus),
+    });
+  }
 
   const visitData = buildRouteStopVisitData(
     stop,
@@ -552,29 +1229,7 @@ export async function markRouteStopVisited(
     );
   });
 
-  const refreshedRoute = await refreshRouteProgress(prisma, stop.routeId);
-
-  if (route.visibility === "PUBLIC") {
-    const routeStops = await prisma.routeStop.findMany({
-      where: {
-        routeId: route.id,
-      },
-      orderBy: {
-        order: "asc",
-      },
-    });
-
-    return prisma.route.update({
-      where: {
-        id: route.id,
-      },
-      data: {
-        shareTags: buildRouteShareTags(refreshedRoute, routeStops),
-      },
-    });
-  }
-
-  return refreshedRoute;
+  return refreshRouteAfterVisitChange(prisma, route);
 }
 
 export async function getPlaceStaySummary(
@@ -655,17 +1310,33 @@ export async function getPlacePhotos(
   return prisma.placePhoto.findMany({
     where: {
       status: "ACTIVE",
-      routeVisibility: "PUBLIC",
-      OR: [
+      AND: [
         {
-          placeKey: {
-            in: placeKeys,
-          },
+          OR: [
+            {
+              placeKey: {
+                in: placeKeys,
+              },
+            },
+            {
+              placeKeys: {
+                hasSome: placeKeys,
+              },
+            },
+          ],
         },
         {
-          placeKeys: {
-            hasSome: placeKeys,
-          },
+          OR: [
+            { publicationConsent: true },
+            {
+              publicationConsent: null,
+              routeVisibility: "PUBLIC",
+            },
+            {
+              publicationConsent: { isSet: false },
+              routeVisibility: "PUBLIC",
+            },
+          ],
         },
       ],
     },

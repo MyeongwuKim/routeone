@@ -50,6 +50,7 @@ type NaverMapsApi = {
     NORMAL: unknown;
   };
   jsContentLoaded?: boolean;
+  Circle: new (options: Record<string, unknown>) => NaverMapOverlay;
   Marker: new (options: Record<string, unknown>) => NaverMapOverlay;
   onJSContentLoaded?: () => void;
   Point: new (x: number, y: number) => object;

@@ -274,6 +274,12 @@ function MyRouteHistoryPage() {
         queryClient.invalidateQueries({
           queryKey: MY_ROUTES_QUERY_KEY,
         }),
+        queryClient.invalidateQueries({
+          queryKey: ["place-photos"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["place-stay-summary"],
+        }),
       ]);
 
       try {

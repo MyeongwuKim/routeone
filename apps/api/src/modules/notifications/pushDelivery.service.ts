@@ -29,12 +29,103 @@ const PUSH_CLAIM_TIMEOUT_MS = 1000 * 60 * 10;
 const NO_DEVICE_RETRY_MS = 1000 * 60 * 60;
 const MAX_RETRY_DELAY_MS = 1000 * 60 * 60 * 6;
 
-function formatFestivalPeriod(startDate: string, endDate: string) {
+type PushLocale = "ko" | "en";
+
+const GANGWON_REGION_LABELS_EN: Record<string, string> = {
+  "1": "Gangneung",
+  "2": "Goseong",
+  "3": "Donghae",
+  "4": "Samcheok",
+  "5": "Sokcho",
+  "6": "Yanggu",
+  "7": "Yangyang",
+  "8": "Yeongwol",
+  "9": "Wonju",
+  "10": "Inje",
+  "11": "Jeongseon",
+  "12": "Cheorwon",
+  "13": "Chuncheon",
+  "14": "Taebaek",
+  "15": "Pyeongchang",
+  "16": "Hongcheon",
+  "17": "Hwacheon",
+  "18": "Hoengseong",
+};
+
+function getPushLocale(locale?: string | null): PushLocale {
+  return locale?.trim().toLowerCase() === "en" ? "en" : "ko";
+}
+
+function formatEnglishRouteDate(dateLabel: string) {
+  const [month, day] = dateLabel.split(".").map(Number);
+
+  if (
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return dateLabel;
+  }
+
+  return new Date(Date.UTC(2000, month - 1, day)).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function localizeGeneratedRouteTitle(
+  routeTitle: string,
+  locale: PushLocale
+) {
+  if (locale !== "en") {
+    return routeTitle;
+  }
+
+  if (routeTitle === "날짜 미정 일정") {
+    return "Unscheduled trip";
+  }
+
+  const match = routeTitle.match(
+    /^(\d{1,2}\.\d{1,2})(?:\s*~\s*(\d{1,2}\.\d{1,2}))?\s+일정$/
+  );
+
+  if (!match) {
+    return routeTitle;
+  }
+
+  const startDate = formatEnglishRouteDate(match[1]);
+  const endDate = match[2] ? formatEnglishRouteDate(match[2]) : null;
+  const dateRange =
+    endDate && endDate !== startDate
+      ? `${startDate} – ${endDate}`
+      : startDate;
+
+  return `${dateRange} trip`;
+}
+
+function formatFestivalPeriod(
+  startDate: string,
+  endDate: string,
+  locale: PushLocale
+) {
   const formatDate = (dateKey: string) => {
     const date = new Date(`${dateKey}T00:00:00.000Z`);
 
     if (Number.isNaN(date.getTime())) {
       return dateKey;
+    }
+
+    if (locale === "en") {
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        weekday: "short",
+        timeZone: "UTC",
+      });
     }
 
     const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
@@ -43,11 +134,20 @@ function formatFestivalPeriod(startDate: string, endDate: string) {
 
   return startDate === endDate
     ? formatDate(startDate)
-    : `${formatDate(startDate)}~${formatDate(endDate)}`;
+    : `${formatDate(startDate)}${locale === "en" ? " – " : "~"}${formatDate(endDate)}`;
 }
 
-function createFestivalBody(notification: UserNotification) {
-  const visibleTitles = notification.festivalTitles.slice(0, 2);
+function createFestivalBody(
+  notification: UserNotification,
+  locale: PushLocale,
+  localizedTitleById: ReadonlyMap<string, string>
+) {
+  const visibleTitles = notification.festivalTitles
+    .slice(0, 2)
+    .map(
+      (title, index) =>
+        localizedTitleById.get(notification.festivalIds[index] ?? "") ?? title
+    );
   const remainingCount =
     notification.festivalTitles.length - visibleTitles.length;
   const festivalStartDates = notification.festivalStartDates ?? [];
@@ -62,28 +162,66 @@ function createFestivalBody(notification: UserNotification) {
 
     return `${title} ${formatFestivalPeriod(
       festivalStartDates[index],
-      festivalEndDates[index]
+      festivalEndDates[index],
+      locale
     )}`;
   });
 
   return `${visibleFestivalLabels.join(" · ")}${
-    remainingCount > 0 ? ` 외 ${remainingCount}개` : ""
+    remainingCount > 0
+      ? locale === "en"
+        ? ` and ${remainingCount} more`
+        : ` 외 ${remainingCount}개`
+      : ""
   }`;
 }
 
 function createPushMessage(
   notification: UserNotification,
-  device: PushDevice
+  device: PushDevice,
+  locale: PushLocale,
+  localizedFestivalTitleById: ReadonlyMap<string, string>
 ): ExpoPushMessage | null {
   if (notification.type === UserNotificationType.FESTIVAL_SUMMARY) {
-    const isTestNotification =
-      notification.notificationKey.startsWith("festival:test:");
+    const festivalCount = notification.festivalTitles.length;
+    const regionLabel =
+      locale === "en"
+        ? GANGWON_REGION_LABELS_EN[notification.regionCode ?? ""] ?? "Gangwon"
+        : notification.regionLabel ?? "강원";
+    const festivalLabel =
+      locale === "en"
+        ? `${festivalCount} festival${festivalCount === 1 ? "" : "s"}`
+        : `축제 ${festivalCount}개`;
+    const title =
+      locale === "en"
+        ? notification.festivalKind === "TODAY"
+          ? `${festivalLabel} in ${regionLabel} today`
+          : notification.festivalKind === "WEEKLY"
+            ? `${festivalLabel} in ${regionLabel} this week`
+            : notification.festivalKind === "MONTHLY"
+              ? `${festivalLabel} in ${regionLabel} this month`
+              : notification.festivalKind === "TRIP"
+                ? `${festivalLabel} in ${regionLabel} on your travel day`
+                : `[Test] ${festivalLabel} in ${regionLabel}`
+        : notification.festivalKind === "TODAY"
+          ? `오늘 ${regionLabel} ${festivalLabel}`
+          : notification.festivalKind === "WEEKLY"
+            ? `이번 주 ${regionLabel} ${festivalLabel}`
+            : notification.festivalKind === "MONTHLY"
+              ? `이번 달 ${regionLabel} ${festivalLabel}`
+              : notification.festivalKind === "TRIP"
+                ? `${regionLabel} 여행일 ${festivalLabel}`
+                : `[테스트] ${regionLabel} ${festivalLabel}`;
 
     return {
       to: device.expoPushToken,
       sound: "default",
-      title: `${isTestNotification ? "[테스트] " : ""}${notification.regionLabel ?? "강원"} 축제 ${notification.festivalTitles.length}개`,
-      body: createFestivalBody(notification),
+      title,
+      body: createFestivalBody(
+        notification,
+        locale,
+        localizedFestivalTitleById
+      ),
       data: {
         type: "festival-summary",
         notificationId: notification.notificationKey,
@@ -94,21 +232,38 @@ function createPushMessage(
   }
 
   if (notification.type === UserNotificationType.ROUTE_REVIEW) {
-    const routeTitle = notification.routeTitle ?? "지난 루트";
+    const routeTitle = localizeGeneratedRouteTitle(
+      notification.routeTitle ??
+        (locale === "en" ? "Your trip" : "지난 루트"),
+      locale
+    );
     const isTestNotification =
       notification.notificationKey.startsWith("route-review:test:");
     const title =
-      notification.routeReviewKind === "COMPLETED"
-        ? `${routeTitle} 기록을 확인해 보세요`
-        : notification.routeReviewKind === "INCOMPLETE"
-          ? `${routeTitle}가 마무리되지 않았어요`
-          : `${routeTitle}를 다녀왔는지 알려주세요`;
+      locale === "en"
+        ? notification.routeReviewKind === "COMPLETED"
+          ? `${routeTitle}—you made it!`
+          : notification.routeReviewKind === "INCOMPLETE"
+            ? `Finish your ${routeTitle} record`
+            : `${routeTitle} has ended`
+        : notification.routeReviewKind === "COMPLETED"
+          ? `${routeTitle}, 무사히 잘 마쳤네요`
+          : notification.routeReviewKind === "INCOMPLETE"
+            ? `${routeTitle}가 마무리되지 않았어요`
+            : `${routeTitle}를 다녀왔는지 알려주세요`;
 
     return {
       to: device.expoPushToken,
       sound: "default",
-      title: `${isTestNotification ? "[테스트] " : ""}${title}`,
-      body: "다녀온 루트에서 7일 동안 기록을 수정할 수 있어요.",
+      title: `${isTestNotification ? (locale === "en" ? "[Test] " : "[테스트] ") : ""}${title}`,
+      body:
+        locale === "en"
+          ? notification.routeReviewKind === "COMPLETED"
+            ? "Update any missing details within 7 days, make a DAY card, or share your route."
+            : "You can update visit records for 7 days after the trip ends."
+          : notification.routeReviewKind === "COMPLETED"
+            ? "빠진 기록은 7일 안에 보완할 수 있어요. DAY 카드를 만들거나 내 루트를 공유해 보세요."
+            : "다녀온 루트에서 7일 동안 기록을 수정할 수 있어요.",
       data: {
         type: "route-review",
         notificationId: notification.notificationKey,
@@ -173,11 +328,22 @@ async function deliverClaimedNotification(
   now: Date,
   pushDeviceId?: string
 ) {
-  const settings = await prisma.userNotificationSetting.findUnique({
-    where: {
-      userId: notification.userId,
-    },
-  });
+  const [settings, user] = await Promise.all([
+    prisma.userNotificationSetting.findUnique({
+      where: {
+        userId: notification.userId,
+      },
+    }),
+    prisma.user.findUnique({
+      where: {
+        id: notification.userId,
+      },
+      select: {
+        locale: true,
+      },
+    }),
+  ]);
+  const locale = getPushLocale(user?.locale);
   const isFestivalTestNotification =
     notification.type === UserNotificationType.FESTIVAL_SUMMARY &&
     notification.notificationKey.startsWith("festival:test:");
@@ -222,8 +388,39 @@ async function deliverClaimedNotification(
         : {}),
     },
   });
+  const localizedFestivalTitles =
+    locale === "en" &&
+    notification.type === UserNotificationType.FESTIVAL_SUMMARY &&
+    notification.festivalIds.length > 0
+      ? await prisma.placeLocalization.findMany({
+          where: {
+            provider: "TOUR_API",
+            locale: "en",
+            externalId: {
+              in: notification.festivalIds,
+            },
+          },
+          select: {
+            externalId: true,
+            title: true,
+          },
+        })
+      : [];
+  const localizedFestivalTitleById = new Map(
+    localizedFestivalTitles.map((festival) => [
+      festival.externalId,
+      festival.title,
+    ])
+  );
   const messages = devices
-    .map((device) => createPushMessage(notification, device))
+    .map((device) =>
+      createPushMessage(
+        notification,
+        device,
+        locale,
+        localizedFestivalTitleById
+      )
+    )
     .filter((message): message is ExpoPushMessage => Boolean(message));
 
   if (messages.length === 0) {

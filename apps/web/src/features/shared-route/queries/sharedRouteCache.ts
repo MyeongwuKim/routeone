@@ -7,6 +7,9 @@ import type {
 import type { SharedRoute } from "../sharedRouteCardModel";
 import type { SharedRoutePageMode } from "../sharedRouteListModel";
 
+type SharedRouteCacheRoute = RouteSummaryFieldsFragment &
+  Pick<SharedRoute, "owner">;
+
 export type SharedRouteConnectionPage =
   | SharedRouteConnectionQuery
   | LikedSharedRouteConnectionQuery;
@@ -83,7 +86,7 @@ function updateSharedRouteInfiniteData(
 export function upsertSharedRouteInInfiniteData(
   data: SharedRouteInfiniteData | undefined,
   mode: SharedRoutePageMode,
-  nextRoute: RouteSummaryFieldsFragment,
+  nextRoute: SharedRouteCacheRoute,
   options: {
     liked?: boolean;
     keepUnlikedRoute?: boolean;
@@ -147,7 +150,7 @@ export function optimisticUpdateSharedRouteInfiniteLike({
 }: {
   data: SharedRouteInfiniteData | undefined;
   mode: SharedRoutePageMode;
-  route: RouteSummaryFieldsFragment;
+  route: SharedRoute;
   liked: boolean;
   likeCount?: number;
   keepUnlikedRoute?: boolean;

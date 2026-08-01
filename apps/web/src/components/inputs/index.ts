@@ -4,4 +4,7 @@ export type { DropdownSelectOption } from "./DropdownSelect";
 export { default as SelectablePillButton } from "./SelectablePillButton";
 export { default as SegmentedToggle } from "./SegmentedToggle";
 export type { SegmentedToggleOption } from "./SegmentedToggle";
-export { default as TimeWheelInput } from "./TimeWheelInput";
+export {
+  default as TimeWheelInput,
+  TimeWheelPicker,
+} from "./TimeWheelInput";
