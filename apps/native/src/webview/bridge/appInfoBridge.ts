@@ -91,18 +91,34 @@ async function getCameraPermissionStatus(): Promise<NativePermissionStatus> {
   }
 }
 
+async function getPhotoLibraryPermissionStatus(): Promise<NativePermissionStatus> {
+  try {
+    const permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+
+    if (permission.accessPrivileges === "limited") {
+      return "granted";
+    }
+
+    return normalizePermissionStatus(permission.status, permission.granted);
+  } catch {
+    return "unavailable";
+  }
+}
+
 async function createNativeAppInfo(
   context: NativeAppInfoContext
 ): Promise<NativeAppInfoResponse> {
   const [
     locationPermissionStatus,
     notificationPermissionStatus,
-    cameraPermissionStatus
+    cameraPermissionStatus,
+    photoLibraryPermissionStatus
   ] =
     await Promise.all([
       getLocationPermissionStatus(),
       getNotificationPermissionStatus(),
-      getCameraPermissionStatus()
+      getCameraPermissionStatus(),
+      getPhotoLibraryPermissionStatus()
     ]);
 
   return {
@@ -119,7 +135,8 @@ async function createNativeAppInfo(
     appVariant: WEB_BUNDLE_UPDATE_CONFIG.appVariant,
     locationPermissionStatus,
     notificationPermissionStatus,
-    cameraPermissionStatus
+    cameraPermissionStatus,
+    photoLibraryPermissionStatus
   };
 }
 

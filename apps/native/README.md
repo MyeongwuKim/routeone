@@ -8,24 +8,50 @@ React Native WebView로 `apps/web` 빌드 산출물을 감싸는 하이브리드
 
 | 상황 | 명령어 | 설명 |
 | --- | --- | --- |
-| 로컬 iOS 시뮬레이터 실행 | `pnpm native:ios:local` | `APP_VARIANT=none`으로 웹 번들을 동기화하고 iOS 앱을 빌드한 뒤 시뮬레이터까지 실행합니다. |
-| 로컬 iOS 실기기 설치 | `pnpm native:ios:device` | 연결된 iPhone을 선택하고 `APP_VARIANT=none` 로컬 앱을 새로 빌드해 설치합니다. |
-| dev 앱 Xcode 파일만 생성 | `pnpm native:ios:dev` | `APP_VARIANT=dev`로 `ios/` 프로젝트만 생성 또는 갱신합니다. |
+| iOS 시뮬레이터 빌드 테스트 | `pnpm native:ios:local` | `EXPO_PUBLIC_GRAPHQL_ENDPOINT`에 현재 실행 중인 API 주소를 넣고, `APP_VARIANT=none` 앱을 빌드해 시뮬레이터에서 실행합니다. |
+| iPhone 실기기 빌드 테스트 | `pnpm native:ios:device` | 연결된 iPhone을 선택하고 Metro에 연결되는 `APP_VARIANT=none` 로컬 개발 앱을 빌드해 설치합니다. |
+| dev TestFlight용 Xcode 프로젝트 생성 | `pnpm native:ios:dev` | `APP_VARIANT=dev`로 `ios/`의 `.xcodeproj`와 `.xcworkspace`를 생성 또는 갱신합니다. |
 | 로컬 Android 실행 | `pnpm native:android` | `APP_VARIANT=none`으로 Android 앱을 빌드하고 실행합니다. |
 | 이미 설치된 dev client 실행 | `pnpm native:start` | 웹 번들을 다시 빌드하지 않고 Metro dev server를 실행합니다. |
 | Expo Go 실행 | `pnpm native:start:go` | Expo Go로 확인해야 할 때만 사용합니다. |
+| 테스트 중 웹 UI 동기화 | `pnpm native:sync:web` | `apps/web`을 다시 빌드하고 Native WebView 번들을 갱신합니다. |
 | 웹뷰 번들 갱신 | `pnpm native:build:webview` | `apps/web/dist`를 native WebView용 번들로 변환합니다. |
 | 타입 체크 | `pnpm native:typecheck` | native TypeScript 타입 검사를 실행합니다. |
 
 `pnpm native:ios`는 로컬 실행인지 Xcode 파일 생성인지 헷갈리기 때문에 사용하지 않습니다. 로컬 시뮬레이터 실행은 `native:ios:local`, dev Xcode 파일 생성은 `native:ios:dev`로 구분합니다.
 
-## 로컬 실행
+## 빌드 테스트 순서
 
-이 앱은 Expo Go보다 native WebView 앱으로 확인하는 흐름을 기본으로 사용합니다. 로컬 iOS 시뮬레이터에서 앱까지 바로 실행하려면 아래 명령어를 사용합니다.
+Native 변경사항은 아래 순서로 확인합니다.
+
+1. `local`: `pnpm native:ios:local`로 iOS 시뮬레이터 빌드 테스트
+2. `device`: `pnpm native:ios:device`로 연결된 iPhone 실기기 빌드 테스트
+3. `dev`: `pnpm native:ios:dev`로 dev용 Xcode 프로젝트 생성 후 dev TestFlight 빌드 테스트
+4. `prod`: dev 검증 완료 후 Expo/EAS에 운영 빌드를 올려 App Store Connect 업로드와 TestFlight 테스트
+
+`local → device → dev → prod` 순서로 진행하며, 앞 단계에서 확인된 빌드만 다음 단계로 넘깁니다.
+
+## 로컬 빌드 테스트 방법
+
+이 앱은 Expo Go보다 native WebView 앱을 직접 빌드해 확인하는 흐름을 기본으로 사용합니다. 테스트할 API는 먼저 별도 터미널에서 실행해 둡니다.
 
 ```bash
-pnpm native:ios:local
+pnpm dev:api
 ```
+
+로컬 시뮬레이터와 연결된 iPhone의 Metro 개발 앱을 테스트할 때는 `APP_VARIANT`를 비활성 상태인 `none` 또는 미설정으로 두는 것을 권장합니다. 이 상태에서는 `EXPO_PUBLIC_WEB_BUNDLE_BASE_URL`이 있거나 이전에 원격 번들을 설치했어도 이를 무시하고 앱에 내장된 로컬 번들을 사용합니다. `dev`나 `prod`를 사용하면 variant별 앱 식별자와 R2 원격 웹 번들 채널이 적용되어, `native:sync:web`으로 갱신한 로컬 UI 대신 저장되어 있던 번들이나 원격 번들이 열릴 수 있습니다. 이 경우 현재 수정한 화면을 테스트하는지 구분하기 어려워집니다.
+
+루트 명령어인 `pnpm native:ios:local`과 `pnpm native:ios:device`는 `APP_VARIANT=none`을 자동으로 적용하므로 별도로 설정할 필요가 없습니다. Native 패키지 안에서 하위 명령어를 직접 실행할 때만 `APP_VARIANT` 값을 확인합니다.
+
+### iOS 시뮬레이터 빌드 테스트
+
+로컬 iOS 시뮬레이터에서 테스트할 때는 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`에 현재 실행 중인 API의 GraphQL 주소를 넣고 실행합니다. API를 기본 포트로 실행 중이라면 아래처럼 사용할 수 있습니다.
+
+```bash
+EXPO_PUBLIC_GRAPHQL_ENDPOINT=http://127.0.0.1:4000/graphql pnpm native:ios:local
+```
+
+시뮬레이터에서는 `127.0.0.1`이 현재 Mac을 가리키므로 로컬 API에 바로 연결할 수 있습니다. 다른 포트나 배포 API를 사용하고 있다면 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`를 해당 API 주소로 바꿉니다.
 
 `native:ios:local`은 내부적으로 아래 일을 실행합니다.
 
@@ -35,15 +61,31 @@ pnpm native:ios:local
 - iOS 권한 문구 동기화
 - `expo run:ios`로 시뮬레이터 실행
 
-`APP_VARIANT=none`은 로컬 개발 모드입니다. dev 앱 식별자를 사용하지만, `EXPO_PUBLIC_WEB_BUNDLE_BASE_URL`이 있어도 R2 원격 웹 번들을 확인하지 않습니다. 이전에 설치된 원격 웹 번들도 무시하고 앱에 내장된 로컬 번들을 사용합니다.
+### iPhone 실기기 빌드 테스트
 
-USB로 연결된 iPhone에 로컬 앱을 새로 빌드해 설치하려면 아래 명령어를 사용합니다.
+USB로 연결된 iPhone에서 테스트할 때는 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`에 현재 Mac에서 실행 중인 로컬 API 주소를 넣고 아래 명령어를 사용합니다.
 
 ```bash
-pnpm native:ios:device
+EXPO_PUBLIC_GRAPHQL_ENDPOINT=http://192.168.0.144:4000/graphql pnpm native:ios:device
 ```
 
-명령 실행 후 표시되는 기기 목록에서 설치할 iPhone을 선택합니다. 기존 앱이 설치되어 있으면 같은 앱 식별자의 새 빌드로 교체하며, `APP_VARIANT=none`을 사용하므로 R2 원격 웹 번들을 확인하지 않습니다.
+`192.168.0.144` 부분은 현재 Mac의 LAN IP로 바꿉니다. 실기기에서 `127.0.0.1`은 Mac이 아니라 iPhone 자신을 가리키므로 로컬 API에 연결할 수 없습니다. Mac과 iPhone은 같은 네트워크에 있어야 합니다.
+
+명령 실행 후 표시되는 기기 목록에서 현재 연결된 iPhone을 선택합니다. 그러면 Metro 개발 서버에 연결되는 네이티브 개발 앱을 새로 빌드해 선택한 iPhone에 설치하고 실행합니다. 기존 앱이 설치되어 있으면 같은 앱 식별자의 새 빌드로 교체하며, `APP_VARIANT=none`을 사용하므로 R2 원격 웹 번들을 확인하지 않습니다.
+
+### 테스트 중 웹 UI 수정 사항 반영
+
+`native:ios:local` 또는 `native:ios:device`로 앱을 실행한 상태에서 `apps/web`의 UI를 수정했다면 아래 명령어로 웹 화면을 갱신합니다.
+
+```bash
+pnpm native:sync:web
+```
+
+이 명령어는 `apps/web`을 다시 빌드하고 결과물을 `apps/native/src/generated/webBundle.ts`에 동기화합니다. 실행 중인 Metro가 변경된 번들을 감지하면 시뮬레이터나 iPhone에서 수정한 웹 화면을 다시 확인할 수 있습니다. 화면이 자동으로 바뀌지 않으면 앱을 한 번 새로고침합니다.
+
+웹 UI만 수정했다면 Xcode 프로젝트를 다시 만들 필요는 없습니다. 네이티브 코드, 권한 또는 네이티브 의존성을 변경한 경우에는 `native:ios:local` 또는 `native:ios:device` 빌드를 다시 실행합니다.
+
+### 설치된 개발 앱 다시 실행
 
 이미 앱이 설치되어 있고 Metro만 다시 띄우면 되는 상황에서는 아래 명령어를 사용합니다.
 
@@ -51,21 +93,17 @@ pnpm native:ios:device
 pnpm native:start
 ```
 
-웹앱을 다시 빌드해서 WebView 번들만 갱신하려면 아래 명령어를 사용합니다.
+## dev TestFlight용 Xcode 프로젝트 생성
 
-```bash
-pnpm native:build:webview
-```
-
-## Xcode 프로젝트 생성
-
-Xcode 파일만 만들고 시뮬레이터를 실행하지 않으려면 아래 명령어를 사용합니다.
+시뮬레이터와 연결된 iPhone 테스트를 마친 뒤 dev TestFlight 빌드를 준비할 때 아래 명령어를 사용합니다.
 
 ```bash
 pnpm native:ios:dev
 ```
 
-이 명령어는 `APP_VARIANT=dev`로 `expo prebuild --platform ios`를 실행하고, `apps/native/ios/` 프로젝트를 생성 또는 갱신합니다. Expo/EAS 서버나 App Store Connect로 업로드하지 않습니다.
+이 명령어는 `APP_VARIANT=dev`로 `expo prebuild --platform ios`를 실행하고, `apps/native/ios/`에 Xcode용 `.xcodeproj`와 `.xcworkspace`를 생성 또는 갱신합니다. 생성된 Xcode 프로젝트는 dev 앱의 네이티브 설정과 빌드를 확인하고 TestFlight 업로드를 준비할 때 사용합니다.
+
+`native:ios:dev`는 Xcode 프로젝트 생성까지만 수행하며 TestFlight에 직접 업로드하지 않습니다. 실제 dev TestFlight 빌드와 업로드는 아래 `TestFlight` 카테고리의 `eas:build:ios:dev`, `eas:submit:ios:dev` 명령어로 진행합니다.
 
 필요하면 native 패키지 안에서 더 직접적인 명령어를 사용할 수 있습니다.
 
@@ -90,7 +128,7 @@ pnpm run eas:build:ios:dev
 pnpm run eas:submit:ios:dev
 ```
 
-운영 앱은 `APP_VARIANT=prod`와 `production` 프로필을 사용합니다. iOS 번들 ID는 `com.routeone.app`, 앱 이름은 `RouteOne`입니다.
+운영 앱은 `APP_VARIANT=prod`와 `production` 프로필을 사용합니다. iOS 번들 ID는 `com.routeone.app`, 앱 이름은 `RouteOne`입니다. 운영 빌드는 Expo/EAS 클라우드에 소스를 올려 생성하고, 완성된 빌드를 App Store Connect에 업로드하는 방식입니다.
 
 ```bash
 cd apps/native
@@ -98,11 +136,7 @@ pnpm run eas:build:ios
 pnpm run eas:submit:ios
 ```
 
-실기기 TestFlight 빌드에서는 로컬 API 주소를 사용할 수 없으므로, 빌드 전에 배포용 GraphQL 주소를 환경변수로 넣어야 합니다.
-
-```bash
-EXPO_PUBLIC_GRAPHQL_ENDPOINT=https://api.example.com/graphql pnpm run eas:build:ios:dev
-```
+EAS 빌드는 Expo/EAS 프로젝트에 등록된 환경변수를 사용합니다. `prod` 빌드에서는 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`를 명령어 앞에 붙이거나 로컬 `.env`에 별도로 설정할 필요가 없습니다. API 주소를 변경해야 할 때는 로컬 명령어가 아니라 Expo/EAS에 등록된 운영 환경변수를 수정합니다.
 
 내부 테스터에게 새 빌드 업데이트가 뜨려면 App Store Connect에서 아래 상태까지 끝나야 합니다.
 
@@ -113,30 +147,43 @@ EXPO_PUBLIC_GRAPHQL_ENDPOINT=https://api.example.com/graphql pnpm run eas:build:
 
 iOS 수출 규정 질문을 줄이기 위해 `app.config.ts`의 `ios.infoPlist`에 `ITSAppUsesNonExemptEncryption: false`를 명시합니다. 자체 암호화 알고리즘이나 문서 제출이 필요한 암호화 기능을 추가하면 이 값은 다시 검토해야 합니다.
 
-## 네이티브 앱의 역할
+## 네이티브 앱의 역할과 제공 기능
 
-RouteOne Native는 웹앱을 앱 안에서 실행하면서 웹만으로 처리하기 어려운 기기 기능과 배포 흐름을 담당합니다.
+RouteOne Native는 `apps/web`을 실행하는 앱 컨테이너이면서, 웹만으로 처리하기 어려운 인증, 기기 권한, 알림, 외부 앱 연동과 배포 흐름을 담당합니다. 웹과 네이티브는 `window.RouteOneNative` 브릿지를 통해 기능을 주고받습니다.
 
-- WebView 컨테이너 제공: `apps/web` 빌드 결과를 네이티브 WebView 안에서 실행합니다.
-- 네이티브 브릿지 제공: 웹앱이 `window.RouteOneNative`를 통해 위치, 카메라, 앱 정보, 알림 기능을 호출할 수 있게 합니다.
-- 네트워크 프록시 제공: WebView 안의 `/graphql`, `/tour-api`, `/map-direction` 요청을 네이티브 브릿지에서 실제 API로 전달합니다.
-- 위치 기능 제공: 현재 GPS 위치 조회와 장소 근처 도착 여부 확인에 필요한 네이티브 위치 권한을 관리합니다.
-- 방문 인증 기능 제공: 방문 사진 촬영, 사진 업로드, GPS 기반 방문 인증 흐름을 네이티브 기능과 연결합니다.
-- 도착 알림 기능 제공: 루트의 다음 방문지 정보를 받아 위치 기반 알림을 등록하고 테스트 알림을 발송합니다.
-- 웹 번들 업데이트 제공: 앱에 내장된 웹 번들을 기본으로 사용하고, dev/prod 빌드에서는 R2의 최신 웹 번들을 확인해 설치합니다.
-- 앱 variant 관리: `none`, `dev`, `prod` 값에 따라 로컬 실행, 테스트 앱, 운영 앱의 번들 ID와 원격 웹 번들 사용 여부를 나눕니다.
-- 앱 정보 전달: 웹앱이 현재 앱 버전, 빌드번호, 플랫폼, 설치된 웹 번들 정보를 확인할 수 있게 합니다.
+| 카테고리 | 네이티브에서 담당하는 일 | 제공 기능 |
+| --- | --- | --- |
+| 앱 실행과 WebView | 웹 빌드 결과를 네이티브 앱 안에서 실행하고 웹·네이티브 메시지를 연결 | 내장 웹 번들 로드, 실행 준비 상태 확인, 앱 언어 동기화, 런타임 오류 처리 |
+| 로그인과 세션 | 앱 진입 전 인증과 로그인 세션을 네이티브 저장소에서 관리 | 아이디·비밀번호, Google, Apple 로그인, 로그인 토큰 저장과 WebView 전달, 로그아웃·만료 처리 |
+| 네트워크 브릿지 | WebView 요청을 실제 외부 API로 전달 | `/graphql`, `/tour-api`, `/map-direction` 요청 프록시, 인증 헤더 전달, 요청 타임아웃과 일부 응답 캐시 |
+| 위치와 방문 인증 | 위치 권한과 방문 인증에 필요한 기기 기능 관리 | 현재 GPS 조회, 도착 반경 판정용 위치 전달, 카메라·사진 보관함 선택, 방문 사진 업로드, GPS 테스트 위치 적용 |
+| 알림 | 웹의 일정 데이터를 네이티브 로컬·푸시 알림과 동기화 | Expo Push Token 발급, 루트 도착 알림, 축제 알림, 루트 후기 알림, 전달된 알림 기록 조회 |
+| 외부 앱과 미디어 | WebView 밖에서 처리해야 하는 링크와 파일 작업 수행 | 네이버 지도 앱 길찾기, 앱 미설치 시 웹 길찾기 fallback, 앱 설정 열기, 포토카드 이미지 저장·공유 |
+| 웹 번들 업데이트 | 앱에 내장된 웹과 R2 원격 웹 번들의 설치 상태 관리 | manifest 확인, ZIP 다운로드, SHA-256 검증, 버전·채널·최소 네이티브 버전 검사, 설치 실패 재시도와 롤백 |
+| 빌드와 배포 | 실행 환경에 따라 앱 식별자와 웹 번들 채널을 구분 | `none`·`dev`·`prod` variant, 시뮬레이터·실기기 빌드, dev/prod TestFlight, Expo/EAS 환경변수 사용 |
+
+웹은 화면과 서비스 흐름을 담당하고, Native는 WebView 실행 환경과 기기 기능을 제공합니다. 앱 버전, 빌드번호, 플랫폼, 현재 웹 번들 정보도 브릿지를 통해 웹에 전달합니다.
 
 ## 구조
 
-- `src/App.tsx`: WebView 컨테이너입니다.
-- `src/generated/webBundle.ts`: `apps/web/dist`의 HTML, CSS, 분리된 JS 모듈을 WebView용 HTML 문자열로 변환한 결과입니다.
-- `src/webview/bridge`: WebView와 네이티브 기능을 연결하는 목적별 브릿지입니다.
-  - `fetchBridge.ts`: `/graphql`, `/tour-api`, `/map-direction` 요청 프록시입니다.
-  - `locationBridge.ts`: 현재 위치 요청을 처리합니다.
-  - `visitPhotoBridge.ts`: 방문 사진 촬영 및 업로드를 처리합니다.
-  - `injectedScript.ts`: WebView에 주입되는 브릿지 스크립트입니다.
-- `scripts/sync-web-build.mjs`: 웹 빌드 후 분리 모듈 import map을 포함한 native 번들을 생성합니다.
+- 앱 실행
+  - `src/App.tsx`: 부팅, 로그인과 WebView 화면을 연결합니다.
+  - `src/boot`: 인증 세션과 웹 번들 준비 상태를 확인합니다.
+  - `src/components/native-onboarding`: 네이티브 온보딩과 로그인 화면입니다.
+  - `src/components/native-webview`: 실행 화면, 로딩 화면과 WebView 컨테이너입니다.
+- 인증과 웹 번들
+  - `src/auth`: 아이디·비밀번호, Google, Apple 로그인과 네이티브 세션 저장을 처리합니다.
+  - `src/webBundle`: R2 manifest 조회, 웹 번들 다운로드·검증·설치·롤백을 처리합니다.
+  - `src/generated/webBundle.ts`: `apps/web/dist`를 WebView용 HTML 문자열로 변환한 결과입니다.
+- WebView 브릿지
+  - `src/webview/bridge/injectedScript.ts`: `window.RouteOneNative` API를 WebView에 주입합니다.
+  - `src/webview/bridge/fetchBridge.ts`, `authTokenBridge.ts`: API 요청과 인증 토큰을 연결합니다.
+  - `src/webview/bridge/locationBridge.ts`, `visitPhotoBridge.ts`, `saveImageBridge.ts`: 위치, 방문 사진과 이미지 저장·공유를 처리합니다.
+  - `src/webview/bridge/pushTokenBridge.ts`, `routeArrivalNotificationBridge.ts`, `festivalNotificationBridge.ts`, `routeReviewNotificationBridge.ts`: 푸시 토큰과 목적별 알림을 처리합니다.
+  - `src/webview/bridge/appInfoBridge.ts`, `externalLinkBridge.ts`: 앱 정보와 외부 링크를 처리합니다.
+- 빌드
+  - `src/config/webBundleUpdateConfig.ts`: variant별 웹 번들 채널과 업데이트 설정입니다.
+  - `scripts/sync-web-build.mjs`: 웹 빌드 후 분리 모듈 import map을 포함한 Native 번들을 생성합니다.
 
 ## 환경변수
 

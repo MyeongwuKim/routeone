@@ -354,7 +354,8 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
       appVariant: payload.appVariant,
       locationPermissionStatus: payload.locationPermissionStatus,
       notificationPermissionStatus: payload.notificationPermissionStatus,
-      cameraPermissionStatus: payload.cameraPermissionStatus
+      cameraPermissionStatus: payload.cameraPermissionStatus,
+      photoLibraryPermissionStatus: payload.photoLibraryPermissionStatus
     });
   };
 

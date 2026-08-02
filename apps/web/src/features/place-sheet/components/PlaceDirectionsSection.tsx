@@ -289,14 +289,11 @@ function PlaceDirectionsSection({
       dlat: `${selectedPlace.lat}`,
       dlng: `${selectedPlace.lng}`,
       dname: selectedPlace.title,
+      slat: `${currentLocation.lat}`,
+      slng: `${currentLocation.lng}`,
+      sname: originLabel,
       appname: NAVER_MAP_SCHEME_APP_NAME,
     });
-
-    if (directionOrigin.isCurrentLocation) {
-      params.set("slat", `${currentLocation.lat}`);
-      params.set("slng", `${currentLocation.lng}`);
-      params.set("sname", originLabel);
-    }
 
     window.location.href = `nmap://route/car?${params.toString()}`;
   };

@@ -69,6 +69,7 @@ export function useNativeAppInfo() {
             info.locationPermissionStatus,
             info.notificationPermissionStatus,
             info.cameraPermissionStatus,
+            info.photoLibraryPermissionStatus,
           ].every((status) => status !== null && status !== undefined);
 
           if (hasAllPermissionStatuses) {

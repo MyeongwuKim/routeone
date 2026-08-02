@@ -26,6 +26,7 @@ import {
   MdOutlineHub,
   MdOutlineRoute,
   MdPhotoCamera,
+  MdPhotoLibrary,
 } from "react-icons/md";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
@@ -446,6 +447,11 @@ function AppInfoLazyFallback() {
       key: "camera",
       icon: <MdPhotoCamera />,
       label: "카메라 권한",
+    },
+    {
+      key: "photo-library",
+      icon: <MdPhotoLibrary />,
+      label: "앨범 권한",
     },
   ];
 

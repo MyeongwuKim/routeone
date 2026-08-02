@@ -18,6 +18,7 @@ export type NativeAppInfo = {
   locationPermissionStatus?: NativePermissionStatus | null;
   notificationPermissionStatus?: NativePermissionStatus | null;
   cameraPermissionStatus?: NativePermissionStatus | null;
+  photoLibraryPermissionStatus?: NativePermissionStatus | null;
 };
 
 export type NativePosition = {

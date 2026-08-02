@@ -7,6 +7,7 @@ import {
   MdLocationOn,
   MdNotifications,
   MdPhotoCamera,
+  MdPhotoLibrary,
   MdSystemUpdateAlt,
 } from "react-icons/md";
 import {
@@ -319,6 +320,13 @@ function AppInfoPage() {
             isLoading={isPermissionLookupPending}
             label="카메라 권한"
             status={appInfo?.cameraPermissionStatus}
+          />
+          <div className="border-b border-brand-50" />
+          <AppPermissionRow
+            icon={<MdPhotoLibrary />}
+            isLoading={isPermissionLookupPending}
+            label="앨범 권한"
+            status={appInfo?.photoLibraryPermissionStatus}
           />
         </section>
       ) : null}

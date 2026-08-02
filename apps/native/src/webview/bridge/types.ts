@@ -360,4 +360,5 @@ export type NativeAppInfoResponse = {
   locationPermissionStatus: NativePermissionStatus;
   notificationPermissionStatus: NativePermissionStatus;
   cameraPermissionStatus: NativePermissionStatus;
+  photoLibraryPermissionStatus: NativePermissionStatus;
 };
