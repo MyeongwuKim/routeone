@@ -1,0 +1,104 @@
+name: Publish native update policy to R2
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "apps/native/minimum-app-versions.json"
+      - ".github/workflows/publish-native-update-policy-r2.yml"
+      - "scripts/publish-native-update-policy-r2.mjs"
+      - "package.json"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Policy channel"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  publish:
+    name: Validate and publish native update policy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Resolve publish target
+        id: target
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            CHANNEL="${{ inputs.channel }}"
+            SHOULD_PUBLISH="true"
+          elif [[ "${GITHUB_REF_NAME}" == "develop" ]]; then
+            CHANNEL="dev"
+            SHOULD_PUBLISH="true"
+          else
+            CHANNEL="prod"
+            SHOULD_PUBLISH="false"
+          fi
+
+          if [[ "${CHANNEL}" == "prod" && "${GITHUB_REF_NAME}" != "main" ]]; then
+            echo "Production policy must be published from main." >&2
+            exit 1
+          fi
+
+          echo "channel=${CHANNEL}" >> "${GITHUB_OUTPUT}"
+          echo "should_publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate policy
+        env:
+          ROUTEONE_NATIVE_UPDATE_CHANNEL: ${{ steps.target.outputs.channel }}
+        run: pnpm validate:native-update-policy
+
+      - name: Load dev R2 config
+        if: ${{ steps.target.outputs.should_publish == 'true' && steps.target.outputs.channel == 'dev' }}
+        env:
+          SELECTED_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID_DEV }}
+          SELECTED_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY_DEV }}
+          SELECTED_R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME_DEV }}
+        run: |
+          echo "R2_ACCESS_KEY_ID=${SELECTED_R2_ACCESS_KEY_ID}" >> "${GITHUB_ENV}"
+          echo "R2_SECRET_ACCESS_KEY=${SELECTED_R2_SECRET_ACCESS_KEY}" >> "${GITHUB_ENV}"
+          echo "R2_BUCKET_NAME=${SELECTED_R2_BUCKET_NAME}" >> "${GITHUB_ENV}"
+
+      - name: Load prod R2 config
+        if: ${{ steps.target.outputs.should_publish == 'true' && steps.target.outputs.channel == 'prod' }}
+        env:
+          SELECTED_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID_PROD }}
+          SELECTED_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY_PROD }}
+          SELECTED_R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME_PROD }}
+        run: |
+          echo "R2_ACCESS_KEY_ID=${SELECTED_R2_ACCESS_KEY_ID}" >> "${GITHUB_ENV}"
+          echo "R2_SECRET_ACCESS_KEY=${SELECTED_R2_SECRET_ACCESS_KEY}" >> "${GITHUB_ENV}"
+          echo "R2_BUCKET_NAME=${SELECTED_R2_BUCKET_NAME}" >> "${GITHUB_ENV}"
+
+      - name: Publish policy to R2
+        if: ${{ steps.target.outputs.should_publish == 'true' }}
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ROUTEONE_NATIVE_UPDATE_CHANNEL: ${{ steps.target.outputs.channel }}
+        run: pnpm publish:native-update-policy:r2
+
+      - name: Production publish notice
+        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+        run: echo "Production policy was validated only. Run this workflow manually with channel=prod after the store release is available."

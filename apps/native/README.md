@@ -160,6 +160,7 @@ RouteOne Native는 `apps/web`을 실행하는 앱 컨테이너이면서, 웹만�
 | 알림 | 웹의 일정 데이터를 네이티브 로컬·푸시 알림과 동기화 | Expo Push Token 발급, 루트 도착 알림, 축제 알림, 루트 후기 알림, 전달된 알림 기록 조회 |
 | 외부 앱과 미디어 | WebView 밖에서 처리해야 하는 링크와 파일 작업 수행 | 네이버 지도 앱 길찾기, 앱 미설치 시 웹 길찾기 fallback, 앱 설정 열기, 포토카드 이미지 저장·공유 |
 | 웹 번들 업데이트 | 앱에 내장된 웹과 R2 원격 웹 번들의 설치 상태 관리 | manifest 확인, ZIP 다운로드, SHA-256 검증, 버전·채널·최소 네이티브 버전 검사, 설치 실패 재시도와 롤백 |
+| 네이티브 앱 업데이트 | 앱 진입 전에 플랫폼별 최소 버전을 확인하고 오래된 앱의 실행을 차단 | dev/prod R2 정책 조회, iOS·Android 개별 버전 비교, App Store·Play Store 이동 |
 | 빌드와 배포 | 실행 환경에 따라 앱 식별자와 웹 번들 채널을 구분 | `none`·`dev`·`prod` variant, 시뮬레이터·실기기 빌드, dev/prod TestFlight, Expo/EAS 환경변수 사용 |
 
 웹은 화면과 서비스 흐름을 담당하고, Native는 WebView 실행 환경과 기기 기능을 제공합니다. 앱 버전, 빌드번호, 플랫폼, 현재 웹 번들 정보도 브릿지를 통해 웹에 전달합니다.
@@ -175,6 +176,9 @@ RouteOne Native는 `apps/web`을 실행하는 앱 컨테이너이면서, 웹만�
   - `src/auth`: 아이디·비밀번호, Google, Apple 로그인과 네이티브 세션 저장을 처리합니다.
   - `src/webBundle`: R2 manifest 조회, 웹 번들 다운로드·검증·설치·롤백을 처리합니다.
   - `src/generated/webBundle.ts`: `apps/web/dist`를 WebView용 HTML 문자열로 변환한 결과입니다.
+- 네이티브 앱 업데이트
+  - `src/nativeUpdate`: R2 정책 조회, 캐시 fallback과 플랫폼별 최소 버전 비교를 처리합니다.
+  - `src/components/native-update`: WebView 진입 전에 표시하는 강제 업데이트 화면입니다.
 - WebView 브릿지
   - `src/webview/bridge/injectedScript.ts`: `window.RouteOneNative` API를 WebView에 주입합니다.
   - `src/webview/bridge/fetchBridge.ts`, `authTokenBridge.ts`: API 요청과 인증 토큰을 연결합니다.
@@ -238,6 +242,41 @@ EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE=1
 
 iOS만 수정 배포할 때는 `prod.ios`만 올리고, Android만 수정 배포할 때는 `prod.android`만 올립니다. EAS 설정은 `appVersionSource: "remote"`와 `autoIncrement: true`를 사용하므로 iOS build number와 Android version code는 EAS remote version에서 자동 증가합니다.
 
+dev/prod Xcode 프로젝트 생성과 EAS 빌드를 시작하면 대상 variant와 플랫폼의 앱 버전을 확인합니다. 표시된 버전이 맞으면 `y` 또는 `yes`를 입력해 계속 진행하고, 다른 입력을 하면 빌드를 중단합니다.
+
+```text
+[prod/ios] iOS 앱 버전 1.0.1이 맞나요? (y/N)
+```
+
+CI처럼 입력할 수 없는 환경에서는 `CI=1`일 때 확인을 자동 통과합니다. 로컬 자동화에서만 확인을 생략해야 한다면 `ROUTEONE_SKIP_APP_VERSION_CONFIRM=1`을 명시합니다.
+
+## 네이티브 강제 업데이트 정책
+
+`apps/native/minimum-app-versions.json`은 dev/prod와 iOS/Android별 최소 허용 버전과 스토어 URL을 관리하는 원본입니다. 앱은 자신의 variant에 맞는 R2의 `native/latest.json`을 시작 시 조회하며, 현재 앱 버전이 활성화된 `minimumVersion`보다 낮으면 WebView와 로그인 화면에 진입하지 않고 네이티브 업데이트 화면을 표시합니다.
+
+정책은 처음에는 모두 `enabled: false`로 두며, 실제 스토어 또는 테스트 트랙 URL을 등록한 뒤 필요한 플랫폼만 활성화합니다.
+
+```json
+{
+  "prod": {
+    "ios": {
+      "enabled": true,
+      "minimumVersion": "1.0.1",
+      "storeUrl": "https://apps.apple.com/app/id..."
+    },
+    "android": {
+      "enabled": false,
+      "minimumVersion": "1.0.0",
+      "storeUrl": null
+    }
+  }
+}
+```
+
+`develop`에 정책 변경을 push하면 dev R2에 자동 배포합니다. `main`의 prod 정책은 검증만 수행하며, 새 앱 버전이 실제 스토어에서 설치 가능한 상태인지 확인한 뒤 GitHub Actions의 `Publish native update policy to R2`를 `channel=prod`로 수동 실행합니다. 워크플로는 정책을 `native/releases/{커밋 SHA}-{실행 번호}.json`에 보관하고 앱이 조회하는 `native/latest.json`을 갱신합니다.
+
+원격 정책 조회에 실패하면 마지막으로 정상 조회한 정책을 사용하고, 저장된 정책도 없으면 네트워크 장애만으로 앱이 차단되지 않도록 실행을 허용합니다. 로컬 `APP_VARIANT=none` 빌드에서는 강제 업데이트 확인을 사용하지 않습니다.
+
 ## 앱 정보 브릿지
 
 WebView에서는 `window.RouteOneNative.getAppInfo()`로 현재 네이티브 앱과 웹 번들 정보를 조회할 수 있습니다.
@@ -285,15 +324,11 @@ GitHub 저장소의 `Settings > Secrets and variables > Actions`에서 아래 Re
 - dev: `CLOUDFLARE_R2_ACCESS_KEY_ID_DEV`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY_DEV`, `R2_BUCKET_NAME_DEV`, `R2_PUBLIC_BASE_URL_DEV`
 - prod: `CLOUDFLARE_R2_ACCESS_KEY_ID_PROD`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY_PROD`, `R2_BUCKET_NAME_PROD`, `R2_PUBLIC_BASE_URL_PROD`
 
-Repository variable `ROUTEONE_WEB_VERSION_PREFIX`는 선택값이며 기본값은 `1.0`입니다. R2 manifest의 플랫폼별 최소 네이티브 버전은 `apps/native/app-versions.json`에서 읽습니다.
+Repository variable `ROUTEONE_WEB_VERSION_PREFIX`는 선택값이며 기본값은 `1.0`입니다. R2 웹 번들 manifest의 플랫폼별 최소 네이티브 버전은 `apps/native/web-bundle-compatibility.json`에서 읽습니다. 이 값은 웹 번들이 새 네이티브 브릿지를 요구할 때만 올리며, 실제 앱 빌드 버전이나 강제 업데이트 최소 버전과 별도로 관리합니다.
 
 R2 버킷과 API Token은 dev/prod용으로 각각 만들고, 각 Token의 `Object Read & Write` 권한을 해당 버킷 하나로 제한합니다. 워크플로는 `develop`에서 `_DEV`, `main`에서 `_PROD` 시크릿을 선택합니다.
 
 `R2_PUBLIC_BASE_URL_DEV`, `R2_PUBLIC_BASE_URL_PROD`에는 각 버킷의 공개 URL을 넣습니다. 이 URL의 origin을 네이버 지도 Web 서비스 URL에도 등록합니다. R2 Access Key는 GitHub Actions에서만 사용하고 네이티브 앱에는 포함하지 않습니다.
-
-## 추후 구현 대상
-
-네이티브 앱 자체의 업데이트 팝업은 현재 웹 번들 manifest와 별개입니다. 마켓 URL이 생기면 R2에 `native/latest.json` 같은 별도 manifest를 두고 `latestVersion`, `minimumVersion`, `storeUrl`을 관리하는 방식으로 추가합니다.
 
 ## 문제 해결 체크
 

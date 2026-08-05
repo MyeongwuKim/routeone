@@ -337,9 +337,13 @@ function listReleases() {
 
 function readMinimumNativeVersion() {
   const versionsPath = resolve(
-    env.ROUTEONE_NATIVE_APP_VERSIONS_PATH || "apps/native/app-versions.json"
+    env.ROUTEONE_WEB_BUNDLE_COMPATIBILITY_PATH ||
+      "apps/native/web-bundle-compatibility.json"
   );
-  const configuredVersions = readNativeAppVersions(versionsPath, channel);
+  const configuredVersions = readWebBundleCompatibilityVersions(
+    versionsPath,
+    channel
+  );
   const iosVersion =
     env.ROUTEONE_IOS_NATIVE_VERSION?.trim() || configuredVersions.ios;
   const androidVersion =
@@ -355,7 +359,7 @@ function readMinimumNativeVersion() {
   };
 }
 
-function readNativeAppVersions(configPath, appVariant) {
+function readWebBundleCompatibilityVersions(configPath, appVariant) {
   try {
     const parsed = JSON.parse(readFileSync(configPath, "utf8"));
     const versions = parsed?.[appVariant];
@@ -372,7 +376,7 @@ function readNativeAppVersions(configPath, appVariant) {
       android: versions.android.trim()
     };
   } catch {
-    fail(`Failed to read native app versions: ${configPath}`);
+    fail(`Failed to read web bundle compatibility versions: ${configPath}`);
   }
 }
 

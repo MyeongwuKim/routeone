@@ -8,7 +8,7 @@ on:
     paths:
       - "apps/web/**"
       - "apps/native/app.config.ts"
-      - "apps/native/app-versions.json"
+      - "apps/native/web-bundle-compatibility.json"
       - ".github/workflows/publish-web-bundle-r2.yml"
       - "scripts/publish-web-bundle-r2.mjs"
       - "package.json"

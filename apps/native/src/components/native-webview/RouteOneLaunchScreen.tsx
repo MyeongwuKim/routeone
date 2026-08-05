@@ -11,12 +11,14 @@ import {
 type RouteOneLaunchScreenProps = {
   progress: number;
   message: string;
+  showProgress?: boolean;
   tagline?: string;
 };
 
 export default function RouteOneLaunchScreen({
   progress,
   message,
+  showProgress = true,
   tagline = "여행의 시작부터 도착까지"
 }: RouteOneLaunchScreenProps) {
   const colorScheme = useColorScheme();
@@ -70,35 +72,37 @@ export default function RouteOneLaunchScreen({
         </Text>
       </View>
 
-      <View style={styles.progressArea}>
-        <View
-          accessibilityRole="progressbar"
-          accessibilityValue={{
-            min: 0,
-            max: 100,
-            now: Math.round(normalizedProgress * 100)
-          }}
-          style={[styles.progressTrack, { backgroundColor: colors.track }]}
-        >
-          <Animated.View
-            style={[
-              styles.progressFill,
-              { backgroundColor: colors.fill, width: progressWidth }
-            ]}
-          />
-        </View>
-        <View style={styles.progressCaption}>
-          <Text
-            numberOfLines={1}
-            style={[styles.message, { color: colors.muted }]}
+      {showProgress ? (
+        <View style={styles.progressArea}>
+          <View
+            accessibilityRole="progressbar"
+            accessibilityValue={{
+              min: 0,
+              max: 100,
+              now: Math.round(normalizedProgress * 100)
+            }}
+            style={[styles.progressTrack, { backgroundColor: colors.track }]}
           >
-            {message}
-          </Text>
-          <Text style={[styles.percentage, { color: colors.percentage }]}>
-            {Math.round(normalizedProgress * 100)}%
-          </Text>
+            <Animated.View
+              style={[
+                styles.progressFill,
+                { backgroundColor: colors.fill, width: progressWidth }
+              ]}
+            />
+          </View>
+          <View style={styles.progressCaption}>
+            <Text
+              numberOfLines={1}
+              style={[styles.message, { color: colors.muted }]}
+            >
+              {message}
+            </Text>
+            <Text style={[styles.percentage, { color: colors.percentage }]}>
+              {Math.round(normalizedProgress * 100)}%
+            </Text>
+          </View>
         </View>
-      </View>
+      ) : null}
     </View>
   );
 }

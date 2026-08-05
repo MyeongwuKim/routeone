@@ -112,6 +112,30 @@ function getWebBundleManifestUrl(
   return `${trimTrailingSlashes(webBundlePublicBaseUrl)}/latest/manifest.json`;
 }
 
+function getNativeUpdatePolicyUrl(
+  variant: AppVariant,
+  shouldUseRemoteWebBundle: boolean
+) {
+  if (!shouldUseRemoteWebBundle) {
+    return null;
+  }
+
+  const explicitUrl =
+    variant === "prod"
+      ? process.env.EXPO_PUBLIC_NATIVE_UPDATE_POLICY_URL_PROD?.trim()
+      : process.env.EXPO_PUBLIC_NATIVE_UPDATE_POLICY_URL_DEV?.trim();
+
+  if (explicitUrl) {
+    return explicitUrl;
+  }
+
+  if (!webBundlePublicBaseUrl) {
+    return null;
+  }
+
+  return `${trimTrailingSlashes(webBundlePublicBaseUrl)}/native/latest.json`;
+}
+
 const { appVariant, isExplicit: hasExplicitAppVariant } = getAppVariant();
 const buildPlatform = getBuildPlatform();
 const appVariantConfig = APP_VARIANT_CONFIG[appVariant];
@@ -134,10 +158,16 @@ const webBundleManifestUrl = getWebBundleManifestUrl(
   appVariant,
   shouldUseRemoteWebBundle
 );
+const nativeUpdatePolicyUrl = getNativeUpdatePolicyUrl(
+  appVariant,
+  shouldUseRemoteWebBundle
+);
 const routeoneExtra = {
   appVariant,
+  nativeUpdateChecksEnabled: shouldUseRemoteWebBundle,
   webBundleChannel,
   webBundleUpdatesEnabled: shouldUseRemoteWebBundle,
+  ...(nativeUpdatePolicyUrl ? { nativeUpdatePolicyUrl } : {}),
   ...(webBundleManifestUrl ? { webBundleManifestUrl } : {})
 };
 

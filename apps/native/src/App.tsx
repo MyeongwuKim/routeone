@@ -9,10 +9,12 @@ import NativeLoginStep from "./components/native-onboarding/NativeLoginStep";
 import NativeOnboardingStep, {
   useNativeOnboardingTheme
 } from "./components/native-onboarding/NativeOnboardingStep";
+import NativeForceUpdateScreen from "./components/native-update/NativeForceUpdateScreen";
 import NativeWebViewScreen from "./components/native-webview/NativeWebViewScreen";
 import RouteOneLaunchScreen from "./components/native-webview/RouteOneLaunchScreen";
 import { useNativeBoot } from "./boot/useNativeBoot";
 import { useNativeLogin } from "./auth/useNativeLogin";
+import { useNativeUpdate } from "./nativeUpdate/useNativeUpdate";
 
 const onboardingText = {
   ko: {
@@ -66,7 +68,41 @@ export default function App() {
   const nativeLogin = useNativeLogin({
     onComplete: completeNativeLogin
   });
+  const nativeUpdate = useNativeUpdate();
   const text = onboardingText[appLanguage];
+
+  if (nativeUpdate.status === "checking") {
+    return (
+      <View
+        style={[
+          styles.launchContainer,
+          { backgroundColor: brandBackgroundColor }
+        ]}
+      >
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor={brandBackgroundColor}
+        />
+        <RouteOneLaunchScreen
+          message={text.launchPreparing}
+          progress={0.06}
+          showProgress={false}
+          tagline={text.launchTagline}
+        />
+      </View>
+    );
+  }
+
+  if (nativeUpdate.status === "required" && nativeUpdate.requirement) {
+    return (
+      <NativeForceUpdateScreen
+        isRefreshing={nativeUpdate.isRefreshing}
+        language={appLanguage}
+        onRefresh={() => nativeUpdate.checkForNativeUpdate()}
+        requirement={nativeUpdate.requirement}
+      />
+    );
+  }
 
   if (bootStep === "checking") {
     return (
