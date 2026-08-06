@@ -62,7 +62,6 @@ try {
   assertDistDir();
   zipDist();
 
-  const minimumNativeVersion = readMinimumNativeVersion();
   const manifest = {
     version,
     channel,
@@ -72,8 +71,7 @@ try {
     entryPath: "index.html",
     sha256: sha256(bundlePath),
     createdAt,
-    runtimeReadySignal: true,
-    minimumNativeVersion
+    runtimeReadySignal: true
   };
 
   uploadDistFiles();
@@ -332,51 +330,6 @@ function listReleases() {
     return [...releases.values()].sort((a, b) => b.modifiedAt - a.modifiedAt);
   } catch {
     return [];
-  }
-}
-
-function readMinimumNativeVersion() {
-  const versionsPath = resolve(
-    env.ROUTEONE_WEB_BUNDLE_COMPATIBILITY_PATH ||
-      "apps/native/web-bundle-compatibility.json"
-  );
-  const configuredVersions = readWebBundleCompatibilityVersions(
-    versionsPath,
-    channel
-  );
-  const iosVersion =
-    env.ROUTEONE_IOS_NATIVE_VERSION?.trim() || configuredVersions.ios;
-  const androidVersion =
-    env.ROUTEONE_ANDROID_NATIVE_VERSION?.trim() || configuredVersions.android;
-
-  if (!iosVersion || !androidVersion) {
-    fail("Native iOS and Android versions are required.");
-  }
-
-  return {
-    ios: iosVersion,
-    android: androidVersion
-  };
-}
-
-function readWebBundleCompatibilityVersions(configPath, appVariant) {
-  try {
-    const parsed = JSON.parse(readFileSync(configPath, "utf8"));
-    const versions = parsed?.[appVariant];
-
-    if (
-      typeof versions?.ios !== "string" ||
-      typeof versions?.android !== "string"
-    ) {
-      fail(`Native app versions are missing for ${appVariant}.`);
-    }
-
-    return {
-      ios: versions.ios.trim(),
-      android: versions.android.trim()
-    };
-  } catch {
-    fail(`Failed to read web bundle compatibility versions: ${configPath}`);
   }
 }
 

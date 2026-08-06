@@ -285,7 +285,13 @@ WebView에서는 `window.RouteOneNative.getAppInfo()`로 현재 네이티브 앱
 const appInfo = await window.RouteOneNative?.getAppInfo?.();
 ```
 
-응답에는 `platform`, `osVersion`, `appVersion`, `buildNumber`, `runtimeVersion`, `bundleIdentifier`, `webBundleVersion`, `webBundleKind`, `webBundleChannel`, `appVariant`가 포함됩니다. 원격으로 설치한 웹 번들은 manifest의 `version`을 반환하고, 앱 내장 번들은 `webBundleVersion`이 `null`이며 `webBundleKind`가 `embedded`로 반환됩니다.
+응답에는 `platform`, `osVersion`, `appVersion`, `buildNumber`, `runtimeVersion`, `bundleIdentifier`, `webBundleVersion`, `webBundleKind`, `webBundleChannel`, `appVariant`, `capabilities`가 포함됩니다. 원격으로 설치한 웹 번들은 manifest의 `version`을 반환하고, 앱 내장 번들은 `webBundleVersion`이 `null`이며 `webBundleKind`가 `embedded`로 반환됩니다.
+
+`capabilities`는 현재 설치된 네이티브 앱이 제공하는 브릿지 기능 목록입니다. 웹은 새 네이티브 기능을 호출하기 전에 capability를 확인하고, 지원하지 않는 앱에서는 해당 기능을 숨기거나 업데이트 안내를 표시합니다. capability 필드가 없는 이전 앱은 빈 목록으로 처리합니다.
+
+```ts
+const canCapture = appInfo?.capabilities?.includes("camera.capture.v1") ?? false;
+```
 
 ## 웹 번들 R2 배포
 
@@ -306,13 +312,11 @@ releases/
     └── web-ui.zip
 ```
 
-`latest/manifest.json`은 최신 release의 manifest와 같은 내용을 담고, 네이티브 앱이 최신 웹 버전과 다운로드 주소를 확인할 때 사용합니다. release manifest에는 `version`, `channel`, `appVariant`, `bundleUrl`, `entryUrl`, `entryPath`, `sha256`, `createdAt`, `runtimeReadySignal`, `minimumNativeVersion`이 들어갑니다.
+`latest/manifest.json`은 최신 release의 manifest와 같은 내용을 담고, 네이티브 앱이 최신 웹 버전과 다운로드 주소를 확인할 때 사용합니다. release manifest에는 `version`, `channel`, `appVariant`, `bundleUrl`, `entryUrl`, `entryPath`, `sha256`, `createdAt`, `runtimeReadySignal`이 들어갑니다.
 
 `EXPO_PUBLIC_WEB_BUNDLE_BASE_URL`은 manifest와 ZIP을 받아오는 공개 R2 주소이며, WebView가 실제 페이지 origin으로 사용하는 주소입니다. 네이버 지도 Web 서비스 URL에는 이 R2 origin을 등록합니다. manifest의 `bundleUrl`과 `entryUrl`도 같은 R2 origin 기준으로 생성됩니다.
 
-`minimumNativeVersion`은 앱 업데이트 팝업용이 아니라 웹 번들 호환성 가드입니다. 현재 네이티브 앱 버전이 이 값보다 낮으면 새 웹 번들을 설치하지 않고 기존 번들이나 내장 번들을 사용합니다.
-
-앱은 manifest의 `channel`이 현재 앱의 `dev` 또는 `prod` 채널과 맞는지 먼저 확인합니다. 채널이 다르면 버전 비교와 설치를 건너뛰고, 채널이 맞을 때만 manifest 버전과 최소 네이티브 버전을 확인합니다. 새 ZIP은 다운로드, SHA-256 검증, 압축 해제 단계를 각각 최대 3회 시도한 뒤 앱 문서 디렉터리에 적용합니다. 설치 준비가 3회 모두 실패하면 종료 안내 팝업을 띄우고, 새 번들이 설치된 뒤 처음 로드되지 않으면 직전 로컬 번들로 되돌아갑니다.
+앱은 manifest의 `channel`이 현재 앱의 `dev` 또는 `prod` 채널과 맞는지 먼저 확인합니다. 채널이 다르면 설치를 건너뛰고, 채널이 맞으며 manifest 버전이 현재 설치된 웹 번들보다 높을 때 새 번들을 설치합니다. 새 ZIP은 다운로드, SHA-256 검증, 압축 해제 단계를 각각 최대 3회 시도한 뒤 앱 문서 디렉터리에 적용합니다. 설치 준비가 3회 모두 실패하면 종료 안내 팝업을 띄우고, 새 번들이 설치된 뒤 처음 로드되지 않으면 직전 로컬 번들로 되돌아갑니다.
 
 버전 폴더명은 기본적으로 `1.0.{GitHub Actions 실행번호}` 형식입니다. Repository variable `ROUTEONE_WEB_VERSION_PREFIX`를 바꾸면 `1.1.{실행번호}`처럼 앞자리를 변경할 수 있고, Actions에서 수동 실행할 때는 `version` 입력값으로 정확한 버전을 지정할 수 있습니다.
 
@@ -324,7 +328,7 @@ GitHub 저장소의 `Settings > Secrets and variables > Actions`에서 아래 Re
 - dev: `CLOUDFLARE_R2_ACCESS_KEY_ID_DEV`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY_DEV`, `R2_BUCKET_NAME_DEV`, `R2_PUBLIC_BASE_URL_DEV`
 - prod: `CLOUDFLARE_R2_ACCESS_KEY_ID_PROD`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY_PROD`, `R2_BUCKET_NAME_PROD`, `R2_PUBLIC_BASE_URL_PROD`
 
-Repository variable `ROUTEONE_WEB_VERSION_PREFIX`는 선택값이며 기본값은 `1.0`입니다. R2 웹 번들 manifest의 플랫폼별 최소 네이티브 버전은 `apps/native/web-bundle-compatibility.json`에서 읽습니다. 이 값은 웹 번들이 새 네이티브 브릿지를 요구할 때만 올리며, 실제 앱 빌드 버전이나 강제 업데이트 최소 버전과 별도로 관리합니다.
+Repository variable `ROUTEONE_WEB_VERSION_PREFIX`는 선택값이며 기본값은 `1.0`입니다. 웹 번들은 네이티브 앱 버전과 관계없이 최신본을 설치하며, 네이티브 기능 지원 여부는 앱 정보 브릿지의 `capabilities`로 확인합니다.
 
 R2 버킷과 API Token은 dev/prod용으로 각각 만들고, 각 Token의 `Object Read & Write` 권한을 해당 버킷 하나로 제한합니다. 워크플로는 `develop`에서 `_DEV`, `main`에서 `_PROD` 시크릿을 선택합니다.
 

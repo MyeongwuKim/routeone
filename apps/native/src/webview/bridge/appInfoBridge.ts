@@ -4,6 +4,7 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { WEB_BUNDLE_UPDATE_CONFIG } from "../../config/webBundleUpdateConfig";
+import { NATIVE_CAPABILITIES } from "./nativeCapabilities";
 import { postNativeAppInfoResponse } from "./responses";
 import type {
   NativeAppInfoContext,
@@ -124,6 +125,7 @@ async function createNativeAppInfo(
   return {
     ok: true,
     platform: Platform.OS,
+    capabilities: [...NATIVE_CAPABILITIES],
     appVersion: WEB_BUNDLE_UPDATE_CONFIG.nativeVersion || null,
     buildNumber: getBuildNumber(),
     runtimeVersion: Constants.expoRuntimeVersion ?? null,

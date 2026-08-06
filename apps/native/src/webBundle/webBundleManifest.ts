@@ -1,8 +1,4 @@
-import type {
-  NativeWebBundlePlatform,
-  WebBundleChannel,
-  WebBundleManifest
-} from "./webBundleTypes";
+import type { WebBundleChannel, WebBundleManifest } from "./webBundleTypes";
 
 const MANIFEST_TIMEOUT_MS = 5_000;
 const VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z._-]*$/;
@@ -71,38 +67,6 @@ function readWebBundleChannel(value: unknown, fieldName: string) {
   throw new Error(`Web bundle manifest ${fieldName} is invalid.`);
 }
 
-function readMinimumNativeVersion(value: unknown) {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  if (typeof value === "string") {
-    return { android: value, ios: value };
-  }
-
-  if (!isRecord(value)) {
-    throw new Error("Web bundle minimumNativeVersion is invalid.");
-  }
-
-  const result: Partial<Record<NativeWebBundlePlatform, string>> = {};
-
-  for (const platform of ["android", "ios"] as const) {
-    const platformVersion = value[platform];
-
-    if (platformVersion === undefined || platformVersion === null) {
-      continue;
-    }
-
-    if (typeof platformVersion !== "string" || !platformVersion.trim()) {
-      throw new Error("Web bundle minimumNativeVersion is invalid.");
-    }
-
-    result[platform] = platformVersion.trim();
-  }
-
-  return result;
-}
-
 function parseManifest(value: unknown): WebBundleManifest {
   if (!isRecord(value)) {
     throw new Error("Web bundle manifest must be an object.");
@@ -128,10 +92,7 @@ function parseManifest(value: unknown): WebBundleManifest {
     entryPath: readEntryPath(value.entryPath),
     sha256: sha256.toLowerCase(),
     createdAt: typeof value.createdAt === "string" ? value.createdAt : null,
-    readySignalRequired: value.runtimeReadySignal === true,
-    minimumNativeVersion: readMinimumNativeVersion(
-      value.minimumNativeVersion
-    )
+    readySignalRequired: value.runtimeReadySignal === true
   };
 }
 

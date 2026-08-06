@@ -1,9 +1,9 @@
 {
   "dev": {
     "ios": {
-      "enabled": false,
+      "enabled": true,
       "minimumVersion": "1.0.0",
-      "storeUrl": null
+      "storeUrl": "https://testflight.apple.com/"
     },
     "android": {
       "enabled": false,

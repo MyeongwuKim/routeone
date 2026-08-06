@@ -1,4 +1,3 @@
-export type NativeWebBundlePlatform = "android" | "ios";
 export type WebBundleChannel = "dev" | "prod";
 
 export type WebBundleManifest = {
@@ -11,9 +10,6 @@ export type WebBundleManifest = {
   sha256: string;
   createdAt: string | null;
   readySignalRequired: boolean;
-  minimumNativeVersion: Partial<
-    Record<NativeWebBundlePlatform, string>
-  > | null;
 };
 
 export type InstalledWebBundle = {

@@ -6,6 +6,7 @@ export type NativePermissionStatus =
 
 export type NativeAppInfo = {
   platform: "ios" | "android" | "web" | "native" | string;
+  capabilities: string[];
   appVersion?: string | null;
   buildNumber?: string | null;
   runtimeVersion?: string | null;

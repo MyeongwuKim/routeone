@@ -1,4 +1,5 @@
 import { getNativeAppInfo } from "./appInfo";
+import { hasNativeCapability } from "./capabilities";
 import { updateNativeAuthSession } from "./auth";
 import {
   subscribeNativeAppActive,
@@ -28,6 +29,7 @@ export const nativeBridge = {
   },
   appInfo: {
     get: getNativeAppInfo,
+    hasCapability: hasNativeCapability,
   },
   permissions: {
     openSettings: openNativeAppSettings,
@@ -63,6 +65,8 @@ export const nativeBridge = {
 } as const;
 
 export { useNativeAppInfo } from "./useNativeAppInfo";
+export { NATIVE_CAPABILITY, hasNativeCapability } from "./capabilities";
+export type { NativeCapability } from "./capabilities";
 export type {
   NativeNotificationReceivedEvent,
 } from "./events";

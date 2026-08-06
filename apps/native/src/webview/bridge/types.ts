@@ -1,5 +1,6 @@
 import type { MutableRefObject } from "react";
 import type { ResolvedWebBundleKind } from "../../webBundle/webBundleTypes";
+import type { NativeCapability } from "./nativeCapabilities";
 
 export type WebViewRef = MutableRefObject<{
   injectJavaScript: (script: string) => void;
@@ -348,6 +349,7 @@ export type NativeSaveImageResponse =
 export type NativeAppInfoResponse = {
   ok: true;
   platform: string;
+  capabilities: NativeCapability[];
   appVersion: string | null;
   buildNumber: string | null;
   runtimeVersion: string | null;

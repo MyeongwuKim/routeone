@@ -13,17 +13,13 @@ import {
 } from "./webBundleStorage";
 import type {
   InstalledWebBundle,
-  NativeWebBundlePlatform,
   ResolvedWebBundle,
   WebBundleManifest,
   WebBundleProgressReporter
 } from "./webBundleTypes";
 import { emitWebBundleProgress } from "./webBundleProgress";
 import { isFatalWebBundleInstallError } from "./webBundleErrors";
-import {
-  compareWebBundleVersions,
-  shouldInstallWebBundle
-} from "./webBundleVersionChecker";
+import { shouldInstallWebBundle } from "./webBundleVersionChecker";
 
 const DEFAULT_EMBEDDED_BASE_URL = "https://routeone.native/";
 
@@ -106,10 +102,6 @@ function readHttpOrigin(value: string | null | undefined) {
   return null;
 }
 
-function getNativeWebBundlePlatform(): NativeWebBundlePlatform | null {
-  return Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : null;
-}
-
 function shouldUseInstalledBundle(bundle: InstalledWebBundle | null) {
   if (!bundle) {
     return false;
@@ -139,24 +131,9 @@ function isManifestRemoteEntryAllowed(manifest: WebBundleManifest) {
   return !expectedOrigin || entryOrigin === expectedOrigin;
 }
 
-function isManifestCompatibleWithNative(manifest: WebBundleManifest) {
+function isManifestForExpectedChannel(manifest: WebBundleManifest) {
   const manifestChannel = manifest.channel ?? manifest.appVariant;
-  const platform = getNativeWebBundlePlatform();
-  const minimumNativeVersion = platform
-    ? manifest.minimumNativeVersion?.[platform]
-    : null;
-
-  if (manifestChannel !== WEB_BUNDLE_UPDATE_CONFIG.channel) {
-    return false;
-  }
-
-  return (
-    !minimumNativeVersion ||
-    compareWebBundleVersions(
-      WEB_BUNDLE_UPDATE_CONFIG.nativeVersion,
-      minimumNativeVersion
-    ) >= 0
-  );
+  return manifestChannel === WEB_BUNDLE_UPDATE_CONFIG.channel;
 }
 
 function createRemoteFallbackBundle(
@@ -165,7 +142,7 @@ function createRemoteFallbackBundle(
 ) {
   if (
     failedVersions.includes(manifest.version) ||
-    !isManifestCompatibleWithNative(manifest) ||
+    !isManifestForExpectedChannel(manifest) ||
     !isManifestRemoteEntryAllowed(manifest)
   ) {
     return null;
@@ -201,7 +178,7 @@ export async function resolveWebBundle(
     fallback = activeInstalledBundle
       ? createInstalledBundle(activeInstalledBundle)
       : createEmbeddedBundle();
-    const { channel, manifestUrl, nativeVersion } = WEB_BUNDLE_UPDATE_CONFIG;
+    const { channel, manifestUrl } = WEB_BUNDLE_UPDATE_CONFIG;
 
     if (
       !manifestUrl ||
@@ -221,19 +198,15 @@ export async function resolveWebBundle(
       message: "최신 버전을 확인하고 있어요."
     });
     const manifest = await fetchWebBundleManifest(manifestUrl);
-    const platform = getNativeWebBundlePlatform();
     const remoteFallbackBundle = createRemoteFallbackBundle(
       manifest,
       snapshot.failedVersions
     );
 
     if (
-      !platform ||
       !shouldInstallWebBundle({
         manifest,
         currentWebVersion: activeInstalledBundle?.version ?? null,
-        nativeVersion,
-        platform,
         expectedChannel: channel,
         failedVersions: snapshot.failedVersions
       })

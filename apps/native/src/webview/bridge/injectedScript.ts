@@ -343,6 +343,11 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 
     handlers.resolve({
       platform: payload.platform,
+      capabilities: Array.isArray(payload.capabilities)
+        ? payload.capabilities.filter(function isNativeCapability(value) {
+            return typeof value === "string";
+          })
+        : [],
       appVersion: payload.appVersion,
       buildNumber: payload.buildNumber,
       runtimeVersion: payload.runtimeVersion,

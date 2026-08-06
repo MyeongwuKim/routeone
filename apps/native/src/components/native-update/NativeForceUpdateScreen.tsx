@@ -25,7 +25,7 @@ const UPDATE_TEXT = {
   ko: {
     title: "앱 업데이트가 필요해요",
     description:
-      "안정적인 사용을 위해 RouteOne을 최신 버전으로 업데이트해 주세요.",
+      "안정적인 사용을 위해 RouteOne을 최신 버전으로\n업데이트해 주세요.",
     currentVersion: "현재 버전",
     minimumVersion: "필요 버전",
     openStore: "스토어에서 업데이트",
