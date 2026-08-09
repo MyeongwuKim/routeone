@@ -1,5 +1,5 @@
 import type { MutableRefObject } from "react";
-import type { ResolvedWebBundleKind } from "../../webBundle/webBundleTypes";
+import type { ResolvedWebBundleKind } from "@/webBundle/webBundleTypes";
 import type { NativeCapability } from "./nativeCapabilities";
 
 export type WebViewRef = MutableRefObject<{

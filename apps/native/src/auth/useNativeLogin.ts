@@ -1,3 +1,4 @@
+/** 비밀번호·Google·Apple 로그인을 실행하고 인증 결과를 부팅 흐름에 전달하는 훅. */
 import { useCallback, useEffect, useState } from "react";
 import {
   GoogleSignin,

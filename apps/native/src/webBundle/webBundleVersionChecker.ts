@@ -1,5 +1,5 @@
 import type { WebBundleChannel, WebBundleManifest } from "./webBundleTypes";
-import { compareVersions } from "../version/compareVersions";
+import { compareVersions } from "@/version/compareVersions";
 
 export function compareWebBundleVersions(leftValue: string, rightValue: string) {
   return compareVersions(leftValue, rightValue);

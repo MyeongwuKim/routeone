@@ -1,3 +1,4 @@
+/** WebView 진입에 필요한 비밀번호·Google·Apple 로그인을 처리하는 화면. */
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,7 +13,8 @@ import {
   useColorScheme,
   View
 } from "react-native";
-import type { NativeLoginProvider } from "../../auth/nativeLoginTypes";
+import type { NativeLoginProvider } from "@/auth/nativeLoginTypes";
+import { LOGIN_TEXT, LOGIN_THEME } from "@/constants/nativeOnboarding";
 
 type AppLanguage = "ko" | "en";
 
@@ -32,95 +34,6 @@ type NativeLoginStepProps = {
   onGoogleLogin: () => void;
   onAppleLogin: () => void;
 };
-
-const LOGIN_THEME = {
-  light: {
-    background: "#0f766e",
-    brandText: "#ffffff",
-    mutedText: "rgba(255, 255, 255, 0.76)",
-    buttonBorder: "rgba(255, 255, 255, 0.38)",
-    googleBackground: "#ffffff",
-    googlePressed: "#edf7f4",
-    googleText: "#111827",
-    appleBackground: "#111827",
-    applePressed: "#030712",
-    appleText: "#ffffff",
-    divider: "rgba(255, 255, 255, 0.26)",
-    inputBackground: "rgba(255, 255, 255, 0.94)",
-    inputBorder: "rgba(255, 255, 255, 0.28)",
-    inputText: "#0f172a",
-    placeholder: "#8ba19c",
-    passwordBackground: "#ffffff",
-    passwordPressed: "#def2ed",
-    passwordText: "#0f766e",
-    errorBackground: "#fff1f2",
-    errorBorder: "#fecdd3",
-    errorText: "#be123c"
-  },
-  dark: {
-    background: "#061918",
-    brandText: "#f8fafc",
-    mutedText: "rgba(226, 245, 241, 0.72)",
-    buttonBorder: "rgba(148, 216, 204, 0.18)",
-    googleBackground: "#eef7f4",
-    googlePressed: "#d7ebe5",
-    googleText: "#0f172a",
-    appleBackground: "#f8fafc",
-    applePressed: "#dbe4e1",
-    appleText: "#020617",
-    divider: "rgba(226, 245, 241, 0.2)",
-    inputBackground: "rgba(13, 36, 34, 0.9)",
-    inputBorder: "rgba(148, 216, 204, 0.22)",
-    inputText: "#f8fafc",
-    placeholder: "#78948f",
-    passwordBackground: "#14b8a6",
-    passwordPressed: "#0f9488",
-    passwordText: "#042f2e",
-    errorBackground: "#3a121b",
-    errorBorder: "#7f1d1d",
-    errorText: "#fecdd3"
-  }
-} as const;
-
-const LOGIN_TEXT = {
-  ko: {
-    appleChecking: "Apple 확인 중",
-    appleContinue: "Apple로 계속",
-    appleIosOnly: "iOS에서 사용 가능",
-    applePermissionError: "Apple 로그인 권한을 켠 뒤 앱을 다시 설치해 주세요.",
-    applePreparing: "Apple 준비 중",
-    checking: "확인 중",
-    displayNamePlaceholder: "닉네임(선택)",
-    errorTitle: "계속 진행하지 못했어요",
-    googleChecking: "Google 확인 중",
-    googleConfigurationError:
-      "Google 로그인 설정이 앱에 아직 반영되지 않았어요. 앱을 다시 설치한 뒤 시도해 주세요.",
-    googleContinue: "Google로 계속",
-    passwordPlaceholder: "비밀번호",
-    testAccount: "테스트 계정",
-    testAccountContinue: "테스트 계정으로 계속",
-    accountIdPlaceholder: "아이디"
-  },
-  en: {
-    appleChecking: "Checking Apple",
-    appleContinue: "Continue with Apple",
-    appleIosOnly: "Available on iOS",
-    applePermissionError:
-      "Turn on Sign in with Apple, then reinstall the app.",
-    applePreparing: "Preparing Apple",
-    checking: "Checking",
-    displayNamePlaceholder: "Nickname (optional)",
-    errorTitle: "Could not continue",
-    googleChecking: "Checking Google",
-    googleConfigurationError:
-      "Google sign-in configuration has not been applied to this app yet. Reinstall the app and try again.",
-    googleContinue: "Continue with Google",
-    passwordPlaceholder: "Password",
-    testAccount: "Test account",
-    testAccountContinue: "Continue with test account",
-    accountIdPlaceholder: "ID"
-  }
-} as const;
 
 function getButtonLabel({
   provider,

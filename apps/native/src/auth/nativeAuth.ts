@@ -1,4 +1,4 @@
-import { NATIVE_GRAPHQL_ENDPOINT } from "../webview/bridge/fetchBridge";
+import { NATIVE_GRAPHQL_ENDPOINT } from "@/webview/bridge/fetchBridge";
 
 export type NativeAuthUser = {
   id: string;

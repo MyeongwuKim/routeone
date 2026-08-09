@@ -1,3 +1,4 @@
+/** 앱 시작과 백그라운드에서 포그라운드로 돌아올 때 최소 앱 버전을 확인하는 훅. */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import {

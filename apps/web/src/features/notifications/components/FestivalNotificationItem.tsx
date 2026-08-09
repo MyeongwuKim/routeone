@@ -112,7 +112,9 @@ function FestivalNotificationItem({
   );
   const regionLabel = region
     ? (text.labels.regions[region.label] ?? region.label)
-    : item.regionLabel;
+    : item.regionCode === "MULTIPLE" && appLanguage === "en"
+      ? "Gangwon"
+      : item.regionLabel;
   const kindLabel =
     text.notifications.kinds[getUiFestivalNotificationKind(item.festivalKind)];
   const festivalLocalizationCandidates = item.festivalTitles.flatMap(
@@ -219,6 +221,9 @@ function FestivalNotificationItem({
           (candidate) =>
             candidate.id === festivalId &&
             candidate.regionCode === item.regionCode
+        ) ??
+        result.gangwonFestivals.find(
+          (candidate) => candidate.id === festivalId
         ) ??
         result.gangwonFestivals.find(
           (candidate) =>

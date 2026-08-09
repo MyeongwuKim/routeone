@@ -2,7 +2,7 @@ import {
   clearStoredNativeAuthToken,
   NATIVE_AUTH_SESSION_DURATION_MS,
   storeNativeAuthToken,
-} from "../../auth/nativeAuthStorage";
+} from "@/auth/nativeAuthStorage";
 import type { NativeAuthTokenMessage } from "./types";
 
 export async function handleNativeAuthTokenMessage(

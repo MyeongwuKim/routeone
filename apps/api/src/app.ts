@@ -6,6 +6,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { createContext } from "./context.js";
 import type { GraphQLContext } from "./context.js";
+import { registerNotificationSchedulerRoutes } from "./modules/notifications/notificationScheduler.route.js";
 import { resolvers, typeDefs } from "./schema.js";
 
 export async function buildApp() {
@@ -20,6 +21,8 @@ export async function buildApp() {
   app.get("/health", async () => ({
     ok: true,
   }));
+
+  registerNotificationSchedulerRoutes(app);
 
   const server = new ApolloServer<GraphQLContext>({
     typeDefs,

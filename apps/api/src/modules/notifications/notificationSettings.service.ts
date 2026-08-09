@@ -1,5 +1,7 @@
 import {
   PushPlatform,
+  UserNotificationPushStatus,
+  UserNotificationType,
   type PrismaClient,
   type User,
 } from "@prisma/client";
@@ -111,6 +113,8 @@ export async function updateNotificationSettings(
   input: UpdateNotificationSettingsInput
 ) {
   const current = await getNotificationSettings(prisma, user);
+  const shouldResetFestivalEvaluation =
+    input.festivalEnabled != null || input.festivalRegionCodes != null;
   let festivalRegionCodes =
     input.festivalRegionCodes == null
       ? current.festivalRegionCodes
@@ -129,18 +133,53 @@ export async function updateNotificationSettings(
     throw new Error("축제 알림을 받을 지역을 1곳 이상 선택해 주세요.");
   }
 
-  return prisma.userNotificationSetting.update({
-    where: {
-      userId: user.id,
-    },
-    data: {
-      festivalEnabled,
-      festivalRegionCodes,
-      routeReviewEnabled:
-        input.routeReviewEnabled ?? current.routeReviewEnabled,
-      routeArrivalEnabled:
-        input.routeArrivalEnabled ?? current.routeArrivalEnabled,
-    },
+  return prisma.$transaction(async (transaction) => {
+    const updatedSetting =
+      await transaction.userNotificationSetting.update({
+        where: {
+          userId: user.id,
+        },
+        data: {
+          festivalEnabled,
+          festivalRegionCodes,
+          ...(shouldResetFestivalEvaluation
+            ? {
+                festivalLastEvaluationKey: null,
+              }
+            : {}),
+          routeReviewEnabled:
+            input.routeReviewEnabled ?? current.routeReviewEnabled,
+          routeArrivalEnabled:
+            input.routeArrivalEnabled ?? current.routeArrivalEnabled,
+        },
+      });
+
+    if (shouldResetFestivalEvaluation) {
+      await transaction.userNotification.updateMany({
+        where: {
+          userId: user.id,
+          type: UserNotificationType.FESTIVAL_SUMMARY,
+          pushStatus: {
+            in: [
+              UserNotificationPushStatus.PENDING,
+              UserNotificationPushStatus.FAILED,
+            ],
+          },
+          NOT: {
+            notificationKey: {
+              startsWith: "festival:test:",
+            },
+          },
+        },
+        data: {
+          pushStatus: UserNotificationPushStatus.CANCELED,
+          nextPushAttemptAt: null,
+          pushError: "축제 알림 설정이 변경되어 다시 계산합니다.",
+        },
+      });
+    }
+
+    return updatedSetting;
   });
 }
 

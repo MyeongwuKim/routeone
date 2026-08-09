@@ -1,3 +1,4 @@
+/** WebView 진입 전에 언어와 기기 권한을 순서대로 안내하는 공용 화면. */
 import {
   ActivityIndicator,
   Pressable,
@@ -6,6 +7,7 @@ import {
   useColorScheme,
   View,
 } from "react-native";
+import { ONBOARDING_THEME } from "@/constants/nativeOnboarding";
 
 type NativeOnboardingAction = {
   label: string;
@@ -21,41 +23,6 @@ type NativeOnboardingStepProps = {
   primaryAction: NativeOnboardingAction;
   secondaryAction?: NativeOnboardingAction;
 };
-
-const ONBOARDING_THEME = {
-  light: {
-    background: "#f8fafc",
-    brandText: "#0f766e",
-    mutedText: "#64748b",
-    cardBackground: "#ffffff",
-    cardBorder: "#e2e8f0",
-    title: "#0f172a",
-    description: "#475569",
-    primaryBackground: "#0f766e",
-    primaryPressed: "#115e59",
-    primaryText: "#ffffff",
-    secondaryBackground: "#ffffff",
-    secondaryPressed: "#edf7f4",
-    secondaryBorder: "#d5e7e1",
-    secondaryText: "#0f766e"
-  },
-  dark: {
-    background: "#061918",
-    brandText: "#f8fafc",
-    mutedText: "rgba(226, 245, 241, 0.76)",
-    cardBackground: "rgba(13, 36, 34, 0.92)",
-    cardBorder: "rgba(148, 216, 204, 0.18)",
-    title: "#f8fafc",
-    description: "rgba(226, 245, 241, 0.76)",
-    primaryBackground: "#14b8a6",
-    primaryPressed: "#0f9488",
-    primaryText: "#042f2e",
-    secondaryBackground: "rgba(13, 36, 34, 0.88)",
-    secondaryPressed: "rgba(20, 184, 166, 0.18)",
-    secondaryBorder: "rgba(148, 216, 204, 0.22)",
-    secondaryText: "#e2f5f1"
-  }
-} as const;
 
 export function useNativeOnboardingTheme() {
   const colorScheme = useColorScheme();

@@ -1,3 +1,4 @@
+/** 웹 번들을 선택해 실행하고 WebView와 네이티브 브릿지를 연결하는 메인 화면. */
 import * as Notifications from "expo-notifications";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -10,23 +11,32 @@ import {
   View
 } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
-import { isFatalWebBundleInstallError } from "../../webBundle/webBundleErrors";
-import { INITIAL_WEB_BUNDLE_PROGRESS } from "../../webBundle/webBundleProgress";
+import {
+  APP_ACTIVE_EVENT_SCRIPT,
+  APP_LANGUAGE_STORAGE_KEY,
+  AUTH_SESSION_EXPIRES_AT_STORAGE_KEY,
+  AUTH_TOKEN_STORAGE_KEY,
+  REQUEST_WEB_BUNDLE_READY_SCRIPT,
+  WEB_VIEW_TEXT
+} from "@/constants/nativeWebView";
+import { isFatalWebBundleInstallError } from "@/webBundle/webBundleErrors";
+import { INITIAL_WEB_BUNDLE_PROGRESS } from "@/webBundle/webBundleProgress";
 import {
   markResolvedWebBundleReady,
   resolveWebBundle,
   rollbackResolvedWebBundle,
   type ResolvedWebBundle
-} from "../../webBundle/webBundleLoader";
-import type { WebBundleProgress } from "../../webBundle/webBundleTypes";
+} from "@/webBundle/webBundleLoader";
+import type { WebBundleProgress } from "@/webBundle/webBundleTypes";
 import {
   handleNativeBridgeMessage,
   ROUTEONE_WEBVIEW_BRIDGE_SCRIPT
-} from "../../webview/bridge";
+} from "@/webview/bridge";
 import {
   openNativeExternalUrl,
   shouldKeepUrlInWebView
-} from "../../webview/bridge/externalLinkBridge";
+} from "@/webview/bridge/externalLinkBridge";
+import NativeDevBuildBadge from "./NativeDevBuildBadge";
 import RouteOneLaunchScreen from "./RouteOneLaunchScreen";
 
 type NativeWebViewScreenProps = {
@@ -47,21 +57,6 @@ type WebViewNavigationRequest = {
   url: string;
   isTopFrame?: boolean;
 };
-
-const AUTH_TOKEN_STORAGE_KEY = "routeone.authToken";
-const AUTH_SESSION_EXPIRES_AT_STORAGE_KEY =
-  "routeone.authSessionExpiresAt";
-const APP_LANGUAGE_STORAGE_KEY = "routeone-app-language";
-const APP_ACTIVE_EVENT_SCRIPT = `
-  window.dispatchEvent(new Event("routeone:native-app-active"));
-  true;
-`;
-const REQUEST_WEB_BUNDLE_READY_SCRIPT = `
-  window.dispatchEvent(
-    new Event("routeone:native-request-web-bundle-ready")
-  );
-  true;
-`;
 
 function createNotificationReceivedEventScript(
   notification: Notifications.Notification
@@ -85,67 +80,6 @@ function createNotificationReceivedEventScript(
     true;
   `;
 }
-
-const WEB_VIEW_TEXT = {
-  ko: {
-    fatalAlertConfirm: "예",
-    fatalAlertDescription: "앱을 종료한 뒤 다시 실행해 주세요.",
-    fatalAlertTitle: "업데이트를 적용하지 못했어요",
-    fatalInstallMessages: {
-      download: "업데이트 파일을 3번 시도했지만 내려받지 못했어요.",
-      extract: "업데이트 압축을 3번 시도했지만 풀지 못했어요.",
-      verify: "업데이트 파일을 3번 시도했지만 확인하지 못했어요."
-    },
-    launchTagline: "여행의 시작부터 도착까지",
-    loadErrorTitle: "웹앱을 불러오지 못했어요.",
-    loadingRouteOne: "RouteOne을 불러오고 있어요.",
-    prepareFailed: "웹 번들을 준비하지 못했어요.",
-    progressMessages: {
-      applying: "새 버전을 적용하고 있어요.",
-      checking: "최신 버전을 확인하고 있어요.",
-      downloading: "업데이트를 내려받고 있어요.",
-      extracting: "업데이트 압축을 풀고 있어요.",
-      loading: "RouteOne을 불러오고 있어요.",
-      preparing: "저장된 버전을 확인하고 있어요.",
-      ready: "준비가 끝났어요.",
-      rollback: "이전 버전으로 복구하고 있어요.",
-      verifying: "업데이트 파일을 확인하고 있어요."
-    },
-    ready: "준비가 끝났어요.",
-    reloadingRouteOne: "RouteOne을 다시 불러오고 있어요.",
-    restoringPrevious: "이전 버전으로 복구하고 있어요.",
-    waitingReadySignal: "웹 화면 준비 신호를 기다리고 있어요."
-  },
-  en: {
-    fatalAlertConfirm: "Yes",
-    fatalAlertDescription: "The app will close. Please open it again.",
-    fatalAlertTitle: "Could not apply the update",
-    fatalInstallMessages: {
-      download: "The update file could not be downloaded after 3 attempts.",
-      extract: "The update archive could not be extracted after 3 attempts.",
-      verify: "The update file could not be verified after 3 attempts."
-    },
-    launchTagline: "From first plan to final stop",
-    loadErrorTitle: "Could not load the web app.",
-    loadingRouteOne: "Loading RouteOne.",
-    prepareFailed: "Could not prepare the web bundle.",
-    progressMessages: {
-      applying: "Applying the new version.",
-      checking: "Checking for updates.",
-      downloading: "Downloading the update.",
-      extracting: "Extracting the update.",
-      loading: "Loading RouteOne.",
-      preparing: "Checking the saved version.",
-      ready: "Ready.",
-      rollback: "Restoring the previous version.",
-      verifying: "Verifying the update file."
-    },
-    ready: "Ready.",
-    reloadingRouteOne: "Loading RouteOne again.",
-    restoringPrevious: "Restoring the previous version.",
-    waitingReadySignal: "Waiting for the web screen to be ready."
-  }
-} as const;
 
 function readProgressNumber(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value)
@@ -767,6 +701,7 @@ export default function NativeWebViewScreen({
           <Text style={styles.errorMessage}>{loadError}</Text>
         </View>
       ) : null}
+      <NativeDevBuildBadge />
     </View>
   );
 }

@@ -15,35 +15,7 @@ import RouteOneLaunchScreen from "./components/native-webview/RouteOneLaunchScre
 import { useNativeBoot } from "./boot/useNativeBoot";
 import { useNativeLogin } from "./auth/useNativeLogin";
 import { useNativeUpdate } from "./nativeUpdate/useNativeUpdate";
-
-const onboardingText = {
-  ko: {
-    locationTitle: "위치 권한 허용",
-    locationDescription:
-      "장소 근처에 도착했는지 확인하고 사진 인증을 도와드릴게요.",
-    notificationTitle: "알림 권한 허용",
-    notificationDescription:
-      "오늘 방문할 장소 근처에 도착하면 알림으로 알려드릴게요.",
-    requestPermission: "권한 요청하기",
-    checking: "확인 중",
-    sessionExpired: "7일 동안 접속하지 않아 로그아웃되었어요.",
-    launchPreparing: "앱을 준비하고 있어요.",
-    launchTagline: "여행의 시작부터 도착까지"
-  },
-  en: {
-    locationTitle: "Allow Location",
-    locationDescription:
-      "RouteOne uses your location to help confirm arrivals and visit photos.",
-    notificationTitle: "Allow Notifications",
-    notificationDescription:
-      "RouteOne can notify you when you are near a place on today's route.",
-    requestPermission: "Request Permission",
-    checking: "Checking",
-    sessionExpired: "You were signed out after 7 days of inactivity.",
-    launchPreparing: "Preparing the app.",
-    launchTagline: "From first plan to final stop"
-  }
-} as const;
+import { ONBOARDING_TEXT } from "@/constants/nativeOnboarding";
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -69,7 +41,7 @@ export default function App() {
     onComplete: completeNativeLogin
   });
   const nativeUpdate = useNativeUpdate();
-  const text = onboardingText[appLanguage];
+  const text = ONBOARDING_TEXT[appLanguage];
 
   if (nativeUpdate.status === "checking") {
     return (

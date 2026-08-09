@@ -28,6 +28,11 @@ const MAX_PUSH_ATTEMPTS = 24;
 const PUSH_CLAIM_TIMEOUT_MS = 1000 * 60 * 10;
 const NO_DEVICE_RETRY_MS = 1000 * 60 * 60;
 const MAX_RETRY_DELAY_MS = 1000 * 60 * 60 * 6;
+const KST_OFFSET_MS = 1000 * 60 * 60 * 9;
+const NOTIFICATION_WINDOW_START_HOUR = 9;
+const NOTIFICATION_WINDOW_END_HOUR = 21;
+const MAX_NOTIFICATIONS_PER_RUN = 100;
+const MAX_NOTIFICATION_CANDIDATE_SCAN = 500;
 
 type PushLocale = "ko" | "en";
 
@@ -288,6 +293,15 @@ function getRetryAt(now: Date, attemptCount: number, hasDevice: boolean) {
   return new Date(now.getTime() + retryDelay);
 }
 
+function isNotificationDeliveryWindow(date: Date) {
+  const kstHour = new Date(date.getTime() + KST_OFFSET_MS).getUTCHours();
+
+  return (
+    kstHour >= NOTIFICATION_WINDOW_START_HOUR &&
+    kstHour < NOTIFICATION_WINDOW_END_HOUR
+  );
+}
+
 async function sendExpoPushMessages(messages: ExpoPushMessage[]) {
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -347,6 +361,9 @@ async function deliverClaimedNotification(
   const isFestivalTestNotification =
     notification.type === UserNotificationType.FESTIVAL_SUMMARY &&
     notification.notificationKey.startsWith("festival:test:");
+  const isDailyFestivalNotification =
+    notification.type === UserNotificationType.FESTIVAL_SUMMARY &&
+    notification.notificationKey.startsWith("festival:daily:");
   const isRouteReviewTestNotification =
     notification.type === UserNotificationType.ROUTE_REVIEW &&
     notification.notificationKey.startsWith("route-review:test:");
@@ -354,7 +371,8 @@ async function deliverClaimedNotification(
     (notification.type === UserNotificationType.FESTIVAL_SUMMARY &&
       !isFestivalTestNotification &&
       (!settings?.festivalEnabled ||
-        (notification.festivalKind !== "TRIP" &&
+        (!isDailyFestivalNotification &&
+          notification.festivalKind !== "TRIP" &&
           (!notification.regionCode ||
             !settings.festivalRegionCodes.includes(
               notification.regionCode
@@ -538,6 +556,10 @@ export async function deliverPendingNotifications(
     return;
   }
 
+  if (!targetNotificationIds && !isNotificationDeliveryWindow(now)) {
+    return;
+  }
+
   const staleClaimedAt = new Date(now.getTime() - PUSH_CLAIM_TIMEOUT_MS);
   const excludeTestNotifications = targetNotificationIds
     ? {}
@@ -634,13 +656,41 @@ export async function deliverPendingNotifications(
         lt: MAX_PUSH_ATTEMPTS,
       },
     },
-    orderBy: {
-      availableAt: "asc",
-    },
-    take: 100,
+    orderBy: [
+      {
+        availableAt: "asc",
+      },
+      {
+        createdAt: "asc",
+      },
+    ],
+    take: targetNotificationIds
+      ? MAX_NOTIFICATIONS_PER_RUN
+      : MAX_NOTIFICATION_CANDIDATE_SCAN,
   });
+  const candidatesForDelivery = targetNotificationIds
+    ? candidates
+    : [
+        ...candidates
+          .reduce((candidateByUser, candidate) => {
+            const currentCandidate = candidateByUser.get(candidate.userId);
+            const shouldPreferFestival =
+              currentCandidate &&
+              currentCandidate.availableAt.getTime() ===
+                candidate.availableAt.getTime() &&
+              currentCandidate.type !== UserNotificationType.FESTIVAL_SUMMARY &&
+              candidate.type === UserNotificationType.FESTIVAL_SUMMARY;
 
-  for (const candidate of candidates) {
+            if (!currentCandidate || shouldPreferFestival) {
+              candidateByUser.set(candidate.userId, candidate);
+            }
+
+            return candidateByUser;
+          }, new Map<string, (typeof candidates)[number]>())
+          .values(),
+      ].slice(0, MAX_NOTIFICATIONS_PER_RUN);
+
+  for (const candidate of candidatesForDelivery) {
     const claimed = await prisma.userNotification.updateMany({
       where: {
         id: candidate.id,

@@ -1,4 +1,4 @@
-import { WEB_BUNDLE_UPDATE_CONFIG } from "../../config/webBundleUpdateConfig";
+import { WEB_BUNDLE_UPDATE_CONFIG } from "@/config/webBundleUpdateConfig";
 
 const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 

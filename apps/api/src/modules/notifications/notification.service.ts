@@ -424,72 +424,82 @@ export async function sendFestivalTestNotification(
     throw new Error("실제 축제 정보를 불러오지 못했어요.");
   }
 
-  const notifications = [];
+  const festivalById = new Map<
+    string,
+    ReturnType<typeof getFestivalTestCandidates>[number]
+  >();
 
   for (const regionCode of regionCodes) {
-    const matchingFestivals = getFestivalTestCandidates(
+    getFestivalTestCandidates(
       festivals,
       regionCode,
       todayKey,
       rangeEndKey
-    );
-
-    if (matchingFestivals.length === 0) {
-      continue;
-    }
-
-    const regionLabel =
-      GANGWON_REGION_BY_CODE[
-        regionCode as keyof typeof GANGWON_REGION_BY_CODE
-      ];
-    const notification = await prisma.userNotification.create({
-      data: {
-        userId: user.id,
-        notificationKey: `festival:test:${Date.now()}:${randomUUID()}`,
-        type: UserNotificationType.FESTIVAL_SUMMARY,
-        festivalKind: FestivalNotificationKind.TEST,
-        regionCode,
-        regionLabel,
-        dateKey: todayKey,
-        festivalIds: matchingFestivals.map(
-          (festival) => festival.id
-        ),
-        festivalTitles: matchingFestivals.map(
-          (festival) => festival.title
-        ),
-        festivalStartDates: matchingFestivals.map((festival) =>
-          formatFestivalDateKey(festival.startYmd)
-        ),
-        festivalEndDates: matchingFestivals.map((festival) =>
-          formatFestivalDateKey(festival.endYmd)
-        ),
-        availableAt: now,
-        expiresAt: new Date(now.getTime() + 1000 * 60 * 60),
-        pushStatus: UserNotificationPushStatus.PENDING,
-        nextPushAttemptAt: now,
-      },
-    });
-
-    notifications.push(notification);
+    ).forEach((festival) => festivalById.set(festival.id, festival));
   }
 
-  if (notifications.length === 0) {
+  const matchingFestivals = [...festivalById.values()]
+    .sort(
+      (left, right) =>
+        left.startYmd.localeCompare(right.startYmd) ||
+        left.title.localeCompare(right.title, "ko")
+    )
+    .slice(0, MAX_FESTIVAL_COUNT_PER_NOTIFICATION);
+
+  if (matchingFestivals.length === 0) {
     throw new Error(
       "선택한 지역에 오늘부터 7일 안에 열리는 축제가 없어요."
     );
   }
 
+  const matchingRegionCodes = [
+    ...new Set(matchingFestivals.map((festival) => festival.regionCode)),
+  ];
+  const notification = await prisma.userNotification.create({
+    data: {
+      userId: user.id,
+      notificationKey: `festival:test:${Date.now()}:${randomUUID()}`,
+      type: UserNotificationType.FESTIVAL_SUMMARY,
+      festivalKind: FestivalNotificationKind.TEST,
+      regionCode:
+        matchingRegionCodes.length === 1
+          ? matchingRegionCodes[0]
+          : "MULTIPLE",
+      regionLabel: matchingRegionCodes
+        .map(
+          (regionCode) =>
+            GANGWON_REGION_BY_CODE[
+              regionCode as keyof typeof GANGWON_REGION_BY_CODE
+            ]
+        )
+        .join(", "),
+      dateKey: todayKey,
+      festivalIds: matchingFestivals.map((festival) => festival.id),
+      festivalTitles: matchingFestivals.map((festival) => festival.title),
+      festivalStartDates: matchingFestivals.map((festival) =>
+        formatFestivalDateKey(festival.startYmd)
+      ),
+      festivalEndDates: matchingFestivals.map((festival) =>
+        formatFestivalDateKey(festival.endYmd)
+      ),
+      availableAt: now,
+      expiresAt: new Date(now.getTime() + 1000 * 60 * 60),
+      pushStatus: UserNotificationPushStatus.PENDING,
+      nextPushAttemptAt: now,
+    },
+  });
+
   await deliverPendingNotifications(
     prisma,
     now,
-    notifications.map((notification) => notification.id)
+    [notification.id]
   );
 
   const deliveredNotifications =
     await prisma.userNotification.findMany({
     where: {
       id: {
-        in: notifications.map((notification) => notification.id),
+        in: [notification.id],
       },
     },
   });
@@ -502,15 +512,15 @@ export async function sendFestivalTestNotification(
     .filter((pushError): pushError is string => Boolean(pushError));
 
   return {
-    notificationKey: notifications[0].notificationKey,
+    notificationKey: notification.notificationKey,
     pushStatus:
-      sentNotifications.length === notifications.length
+      sentNotifications.length === 1
         ? UserNotificationPushStatus.SENT
         : UserNotificationPushStatus.FAILED,
     pushError:
       pushErrors.length > 0
         ? [...new Set(pushErrors)].join(" | ")
-        : sentNotifications.length === notifications.length
+        : sentNotifications.length === 1
           ? null
           : "일부 축제 알림을 보내지 못했어요.",
   };
@@ -570,17 +580,18 @@ export async function sendRouteReviewTestNotification(
     throw new Error("현재 기기의 푸시 정보를 찾지 못했어요.");
   }
 
-  const todayKey = toKstDateKey(now);
-  const oldestEndDate = new Date(
-    `${addDateKeyDays(todayKey, -ROUTE_CORRECTION_GRACE_DAYS)}T00:00:00.000Z`
-  );
   const routes = await prisma.route.findMany({
     where: {
       ownerId: user.id,
+      status: RouteStatus.COMPLETED,
+      completedAt: {
+        not: null,
+      },
       travelEndDate: {
         not: null,
-        gte: oldestEndDate,
-        lte: now,
+      },
+      totalStopCount: {
+        gt: 0,
       },
     },
     include: {
@@ -599,7 +610,7 @@ export async function sendRouteReviewTestNotification(
     },
     orderBy: [
       {
-        travelEndDate: "desc",
+        completedAt: "desc",
       },
       {
         updatedAt: "desc",
@@ -611,7 +622,6 @@ export async function sendRouteReviewTestNotification(
         route: (typeof routes)[number];
         travelEndDate: Date;
         dayId: string;
-        correctionDeadlineAt: Date;
       }
     | undefined;
 
@@ -620,13 +630,6 @@ export async function sendRouteReviewTestNotification(
       continue;
     }
 
-    const endDateKey = route.travelEndDate.toISOString().slice(0, 10);
-    const routeEndedAt = atKst(addDateKeyDays(endDateKey, 1), 0);
-    const correctionDeadlineAt = atKst(
-      addDateKeyDays(endDateKey, ROUTE_CORRECTION_GRACE_DAYS),
-      23,
-      59
-    );
     const daysWithStops = route.days.filter(
       (day) => day.stops.length > 0
     );
@@ -637,39 +640,28 @@ export async function sendRouteReviewTestNotification(
     );
     const reviewDay = incompleteDay ?? daysWithStops.at(-1);
 
-    if (
-      routeEndedAt <= now &&
-      correctionDeadlineAt > now &&
-      reviewDay
-    ) {
+    if (reviewDay) {
       candidate = {
         route,
         travelEndDate: route.travelEndDate,
         dayId: reviewDay.id,
-        correctionDeadlineAt,
       };
       break;
     }
   }
 
   if (!candidate) {
-    throw new Error(
-      "최근 7일 안에 종료되고 장소가 포함된 루트가 없어요."
-    );
+    throw new Error("완료되고 장소가 포함된 루트가 없어요.");
   }
 
   const {
     route,
     travelEndDate,
     dayId,
-    correctionDeadlineAt,
   } = candidate;
-  const kind =
-    route.status === RouteStatus.COMPLETED
-      ? RouteReviewNotificationKind.COMPLETED
-      : route.startedAt
-        ? RouteReviewNotificationKind.INCOMPLETE
-        : RouteReviewNotificationKind.UNSTARTED;
+  const correctionDeadlineAt = new Date(
+    now.getTime() + 1000 * 60 * 60 * 24 * ROUTE_CORRECTION_GRACE_DAYS
+  );
   const notificationKey = `route-review:test:${route.id}:${Math.floor(
     now.getTime() / ROUTE_REVIEW_TEST_COOLDOWN_MS
   )}`;
@@ -698,7 +690,7 @@ export async function sendRouteReviewTestNotification(
         userId: user.id,
         notificationKey,
         type: UserNotificationType.ROUTE_REVIEW,
-        routeReviewKind: kind,
+        routeReviewKind: RouteReviewNotificationKind.COMPLETED,
         routeId: route.id,
         routeTitle: getRouteTitle(
           route.travelStartDate,

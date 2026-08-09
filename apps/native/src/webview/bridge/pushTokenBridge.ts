@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import { WEB_BUNDLE_UPDATE_CONFIG } from "../../config/webBundleUpdateConfig";
+import { WEB_BUNDLE_UPDATE_CONFIG } from "@/config/webBundleUpdateConfig";
 import { postNativePushTokenResponse } from "./responses";
 import type {
   NativePermissionStatus,

@@ -1,9 +1,9 @@
 import { Platform } from "react-native";
-import { WEB_BUNDLE_UPDATE_CONFIG } from "../config/webBundleUpdateConfig";
+import { WEB_BUNDLE_UPDATE_CONFIG } from "@/config/webBundleUpdateConfig";
 import {
   WEB_BUNDLE_BASE_URL,
   WEB_BUNDLE_HTML
-} from "../generated/webBundle";
+} from "@/generated/webBundle";
 import { fetchWebBundleManifest } from "./webBundleManifest";
 import {
   confirmWebBundleReady,

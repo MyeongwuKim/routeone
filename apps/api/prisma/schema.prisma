@@ -371,12 +371,13 @@ model UserNotification {
 }
 
 model UserNotificationSetting {
-  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId              String   @unique @db.ObjectId
-  festivalEnabled     Boolean  @default(false)
-  festivalRegionCodes String[] @default([])
-  routeReviewEnabled  Boolean  @default(true)
-  routeArrivalEnabled Boolean  @default(true)
+  id                        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId                    String   @unique @db.ObjectId
+  festivalEnabled           Boolean  @default(false)
+  festivalRegionCodes       String[] @default([])
+  festivalLastEvaluationKey String?
+  routeReviewEnabled        Boolean  @default(true)
+  routeArrivalEnabled       Boolean  @default(true)
 
   user User @relation(fields: [userId], references: [id])
 

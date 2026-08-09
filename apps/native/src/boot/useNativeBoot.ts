@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
-import type { NativeAuthPayload } from "../auth/nativeAuth";
+import type { NativeAuthPayload } from "@/auth/nativeAuth";
 import {
   NATIVE_AUTH_SESSION_DURATION_MS,
   readStoredNativeAuthSession,
   storeNativeAuthToken
-} from "../auth/nativeAuthStorage";
+} from "@/auth/nativeAuthStorage";
 
 export type NativeBootStep =
   | "checking"

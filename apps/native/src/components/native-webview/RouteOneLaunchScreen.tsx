@@ -1,3 +1,4 @@
+/** 앱 시작과 웹 번들 준비 진행 상태를 표시하는 공용 로딩 화면. */
 import { useEffect, useRef } from "react";
 import {
   Animated,

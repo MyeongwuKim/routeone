@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import { NATIVE_UPDATE_CONFIG } from "../config/nativeUpdateConfig";
-import { compareVersions } from "../version/compareVersions";
+import { NATIVE_UPDATE_CONFIG } from "@/config/nativeUpdateConfig";
+import { compareVersions } from "@/version/compareVersions";
 
 type NativeUpdatePlatform = "ios" | "android";
 
