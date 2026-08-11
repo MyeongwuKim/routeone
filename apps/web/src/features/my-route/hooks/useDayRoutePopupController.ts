@@ -539,11 +539,14 @@ export function useDayRoutePopupController({
     });
   };
 
+  const runtimeAppVariant =
+    window.RouteOneRuntimeConfig?.nativeAppVariant?.trim().toLowerCase() ||
+    window.RouteOneRuntimeConfig?.webBundleChannel?.trim().toLowerCase();
   const isGpsTestEnabled =
     !isReadOnly &&
     !isRetrospectiveCompletion &&
     route.isMine &&
-    window.RouteOneRuntimeConfig?.arrivalNotificationTestMode === true &&
+    runtimeAppVariant === "dev" &&
     nativeBridge.runtime.isAvailable();
 
   const handleApplyGpsTestLocation = async (

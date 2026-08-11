@@ -1609,7 +1609,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       continueStay: "계속 머물기",
       completeVisit: "방문 완료",
       cancelCheckIn: "도착 인증 취소",
-      skipActualStay: "건너뛰기",
+      skipActualStay: "기록 안 함",
       saveActualStay: "저장",
       allPlacesCompleted: "모든 장소 완료",
       remainingPlaces: (count) => `${count}곳 남음`,
