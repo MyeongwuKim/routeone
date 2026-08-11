@@ -112,11 +112,15 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
     paddingHorizontal: 28
   },
   brand: {
-    alignItems: "center"
+    position: "absolute",
+    top: "50%",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    transform: [{ translateY: -140 }]
   },
   logo: {
     width: 280,

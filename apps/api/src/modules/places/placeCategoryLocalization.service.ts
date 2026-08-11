@@ -6,6 +6,10 @@ import {
   normalizeLocale,
 } from "./placeLocalization.shared.js";
 import type { TourCategoryLocalizationInput } from "./placeLocalization.types.js";
+import {
+  getTourCategoryEnglishLabelOverride,
+  TOUR_CATEGORY_ENGLISH_LABEL_BY_CODE,
+} from "./tourCategoryEnglishOverrides.js";
 
 export async function getTourCategoryLocalizations(
   prisma: PrismaClient,
@@ -19,12 +23,60 @@ export async function getTourCategoryLocalizations(
   const rows = await prisma.tourCategoryLocalization.findMany({
     where: {
       provider: "TOUR_API",
-      locale: normalizedLocale,
+      locale:
+        normalizedLocale === "en"
+          ? {
+              in: ["en", "ko"],
+            }
+          : normalizedLocale,
     },
     orderBy: {
       code: "asc",
     },
   });
+
+  if (normalizedLocale === "en") {
+    const englishRowsByCode = new Map(
+      rows
+        .filter((row) => row.locale === "en")
+        .map((row) => [row.code, row])
+    );
+    const koreanRowsByCode = new Map(
+      rows
+        .filter((row) => row.locale === "ko")
+        .map((row) => [row.code, row])
+    );
+    const availableCodes = new Set(englishRowsByCode.keys());
+
+    Object.keys(TOUR_CATEGORY_ENGLISH_LABEL_BY_CODE).forEach((code) => {
+      if (koreanRowsByCode.has(code)) {
+        availableCodes.add(code);
+      }
+    });
+
+    return [...availableCodes]
+      .sort((left, right) => left.localeCompare(right))
+      .map((code) => {
+        const englishRow = englishRowsByCode.get(code);
+        const koreanRow = koreanRowsByCode.get(code);
+        const label =
+          getTourCategoryEnglishLabelOverride(code) ?? englishRow?.label;
+
+        if (!label) {
+          return null;
+        }
+
+        return {
+          code,
+          locale: "en",
+          label,
+          sourceLabel:
+            englishRow?.sourceLabel ?? koreanRow?.label ?? "",
+          cached: Boolean(englishRow),
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+  }
 
   return rows.map((row) => ({
     code: row.code,
@@ -43,7 +95,12 @@ export async function cacheTourCategoryLocalizations(
   rawInputs.forEach((input) => {
     const code = input.code.trim();
     const locale = normalizeLocale(input.locale);
-    const label = input.label.trim();
+    const rawLabel = input.label.trim();
+    const englishLabel =
+      locale === "en"
+        ? getTourCategoryEnglishLabelOverride(code)
+        : undefined;
+    const label = englishLabel ?? rawLabel;
 
     if (!code || !locale || !label) {
       return;
@@ -53,7 +110,9 @@ export async function cacheTourCategoryLocalizations(
       code,
       locale,
       label,
-      sourceLabel: input.sourceLabel?.trim() || null,
+      sourceLabel:
+        input.sourceLabel?.trim() ||
+        (englishLabel && englishLabel !== rawLabel ? rawLabel : null),
     });
   });
 

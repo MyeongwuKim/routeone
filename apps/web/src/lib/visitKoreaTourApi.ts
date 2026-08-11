@@ -1,5 +1,8 @@
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import {
+  applyTourCategoryEnglishOverrides,
+} from "@/lib/tourCategoryEnglishOverrides";
+import {
   GANGWON_AREA_CODE,
   GANGWON_REGION_LABELS,
   GANGWON_SIGUNGU_CODE_BY_LABEL,
@@ -1045,7 +1048,7 @@ export async function fetchLclsSystemNameMap(
       }
     });
 
-    return codeNameMap;
+    return applyTourCategoryEnglishOverrides(codeNameMap, language);
   })().catch((error) => {
     lclsSystemNameMapPromiseByServiceKey.delete(cacheKey);
     throw error;
