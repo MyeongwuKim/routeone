@@ -186,7 +186,8 @@ export async function updateNotificationSettings(
 export async function registerPushDevice(
   prisma: PrismaClient,
   user: User,
-  input: RegisterPushDeviceInput
+  input: RegisterPushDeviceInput,
+  sessionExpiresAt: Date
 ) {
   const expoPushToken = normalizeExpoPushToken(input.expoPushToken);
   const locale = normalizeNotificationLocale(input.locale);
@@ -217,6 +218,7 @@ export async function registerPushDevice(
       appVariant: normalizeAppVariant(input.appVariant),
       enabled: true,
       lastSeenAt: now,
+      sessionExpiresAt,
     },
     update: {
       userId: user.id,
@@ -224,6 +226,7 @@ export async function registerPushDevice(
       appVariant: normalizeAppVariant(input.appVariant),
       enabled: true,
       lastSeenAt: now,
+      sessionExpiresAt,
       disabledAt: null,
     },
   });
@@ -243,6 +246,7 @@ export async function unregisterPushDevice(
     },
     data: {
       enabled: false,
+      sessionExpiresAt: null,
       disabledAt: new Date(),
     },
   });

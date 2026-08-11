@@ -399,6 +399,9 @@ async function deliverClaimedNotification(
     where: {
       userId: notification.userId,
       enabled: true,
+      sessionExpiresAt: {
+        gt: now,
+      },
       ...(pushDeviceId
         ? {
             id: pushDeviceId,
@@ -493,6 +496,7 @@ async function deliverClaimedNotification(
             },
             data: {
               enabled: false,
+              sessionExpiresAt: null,
               disabledAt: now,
             },
           });

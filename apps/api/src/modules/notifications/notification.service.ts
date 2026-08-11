@@ -578,6 +578,9 @@ export async function sendRouteReviewTestNotification(
       id: normalizedPushDeviceId,
       userId: user.id,
       enabled: true,
+      sessionExpiresAt: {
+        gt: now,
+      },
     },
     select: {
       id: true,

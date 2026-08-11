@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { GraphQLContext } from "../context.js";
 
-type AuthTokenPayload = {
+export type AuthTokenPayload = {
   userId: string;
   exp: number;
 };
@@ -83,7 +83,7 @@ export function createAuthToken(userId: string) {
   return `${TOKEN_PREFIX}.${encodedPayload}.${signPayload(encodedPayload)}`;
 }
 
-export function verifyAuthToken(token: string | null | undefined) {
+export function verifyAuthSession(token: string | null | undefined) {
   if (!token) {
     return null;
   }
@@ -102,14 +102,23 @@ export function verifyAuthToken(token: string | null | undefined) {
   try {
     const payload = JSON.parse(fromBase64Url(encodedPayload)) as AuthTokenPayload;
 
-    if (!payload.userId || payload.exp < Date.now()) {
+    if (
+      !payload.userId ||
+      typeof payload.exp !== "number" ||
+      !Number.isFinite(payload.exp) ||
+      payload.exp <= Date.now()
+    ) {
       return null;
     }
 
-    return payload.userId;
+    return payload;
   } catch {
     return null;
   }
+}
+
+export function verifyAuthToken(token: string | null | undefined) {
+  return verifyAuthSession(token)?.userId ?? null;
 }
 
 export function readBearerToken(authorization?: string | string[]) {

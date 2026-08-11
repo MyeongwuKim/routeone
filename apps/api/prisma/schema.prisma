@@ -400,21 +400,22 @@ model UserNotificationSetting {
 }
 
 model PushDevice {
-  id            String       @id @default(auto()) @map("_id") @db.ObjectId
-  userId        String       @db.ObjectId
-  expoPushToken String       @unique
-  platform      PushPlatform
-  appVariant    String?
-  enabled       Boolean      @default(true)
-  lastSeenAt    DateTime     @default(now())
-  disabledAt    DateTime?
+  id               String       @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String       @db.ObjectId
+  expoPushToken    String       @unique
+  platform         PushPlatform
+  appVariant       String?
+  enabled          Boolean      @default(true)
+  lastSeenAt       DateTime     @default(now())
+  sessionExpiresAt DateTime?
+  disabledAt       DateTime?
 
   user User @relation(fields: [userId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId, enabled])
+  @@index([userId, enabled, sessionExpiresAt])
 }
 
 type PlaceSnapshot {

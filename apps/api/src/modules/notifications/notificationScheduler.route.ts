@@ -122,6 +122,9 @@ export function registerNotificationSchedulerRoutes(app: FastifyInstance) {
           where: {
             userId: user.id,
             enabled: true,
+            sessionExpiresAt: {
+              gt: new Date(),
+            },
           },
           orderBy: {
             lastSeenAt: "desc",

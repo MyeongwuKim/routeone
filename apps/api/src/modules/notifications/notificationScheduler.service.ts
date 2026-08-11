@@ -180,6 +180,14 @@ async function createRouteReviewNotifications(
             routeReviewEnabled: true,
           },
         },
+        pushDevices: {
+          some: {
+            enabled: true,
+            sessionExpiresAt: {
+              gt: now,
+            },
+          },
+        },
       },
     },
     include: {
@@ -388,6 +396,16 @@ async function createFestivalNotifications(
   const settings = await prisma.userNotificationSetting.findMany({
     where: {
       festivalEnabled: true,
+      user: {
+        pushDevices: {
+          some: {
+            enabled: true,
+            sessionExpiresAt: {
+              gt: now,
+            },
+          },
+        },
+      },
     },
   });
 

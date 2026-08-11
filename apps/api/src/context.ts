@@ -1,10 +1,11 @@
 import type { FastifyRequest } from "fastify";
 import type { PrismaClient, User } from "@prisma/client";
 import { prisma } from "./lib/prisma.js";
-import { readBearerToken, verifyAuthToken } from "./lib/auth.js";
+import { readBearerToken, verifyAuthSession } from "./lib/auth.js";
 
 export type GraphQLContext = {
   authenticatedUserId: string | null;
+  authenticatedSessionExpiresAt: Date | null;
   prisma: PrismaClient;
   user: User;
 };
@@ -31,29 +32,37 @@ async function getLocalDevUser() {
   });
 }
 
-async function getUserFromRequest(request?: FastifyRequest) {
+async function getAuthenticatedUserFromRequest(request?: FastifyRequest) {
   const token = readBearerToken(request?.headers.authorization);
-  const userId = verifyAuthToken(token);
+  const session = verifyAuthSession(token);
 
-  if (!userId) {
+  if (!session) {
     return null;
   }
 
-  return prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: {
-      id: userId,
+      id: session.userId,
     },
   });
+
+  return user
+    ? {
+        user,
+        expiresAt: new Date(session.exp),
+      }
+    : null;
 }
 
 export async function createContext(
   request?: FastifyRequest
 ): Promise<GraphQLContext> {
-  const authenticatedUser = await getUserFromRequest(request);
-  const user = authenticatedUser ?? (await getLocalDevUser());
+  const authenticatedSession = await getAuthenticatedUserFromRequest(request);
+  const user = authenticatedSession?.user ?? (await getLocalDevUser());
 
   return {
-    authenticatedUserId: authenticatedUser?.id ?? null,
+    authenticatedUserId: authenticatedSession?.user.id ?? null,
+    authenticatedSessionExpiresAt: authenticatedSession?.expiresAt ?? null,
     prisma,
     user,
   };

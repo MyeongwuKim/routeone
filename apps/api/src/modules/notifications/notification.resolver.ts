@@ -290,6 +290,20 @@ function requireAuthenticatedNotificationUser(context: GraphQLContext) {
   return context.user;
 }
 
+function requireAuthenticatedNotificationSession(context: GraphQLContext) {
+  const user = requireAuthenticatedNotificationUser(context);
+  const sessionExpiresAt = context.authenticatedSessionExpiresAt;
+
+  if (!sessionExpiresAt || sessionExpiresAt <= new Date()) {
+    throw new Error("로그인이 필요합니다.");
+  }
+
+  return {
+    user,
+    sessionExpiresAt,
+  };
+}
+
 export const notificationResolvers = {
   UserNotification: {
     festivalStartDates(parent: { festivalStartDates?: string[] | null }) {
@@ -462,15 +476,21 @@ export const notificationResolvers = {
       args: RegisterPushDeviceArgs,
       context: GraphQLContext
     ) {
-      const user = requireUser(context);
-      return registerPushDevice(context.prisma, user, args.input);
+      const { user, sessionExpiresAt } =
+        requireAuthenticatedNotificationSession(context);
+      return registerPushDevice(
+        context.prisma,
+        user,
+        args.input,
+        sessionExpiresAt
+      );
     },
     unregisterPushDevice(
       _parent: unknown,
       args: UnregisterPushDeviceArgs,
       context: GraphQLContext
     ) {
-      const user = requireUser(context);
+      const user = requireAuthenticatedNotificationUser(context);
       return unregisterPushDevice(
         context.prisma,
         user,
