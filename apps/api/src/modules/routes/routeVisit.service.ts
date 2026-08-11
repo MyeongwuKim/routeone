@@ -45,6 +45,7 @@ type RouteStopStayContribution = {
 };
 
 const GPS_VERIFICATION_MAX_DISTANCE_METERS = 100;
+const GPS_VERIFICATION_MAX_ACCURACY_METERS = 100;
 
 const BYPASS_GPS_LOCATION_VERIFICATION = false;
 
@@ -175,6 +176,10 @@ function clampPlacePhotoLimit(value?: number | null) {
 }
 
 function toFiniteCoordinate(value: unknown) {
+  if (value == null || value === "") {
+    return null;
+  }
+
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -245,6 +250,22 @@ function assertRouteStopGpsVerification(
 
   if (currentLat == null || currentLng == null) {
     throw new Error("현재 위치를 확인하지 못했어요. 위치 권한과 GPS 상태를 확인해 주세요.");
+  }
+
+  const accuracyMeters = toFiniteCoordinate(verification?.accuracyMeters);
+
+  if (accuracyMeters == null || accuracyMeters < 0) {
+    throw new Error(
+      "현재 위치의 정확도를 확인하지 못했어요. GPS 상태를 확인한 뒤 다시 시도해 주세요."
+    );
+  }
+
+  if (accuracyMeters > GPS_VERIFICATION_MAX_ACCURACY_METERS) {
+    throw new Error(
+      `위치 정확도가 낮아요. GPS 신호가 안정된 후 다시 시도해 주세요. 현재 정확도는 약 ${Math.round(
+        accuracyMeters
+      )}m예요.`
+    );
   }
 
   const placeCoordinates = getRouteStopPlaceCoordinates(stop);

@@ -27,6 +27,7 @@ export type CloneRouteInput = {
 };
 
 export type CreateRouteInput = {
+  clientRequestId?: string | null | undefined;
   countryCode?: string | null | undefined;
   dailyStartMinutes?: number | null | undefined;
   primaryRegionCode?: string | null | undefined;

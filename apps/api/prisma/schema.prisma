@@ -93,6 +93,20 @@ model Route {
   @@index([sourceRouteId])
 }
 
+model RouteCreateRequest {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId   String @db.ObjectId
+  requestId String
+  inputHash String
+  routeId   String @db.ObjectId
+
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, requestId])
+  @@index([routeId])
+  @@index([createdAt])
+}
+
 model RouteDay {
   id      String @id @default(auto()) @map("_id") @db.ObjectId
   routeId String @db.ObjectId

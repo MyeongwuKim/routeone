@@ -185,6 +185,11 @@ export async function deleteUserAccount(
         userId,
       },
     });
+    await transaction.routeCreateRequest.deleteMany({
+      where: {
+        ownerId: userId,
+      },
+    });
     await transaction.authAccount.deleteMany({
       where: {
         userId,

@@ -1,4 +1,5 @@
-import type { PrismaClient, User } from "@prisma/client";
+import { createHash } from "node:crypto";
+import { Prisma, type PrismaClient, type User } from "@prisma/client";
 import {
   addDays,
   assertRouteOwner,
@@ -19,6 +20,98 @@ import type {
   UpdateRouteStopStayMinutesInput,
 } from "./route.types.js";
 import { syncPlaceStayStatForRouteStopChange } from "./routeVisit.service.js";
+
+type RouteCommandPrisma = PrismaClient | Prisma.TransactionClient;
+
+const ROUTE_START_TIME_ZONE = "Asia/Seoul";
+const MAX_ROUTE_CREATE_REQUEST_ID_LENGTH = 160;
+const ROUTE_CREATE_TRANSACTION_MAX_ATTEMPTS = 4;
+
+function getRouteDateKey(value: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: ROUTE_START_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
+function normalizeRouteCreateRequestId(value?: string | null) {
+  const normalized = nullableString(value);
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length > MAX_ROUTE_CREATE_REQUEST_ID_LENGTH) {
+    throw new Error("경로 생성 요청 식별값이 너무 깁니다.");
+  }
+
+  return normalized;
+}
+
+function stableSerialize(value: unknown): string {
+  if (value instanceof Date) {
+    return JSON.stringify(value.toISOString());
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right));
+
+    return `{${entries
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableSerialize(item)}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value) ?? "null";
+}
+
+function buildRouteCreateInputHash(value: unknown) {
+  return createHash("sha256").update(stableSerialize(value)).digest("hex");
+}
+
+function isRetryableRouteCreateError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === "P2002" || error.code === "P2034")
+  );
+}
+
+async function runRouteCreateTransactionWithRetry<T>(
+  prisma: PrismaClient,
+  operation: (transaction: Prisma.TransactionClient) => Promise<T>
+) {
+  let lastError: unknown;
+
+  for (
+    let attempt = 1;
+    attempt <= ROUTE_CREATE_TRANSACTION_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
+    try {
+      return await prisma.$transaction(operation);
+    } catch (error) {
+      lastError = error;
+
+      if (
+        !isRetryableRouteCreateError(error) ||
+        attempt === ROUTE_CREATE_TRANSACTION_MAX_ATTEMPTS
+      ) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, attempt * 15));
+    }
+  }
+
+  throw lastError;
+}
 
 function clampTripDays(value: number) {
   return Math.max(1, Math.min(30, Math.round(value || 1)));
@@ -72,7 +165,7 @@ function assertValidDate(value: Date) {
 }
 
 async function assertNoRouteDateConflict(
-  prisma: PrismaClient,
+  prisma: RouteCommandPrisma,
   ownerId: string,
   travelStartDate: Date | null,
   travelEndDate: Date | null,
@@ -168,7 +261,7 @@ function normalizeTravelMinutes(value?: number | null) {
 }
 
 async function createRouteDays(
-  prisma: PrismaClient,
+  prisma: RouteCommandPrisma,
   routeId: string,
   tripDays: number,
   travelStartDate?: Date | null
@@ -208,50 +301,131 @@ export async function createRoute(
       ? addDays(travelStartDate, tripDays - 1)
       : (input.travelEndDate ?? null);
   const startLocation = normalizeRouteStartLocation(input.startLocation);
-  await assertNoRouteDateConflict(
-    prisma,
-    owner.id,
+  const countryCode = nullableString(input.countryCode) ?? "KR";
+  const primaryRegionCode = nullableString(input.primaryRegionCode);
+  const primaryRegionLabelKey = nullableString(input.primaryRegionLabelKey);
+  const dailyStartMinutes = normalizeDayMinutes(input.dailyStartMinutes);
+  const scheduleEndMinutes = normalizeDayMinutes(input.scheduleEndMinutes);
+  const clientRequestId = normalizeRouteCreateRequestId(input.clientRequestId);
+  const inputHash = buildRouteCreateInputHash({
+    countryCode,
+    primaryRegionCode,
+    primaryRegionLabelKey,
+    tripDays,
     travelStartDate,
-    travelEndDate
-  );
-  const route = await prisma.route.create({
-    data: {
-      ownerId: owner.id,
-      countryCode: nullableString(input.countryCode) ?? "KR",
-      primaryRegionCode: nullableString(input.primaryRegionCode),
-      primaryRegionLabelKey: nullableString(input.primaryRegionLabelKey),
-      tripDays,
-      travelStartDate,
-      travelEndDate,
-      dailyStartMinutes: normalizeDayMinutes(input.dailyStartMinutes),
-      scheduleEndMinutes: normalizeDayMinutes(input.scheduleEndMinutes),
-      startLocation,
-      status: stopInputs.length > 0 ? "ACTIVE" : "DRAFT",
-      totalStopCount: stopInputs.length,
-    },
+    travelEndDate,
+    dailyStartMinutes,
+    scheduleEndMinutes,
+    startLocation,
+    stops: stopInputs.map((stop) => ({
+      ...stop,
+      place: normalizePlaceSnapshot(stop.place),
+    })),
   });
-  const days = await createRouteDays(prisma, route.id, tripDays, travelStartDate);
-  const dayIdByIndex = new Map(days.map((day) => [day.dayIndex, day.id]));
 
-  for (const [index, stop] of stopInputs.entries()) {
-    const dayIndex = Math.max(1, Math.min(tripDays, stop.dayIndex ?? 1));
-
-    await prisma.routeStop.create({
+  const persistRoute = async (database: RouteCommandPrisma) => {
+    await assertNoRouteDateConflict(
+      database,
+      owner.id,
+      travelStartDate,
+      travelEndDate
+    );
+    const route = await database.route.create({
       data: {
-        routeId: route.id,
-        dayId: dayIdByIndex.get(dayIndex),
-        order: stop.order ?? index + 1,
-        place: normalizePlaceSnapshot(stop.place),
-        stayMinutes: stop.stayMinutes ?? null,
-        travelMinutesFromPrevious: normalizeTravelMinutes(
-          stop.travelMinutesFromPrevious
-        ),
-        memo: nullableString(stop.memo),
+        ownerId: owner.id,
+        countryCode,
+        primaryRegionCode,
+        primaryRegionLabelKey,
+        tripDays,
+        travelStartDate,
+        travelEndDate,
+        dailyStartMinutes,
+        scheduleEndMinutes,
+        startLocation,
+        status: stopInputs.length > 0 ? "ACTIVE" : "DRAFT",
+        totalStopCount: stopInputs.length,
       },
     });
+    const days = await createRouteDays(
+      database,
+      route.id,
+      tripDays,
+      travelStartDate
+    );
+    const dayIdByIndex = new Map(days.map((day) => [day.dayIndex, day.id]));
+
+    for (const [index, stop] of stopInputs.entries()) {
+      const dayIndex = Math.max(1, Math.min(tripDays, stop.dayIndex ?? 1));
+
+      await database.routeStop.create({
+        data: {
+          routeId: route.id,
+          dayId: dayIdByIndex.get(dayIndex),
+          order: stop.order ?? index + 1,
+          place: normalizePlaceSnapshot(stop.place),
+          stayMinutes: stop.stayMinutes ?? null,
+          travelMinutesFromPrevious: normalizeTravelMinutes(
+            stop.travelMinutesFromPrevious
+          ),
+          memo: nullableString(stop.memo),
+        },
+      });
+    }
+
+    return refreshRouteProgress(database, route.id);
+  };
+
+  if (!clientRequestId) {
+    return persistRoute(prisma);
   }
 
-  return refreshRouteProgress(prisma, route.id);
+  return runRouteCreateTransactionWithRetry(prisma, async (transaction) => {
+    const existingRequest = await transaction.routeCreateRequest.findUnique({
+      where: {
+        ownerId_requestId: {
+          ownerId: owner.id,
+          requestId: clientRequestId,
+        },
+      },
+    });
+
+    if (existingRequest) {
+      if (existingRequest.inputHash !== inputHash) {
+        throw new Error(
+          "같은 경로 생성 요청에 서로 다른 일정 정보가 전달됐습니다. 다시 시도해 주세요."
+        );
+      }
+
+      const existingRoute = await transaction.route.findUnique({
+        where: {
+          id: existingRequest.routeId,
+        },
+      });
+
+      if (existingRoute) {
+        return refreshRouteProgress(transaction, existingRoute.id);
+      }
+
+      await transaction.routeCreateRequest.delete({
+        where: {
+          id: existingRequest.id,
+        },
+      });
+    }
+
+    const route = await persistRoute(transaction);
+
+    await transaction.routeCreateRequest.create({
+      data: {
+        ownerId: owner.id,
+        requestId: clientRequestId,
+        inputHash,
+        routeId: route.id,
+      },
+    });
+
+    return route;
+  });
 }
 
 export async function appendRouteDays(
@@ -366,6 +540,10 @@ export async function startRoute(
 
   if (route.status === "COMPLETED") {
     throw new Error("이미 완료된 일정은 다시 시작할 수 없어요.");
+  }
+
+  if (getRouteDateKey(input.startedAt) > getRouteDateKey(new Date())) {
+    throw new Error("미래 날짜의 여행은 아직 시작할 수 없어요.");
   }
 
   const routeDays = await prisma.routeDay.findMany({
@@ -600,6 +778,11 @@ export async function deleteRoute(
     await transaction.userNotification.deleteMany({
       where: {
         userId: user.id,
+        routeId: route.id,
+      },
+    });
+    await transaction.routeCreateRequest.deleteMany({
+      where: {
         routeId: route.id,
       },
     });

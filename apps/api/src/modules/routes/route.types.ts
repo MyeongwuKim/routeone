@@ -34,6 +34,7 @@ export type CreateRouteStopInput = {
 };
 
 export type CreateRouteInput = {
+  clientRequestId?: string | null;
   countryCode?: string | null;
   primaryRegionCode?: string | null;
   primaryRegionLabelKey?: string | null;

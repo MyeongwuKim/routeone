@@ -530,6 +530,11 @@ function MyRoutePage() {
       return false;
     }
 
+    if (startedAt > getTodayDateKey()) {
+      showToast(text.myRoute.futureStartError, 2600);
+      return true;
+    }
+
     const startTimeReview = getStartTimeReview(route, startedAt, text);
     if (!startTimeReview) {
       handleStartRoute(route, startedAt);
@@ -600,11 +605,15 @@ function MyRoutePage() {
             }
           },
         },
-        {
-          label: text.myRoute.startPlannedDate,
-          variant: "secondary",
-          onClick: () => handleStartRoute(route, plannedStartKey),
-        },
+        ...(plannedStartKey <= todayKey
+          ? [
+              {
+                label: text.myRoute.startPlannedDate,
+                variant: "secondary" as const,
+                onClick: () => handleStartRoute(route, plannedStartKey),
+              },
+            ]
+          : []),
         {
           label: text.myRoute.chooseDate,
           variant: "secondary",

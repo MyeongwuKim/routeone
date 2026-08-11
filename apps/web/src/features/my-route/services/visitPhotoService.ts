@@ -25,6 +25,7 @@ type CloudflareImageUploadResponse = {
 };
 
 const VISIT_GPS_VERIFICATION_MAX_DISTANCE_METERS = 100;
+const VISIT_GPS_VERIFICATION_MAX_ACCURACY_METERS = 100;
 const EARTH_RADIUS_METERS = 6_371_000;
 const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 
@@ -87,6 +88,28 @@ export function assertVisitPositionNearPlace(
   return distanceMeters;
 }
 
+export function assertVisitPositionAccuracy(position: NativePosition) {
+  const accuracyMeters = position.accuracyMeters;
+
+  if (
+    typeof accuracyMeters !== "number" ||
+    !Number.isFinite(accuracyMeters) ||
+    accuracyMeters < 0
+  ) {
+    throw new Error(
+      "현재 위치의 정확도를 확인하지 못했어요. GPS 상태를 확인한 뒤 다시 시도해 주세요."
+    );
+  }
+
+  if (accuracyMeters > VISIT_GPS_VERIFICATION_MAX_ACCURACY_METERS) {
+    throw new Error(
+      `위치 정확도가 낮아요. GPS 신호가 안정된 후 다시 시도해 주세요. 현재 정확도는 약 ${Math.round(
+        accuracyMeters
+      )}m예요.`
+    );
+  }
+}
+
 export async function requestCurrentPosition() {
   const positionRequest = nativeBridge.location.getCurrentPosition();
 
@@ -114,6 +137,7 @@ export async function requestVisitVerificationPosition(
 
   const position = await requestCurrentPosition();
 
+  assertVisitPositionAccuracy(position);
   assertVisitPositionNearPlace(position, place);
 
   return position;

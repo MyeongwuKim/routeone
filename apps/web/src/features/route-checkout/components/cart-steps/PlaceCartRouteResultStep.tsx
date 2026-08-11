@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { IoLocationSharp } from "react-icons/io5";
@@ -86,6 +86,14 @@ function getRouteSaveErrorMessage(error: unknown, text: UiText) {
     : text.cart.saveRouteFallbackError;
 }
 
+function createRouteRequestId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `route-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function PlaceCartRouteResultStep({
   savedPlaces,
   candidatePlaces,
@@ -138,6 +146,8 @@ function PlaceCartRouteResultStep({
   });
   const [isOrderEditing, setIsOrderEditing] = useState(false);
   const [isSavingRoute, setIsSavingRoute] = useState(false);
+  const isSaveRequestInFlightRef = useRef(false);
+  const createRouteRequestIdRef = useRef<string | null>(null);
   const [isStartLocationPickerOpen, setIsStartLocationPickerOpen] =
     useState(false);
   const hasOverSchedule = routePlan.some((day) =>
@@ -148,6 +158,19 @@ function PlaceCartRouteResultStep({
     routePlan.find((day) => day.items.length > 0)?.items[0] ?? null;
   const firstTravelMinutes = firstRouteItem?.travelMinutesFromPrevious ?? null;
   const isRouteOrderEditing = isOrderEditing && hasEditableRoute;
+  useEffect(() => {
+    if (!isSaveRequestInFlightRef.current) {
+      createRouteRequestIdRef.current = null;
+    }
+  }, [
+    appendTarget?.routeId,
+    dailyStartMinutes,
+    routePlan,
+    scheduleEndMinutes,
+    startLocation,
+    travelStartDate,
+    tripDays,
+  ]);
   const routePlanPlaces = useMemo(() => {
     const usedKeys = new Set<string>();
 
@@ -289,7 +312,7 @@ function PlaceCartRouteResultStep({
     setIsOrderEditing(false);
   };
   const handleSaveRoute = async () => {
-    if (isSavingRoute) {
+    if (isSavingRoute || isSaveRequestInFlightRef.current) {
       return;
     }
 
@@ -298,6 +321,7 @@ function PlaceCartRouteResultStep({
       return;
     }
 
+    isSaveRequestInFlightRef.current = true;
     setIsSavingRoute(true);
 
     try {
@@ -341,6 +365,7 @@ function PlaceCartRouteResultStep({
             },
           ],
         });
+        isSaveRequestInFlightRef.current = false;
         setIsSavingRoute(false);
         return;
       }
@@ -359,14 +384,18 @@ function PlaceCartRouteResultStep({
           (currentData) => upsertMyRouteCache(currentData, route.appendRouteDays)
         );
       } else {
-        const route = await routeCheckoutApi.saveRoutePlan({
-          routePlan,
-          travelStartDate,
-          tripDays,
-          dailyStartMinutes,
-          scheduleEndMinutes,
-          startLocation,
-        });
+        createRouteRequestIdRef.current ??= createRouteRequestId();
+        const route = await routeCheckoutApi.saveRoutePlan(
+          {
+            routePlan,
+            travelStartDate,
+            tripDays,
+            dailyStartMinutes,
+            scheduleEndMinutes,
+            startLocation,
+          },
+          createRouteRequestIdRef.current
+        );
         queryClient.setQueryData<MyRoutesQuery>(
           MY_ROUTES_QUERY_KEY,
           (currentData) => upsertMyRouteCache(currentData, route.createRoute)
@@ -378,11 +407,13 @@ function PlaceCartRouteResultStep({
       if (appendTarget) {
         showToast(text.cart.appendDaySavedToast(appendTarget.routeTitle));
       }
+      isSaveRequestInFlightRef.current = false;
       clearAppendTarget();
       onClearPlaces();
       onClose();
     } catch (error) {
       showToast(getRouteSaveErrorMessage(error, text), 2600);
+      isSaveRequestInFlightRef.current = false;
       setIsSavingRoute(false);
     }
   };

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   FestivalNotificationKind,
+  Prisma,
   RouteReviewNotificationKind,
   RouteStatus,
   UserNotificationPushStatus,
@@ -62,6 +63,13 @@ const MAX_NOTIFICATION_CURSOR_LENGTH = 512;
 const KST_OFFSET_MS = 1000 * 60 * 60 * 9;
 const ROUTE_CORRECTION_GRACE_DAYS = 7;
 const ROUTE_REVIEW_TEST_COOLDOWN_MS = 10_000;
+
+function isUniqueConstraintError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
+}
 
 function normalizeRequiredText(
   value: string,
@@ -933,35 +941,51 @@ export async function syncRouteArrivalNotificationInbox(
     );
   });
 
-  await prisma.$transaction(async (transaction) => {
-    for (const notification of notifications) {
-      const stop = stopById.get(notification.stopId);
+  for (const notification of notifications) {
+    const stop = stopById.get(notification.stopId);
+    const createData = {
+      userId: user.id,
+      notificationKey: notification.notificationKey,
+      type: UserNotificationType.ROUTE_ARRIVAL,
+      routeId: notification.routeId,
+      routeTitle: notification.routeTitle,
+      dayId: notification.dayId,
+      stopId: notification.stopId,
+      placeTitle: stop?.place.title ?? notification.placeTitle,
+      availableAt: notification.deliveredAt,
+    };
+    const updateData = {
+      routeTitle: notification.routeTitle,
+      placeTitle: stop?.place.title ?? notification.placeTitle,
+    };
 
-      await transaction.userNotification.upsert({
+    try {
+      await prisma.userNotification.upsert({
         where: {
           userId_notificationKey: {
             userId: user.id,
             notificationKey: notification.notificationKey,
           },
         },
-        create: {
-          userId: user.id,
-          notificationKey: notification.notificationKey,
-          type: UserNotificationType.ROUTE_ARRIVAL,
-          routeId: notification.routeId,
-          routeTitle: notification.routeTitle,
-          dayId: notification.dayId,
-          stopId: notification.stopId,
-          placeTitle: stop?.place.title ?? notification.placeTitle,
-          availableAt: notification.deliveredAt,
+        create: createData,
+        update: updateData,
+      });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) {
+        throw error;
+      }
+
+      await prisma.userNotification.update({
+        where: {
+          userId_notificationKey: {
+            userId: user.id,
+            notificationKey: notification.notificationKey,
+          },
         },
-        update: {
-          routeTitle: notification.routeTitle,
-          placeTitle: stop?.place.title ?? notification.placeTitle,
-        },
+        data: updateData,
       });
     }
-  });
+  }
 
   return {
     syncedCount: notifications.length,

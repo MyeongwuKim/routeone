@@ -1,4 +1,4 @@
-import type { PrismaClient, User } from "@prisma/client";
+import { Prisma, type PrismaClient, type User } from "@prisma/client";
 import {
   assertRouteOwner,
   buildRouteShareTags,
@@ -8,6 +8,13 @@ import {
   buildRouteStopVisitDataFromStop,
   syncPlacePhotoForRouteStopVisit,
 } from "./routeVisit.service.js";
+
+function isUniqueConstraintError(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
+}
 
 export async function shareRoute(
   prisma: PrismaClient,
@@ -103,51 +110,44 @@ export async function setRouteLike(
   routeId: string,
   liked: boolean
 ) {
-  const existing = await prisma.routeLike.findUnique({
-    where: {
-      userId_routeId: {
+  if (liked) {
+    try {
+      await prisma.routeLike.create({
+        data: {
+          userId: user.id,
+          routeId,
+        },
+      });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  if (!liked) {
+    await prisma.routeLike.deleteMany({
+      where: {
         userId: user.id,
         routeId,
       },
+    });
+  }
+
+  const likeCount = await prisma.routeLike.count({
+    where: {
+      routeId,
     },
   });
 
-  if (liked && !existing) {
-    await prisma.routeLike.create({
-      data: {
-        userId: user.id,
-        routeId,
-      },
-    });
-    await prisma.route.update({
-      where: {
-        id: routeId,
-      },
-      data: {
-        likeCount: {
-          increment: 1,
-        },
-      },
-    });
-  }
-
-  if (!liked && existing) {
-    await prisma.routeLike.delete({
-      where: {
-        id: existing.id,
-      },
-    });
-    await prisma.route.update({
-      where: {
-        id: routeId,
-      },
-      data: {
-        likeCount: {
-          decrement: 1,
-        },
-      },
-    });
-  }
+  await prisma.route.update({
+    where: {
+      id: routeId,
+    },
+    data: {
+      likeCount,
+    },
+  });
 
   return readRouteInteraction(prisma, user.id, routeId);
 }
@@ -158,51 +158,44 @@ export async function setRouteSave(
   routeId: string,
   saved: boolean
 ) {
-  const existing = await prisma.routeSave.findUnique({
-    where: {
-      userId_routeId: {
+  if (saved) {
+    try {
+      await prisma.routeSave.create({
+        data: {
+          userId: user.id,
+          routeId,
+        },
+      });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  if (!saved) {
+    await prisma.routeSave.deleteMany({
+      where: {
         userId: user.id,
         routeId,
       },
+    });
+  }
+
+  const saveCount = await prisma.routeSave.count({
+    where: {
+      routeId,
     },
   });
 
-  if (saved && !existing) {
-    await prisma.routeSave.create({
-      data: {
-        userId: user.id,
-        routeId,
-      },
-    });
-    await prisma.route.update({
-      where: {
-        id: routeId,
-      },
-      data: {
-        saveCount: {
-          increment: 1,
-        },
-      },
-    });
-  }
-
-  if (!saved && existing) {
-    await prisma.routeSave.delete({
-      where: {
-        id: existing.id,
-      },
-    });
-    await prisma.route.update({
-      where: {
-        id: routeId,
-      },
-      data: {
-        saveCount: {
-          decrement: 1,
-        },
-      },
-    });
-  }
+  await prisma.route.update({
+    where: {
+      id: routeId,
+    },
+    data: {
+      saveCount,
+    },
+  });
 
   return readRouteInteraction(prisma, user.id, routeId);
 }

@@ -260,6 +260,7 @@ export type UiText = {
     deleteError: string;
     startSuccess: string;
     startError: string;
+    futureStartError: string;
     viewConflictingRoute: string;
     conflictConfirm: string;
     conflictTitle: string;
@@ -1239,6 +1240,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       deleteError: "일정을 삭제하지 못했어요.",
       startSuccess: "여행을 시작했어요.",
       startError: "여행을 시작하지 못했어요.",
+      futureStartError: "미래 날짜의 여행은 아직 시작할 수 없어요.",
       viewConflictingRoute: "해당 일정 보기",
       conflictConfirm: "확인",
       conflictTitle: "다음 날짜에 이미 일정이 있어요",
@@ -1843,7 +1845,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       finishOrderEditing: "순서 변경을 완료해 주세요",
       cancelChanges: "변경 취소",
       applyChanges: "변경 적용",
-      saving: "저장 중...",
+      saving: "루트 저장 중...",
       addDay: "DAY 추가",
       done: "완료",
       addSegmentAria: "이 구간에 장소 추가",
@@ -2341,6 +2343,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       deleteError: "Could not delete the schedule.",
       startSuccess: "Trip started.",
       startError: "Could not start the trip.",
+      futureStartError: "A trip with a future start date cannot be started yet.",
       viewConflictingRoute: "View schedule",
       conflictConfirm: "OK",
       conflictTitle: "Another schedule already uses that date",
@@ -2948,7 +2951,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       finishOrderEditing: "Finish changing the order",
       cancelChanges: "Cancel changes",
       applyChanges: "Apply changes",
-      saving: "Saving...",
+      saving: "Saving route...",
       addDay: "Add DAY",
       done: "Done",
       addSegmentAria: "Add a place to this segment",

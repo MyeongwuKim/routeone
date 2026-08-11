@@ -1,10 +1,13 @@
 import type {
+  Prisma,
   PrismaClient,
   Route,
   RouteStop,
   RouteStopVerificationStatus,
 } from "@prisma/client";
 import type { PlaceSnapshotInput } from "./route.types.js";
+
+type RouteSharedPrisma = PrismaClient | Prisma.TransactionClient;
 
 export const VERIFIED_ROUTE_STOP_STATUSES = new Set<RouteStopVerificationStatus>([
   "GPS",
@@ -403,7 +406,10 @@ export async function assertRouteOwner(
   return route;
 }
 
-export async function refreshRouteProgress(prisma: PrismaClient, routeId: string) {
+export async function refreshRouteProgress(
+  prisma: RouteSharedPrisma,
+  routeId: string
+) {
   const [totalStopCount, completedStopCount] = await Promise.all([
     prisma.routeStop.count({
       where: {

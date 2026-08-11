@@ -267,6 +267,7 @@ export const routeTypeDefs = gql`
   }
 
   input CreateRouteInput {
+    clientRequestId: String
     countryCode: String
     primaryRegionCode: String
     primaryRegionLabelKey: String

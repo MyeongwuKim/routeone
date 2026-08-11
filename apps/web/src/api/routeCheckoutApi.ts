@@ -187,8 +187,11 @@ async function buildAppendRouteDaysInput(
 }
 
 export const routeCheckoutApi = {
-  async saveRoutePlan(input: SaveRoutePlanInput) {
-    return routeApi.createRoute(await buildCreateRouteInput(input));
+  async saveRoutePlan(input: SaveRoutePlanInput, clientRequestId: string) {
+    const routeInput = await buildCreateRouteInput(input);
+    routeInput.clientRequestId = clientRequestId;
+
+    return routeApi.createRoute(routeInput);
   },
   async appendRouteDays(routeId: string, input: SaveRoutePlanInput) {
     return routeApi.appendRouteDays(
