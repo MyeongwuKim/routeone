@@ -85,6 +85,7 @@ export function useHomeAttractionData(
   const appLanguage = useAppLanguageStore((state) => state.language);
   const [attractionLoadingStage, setAttractionLoadingStage] =
     useState<AttractionLoadingStage>("idle");
+  const attractionLoadingRequestIdRef = useRef(0);
   const isUpdatingPlaceLabelsRef = useRef(false);
   const isAttractionQueryEnabled = options.enabled ?? true;
   const festivalDateWindow = useMemo(() => getFestivalDateWindow(), []);
@@ -195,6 +196,8 @@ export function useHomeAttractionData(
     queryKey: attractionQueryKey,
     enabled: Boolean(TOUR_API_SERVICE_KEY) && isAttractionQueryEnabled,
     queryFn: async () => {
+      const loadingRequestId = attractionLoadingRequestIdRef.current + 1;
+      attractionLoadingRequestIdRef.current = loadingRequestId;
       setAttractionLoadingStage("fetching-places");
       const selectedRegion = serviceArea.regions.find(
         (region) => region.sigunguCode === selectedSigunguCode
@@ -246,7 +249,9 @@ export function useHomeAttractionData(
         resolvedLclsNameByCode,
         appLanguage
       );
-      setAttractionLoadingStage("ranking");
+      if (attractionLoadingRequestIdRef.current === loadingRequestId) {
+        setAttractionLoadingStage("ranking");
+      }
 
       const attractionsWithFestivals = [...attractions, ...festivals];
       const dedupedAttractions = attractionsWithFestivals.filter(
@@ -308,6 +313,9 @@ export function useHomeAttractionData(
         });
       });
 
+      if (attractionLoadingRequestIdRef.current === loadingRequestId) {
+        setAttractionLoadingStage("idle");
+      }
       return {
         allAttractions: filteredAttractions,
         sourceAttractions: filteredAttractions,

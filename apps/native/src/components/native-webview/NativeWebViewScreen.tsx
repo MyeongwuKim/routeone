@@ -274,7 +274,7 @@ export default function NativeWebViewScreen({
 }: NativeWebViewScreenProps) {
   const text = WEB_VIEW_TEXT[appLanguage];
   const webViewRef = useRef<WebView>(null);
-  const pendingNavigationPathRef = useRef<string | null>(null);
+  const pendingNavigationPathRef = useRef<string | null>("/home");
   const fatalExitAlertShownRef = useRef(false);
   const rollbackInProgressRef = useRef(false);
   const readyBundleKeyRef = useRef<string | null>(null);

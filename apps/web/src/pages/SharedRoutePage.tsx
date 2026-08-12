@@ -280,7 +280,6 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       closeFilterDialog();
       setSelectedRouteId(null);
       setCheckoutRoutePlan(null);
-      void queryClient.invalidateQueries({ queryKey: ["tour-attractions"] });
       void queryClient.invalidateQueries({ queryKey: ["gangwon-attractions"] });
       void queryClient.invalidateQueries({ queryKey: ["gangwon-festivals"] });
       void queryClient.invalidateQueries({ queryKey: ["nearby-tourist"] });

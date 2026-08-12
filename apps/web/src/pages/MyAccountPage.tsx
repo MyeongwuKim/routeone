@@ -26,6 +26,10 @@ import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useAuthUserStore } from "@/stores/authUserStore";
+import { useHomeExploreStore } from "@/stores/homeExploreStore";
+import { useMapSheetStore } from "@/stores/mapSheetStore";
+import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
+import { useEffectiveServiceArea } from "@/stores/serviceAreaStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
@@ -140,6 +144,7 @@ function formatJoinedAt(value: string | undefined, language: "ko" | "en") {
 function MyAccountPage() {
   const text = useUiText();
   const language = useAppLanguageStore((state) => state.language);
+  const serviceArea = useEffectiveServiceArea();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
@@ -147,6 +152,13 @@ function MyAccountPage() {
   const authUser = useAuthUserStore((state) => state.user);
   const setAuthUser = useAuthUserStore((state) => state.setUser);
   const clearAuthUser = useAuthUserStore((state) => state.clearUser);
+  const resetHomeForArea = useHomeExploreStore(
+    (state) => state.resetForArea
+  );
+  const resetMapSheet = useMapSheetStore((state) => state.resetSheet);
+  const clearAppendTarget = useRouteEditFlowStore(
+    (state) => state.clearAppendTarget
+  );
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const meQuery = useQuery({
@@ -201,6 +213,9 @@ function MyAccountPage() {
   };
 
   const finishSession = (toastMessage: string) => {
+    resetHomeForArea(serviceArea.defaultRegion.sigunguCode);
+    resetMapSheet();
+    clearAppendTarget();
     clearAuthToken();
     clearAuthUser();
     queryClient.clear();

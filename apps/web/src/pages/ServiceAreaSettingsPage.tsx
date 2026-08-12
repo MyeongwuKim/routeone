@@ -40,7 +40,6 @@ function ServiceAreaSettingsPage() {
     setSelectedAreaId(nextAreaId);
     resetForArea(nextInitialRegion.sigunguCode);
     resetSheet();
-    void queryClient.invalidateQueries({ queryKey: ["tour-attractions"] });
     void queryClient.invalidateQueries({ queryKey: ["gangwon-attractions"] });
     void queryClient.invalidateQueries({ queryKey: ["gangwon-festivals"] });
     void queryClient.invalidateQueries({ queryKey: ["nearby-tourist"] });
