@@ -416,6 +416,10 @@ function HomePage() {
     mapReady &&
     !mapError &&
     (attractionLoadingStage !== "idle" || isAttractionFetching);
+  const shouldShowInitialRegionLoader =
+    !developmentFixedRegion &&
+    !isInitialRegionResolved &&
+    !mapError;
   const shouldShowMapSetupSkeleton = !isInitialRegionResolved;
   const shouldShowInteractiveMapUi = isInitialRegionResolved;
   const orderedRegions = useMemo(() => {
@@ -693,7 +697,22 @@ function HomePage() {
   }, [isSearchPopupOpen]);
 
   useEffect(() => {
-    if (!shouldShowAttractionLoader || isSearchPopupOpen) {
+    if (isSearchPopupOpen) {
+      hideLoading();
+      return;
+    }
+
+    if (shouldShowInitialRegionLoader) {
+      showLoading({
+        title: text.home.loadingLocationTitle,
+        description: text.home.loadingLocationDescription,
+        footerText: text.home.loadingFooter,
+        animation: "map-thinking",
+      });
+      return;
+    }
+
+    if (!shouldShowAttractionLoader) {
       hideLoading();
       return;
     }
@@ -746,6 +765,7 @@ function HomePage() {
     hideLoading,
     isSearchPopupOpen,
     shouldShowAttractionLoader,
+    shouldShowInitialRegionLoader,
     showLoading,
     text,
   ]);

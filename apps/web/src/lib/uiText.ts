@@ -184,6 +184,8 @@ export type UiText = {
     missingTourKey: string;
     loadingMapTitle: string;
     loadingMapDescription: string;
+    loadingLocationTitle: string;
+    loadingLocationDescription: string;
     loadingFooter: string;
     loadingPlacesTitle: string;
     loadingPlacesDescription: string;
@@ -1146,6 +1148,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       missingTourKey: "VITE_VISITKOREA_SERVICE_KEY가 비어있습니다.",
       loadingMapTitle: "지도를 준비하고 있어요",
       loadingMapDescription: "지도를 다시 연결하는 중",
+      loadingLocationTitle: "내 위치를 확인하고 있어요",
+      loadingLocationDescription: "가까운 지역 필터를 준비하는 중",
       loadingFooter: "감자 분석 모드 진행 중",
       loadingPlacesTitle: "장소 데이터를 찾고 있어요",
       loadingPlacesDescription: "지도를 보면서 장소 후보를 찾는 중",
@@ -2262,6 +2266,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       missingTourKey: "VITE_VISITKOREA_SERVICE_KEY is empty.",
       loadingMapTitle: "Preparing the map",
       loadingMapDescription: "Reconnecting the map",
+      loadingLocationTitle: "Finding your location",
+      loadingLocationDescription: "Preparing the nearest region filter",
       loadingFooter: "Analysis mode in progress",
       loadingPlacesTitle: "Finding place data",
       loadingPlacesDescription: "Looking for place candidates on the map",

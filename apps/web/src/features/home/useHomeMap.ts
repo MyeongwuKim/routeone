@@ -626,11 +626,8 @@ export function useHomeMap({
     const isPlaceLabelUpdate =
       isUpdatingPlaceLabelsRef.current &&
       hasRenderedAttractionMarkersRef.current;
-    let stageFrameId: number | null = null;
     if (!isPlaceLabelUpdate) {
-      stageFrameId = window.requestAnimationFrame(() => {
-        setAttractionLoadingStage("rendering-markers");
-      });
+      setAttractionLoadingStage("rendering-markers");
       hasRenderedAttractionMarkersRef.current = false;
     }
 
@@ -673,56 +670,68 @@ export function useHomeMap({
         visibleAttractions.length
       );
 
-      for (; markerIndex < nextIndex; markerIndex += 1) {
-        const markerItem = visibleAttractions[markerIndex];
-        if (!markerItem) {
-          continue;
+      try {
+        for (; markerIndex < nextIndex; markerIndex += 1) {
+          const markerItem = visibleAttractions[markerIndex];
+          if (!markerItem) {
+            continue;
+          }
+
+          const { attraction, markerType } = markerItem;
+          const spreadPosition =
+            spreadPositionByMarkerKey.get(
+              getAttractionMarkerKey(attraction)
+            ) ?? {
+              lat: attraction.lat,
+              lng: attraction.lng,
+            };
+          const position = new naverMaps.LatLng(
+            spreadPosition.lat,
+            spreadPosition.lng
+          );
+          const rank = topRankByAttractionId.get(attraction.id) ?? null;
+          const touristTrendName =
+            trendNameByAttractionId.get(attraction.id) ?? attraction.title;
+          const isTodayFestival = attraction.isTodayFestival;
+          const markerAnchor = isTodayFestival ? 27 : 17;
+          const marker = new naverMaps.Marker({
+            map: mapInstance,
+            position,
+            title: attraction.title,
+            zIndex: isTodayFestival ? 2600 : rank ? 2000 - rank : 1100,
+            icon: {
+              content: createBadgeMarkerIconHtml(
+                markerType.badge,
+                rank ? `${rank}` : undefined,
+                {
+                  highlighted: isTodayFestival,
+                  highlightLabel: text.home.ongoing,
+                }
+              ),
+              anchor: new naverMaps.Point(markerAnchor, markerAnchor),
+            },
+          }) as HomeMapOverlay;
+
+          markerRefs.current.push(marker);
+          const listener = naverMaps.Event.addListener(
+            marker,
+            "click",
+            () => {
+              focusAttraction(attraction);
+              onSelectAttractionRef.current({
+                attraction,
+                markerType,
+                touristTrendName,
+                rank,
+              });
+            }
+          );
+          markerListenerRefs.current.push(listener);
         }
-
-        const { attraction, markerType } = markerItem;
-        const spreadPosition =
-          spreadPositionByMarkerKey.get(getAttractionMarkerKey(attraction)) ?? {
-            lat: attraction.lat,
-            lng: attraction.lng,
-          };
-        const position = new naverMaps.LatLng(
-          spreadPosition.lat,
-          spreadPosition.lng
-        );
-        const rank = topRankByAttractionId.get(attraction.id) ?? null;
-        const touristTrendName =
-          trendNameByAttractionId.get(attraction.id) ?? attraction.title;
-        const isTodayFestival = attraction.isTodayFestival;
-        const markerAnchor = isTodayFestival ? 27 : 17;
-        const marker = new naverMaps.Marker({
-          map: mapInstance,
-          position,
-          title: attraction.title,
-          zIndex: isTodayFestival ? 2600 : rank ? 2000 - rank : 1100,
-          icon: {
-            content: createBadgeMarkerIconHtml(
-              markerType.badge,
-              rank ? `${rank}` : undefined,
-              {
-                highlighted: isTodayFestival,
-                highlightLabel: text.home.ongoing,
-              }
-            ),
-            anchor: new naverMaps.Point(markerAnchor, markerAnchor),
-          },
-        }) as HomeMapOverlay;
-
-        markerRefs.current.push(marker);
-        const listener = naverMaps.Event.addListener(marker, "click", () => {
-          focusAttraction(attraction);
-          onSelectAttractionRef.current({
-            attraction,
-            markerType,
-            touristTrendName,
-            rank,
-          });
-        });
-        markerListenerRefs.current.push(listener);
+      } catch (error) {
+        console.warn("[routeone-web] failed to render map markers", error);
+        completeMarkerRendering();
+        return;
       }
 
       if (markerIndex < visibleAttractions.length) {
@@ -738,9 +747,6 @@ export function useHomeMap({
       isCancelled = true;
       if (isPlaceLabelUpdate) {
         isUpdatingPlaceLabelsRef.current = false;
-      }
-      if (stageFrameId != null) {
-        window.cancelAnimationFrame(stageFrameId);
       }
       if (frameId != null) {
         window.cancelAnimationFrame(frameId);
