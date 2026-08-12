@@ -155,7 +155,8 @@ export type NearbyTouristPlace = {
   distanceM: number | null;
 };
 
-type FetchGangwonAttractionsOptions = {
+type FetchTourAttractionsOptions = {
+  areaCode?: string;
   sigunguCode?: string;
   contentTypeIds?: string[];
 };
@@ -757,9 +758,9 @@ function getPageNumbers(startPage: number, endPage: number) {
   );
 }
 
-export async function fetchGangwonAttractions(
+export async function fetchTourAttractions(
   serviceKey: string,
-  options: FetchGangwonAttractionsOptions = {},
+  options: FetchTourAttractionsOptions = {},
   language: AppLanguage = "ko"
 ) {
   if (!serviceKey) {
@@ -788,7 +789,7 @@ export async function fetchGangwonAttractions(
     numOfRows: `${pageSize}`,
     pageNo: "1",
     arrange: "Q",
-    areaCode: GANGWON_AREA_CODE,
+    areaCode: options.areaCode || GANGWON_AREA_CODE,
   };
 
   if (options.sigunguCode) {
@@ -868,6 +869,8 @@ export async function fetchGangwonAttractions(
 
   return [...unique.values()];
 }
+
+export const fetchGangwonAttractions = fetchTourAttractions;
 
 export async function fetchGangwonFestivals(
   serviceKey: string,

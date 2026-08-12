@@ -5,6 +5,7 @@ import fastifyApollo, {
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { createContext } from "./context.js";
+import { formatRouteOneGraphQLError } from "./graphql/userFacingError.js";
 import type { GraphQLContext } from "./context.js";
 import { registerNotificationSchedulerRoutes } from "./modules/notifications/notificationScheduler.route.js";
 import { resolvers, typeDefs } from "./schema.js";
@@ -27,6 +28,7 @@ export async function buildApp() {
   const server = new ApolloServer<GraphQLContext>({
     typeDefs,
     resolvers,
+    formatError: formatRouteOneGraphQLError,
     plugins: [fastifyApolloDrainPlugin(app)],
   });
 

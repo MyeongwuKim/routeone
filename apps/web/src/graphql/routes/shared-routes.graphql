@@ -1,5 +1,5 @@
-query SharedRoutes($regionCode: String, $limit: Int) {
-  sharedRoutes(regionCode: $regionCode, limit: $limit) {
+query SharedRoutes($regionCode: String, $regionTag: String, $limit: Int) {
+  sharedRoutes(regionCode: $regionCode, regionTag: $regionTag, limit: $limit) {
     ...RouteSummaryFields
     owner {
       ...SharedRouteOwnerFields

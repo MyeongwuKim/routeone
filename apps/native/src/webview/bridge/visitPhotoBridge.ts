@@ -42,12 +42,16 @@ type NativeVisitPhotoUploadFile = {
 const VISIT_PHOTO_MAX_DIMENSION = 1280;
 
 function getCloudflareUploadError(payload: CloudflareImageUploadResponse) {
-  return (
-    payload.errors
-      ?.map((error) => error.message)
-      .filter(Boolean)
-      .join(", ") || "사진 업로드에 실패했어요."
-  );
+  const errorDetails = payload.errors
+    ?.map((error) => error.message)
+    .filter(Boolean)
+    .join(", ");
+
+  if (errorDetails) {
+    console.error("[visit-photo] Cloudflare upload rejected", errorDetails);
+  }
+
+  return "사진 업로드에 실패했어요. 잠시 후 다시 시도해 주세요.";
 }
 
 function assertCloudflareUploadUrl(uploadUrl: string) {

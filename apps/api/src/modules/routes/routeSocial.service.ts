@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient, type User } from "@prisma/client";
+import { UserFacingError } from "../../graphql/userFacingError.js";
 import {
   assertRouteOwner,
   buildRouteShareTags,
@@ -33,7 +34,7 @@ export async function shareRoute(
   });
 
   if (refreshedRoute.status !== "COMPLETED") {
-    throw new Error("완료한 루트만 공유할 수 있습니다.");
+    throw new UserFacingError("완료한 루트만 공유할 수 있습니다.");
   }
 
   const shareTags = buildRouteShareTags(refreshedRoute, routeStops);
@@ -94,7 +95,7 @@ async function readRouteInteraction(
   ]);
 
   if (!route) {
-    throw new Error("루트를 찾을 수 없습니다.");
+    throw new UserFacingError("루트를 찾을 수 없습니다.");
   }
 
   return {

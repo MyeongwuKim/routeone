@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useQuery,
+  useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
@@ -17,9 +18,10 @@ import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import { DropdownSelect } from "@/components/inputs";
 import {
-  GANGWON_REGIONS,
-  type GangwonRegionLabel,
-} from "@/data/gangwonRegions";
+  SERVICE_AREAS,
+  getNearestServiceRegion,
+  type ServiceAreaId,
+} from "@/data/serviceAreas";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
 import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
 import type { PlannedRouteDay } from "@/features/route-checkout/models/routePlanTypes";
@@ -35,10 +37,8 @@ import {
   getRoutePlanTripDays,
 } from "@/features/shared-route/sharedRouteCheckout";
 import {
-  DEFAULT_FILTER_REGION,
   getActiveFilterCount,
   getFilterLabel,
-  getNearestGangwonRegion,
   getSharedRouteFilterOptions,
   routeMatchesFilters,
 } from "@/features/shared-route/sharedRouteFilters";
@@ -73,7 +73,13 @@ import { getSortedRouteDays } from "@/features/my-route/routeDisplay";
 import { getCurrentPosition } from "@/lib/currentPosition";
 import { localizeTourPlaces } from "@/lib/placeLocalization";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
+import {
+  isDevelopmentServiceAreaEnabled,
+  useEffectiveServiceArea,
+  useServiceAreaStore,
+} from "@/stores/serviceAreaStore";
 import { useUiText } from "@/lib/uiText";
 import type { MapSheetPlace } from "@/types/place";
 
@@ -81,10 +87,19 @@ type SharedRoutePageProps = {
   mode?: SharedRoutePageMode;
 };
 
+const SERVICE_AREA_OPTION_VALUES: ServiceAreaId[] = ["seoul", "gangwon"];
+
 function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const text = useUiText();
   const appLanguage = useAppLanguageStore((state) => state.language);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const serviceArea = useEffectiveServiceArea();
+  const canSelectServiceArea = isDevelopmentServiceAreaEnabled();
+  const setSelectedAreaId = useServiceAreaStore(
+    (state) => state.setSelectedAreaId
+  );
+  const resetForArea = useHomeExploreStore((state) => state.resetForArea);
   const resetMapSheet = useMapSheetStore((state) => state.resetSheet);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [checkoutRoutePlan, setCheckoutRoutePlan] = useState<
@@ -105,8 +120,9 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     removeActiveFilter: handleRemoveActiveFilter,
     toggleDraftFilter: handleToggleDraftFilter,
   } = useSharedRouteFilters(appLanguage);
-  const [defaultFilterRegion, setDefaultFilterRegion] =
-    useState<GangwonRegionLabel>(DEFAULT_FILTER_REGION);
+  const [defaultFilterRegion, setDefaultFilterRegion] = useState(
+    serviceArea.defaultRegion.label
+  );
   const routeListScrollRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const handleOpenRoute = useCallback(
@@ -115,18 +131,23 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   );
   const pageCopy = getSharedRoutePageCopy(text, mode);
   const sortOptions = useMemo(() => getSharedRouteSortOptions(text), [text]);
-  const routeListQueryKey =
+  const baseRouteListQueryKey =
     mode === "liked" ? LIKED_SHARED_ROUTES_QUERY_KEY : SHARED_ROUTES_QUERY_KEY;
+  const routeListQueryKey = canSelectServiceArea
+    ? [...baseRouteListQueryKey, "service-area", serviceArea.id]
+    : baseRouteListQueryKey;
   const routeListQuery = useInfiniteQuery({
     queryKey: routeListQueryKey,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) =>
       mode === "liked"
         ? routeApi.likedSharedRouteConnection({
+            regionTag: canSelectServiceArea ? serviceArea.label : null,
             limit: SHARED_ROUTE_PAGE_SIZE,
             cursor: pageParam,
           })
         : routeApi.sharedRouteConnection({
+            regionTag: canSelectServiceArea ? serviceArea.label : null,
             limit: SHARED_ROUTE_PAGE_SIZE,
             cursor: pageParam,
           }),
@@ -154,7 +175,11 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     likedRouteIds,
     pendingLikeRouteIds,
     toggleLike: handleToggleLike,
-  } = useSharedRouteLike({ routes, mode });
+  } = useSharedRouteLike({
+    routes,
+    mode,
+    serviceAreaId: canSelectServiceArea ? serviceArea.id : undefined,
+  });
   const routePlaceLocalizationCandidates = useMemo(
     () => getSharedRoutePlaceLocalizationCandidates(routes),
     [routes]
@@ -188,12 +213,17 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     [appLanguage, routePlaceLocalizationQuery.data, routes]
   );
   const filterOptions = useMemo(
-    () => getSharedRouteFilterOptions(displayRoutes, text),
-    [displayRoutes, text]
+    () =>
+      getSharedRouteFilterOptions(
+        displayRoutes,
+        text,
+        serviceArea.regions.map((region) => region.label)
+      ),
+    [displayRoutes, serviceArea.regions, text]
   );
   const handleRequestPlaceRouteFilter = useCallback(
     (place: MapSheetPlace) => {
-      const codedRegion = GANGWON_REGIONS.find(
+      const codedRegion = serviceArea.regions.find(
         (region) =>
           region.sigunguCode === place.signguCode ||
           region.adminCode === place.signguCode ||
@@ -225,6 +255,47 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       filterOptions.placeRegions,
       replaceActiveFiltersWithCandidate,
       resetMapSheet,
+      serviceArea.regions,
+    ]
+  );
+
+  const handleSelectServiceArea = useCallback(
+    (nextAreaId: ServiceAreaId) => {
+      if (nextAreaId === serviceArea.id) {
+        return;
+      }
+
+      const nextArea = SERVICE_AREAS[nextAreaId];
+      setDefaultFilterRegion(nextArea.defaultRegion.label);
+      setSelectedAreaId(nextAreaId);
+      resetForArea(nextArea.defaultRegion.sigunguCode);
+      resetMapSheet();
+      handleClearActiveFilters();
+      handleClearDraftFilters();
+      closeFilterDialog();
+      setSelectedRouteId(null);
+      setCheckoutRoutePlan(null);
+      void queryClient.invalidateQueries({ queryKey: ["tour-attractions"] });
+      void queryClient.invalidateQueries({ queryKey: ["gangwon-attractions"] });
+      void queryClient.invalidateQueries({ queryKey: ["gangwon-festivals"] });
+      void queryClient.invalidateQueries({ queryKey: ["nearby-tourist"] });
+
+      window.requestAnimationFrame(() => {
+        routeListScrollRef.current?.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+      });
+    },
+    [
+      closeFilterDialog,
+      handleClearActiveFilters,
+      handleClearDraftFilters,
+      queryClient,
+      resetForArea,
+      resetMapSheet,
+      serviceArea.id,
+      setSelectedAreaId,
     ]
   );
   const activeFilterCount = getActiveFilterCount(activeFilters);
@@ -377,22 +448,19 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         }
 
         setDefaultFilterRegion(
-          getNearestGangwonRegion({
-            lat: position.lat,
-            lng: position.lng,
-          })
+          getNearestServiceRegion(serviceArea, position).label
         );
       })
       .catch(() => {
         if (isMounted) {
-          setDefaultFilterRegion(DEFAULT_FILTER_REGION);
+          setDefaultFilterRegion(serviceArea.defaultRegion.label);
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [serviceArea]);
 
   useEffect(() => {
     const root = routeListScrollRef.current;
@@ -492,6 +560,36 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       ) : null}
 
       <div className="space-y-2">
+        {canSelectServiceArea ? (
+          <div
+            role="group"
+            aria-label={text.sharedRoute.areaFilterAria}
+            className="grid grid-cols-2 gap-1 rounded-full border border-brand-200 bg-brand-50 p-1 dark:border-brand-400/25 dark:bg-brand-400/10"
+          >
+            {SERVICE_AREA_OPTION_VALUES.map((areaId) => {
+              const area = SERVICE_AREAS[areaId];
+              const areaLabel = text.labels.regions[area.label] ?? area.label;
+              const isSelected = serviceArea.id === areaId;
+
+              return (
+                <button
+                  key={areaId}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => handleSelectServiceArea(areaId)}
+                  className={`min-h-9 rounded-full px-3 py-2 text-xs font-black transition ${
+                    isSelected
+                      ? "bg-brand-600 text-white shadow-sm"
+                      : "text-brand-700 hover:bg-white/70 dark:text-brand-100 dark:hover:bg-brand-400/10"
+                  }`}
+                >
+                  {areaLabel}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
         <div className="flex items-center gap-2">
           <DropdownSelect
             ariaLabel={text.sharedRoute.sortAria}

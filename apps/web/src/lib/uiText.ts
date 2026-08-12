@@ -72,6 +72,7 @@ export type UiText = {
     appSettings: string;
     languageTitle: string;
     notificationSettingsTitle: string;
+    serviceAreaTitle: string;
     appInfoTitle: string;
   };
   myInfo: {
@@ -92,11 +93,19 @@ export type UiText = {
     english: string;
     notificationSettings: string;
     notificationSettingsDescription: string;
+    serviceArea: string;
+    serviceAreaDescription: (area: string) => string;
     appInfo: string;
     appInfoDescription: string;
     logout: string;
     logoutDescription: string;
     logoutToast: string;
+  };
+  serviceArea: {
+    selectAreaAria: string;
+    optionDescription: (area: string) => string;
+    note: string;
+    changedToast: (area: string) => string;
   };
   account: {
     eyebrow: string;
@@ -108,21 +117,6 @@ export type UiText = {
     loginMethods: string;
     joinedAt: string;
     providers: Record<AuthProvider, string>;
-    testAccountSection: string;
-    testAccountDescription: string;
-    openTestAccountSwitch: string;
-    closeTestAccountSwitch: string;
-    testAccountFormTitle: string;
-    accountIdLabel: string;
-    accountIdPlaceholder: string;
-    passwordLabel: string;
-    passwordPlaceholder: string;
-    displayNameLabel: string;
-    optional: string;
-    switching: string;
-    switchAccount: string;
-    switchToast: (name: string) => string;
-    requestError: string;
     managementSection: string;
     logout: string;
     logoutDescription: string;
@@ -378,6 +372,7 @@ export type UiText = {
     likedDescription: string;
     likedError: string;
     likedEmpty: string;
+    areaFilterAria: string;
     sortAria: string;
     sortButtonLabel: string;
     sortSharedDescLabel: string;
@@ -855,6 +850,32 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     },
     labels: {
       regions: {
+        서울: "서울",
+        강남구: "강남구",
+        강동구: "강동구",
+        강북구: "강북구",
+        강서구: "강서구",
+        관악구: "관악구",
+        광진구: "광진구",
+        구로구: "구로구",
+        금천구: "금천구",
+        노원구: "노원구",
+        도봉구: "도봉구",
+        동대문구: "동대문구",
+        동작구: "동작구",
+        마포구: "마포구",
+        서대문구: "서대문구",
+        서초구: "서초구",
+        성동구: "성동구",
+        성북구: "성북구",
+        송파구: "송파구",
+        양천구: "양천구",
+        영등포구: "영등포구",
+        용산구: "용산구",
+        은평구: "은평구",
+        종로구: "종로구",
+        중구: "중구",
+        중랑구: "중랑구",
         강원: "강원",
         강릉: "강릉",
         고성: "고성",
@@ -995,6 +1016,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       appSettings: "앱 설정",
       languageTitle: "언어 설정",
       notificationSettingsTitle: "알림 설정",
+      serviceAreaTitle: "테스트 지역 설정",
       appInfoTitle: "버전 및 권한",
     },
     myInfo: {
@@ -1015,11 +1037,20 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       english: "English",
       notificationSettings: "알림 설정",
       notificationSettingsDescription: "축제·루트·장소 도착 알림 관리",
+      serviceArea: "테스트 지역 설정",
+      serviceAreaDescription: (area) => `${area} Open API 장소 사용 중`,
       appInfo: "버전 및 권한",
       appInfoDescription: "앱 버전과 위치·알림·카메라·앨범 권한 확인",
       logout: "로그아웃",
       logoutDescription: "현재 계정에서 나가기",
       logoutToast: "로그아웃했어요.",
+    },
+    serviceArea: {
+      selectAreaAria: "GPS 테스트 지역 선택",
+      optionDescription: (area) =>
+        `${area}의 시군구별 Open API 장소를 지도에 표시해요.`,
+      note: "개발 빌드에서만 사용하는 설정이에요. 현재 위치와 가까운 시군구가 홈 필터 맨 앞에 표시돼요.",
+      changedToast: (area) => `${area} 테스트 모드로 변경했어요.`,
     },
     account: {
       eyebrow: "내 정보",
@@ -1036,22 +1067,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         APPLE: "Apple",
         UNKNOWN: "로그인 계정",
       },
-      testAccountSection: "테스트 계정",
-      testAccountDescription:
-        "다른 테스트 아이디로 로그인하거나 새 테스트 계정을 만들 수 있어요.",
-      openTestAccountSwitch: "다른 테스트 계정으로 전환",
-      closeTestAccountSwitch: "계정 전환 닫기",
-      testAccountFormTitle: "전환할 계정을 입력해요",
-      accountIdLabel: "아이디",
-      accountIdPlaceholder: "routeone",
-      passwordLabel: "비밀번호",
-      passwordPlaceholder: "4자 이상",
-      displayNameLabel: "닉네임",
-      optional: "선택",
-      switching: "전환 중...",
-      switchAccount: "테스트 계정으로 전환",
-      switchToast: (name) => `${name} 계정으로 전환했어요.`,
-      requestError: "계정 처리에 실패했어요. 다시 시도해 주세요.",
       managementSection: "계정 관리",
       logout: "로그아웃",
       logoutDescription: "현재 계정에서 나가기",
@@ -1359,6 +1374,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       likedDescription: "내가 좋아요한 공유 루트 모아보기",
       likedError: "좋아요한 공유 루트를 불러오지 못했어요.",
       likedEmpty: "아직 좋아요한 공유 루트가 없어요.",
+      areaFilterAria: "공유 루트 지역 선택",
       sortAria: "공유 루트 정렬",
       sortButtonLabel: "정렬",
       sortSharedDescLabel: "최신순",
@@ -1391,10 +1407,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       likedBackAria: "내 정보로 돌아가기",
       loadingFeed: "공유 루트 찾는 중",
       loadingLiked: "하트 루트 찾는 중",
-      emptyLikedDescription: "마음에 드는 공유 루트에 하트를 누르면 여기에 모여요.",
-      emptyFeedDescription: "감자가 공개된 여행 가방을 살펴보고 있어요.",
-      emptyLikedFooter: "마음에 드는 루트를 찾으면 하트로 모아둘 수 있어요.",
-      emptyFeedFooter: "완료한 루트가 공유되면 여기에 모여요.",
+      emptyLikedDescription: "좋아요한 루트는 여기서 볼 수 있어요.",
+      emptyFeedDescription: "공개된 여행 루트를 찾고 있어요.",
+      emptyLikedFooter: "공유 루트에서 하트를 눌러보세요.",
+      emptyFeedFooter: "공유된 루트가 여기에 모여요.",
       noFilteredTitle: "조건에 맞는 공유 루트가 없어요.",
       noFilteredDescription: "감자가 필터 안을 다시 살펴보고 있어요.",
       noFilteredFooter: "필터를 줄이면 더 많은 루트가 보여요.",
@@ -1931,6 +1947,32 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     },
     labels: {
       regions: {
+        서울: "Seoul",
+        강남구: "Gangnam-gu",
+        강동구: "Gangdong-gu",
+        강북구: "Gangbuk-gu",
+        강서구: "Gangseo-gu",
+        관악구: "Gwanak-gu",
+        광진구: "Gwangjin-gu",
+        구로구: "Guro-gu",
+        금천구: "Geumcheon-gu",
+        노원구: "Nowon-gu",
+        도봉구: "Dobong-gu",
+        동대문구: "Dongdaemun-gu",
+        동작구: "Dongjak-gu",
+        마포구: "Mapo-gu",
+        서대문구: "Seodaemun-gu",
+        서초구: "Seocho-gu",
+        성동구: "Seongdong-gu",
+        성북구: "Seongbuk-gu",
+        송파구: "Songpa-gu",
+        양천구: "Yangcheon-gu",
+        영등포구: "Yeongdeungpo-gu",
+        용산구: "Yongsan-gu",
+        은평구: "Eunpyeong-gu",
+        종로구: "Jongno-gu",
+        중구: "Jung-gu",
+        중랑구: "Jungnang-gu",
         강원: "Gangwon",
         강릉: "Gangneung",
         고성: "Goseong",
@@ -2082,6 +2124,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       appSettings: "App Settings",
       languageTitle: "Language",
       notificationSettingsTitle: "Notifications",
+      serviceAreaTitle: "Test Region",
       appInfoTitle: "Version & Permissions",
     },
     myInfo: {
@@ -2103,12 +2146,21 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       notificationSettings: "Notifications",
       notificationSettingsDescription:
         "Manage festival, route, and arrival alerts",
+      serviceArea: "Test Region",
+      serviceAreaDescription: (area) => `Using ${area} Open API places`,
       appInfo: "Version & Permissions",
       appInfoDescription:
         "Check app versions, location, notification, camera, and photo library permissions",
       logout: "Log Out",
       logoutDescription: "Leave the current account",
       logoutToast: "Logged out.",
+    },
+    serviceArea: {
+      selectAreaAria: "Select a GPS test region",
+      optionDescription: (area) =>
+        `Show Open API places for each district in ${area}.`,
+      note: "This setting is available only in development builds. The district nearest your current location appears first on Home.",
+      changedToast: (area) => `Changed the test region to ${area}.`,
     },
     account: {
       eyebrow: "My Info",
@@ -2125,22 +2177,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         APPLE: "Apple",
         UNKNOWN: "Sign-in account",
       },
-      testAccountSection: "Test Account",
-      testAccountDescription:
-        "Sign in with another test ID or create a new test account.",
-      openTestAccountSwitch: "Switch test account",
-      closeTestAccountSwitch: "Close account switcher",
-      testAccountFormTitle: "Enter the account to use",
-      accountIdLabel: "ID",
-      accountIdPlaceholder: "routeone",
-      passwordLabel: "Password",
-      passwordPlaceholder: "At least 4 characters",
-      displayNameLabel: "Nickname",
-      optional: "Optional",
-      switching: "Switching...",
-      switchAccount: "Switch test account",
-      switchToast: (name) => `Switched to ${name}.`,
-      requestError: "Could not process the account. Try again.",
       managementSection: "Account Management",
       logout: "Log Out",
       logoutDescription: "Leave the current account",
@@ -2474,6 +2510,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       likedDescription: "Routes you saved with hearts",
       likedError: "Could not load liked shared routes.",
       likedEmpty: "No liked shared routes yet",
+      areaFilterAria: "Choose a shared route area",
       sortAria: "Sort shared routes",
       sortButtonLabel: "Sort",
       sortSharedDescLabel: "Newest",
@@ -2506,10 +2543,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       likedBackAria: "Back to My Info",
       loadingFeed: "Finding shared routes",
       loadingLiked: "Finding liked routes",
-      emptyLikedDescription: "Tap hearts on shared routes to collect them here.",
-      emptyFeedDescription: "Looking through public travel bags.",
-      emptyLikedFooter: "Use hearts to save routes you like.",
-      emptyFeedFooter: "Completed shared routes will appear here.",
+      emptyLikedDescription: "View liked routes here.",
+      emptyFeedDescription: "Looking for public travel routes.",
+      emptyLikedFooter: "Tap a heart to save a route.",
+      emptyFeedFooter: "Shared routes collect here.",
       noFilteredTitle: "No shared routes match the filters",
       noFilteredDescription: "Checking inside the current filters.",
       noFilteredFooter: "Try removing a filter to see more routes.",

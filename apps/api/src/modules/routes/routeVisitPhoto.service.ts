@@ -1,4 +1,5 @@
 import type { PrismaClient, User } from "@prisma/client";
+import { UserFacingError } from "../../graphql/userFacingError.js";
 import { isDevVerificationBypassEnabled } from "../../lib/devVerification.js";
 
 export type RouteStopVisitPhotoUploadPayload = {
@@ -136,7 +137,7 @@ async function assertRouteStopOwner(
   });
 
   if (!stop) {
-    throw new Error("장소를 찾을 수 없습니다.");
+    throw new UserFacingError("장소를 찾을 수 없습니다.");
   }
 
   const route = await prisma.route.findUnique({
@@ -146,11 +147,11 @@ async function assertRouteStopOwner(
   });
 
   if (!route) {
-    throw new Error("루트를 찾을 수 없습니다.");
+    throw new UserFacingError("루트를 찾을 수 없습니다.");
   }
 
   if (route.ownerId !== userId) {
-    throw new Error("루트에 접근할 수 없습니다.");
+    throw new UserFacingError("루트에 접근할 수 없습니다.");
   }
 }
 
@@ -273,7 +274,7 @@ export async function deleteRouteVisitPhotoImages(imageIds: string[]) {
       "[visit-photo] account image cleanup failed",
       error instanceof Error ? error.message : error
     );
-    throw new Error(
+    throw new UserFacingError(
       "인증 사진을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요."
     );
   }

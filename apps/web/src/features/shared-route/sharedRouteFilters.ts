@@ -6,12 +6,10 @@ import {
   type SharedRoutePlaceFilterOption,
 } from "./sharedRouteCardModel";
 import {
-  DEFAULT_GANGWON_REGION,
-  GANGWON_REGION_CENTER_BY_LABEL,
-  GANGWON_REGION_LABELS,
-  GANGWON_SIGUNGU_CODE_BY_LABEL,
-  type GangwonRegionLabel,
-} from "@/data/gangwonRegions";
+  SERVICE_AREAS,
+  type ServiceArea,
+  type ServiceRegion,
+} from "@/data/serviceAreas";
 import {
   cacheTourCategoryLocalizationMap,
   localizeTourPlaces,
@@ -22,9 +20,9 @@ import {
   getPlaceCategoryLabel,
 } from "@/lib/placeCategory";
 import {
-  fetchGangwonAttractions,
   fetchGangwonFestivals,
   fetchLclsSystemNameMap,
+  fetchTourAttractions,
   type GangwonAttraction,
 } from "@/lib/visitKoreaTourApi";
 import {
@@ -56,9 +54,6 @@ export const EMPTY_SHARED_ROUTE_FILTERS: SharedRouteFilters = {
   places: [],
 };
 
-export const DEFAULT_FILTER_REGION: GangwonRegionLabel =
-  DEFAULT_GANGWON_REGION.label;
-
 export const SHARED_ROUTE_FILTER_PLACE_SOURCE_ENABLED = Boolean(
   TOUR_API_SERVICE_KEY
 );
@@ -74,42 +69,6 @@ const PLACE_CATEGORY_ORDER = [
   "기타",
 ] as const;
 
-function calculateDistanceMeters(
-  from: { lat: number; lng: number },
-  to: { lat: number; lng: number }
-) {
-  const earthRadiusMeters = 6371000;
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const dLat = toRadians(to.lat - from.lat);
-  const dLng = toRadians(to.lng - from.lng);
-  const fromLat = toRadians(from.lat);
-  const toLat = toRadians(to.lat);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(dLng / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return earthRadiusMeters * c;
-}
-
-export function getNearestGangwonRegion(location: {
-  lat: number;
-  lng: number;
-}) {
-  return GANGWON_REGION_LABELS.reduce((nearestRegion, region) => {
-    const nearestDistance = calculateDistanceMeters(
-      location,
-      GANGWON_REGION_CENTER_BY_LABEL[nearestRegion]
-    );
-    const regionDistance = calculateDistanceMeters(
-      location,
-      GANGWON_REGION_CENTER_BY_LABEL[region]
-    );
-
-    return regionDistance < nearestDistance ? region : nearestRegion;
-  }, DEFAULT_FILTER_REGION);
-}
-
 function getPlaceCategorySortRank(category: string) {
   const matchedIndex = PLACE_CATEGORY_ORDER.findIndex((orderedCategory) =>
     category.includes(orderedCategory)
@@ -118,8 +77,21 @@ function getPlaceCategorySortRank(category: string) {
   return matchedIndex === -1 ? PLACE_CATEGORY_ORDER.length : matchedIndex;
 }
 
-function getRegionSigunguCode(region: string) {
-  return GANGWON_SIGUNGU_CODE_BY_LABEL[region as GangwonRegionLabel];
+function getServiceRegion(regionLabel: string): {
+  serviceArea: ServiceArea;
+  region: ServiceRegion;
+} | null {
+  for (const serviceArea of Object.values(SERVICE_AREAS)) {
+    const region = serviceArea.regions.find(
+      (candidate) => candidate.label === regionLabel
+    );
+
+    if (region) {
+      return { serviceArea, region };
+    }
+  }
+
+  return null;
 }
 
 function getAttractionCategoryName(
@@ -242,11 +214,13 @@ export async function fetchRegionFilterPlaceCategories(
   region: string,
   language: AppLanguage
 ) {
-  const sigunguCode = getRegionSigunguCode(region);
+  const serviceRegion = getServiceRegion(region);
 
-  if (!TOUR_API_SERVICE_KEY || !sigunguCode) {
+  if (!TOUR_API_SERVICE_KEY || !serviceRegion) {
     return [];
   }
+
+  const { serviceArea, region: matchedRegion } = serviceRegion;
 
   const lclsNameByCode = await fetchLclsSystemNameMap(
     TOUR_API_SERVICE_KEY,
@@ -271,22 +245,25 @@ export async function fetchRegionFilterPlaceCategories(
   void cacheTourCategoryLocalizationMap(lclsNameByCode, language);
 
   const [attractions, festivals] = await Promise.all([
-    fetchGangwonAttractions(
+    fetchTourAttractions(
       TOUR_API_SERVICE_KEY,
       {
-        sigunguCode,
+        areaCode: serviceArea.tourAreaCode,
+        sigunguCode: matchedRegion.sigunguCode,
         contentTypeIds: ["12", "39"],
       },
       "ko"
     ),
-    fetchGangwonFestivals(
-      TOUR_API_SERVICE_KEY,
-      {
-        sigunguCode,
-        lookAheadDays: 90,
-      },
-      "ko"
-    ).catch(() => [] as GangwonAttraction[]),
+    serviceArea.hasFestivalSource
+      ? fetchGangwonFestivals(
+          TOUR_API_SERVICE_KEY,
+          {
+            sigunguCode: matchedRegion.sigunguCode,
+            lookAheadDays: 90,
+          },
+          "ko"
+        ).catch(() => [] as GangwonAttraction[])
+      : Promise.resolve([] as GangwonAttraction[]),
   ]);
 
   const filteredAttractions = dedupeAttractionsByPlace([
@@ -440,7 +417,8 @@ export function routeMatchesFilters(
 
 export function getSharedRouteFilterOptions(
   routes: SharedRoute[],
-  text: UiText
+  text: UiText,
+  regionOrder: readonly string[] = []
 ): SharedRouteFilterOptions {
   const tagOptions = new Set<string>();
   const placeOptionsByRegion = new Map<string, Map<string, Set<string>>>();
@@ -461,13 +439,8 @@ export function getSharedRouteFilterOptions(
 
   const placeRegionNames = Array.from(placeOptionsByRegion.keys());
   const orderedRegionNames = [
-    ...GANGWON_REGION_LABELS,
-    ...placeRegionNames.filter(
-      (region) =>
-        !GANGWON_REGION_LABELS.includes(
-          region as GangwonRegionLabel
-        )
-    ),
+    ...regionOrder,
+    ...placeRegionNames.filter((region) => !regionOrder.includes(region)),
   ];
 
   return {

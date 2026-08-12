@@ -7,6 +7,7 @@ import type {
   User,
   VisitStatus,
 } from "@prisma/client";
+import { UserFacingError } from "../../graphql/userFacingError.js";
 import { isDevVerificationBypassEnabled } from "../../lib/devVerification.js";
 import { deleteRouteVisitPhotoImages } from "./routeVisitPhoto.service.js";
 import {
@@ -99,7 +100,7 @@ function assertRouteCorrectionWindow(route: Route) {
   );
 
   if (daysSinceEnd > ROUTE_CORRECTION_GRACE_DAYS) {
-    throw new Error("루트 종료 후 7일이 지나 방문 기록을 수정할 수 없어요.");
+    throw new UserFacingError("루트 종료 후 7일이 지나 방문 기록을 수정할 수 없어요.");
   }
 }
 
@@ -107,7 +108,7 @@ function assertRoutePhotoCorrectionWindow(route: Route) {
   const routeEndDate = route.travelEndDate ?? route.travelStartDate;
 
   if (!routeEndDate) {
-    throw new Error("완료 일정의 날짜를 확인할 수 없어요.");
+    throw new UserFacingError("완료 일정의 날짜를 확인할 수 없어요.");
   }
 
   const daysSinceEnd = getDateKeyDiffInDays(
@@ -116,7 +117,7 @@ function assertRoutePhotoCorrectionWindow(route: Route) {
   );
 
   if (daysSinceEnd < 0 || daysSinceEnd > ROUTE_CORRECTION_GRACE_DAYS) {
-    throw new Error("일정 종료 후 7일 동안만 인증 사진을 수정할 수 있어요.");
+    throw new UserFacingError("일정 종료 후 7일 동안만 인증 사진을 수정할 수 있어요.");
   }
 }
 
@@ -131,11 +132,11 @@ async function assertRouteStopVisitDate(
   }
 
   if (!route.startedAt) {
-    throw new Error("루트를 먼저 시작한 뒤 인증해 주세요.");
+    throw new UserFacingError("루트를 먼저 시작한 뒤 인증해 주세요.");
   }
 
   if (!stop.dayId) {
-    throw new Error("일정 날짜가 없는 장소는 인증할 수 없어요.");
+    throw new UserFacingError("일정 날짜가 없는 장소는 인증할 수 없어요.");
   }
 
   const routeDay = await prisma.routeDay.findUnique({
@@ -149,19 +150,19 @@ async function assertRouteStopVisitDate(
   const routeDayDateKey = routeDay?.date ? getDateKey(routeDay.date) : null;
 
   if (!routeDayDateKey) {
-    throw new Error("DAY 날짜를 먼저 설정한 뒤 인증해 주세요.");
+    throw new UserFacingError("DAY 날짜를 먼저 설정한 뒤 인증해 주세요.");
   }
 
   const todayDateKey = getTodayDateKey();
 
   if (routeDayDateKey > todayDateKey) {
-    throw new Error(
+    throw new UserFacingError(
       `해당 DAY 날짜에만 인증할 수 있어요. 일정 날짜는 ${routeDayDateKey}예요.`
     );
   }
 
   if (!options.allowPast && routeDayDateKey < todayDateKey) {
-    throw new Error(
+    throw new UserFacingError(
       `지난 DAY에서는 실시간 인증을 진행할 수 없어요. 일정 날짜는 ${routeDayDateKey}예요.`
     );
   }
@@ -249,19 +250,19 @@ function assertRouteStopGpsVerification(
   const currentLng = toFiniteCoordinate(verification?.lng);
 
   if (currentLat == null || currentLng == null) {
-    throw new Error("현재 위치를 확인하지 못했어요. 위치 권한과 GPS 상태를 확인해 주세요.");
+    throw new UserFacingError("현재 위치를 확인하지 못했어요. 위치 권한과 GPS 상태를 확인해 주세요.");
   }
 
   const accuracyMeters = toFiniteCoordinate(verification?.accuracyMeters);
 
   if (accuracyMeters == null || accuracyMeters < 0) {
-    throw new Error(
+    throw new UserFacingError(
       "현재 위치의 정확도를 확인하지 못했어요. GPS 상태를 확인한 뒤 다시 시도해 주세요."
     );
   }
 
   if (accuracyMeters > GPS_VERIFICATION_MAX_ACCURACY_METERS) {
-    throw new Error(
+    throw new UserFacingError(
       `위치 정확도가 낮아요. GPS 신호가 안정된 후 다시 시도해 주세요. 현재 정확도는 약 ${Math.round(
         accuracyMeters
       )}m예요.`
@@ -271,7 +272,7 @@ function assertRouteStopGpsVerification(
   const placeCoordinates = getRouteStopPlaceCoordinates(stop);
 
   if (!placeCoordinates) {
-    throw new Error("장소 좌표가 없어 위치 인증을 진행할 수 없어요.");
+    throw new UserFacingError("장소 좌표가 없어 위치 인증을 진행할 수 없어요.");
   }
 
   const distanceMeters = calculateDistanceMeters(
@@ -283,7 +284,7 @@ function assertRouteStopGpsVerification(
   );
 
   if (distanceMeters > GPS_VERIFICATION_MAX_DISTANCE_METERS) {
-    throw new Error(
+    throw new UserFacingError(
       `장소 근처에서만 인증할 수 있어요. 현재 위치가 약 ${Math.round(
         distanceMeters
       )}m 떨어져 있어요.`
@@ -360,13 +361,13 @@ async function assertRouteStopVisitTimeOrder(
       getRecordedRouteStopCompletionAt(previousTimedStop);
 
     if (!previousCompletionAt) {
-      throw new Error(
+      throw new UserFacingError(
         `앞 장소 '${previousTimedStop.place.title}' 방문을 먼저 완료해 주세요.`
       );
     }
 
     if (checkedInAt.getTime() < previousCompletionAt.getTime()) {
-      throw new Error(
+      throw new UserFacingError(
         `도착시간은 앞 장소 '${previousTimedStop.place.title}'의 완료시간보다 빠를 수 없어요.`
       );
     }
@@ -393,7 +394,7 @@ async function assertRouteStopVisitTimeOrder(
     nextBoundaryAt &&
     currentBoundaryAt.getTime() > nextBoundaryAt.getTime()
   ) {
-    throw new Error(
+    throw new UserFacingError(
       `방문시간은 다음 장소 '${nextTimedStop.place.title}'의 도착시간보다 늦을 수 없어요.`
     );
   }
@@ -483,7 +484,7 @@ function buildRouteStopCheckInData(
   const verificationStatus = getVisitVerificationStatus(verification);
 
   if (verificationStatus !== "GPS" && verificationStatus !== "GPS_PHOTO") {
-    throw new Error("도착 인증은 GPS 확인이 필요해요.");
+    throw new UserFacingError("도착 인증은 GPS 확인이 필요해요.");
   }
 
   assertRouteStopGpsVerification(stop, verification, verificationStatus);
@@ -519,7 +520,7 @@ function buildRouteStopCompletionData(
   actualStayMinutes?: number | null
 ): RouteStopVisitData {
   if (!stop.checkedInAt) {
-    throw new Error("먼저 장소 도착 인증을 진행해 주세요.");
+    throw new UserFacingError("먼저 장소 도착 인증을 진행해 주세요.");
   }
 
   const checkedOutAt = new Date();
@@ -815,7 +816,7 @@ export async function checkInRouteStop(
   });
 
   if (!stop) {
-    throw new Error("장소를 찾을 수 없습니다.");
+    throw new UserFacingError("장소를 찾을 수 없습니다.");
   }
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
@@ -823,7 +824,7 @@ export async function checkInRouteStop(
   await assertRouteStopVisitDate(prisma, route, stop, { allowPast: false });
 
   if (stop.visitStatus === "VISITED") {
-    throw new Error("이미 방문 완료한 장소예요.");
+    throw new UserFacingError("이미 방문 완료한 장소예요.");
   }
 
   if (stop.checkedInAt) {
@@ -858,7 +859,7 @@ export async function setRouteStopPhotoPublication(
   });
 
   if (!stop) {
-    throw new Error("장소를 찾을 수 없습니다.");
+    throw new UserFacingError("장소를 찾을 수 없습니다.");
   }
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
@@ -867,7 +868,7 @@ export async function setRouteStopPhotoPublication(
     !nullableString(stop.verificationPhotoUrl) ||
     !PUBLISHABLE_PLACE_PHOTO_STATUSES.has(stop.verificationStatus)
   ) {
-    throw new Error("공개할 인증 사진이 없어요.");
+    throw new UserFacingError("공개할 인증 사진이 없어요.");
   }
 
   const publishedAt = published ? new Date() : null;
@@ -909,21 +910,21 @@ export async function setRouteStopVisitPhoto(
   });
 
   if (!stop) {
-    throw new Error("장소를 찾을 수 없습니다.");
+    throw new UserFacingError("장소를 찾을 수 없습니다.");
   }
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
   assertRoutePhotoCorrectionWindow(route);
 
   if (stop.visitStatus !== "VISITED") {
-    throw new Error("완료한 장소에서만 인증 사진을 수정할 수 있어요.");
+    throw new UserFacingError("완료한 장소에서만 인증 사진을 수정할 수 있어요.");
   }
 
   const normalizedImageId = nullableString(imageId);
   const normalizedImageUrl = nullableString(imageUrl);
 
   if (!normalizedImageId || !normalizedImageUrl) {
-    throw new Error("저장할 인증 사진 정보가 올바르지 않아요.");
+    throw new UserFacingError("저장할 인증 사진 정보가 올바르지 않아요.");
   }
 
   const nextVerificationStatus: RouteStopVerificationStatus =
@@ -985,7 +986,7 @@ export async function deleteRouteStopVisitPhoto(
   });
 
   if (!stop) {
-    throw new Error("장소를 찾을 수 없습니다.");
+    throw new UserFacingError("장소를 찾을 수 없습니다.");
   }
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
@@ -1033,7 +1034,7 @@ export async function completeRouteStopVisit(
   });
 
   if (!stop) {
-    throw new Error("장소를 찾을 수 없습니다.");
+    throw new UserFacingError("장소를 찾을 수 없습니다.");
   }
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
@@ -1092,14 +1093,14 @@ export async function updateRouteStopVisitTimes(
   });
 
   if (!stop) {
-    throw new Error("장소를 찾을 수 없습니다.");
+    throw new UserFacingError("장소를 찾을 수 없습니다.");
   }
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
   assertRouteCorrectionWindow(route);
 
   if (!stop.checkedInAt && stop.visitStatus !== "VISITED") {
-    throw new Error("도착 기록이 있는 장소만 시간을 수정할 수 있어요.");
+    throw new UserFacingError("도착 기록이 있는 장소만 시간을 수정할 수 있어요.");
   }
 
   const checkedInAt = new Date(input.checkedInAt);
@@ -1108,19 +1109,19 @@ export async function updateRouteStopVisitTimes(
     : null;
 
   if (Number.isNaN(checkedInAt.getTime())) {
-    throw new Error("도착시간을 다시 확인해 주세요.");
+    throw new UserFacingError("도착시간을 다시 확인해 주세요.");
   }
 
   if (checkedOutAt && Number.isNaN(checkedOutAt.getTime())) {
-    throw new Error("완료시간을 다시 확인해 주세요.");
+    throw new UserFacingError("완료시간을 다시 확인해 주세요.");
   }
 
   if (stop.visitStatus === "VISITED" && !checkedOutAt) {
-    throw new Error("완료된 방문은 완료시간도 입력해 주세요.");
+    throw new UserFacingError("완료된 방문은 완료시간도 입력해 주세요.");
   }
 
   if (stop.visitStatus !== "VISITED" && checkedOutAt) {
-    throw new Error("머무는 중인 장소에는 완료시간을 입력할 수 없어요.");
+    throw new UserFacingError("머무는 중인 장소에는 완료시간을 입력할 수 없어요.");
   }
 
   const nowWithTolerance = Date.now() + 60_000;
@@ -1129,11 +1130,11 @@ export async function updateRouteStopVisitTimes(
     checkedInAt.getTime() > nowWithTolerance ||
     (checkedOutAt && checkedOutAt.getTime() > nowWithTolerance)
   ) {
-    throw new Error("현재보다 이후 시간으로는 수정할 수 없어요.");
+    throw new UserFacingError("현재보다 이후 시간으로는 수정할 수 없어요.");
   }
 
   if (checkedOutAt && checkedOutAt.getTime() < checkedInAt.getTime()) {
-    throw new Error("완료시간은 도착시간보다 빠를 수 없어요.");
+    throw new UserFacingError("완료시간은 도착시간보다 빠를 수 없어요.");
   }
 
   const actualStayMinutes = checkedOutAt
@@ -1141,7 +1142,7 @@ export async function updateRouteStopVisitTimes(
     : null;
 
   if (actualStayMinutes && actualStayMinutes > 480) {
-    throw new Error("체류시간은 최대 8시간까지 기록할 수 있어요.");
+    throw new UserFacingError("체류시간은 최대 8시간까지 기록할 수 있어요.");
   }
 
   await assertRouteStopVisitTimeOrder(
@@ -1198,7 +1199,7 @@ export async function markRouteStopVisited(
   });
 
   if (!stop) {
-    throw new Error("장소를 찾을 수 없습니다.");
+    throw new UserFacingError("장소를 찾을 수 없습니다.");
   }
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);

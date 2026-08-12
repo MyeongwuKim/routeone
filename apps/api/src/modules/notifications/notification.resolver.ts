@@ -4,6 +4,7 @@ import type {
   RouteReviewNotificationKind,
 } from "@prisma/client";
 import type { GraphQLContext } from "../../context.js";
+import { UserFacingError } from "../../graphql/userFacingError.js";
 import { requireUser } from "../../lib/auth.js";
 import {
   getNotificationInbox,
@@ -284,7 +285,7 @@ function requireAuthenticatedNotificationUser(context: GraphQLContext) {
     !context.authenticatedUserId ||
     context.authenticatedUserId !== context.user.id
   ) {
-    throw new Error("로그인이 필요합니다.");
+    throw new UserFacingError("로그인이 필요합니다.");
   }
 
   return context.user;
@@ -295,7 +296,7 @@ function requireAuthenticatedNotificationSession(context: GraphQLContext) {
   const sessionExpiresAt = context.authenticatedSessionExpiresAt;
 
   if (!sessionExpiresAt || sessionExpiresAt <= new Date()) {
-    throw new Error("로그인이 필요합니다.");
+    throw new UserFacingError("로그인이 필요합니다.");
   }
 
   return {
@@ -325,7 +326,7 @@ export const notificationResolvers = {
         !dateKeyPattern.test(args.endDate) ||
         args.startDate > args.endDate
       ) {
-        throw new Error("축제 조회 기간이 올바르지 않습니다.");
+        throw new UserFacingError("축제 조회 기간이 올바르지 않습니다.");
       }
 
       const startDate = new Date(`${args.startDate}T00:00:00.000Z`);
@@ -335,7 +336,7 @@ export const notificationResolvers = {
         endDate.getTime() - startDate.getTime() >
         1000 * 60 * 60 * 24 * 31
       ) {
-        throw new Error("축제는 최대 31일 범위까지 조회할 수 있습니다.");
+        throw new UserFacingError("축제는 최대 31일 범위까지 조회할 수 있습니다.");
       }
 
       const festivals = await fetchGangwonFestivalSource();

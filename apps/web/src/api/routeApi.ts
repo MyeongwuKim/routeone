@@ -63,6 +63,7 @@ export const routeApi = {
   },
   sharedRouteConnection(variables?: {
     regionCode?: string | null;
+    regionTag?: string | null;
     limit?: number | null;
     cursor?: string | null;
   }) {
@@ -72,6 +73,7 @@ export const routeApi = {
     return requestGraphQL(LikedSharedRoutesDocument);
   },
   likedSharedRouteConnection(variables?: {
+    regionTag?: string | null;
     limit?: number | null;
     cursor?: string | null;
   }) {

@@ -1,6 +1,12 @@
-query SharedRouteConnection($regionCode: String, $limit: Int, $cursor: String) {
+query SharedRouteConnection(
+  $regionCode: String
+  $regionTag: String
+  $limit: Int
+  $cursor: String
+) {
   sharedRouteConnection(
     regionCode: $regionCode
+    regionTag: $regionTag
     limit: $limit
     cursor: $cursor
   ) {

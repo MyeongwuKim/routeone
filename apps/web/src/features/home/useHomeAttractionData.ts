@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { festivalApi } from "@/api/festivalApi";
-import {
-  GANGWON_SIGNGU_ADMIN_CODES,
-  GANGWON_TATS_AREA_CODE,
-} from "@/data/gangwonRegions";
+import type { ServiceArea } from "@/data/serviceAreas";
 import {
   buildBoundaryMapBySigunguCode,
   type GangwonBoundaryCollection,
@@ -23,7 +20,7 @@ import {
 import { useUiText } from "@/lib/uiText";
 import {
   buildLatestConcentrationMap,
-  fetchGangwonAttractions,
+  fetchTourAttractions,
   fetchLclsSystemNameMap,
   fetchTouristConcentrationPoints,
   type GangwonAttraction,
@@ -81,6 +78,7 @@ function getGangwonBoundaryAssetUrl() {
 
 export function useHomeAttractionData(
   selectedSigunguCode: string,
+  serviceArea: ServiceArea,
   options: UseHomeAttractionDataOptions = {}
 ) {
   const text = useUiText();
@@ -158,17 +156,24 @@ export function useHomeAttractionData(
   const attractionQueryKey = useMemo(
     () =>
       [
-        "gangwon-attractions",
+        "tour-attractions",
         "source-first-v2",
+        serviceArea.id,
         selectedSigunguCode,
         festivalDateWindow.startDateKey,
         appLanguage,
       ] as const,
-    [appLanguage, festivalDateWindow.startDateKey, selectedSigunguCode]
+    [
+      appLanguage,
+      festivalDateWindow.startDateKey,
+      selectedSigunguCode,
+      serviceArea.id,
+    ]
   );
 
   const boundaryQuery = useQuery({
     queryKey: ["gangwon-boundary"],
+    enabled: serviceArea.hasBoundaryAsset,
     queryFn: async () => {
       const response = await fetch(getGangwonBoundaryAssetUrl());
       if (!response.ok) {
@@ -186,35 +191,41 @@ export function useHomeAttractionData(
     enabled: Boolean(TOUR_API_SERVICE_KEY) && isAttractionQueryEnabled,
     queryFn: async () => {
       setAttractionLoadingStage("fetching-places");
-      const signguCode = GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode];
+      const selectedRegion = serviceArea.regions.find(
+        (region) => region.sigunguCode === selectedSigunguCode
+      );
+      const signguCode = selectedRegion?.adminCode ?? "";
       const [lclsNameByCode, attractions, festivals, concentrationPoints] =
         await Promise.all([
           loadLclsNameByCode(),
-          fetchGangwonAttractions(
+          fetchTourAttractions(
             TOUR_API_SERVICE_KEY,
             {
+              areaCode: serviceArea.tourAreaCode,
               sigunguCode: selectedSigunguCode || undefined,
               contentTypeIds: ["12", "39"],
             },
             "ko"
           ),
-          queryClient
-            .fetchQuery({
-              queryKey: festivalQueryKey,
-              queryFn: loadFestivals,
-              staleTime: 1000 * 60 * 60 * 6,
-            })
-            .then((items) =>
-              selectedSigunguCode
-                ? items.filter(
-                    (festival) =>
-                      festival.tourApiSigunguCode === selectedSigunguCode
-                  )
-                : items
-            )
-            .catch(() => [] as GangwonAttraction[]),
+          serviceArea.hasFestivalSource
+            ? queryClient
+                .fetchQuery({
+                  queryKey: festivalQueryKey,
+                  queryFn: loadFestivals,
+                  staleTime: 1000 * 60 * 60 * 6,
+                })
+                .then((items) =>
+                  selectedSigunguCode
+                    ? items.filter(
+                        (festival) =>
+                          festival.tourApiSigunguCode === selectedSigunguCode
+                      )
+                    : items
+                )
+                .catch(() => [] as GangwonAttraction[])
+            : Promise.resolve([] as GangwonAttraction[]),
           fetchTouristConcentrationPoints(TOUR_API_SERVICE_KEY, {
-            areaCode: GANGWON_TATS_AREA_CODE,
+            areaCode: serviceArea.tatsAreaCode,
             signguCode,
             numOfRows: 2000,
           }),
@@ -422,7 +433,8 @@ export function useHomeAttractionData(
 
   const festivalsQuery = useQuery({
     queryKey: festivalQueryKey,
-    enabled: Boolean(TOUR_API_SERVICE_KEY),
+    enabled:
+      Boolean(TOUR_API_SERVICE_KEY) && serviceArea.hasFestivalSource,
     queryFn: loadFestivals,
     staleTime: 1000 * 60 * 60 * 6,
     gcTime: 1000 * 60 * 60 * 24,
@@ -430,6 +442,10 @@ export function useHomeAttractionData(
 
   const festivalCountBySigunguCode = useMemo(() => {
     const countByCode = new Map<string, number>();
+
+    if (!serviceArea.hasFestivalSource) {
+      return countByCode;
+    }
 
     (festivalsQuery.data ?? []).forEach((festival) => {
       if (!festival.tourApiSigunguCode) {
@@ -443,7 +459,7 @@ export function useHomeAttractionData(
     });
 
     return countByCode;
-  }, [festivalsQuery.data]);
+  }, [festivalsQuery.data, serviceArea.hasFestivalSource]);
 
   const topRankByAttractionId = useMemo(() => {
     const rankById = new Map<string, number>();
@@ -471,13 +487,21 @@ export function useHomeAttractionData(
     attractionLoadingStage: attractionsQuery.isError
       ? "idle"
       : attractionLoadingStage,
-    boundaryBySigunguCode: boundaryQuery.data ?? {},
+    boundaryBySigunguCode: serviceArea.hasBoundaryAsset
+      ? boundaryQuery.data ?? {}
+      : {},
     festivalCountBySigunguCode,
-    festivals: festivalsQuery.data ?? [],
-    isFestivalDataReady: festivalsQuery.isSuccess,
+    festivals: serviceArea.hasFestivalSource
+      ? festivalsQuery.data ?? []
+      : [],
+    isFestivalDataReady:
+      !serviceArea.hasFestivalSource || festivalsQuery.isSuccess,
     isAttractionLoading: attractionsQuery.isFetching,
     isAttractionFetching: attractionsQuery.isFetching,
-    isBoundaryDataReady: boundaryQuery.isSuccess || boundaryQuery.isError,
+    isBoundaryDataReady:
+      !serviceArea.hasBoundaryAsset ||
+      boundaryQuery.isSuccess ||
+      boundaryQuery.isError,
     isUpdatingPlaceLabelsRef,
     setAttractionLoadingStage,
     topRankByAttractionId,

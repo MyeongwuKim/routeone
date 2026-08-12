@@ -13,6 +13,8 @@ const GRAPHQL_MAX_RETRY_COUNT = getNonNegativeIntegerEnv(
 const GRAPHQL_RETRY_BASE_DELAY_MS = 600;
 const GRAPHQL_RETRY_MAX_DELAY_MS = 5_000;
 const RETRYABLE_HTTP_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const UNEXPECTED_SERVER_ERROR_MESSAGE =
+  "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
 
 type GraphQLRequestOptions = {
   timeoutMs?: number;
@@ -144,7 +146,7 @@ async function readGraphQLPayload<TResult>(response: Response) {
   } catch {
     if (RETRYABLE_HTTP_STATUS_CODES.has(response.status)) {
       throw new GraphQLRequestError(
-        `GraphQL request failed: ${response.status}`,
+        UNEXPECTED_SERVER_ERROR_MESSAGE,
         {
           retryable: true,
           status: response.status,
@@ -152,7 +154,7 @@ async function readGraphQLPayload<TResult>(response: Response) {
       );
     }
 
-    throw new GraphQLRequestError("GraphQL 응답을 읽지 못했어요.", {
+    throw new GraphQLRequestError(UNEXPECTED_SERVER_ERROR_MESSAGE, {
       retryable: false,
       status: response.status,
     });
@@ -185,7 +187,7 @@ async function executeGraphQLRequest<TResult>({
     if (!response.ok || payload.errors?.length) {
       throw new GraphQLRequestError(
         payload.errors?.[0]?.message ??
-          `GraphQL request failed: ${response.status}`,
+          UNEXPECTED_SERVER_ERROR_MESSAGE,
         {
           retryable: RETRYABLE_HTTP_STATUS_CODES.has(response.status),
           status: response.status,
@@ -194,7 +196,7 @@ async function executeGraphQLRequest<TResult>({
     }
 
     if (!payload.data) {
-      throw new GraphQLRequestError("GraphQL 응답 데이터가 비어있습니다.", {
+      throw new GraphQLRequestError(UNEXPECTED_SERVER_ERROR_MESSAGE, {
         retryable: false,
       });
     }
@@ -261,5 +263,5 @@ export async function requestGraphQL<TResult, TVariables>(
     }
   }
 
-  throw new Error("GraphQL 요청에 실패했어요.");
+  throw new Error(UNEXPECTED_SERVER_ERROR_MESSAGE);
 }

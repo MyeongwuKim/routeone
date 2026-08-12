@@ -9,6 +9,7 @@ import {
   MdInfoOutline,
   MdLanguage,
   MdLightMode,
+  MdLocationOn,
   MdNotifications,
 } from "react-icons/md";
 import { authApi, ME_QUERY_KEY, ME_QUERY_STALE_TIME_MS } from "@/api/authApi";
@@ -21,6 +22,10 @@ import {
 import { useUiText } from "@/lib/uiText";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useAuthUserStore, type AuthUser } from "@/stores/authUserStore";
+import {
+  isDevelopmentServiceAreaEnabled,
+  useEffectiveServiceArea,
+} from "@/stores/serviceAreaStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 
 function MyInfoMenuRow({
@@ -153,6 +158,8 @@ function MyInfoPage() {
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const toggleDarkMode = useUiThemeStore((state) => state.toggleDarkMode);
   const language = useAppLanguageStore((state) => state.language);
+  const serviceArea = useEffectiveServiceArea();
+  const canSelectServiceArea = isDevelopmentServiceAreaEnabled();
   const authUser = useAuthUserStore((state) => state.user);
   const setAuthUser = useAuthUserStore((state) => state.setUser);
   const meQuery = useQuery({
@@ -228,6 +235,21 @@ function MyInfoPage() {
           }
           onClick={() => navigate("/me/language")}
         />
+
+        {canSelectServiceArea ? (
+          <>
+            <div className="border-b border-brand-50" />
+
+            <MyInfoMenuRow
+              icon={<MdLocationOn />}
+              title={text.myInfo.serviceArea}
+              description={text.myInfo.serviceAreaDescription(
+                text.labels.regions[serviceArea.label] ?? serviceArea.label
+              )}
+              onClick={() => navigate("/me/service-area")}
+            />
+          </>
+        ) : null}
 
         <div className="border-b border-brand-50" />
 

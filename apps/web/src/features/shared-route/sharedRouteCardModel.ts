@@ -5,13 +5,16 @@ import type {
   SharedRouteConnectionQuery,
   SharedRoutesQuery,
 } from "@/generated/graphql";
-import {
-  GANGWON_REGION_LABEL_BY_CODE,
-  GANGWON_REGION_LABELS,
-} from "@/data/gangwonRegions";
+import { SERVICE_AREAS } from "@/data/serviceAreas";
 import { getUiText, type UiText } from "@/lib/uiText";
 
-const REGION_SHARE_TAGS = new Set(["강원", ...GANGWON_REGION_LABELS]);
+const SERVICE_AREA_LIST = Object.values(SERVICE_AREAS);
+const REGION_SHARE_TAGS = new Set(
+  SERVICE_AREA_LIST.flatMap((serviceArea) => [
+    serviceArea.label,
+    ...serviceArea.regions.map((region) => region.label),
+  ])
+);
 
 export type SharedRoute =
   | SharedRoutesQuery["sharedRoutes"][number]
@@ -133,29 +136,47 @@ function getRouteDateTitle(route: RouteSummaryFieldsFragment) {
   return `${startDate} ~ ${endDate}`;
 }
 
-function getRegionCode(
-  regionLabelKey?: string | null,
-  regionCode?: string | null
-) {
-  const [areaCodeOrSigunguCode, sigunguCode] = regionLabelKey?.split(":") ?? [];
-
-  return (
-    sigunguCode ??
-    regionCode ??
-    (areaCodeOrSigunguCode &&
-    GANGWON_REGION_LABEL_BY_CODE[areaCodeOrSigunguCode]
-      ? areaCodeOrSigunguCode
-      : null)
-  );
-}
-
 function getRegionName(
   regionLabelKey?: string | null,
   regionCode?: string | null
 ) {
-  const code = getRegionCode(regionLabelKey, regionCode);
+  const [areaCodeOrRegion, sigunguCode] = regionLabelKey?.split(":") ?? [];
+  const serviceArea = sigunguCode
+    ? SERVICE_AREA_LIST.find(
+        (area) =>
+          area.tatsAreaCode === areaCodeOrRegion ||
+          area.tourAreaCode === areaCodeOrRegion
+      )
+    : null;
+  const codedRegion = serviceArea?.regions.find(
+    (region) =>
+      region.sigunguCode === sigunguCode || region.adminCode === sigunguCode
+  );
 
-  return code ? GANGWON_REGION_LABEL_BY_CODE[code] : null;
+  if (codedRegion) {
+    return codedRegion.label;
+  }
+
+  const regionCandidates = [regionCode, regionLabelKey].filter(
+    (value): value is string => Boolean(value)
+  );
+
+  for (const area of SERVICE_AREA_LIST) {
+    const region = area.regions.find((candidate) =>
+      regionCandidates.some(
+        (value) =>
+          candidate.adminCode === value ||
+          candidate.sigunguCode === value ||
+          candidate.label === value
+      )
+    );
+
+    if (region) {
+      return region.label;
+    }
+  }
+
+  return null;
 }
 
 export function getDisplayRegionNames(route: SharedRoute) {

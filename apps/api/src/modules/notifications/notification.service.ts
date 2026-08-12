@@ -10,6 +10,7 @@ import {
   type PrismaClient,
   type User,
 } from "@prisma/client";
+import { UserFacingError } from "../../graphql/userFacingError.js";
 import {
   fetchGangwonFestivalSource,
   hasFestivalCoordinates,
@@ -79,7 +80,7 @@ function normalizeRequiredText(
   const normalized = value.trim();
 
   if (!normalized || normalized.length > maxLength) {
-    throw new Error(`${fieldName} 값이 올바르지 않습니다.`);
+    throw new UserFacingError(`${fieldName} 값이 올바르지 않습니다.`);
   }
 
   return normalized;
@@ -99,7 +100,7 @@ function normalizeFestivalNotification(
   const dateKey = normalizeRequiredText(input.dateKey, "알림 날짜", 10);
 
   if (!DATE_KEY_PATTERN.test(dateKey)) {
-    throw new Error("알림 날짜 값이 올바르지 않습니다.");
+    throw new UserFacingError("알림 날짜 값이 올바르지 않습니다.");
   }
 
   if (
@@ -107,7 +108,7 @@ function normalizeFestivalNotification(
     input.festivalIds.length !== input.festivalTitles.length ||
     input.festivalIds.length > MAX_FESTIVAL_COUNT_PER_NOTIFICATION
   ) {
-    throw new Error("축제 알림 목록이 올바르지 않습니다.");
+    throw new UserFacingError("축제 알림 목록이 올바르지 않습니다.");
   }
 
   const festivalStartDates = input.festivalStartDates ?? [];
@@ -120,7 +121,7 @@ function normalizeFestivalNotification(
     (festivalStartDates.length !== input.festivalIds.length ||
       festivalEndDates.length !== input.festivalIds.length)
   ) {
-    throw new Error("축제 기간 목록이 올바르지 않습니다.");
+    throw new UserFacingError("축제 기간 목록이 올바르지 않습니다.");
   }
 
   const festivalById = new Map<
@@ -164,7 +165,7 @@ function normalizeFestivalNotification(
         !DATE_KEY_PATTERN.test(normalizedEndDate) ||
         normalizedStartDate > normalizedEndDate)
     ) {
-      throw new Error("축제 기간 값이 올바르지 않습니다.");
+      throw new UserFacingError("축제 기간 값이 올바르지 않습니다.");
     }
 
     if (!festivalById.has(normalizedId)) {
@@ -180,7 +181,7 @@ function normalizeFestivalNotification(
   const triggerAt = input.triggerAt ?? null;
 
   if (triggerAt && Number.isNaN(triggerAt.getTime())) {
-    throw new Error("알림 예약 시간이 올바르지 않습니다.");
+    throw new UserFacingError("알림 예약 시간이 올바르지 않습니다.");
   }
 
   return {
@@ -206,7 +207,7 @@ function normalizeFestivalNotification(
 
 function normalizeDate(value: Date, fieldName: string) {
   if (Number.isNaN(value.getTime())) {
-    throw new Error(`${fieldName} 값이 올바르지 않습니다.`);
+    throw new UserFacingError(`${fieldName} 값이 올바르지 않습니다.`);
   }
 
   return value;
@@ -216,7 +217,7 @@ function normalizeOptionalText(value: string | null | undefined, maxLength: numb
   const normalized = value?.trim() ?? "";
 
   if (normalized.length > maxLength) {
-    throw new Error("알림 텍스트 값이 올바르지 않습니다.");
+    throw new UserFacingError("알림 텍스트 값이 올바르지 않습니다.");
   }
 
   return normalized || null;
@@ -233,14 +234,14 @@ function normalizeRouteArrivalNotification(
   const deliveredAt = normalizeDate(input.deliveredAt, "도착 알림 시간");
 
   if (!DATE_KEY_PATTERN.test(dateKey)) {
-    throw new Error("도착 날짜 값이 올바르지 않습니다.");
+    throw new UserFacingError("도착 날짜 값이 올바르지 않습니다.");
   }
 
   if (
     deliveredAt.getTime() >
     now.getTime() + MAX_FUTURE_TIMESTAMP_OFFSET_MS
   ) {
-    throw new Error("도착 알림 시간이 올바르지 않습니다.");
+    throw new UserFacingError("도착 알림 시간이 올바르지 않습니다.");
   }
 
   return {
@@ -318,7 +319,7 @@ function decodeNotificationInboxCursor(value: string) {
     !normalized ||
     normalized.length > MAX_NOTIFICATION_CURSOR_LENGTH
   ) {
-    throw new Error("알림 목록 커서가 올바르지 않습니다.");
+    throw new UserFacingError("알림 목록 커서가 올바르지 않습니다.");
   }
 
   try {
@@ -340,7 +341,7 @@ function decodeNotificationInboxCursor(value: string) {
       availableAt.toISOString() !== payload.at ||
       !MONGO_OBJECT_ID_PATTERN.test(id)
     ) {
-      throw new Error("Invalid notification cursor payload.");
+      throw new UserFacingError("알림 목록 커서가 올바르지 않습니다.");
     }
 
     return {
@@ -348,7 +349,7 @@ function decodeNotificationInboxCursor(value: string) {
       id,
     } satisfies NotificationInboxCursor;
   } catch {
-    throw new Error("알림 목록 커서가 올바르지 않습니다.");
+    throw new UserFacingError("알림 목록 커서가 올바르지 않습니다.");
   }
 }
 
@@ -412,7 +413,7 @@ export async function sendFestivalTestNotification(
     : [];
 
   if (regionCodes.length === 0) {
-    throw new Error("축제 알림을 받을 지역을 먼저 선택해 주세요.");
+    throw new UserFacingError("축제 알림을 받을 지역을 먼저 선택해 주세요.");
   }
 
   const now = new Date();
@@ -429,7 +430,7 @@ export async function sendFestivalTestNotification(
       "[notification-test] festival lookup failed",
       error instanceof Error ? error.message : error
     );
-    throw new Error("실제 축제 정보를 불러오지 못했어요.");
+    throw new UserFacingError("실제 축제 정보를 불러오지 못했어요.");
   }
 
   const festivalById = new Map<
@@ -455,7 +456,7 @@ export async function sendFestivalTestNotification(
     .slice(0, MAX_FESTIVAL_COUNT_PER_NOTIFICATION);
 
   if (matchingFestivals.length === 0) {
-    throw new Error(
+    throw new UserFacingError(
       "선택한 지역에 오늘부터 7일 안에 열리는 축제가 없어요."
     );
   }
@@ -570,7 +571,7 @@ export async function sendRouteReviewTestNotification(
   );
 
   if (!MONGO_OBJECT_ID_PATTERN.test(normalizedPushDeviceId)) {
-    throw new Error("푸시 기기 ID가 올바르지 않습니다.");
+    throw new UserFacingError("푸시 기기 ID가 올바르지 않습니다.");
   }
 
   const pushDevice = await prisma.pushDevice.findFirst({
@@ -588,7 +589,7 @@ export async function sendRouteReviewTestNotification(
   });
 
   if (!pushDevice) {
-    throw new Error("현재 기기의 푸시 정보를 찾지 못했어요.");
+    throw new UserFacingError("현재 기기의 푸시 정보를 찾지 못했어요.");
   }
 
   const routes = await prisma.route.findMany({
@@ -662,7 +663,7 @@ export async function sendRouteReviewTestNotification(
   }
 
   if (!candidate) {
-    throw new Error("완료되고 장소가 포함된 루트가 없어요.");
+    throw new UserFacingError("완료되고 장소가 포함된 루트가 없어요.");
   }
 
   const {
@@ -690,7 +691,7 @@ export async function sendRouteReviewTestNotification(
     });
 
   if (existingNotification) {
-    throw new Error("테스트 알림은 10초 후에 다시 보내 주세요.");
+    throw new UserFacingError("테스트 알림은 10초 후에 다시 보내 주세요.");
   }
 
   let notification;
@@ -730,7 +731,7 @@ export async function sendRouteReviewTestNotification(
       });
 
     if (duplicatedNotification) {
-      throw new Error("테스트 알림은 10초 후에 다시 보내 주세요.");
+      throw new UserFacingError("테스트 알림은 10초 후에 다시 보내 주세요.");
     }
 
     throw error;
@@ -762,7 +763,7 @@ export async function sendRouteReviewTestNotification(
     });
 
   if (!deliveredNotification) {
-    throw new Error("루트 종료 테스트 알림 결과를 확인하지 못했어요.");
+    throw new UserFacingError("루트 종료 테스트 알림 결과를 확인하지 못했어요.");
   }
 
   const result = {
@@ -795,7 +796,7 @@ export async function syncFestivalNotificationInbox(
   inputs: FestivalNotificationSyncInput[]
 ) {
   if (inputs.length > MAX_NOTIFICATION_SYNC_COUNT) {
-    throw new Error("한 번에 동기화할 수 있는 알림 수를 초과했습니다.");
+    throw new UserFacingError("한 번에 동기화할 수 있는 알림 수를 초과했습니다.");
   }
 
   const now = new Date();
@@ -890,7 +891,7 @@ export async function syncRouteArrivalNotificationInbox(
   inputs: RouteArrivalNotificationSyncInput[]
 ) {
   if (inputs.length > MAX_ARRIVAL_NOTIFICATION_SYNC_COUNT) {
-    throw new Error("한 번에 동기화할 수 있는 도착 알림 수를 초과했습니다.");
+    throw new UserFacingError("한 번에 동기화할 수 있는 도착 알림 수를 초과했습니다.");
   }
 
   const now = new Date();
@@ -1004,7 +1005,7 @@ export async function syncRouteReviewNotificationInbox(
   inputs: RouteReviewNotificationSyncInput[]
 ) {
   if (inputs.length > MAX_NOTIFICATION_SYNC_COUNT) {
-    throw new Error("한 번에 동기화할 수 있는 루트 알림 수를 초과했습니다.");
+    throw new UserFacingError("한 번에 동기화할 수 있는 루트 알림 수를 초과했습니다.");
   }
 
   const now = new Date();

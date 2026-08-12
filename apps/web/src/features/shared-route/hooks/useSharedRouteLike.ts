@@ -5,6 +5,7 @@ import type {
   RouteByIdQuery,
 } from "@/generated/graphql";
 import { useUiText } from "@/lib/uiText";
+import type { ServiceAreaId } from "@/data/serviceAreas";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import type { SharedRoute } from "../sharedRouteCardModel";
 import {
@@ -22,6 +23,7 @@ import {
 type UseSharedRouteLikeOptions = {
   routes: SharedRoute[];
   mode: SharedRoutePageMode;
+  serviceAreaId?: ServiceAreaId;
 };
 
 type ToggleLikeVariables = {
@@ -39,6 +41,7 @@ type ToggleLikeContext = {
 export function useSharedRouteLike({
   routes,
   mode,
+  serviceAreaId,
 }: UseSharedRouteLikeOptions) {
   const text = useUiText();
   const queryClient = useQueryClient();
@@ -47,6 +50,12 @@ export function useSharedRouteLike({
   const [pendingLikeRouteIds, setPendingLikeRouteIds] = useState<Set<string>>(
     new Set()
   );
+  const sharedRoutesQueryKey = serviceAreaId
+    ? [...SHARED_ROUTES_QUERY_KEY, "service-area", serviceAreaId]
+    : SHARED_ROUTES_QUERY_KEY;
+  const likedSharedRoutesQueryKey = serviceAreaId
+    ? [...LIKED_SHARED_ROUTES_QUERY_KEY, "service-area", serviceAreaId]
+    : LIKED_SHARED_ROUTES_QUERY_KEY;
   const likedRouteIds = useMemo(
     () =>
       new Set(
@@ -80,21 +89,19 @@ export function useSharedRouteLike({
     onMutate: async ({ route, nextLiked, keepUnlikedRoute }) => {
       await Promise.all([
         queryClient.cancelQueries({
-          queryKey: SHARED_ROUTES_QUERY_KEY,
+          queryKey: sharedRoutesQueryKey,
         }),
         queryClient.cancelQueries({
-          queryKey: LIKED_SHARED_ROUTES_QUERY_KEY,
+          queryKey: likedSharedRoutesQueryKey,
         }),
       ]);
       const previousLikedRoutes =
         queryClient.getQueryData<SharedRouteInfiniteData>(
-          LIKED_SHARED_ROUTES_QUERY_KEY
+          likedSharedRoutesQueryKey
         );
 
-      queryClient.setQueriesData<SharedRouteInfiniteData>(
-        {
-          queryKey: SHARED_ROUTES_QUERY_KEY,
-        },
+      queryClient.setQueryData<SharedRouteInfiniteData>(
+        sharedRoutesQueryKey,
         (currentData) =>
           optimisticUpdateSharedRouteInfiniteLike({
             data: currentData,
@@ -104,7 +111,7 @@ export function useSharedRouteLike({
           })
       );
       queryClient.setQueryData<SharedRouteInfiniteData>(
-        LIKED_SHARED_ROUTES_QUERY_KEY,
+        likedSharedRoutesQueryKey,
         (currentData) =>
           optimisticUpdateSharedRouteInfiniteLike({
             data: currentData,
@@ -135,10 +142,8 @@ export function useSharedRouteLike({
       return { previousLikedRoutes };
     },
     onSuccess: (interaction, { route, keepUnlikedRoute }) => {
-      queryClient.setQueriesData<SharedRouteInfiniteData>(
-        {
-          queryKey: SHARED_ROUTES_QUERY_KEY,
-        },
+      queryClient.setQueryData<SharedRouteInfiniteData>(
+        sharedRoutesQueryKey,
         (currentData) =>
           upsertSharedRouteInInfiniteData(
             currentData,
@@ -150,7 +155,7 @@ export function useSharedRouteLike({
           )
       );
       queryClient.setQueryData<SharedRouteInfiniteData>(
-        LIKED_SHARED_ROUTES_QUERY_KEY,
+        likedSharedRoutesQueryKey,
         (currentData) =>
           upsertSharedRouteInInfiniteData(
             currentData,
@@ -182,10 +187,8 @@ export function useSharedRouteLike({
       { route, wasLiked, previousLikeCount },
       context
     ) => {
-      queryClient.setQueriesData<SharedRouteInfiniteData>(
-        {
-          queryKey: SHARED_ROUTES_QUERY_KEY,
-        },
+      queryClient.setQueryData<SharedRouteInfiniteData>(
+        sharedRoutesQueryKey,
         (currentData) =>
           optimisticUpdateSharedRouteInfiniteLike({
             data: currentData,
@@ -197,7 +200,7 @@ export function useSharedRouteLike({
       );
       if (context?.previousLikedRoutes) {
         queryClient.setQueryData<SharedRouteInfiniteData>(
-          LIKED_SHARED_ROUTES_QUERY_KEY,
+          likedSharedRoutesQueryKey,
           context.previousLikedRoutes
         );
       }

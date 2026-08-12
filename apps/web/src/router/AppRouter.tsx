@@ -41,6 +41,7 @@ import { getAuthToken } from "@/lib/authToken";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import MyInfoPage from "@/pages/MyInfoPage";
+import { isDevelopmentServiceAreaEnabled } from "@/stores/serviceAreaStore";
 
 type PreloadableLazyComponent<
   T extends ComponentType<Record<string, never>>,
@@ -78,6 +79,9 @@ const SharedRoutePage = lazyWithPreload(async () => {
 const MyAccountPage = lazyWithPreload(() => import("@/pages/MyAccountPage"));
 const LanguageSettingsPage = lazyWithPreload(
   () => import("@/pages/LanguageSettingsPage")
+);
+const ServiceAreaSettingsPage = lazyWithPreload(
+  () => import("@/pages/ServiceAreaSettingsPage")
 );
 const AppInfoPage = lazyWithPreload(() => import("@/pages/AppInfoPage"));
 const NotificationCenterPage = lazyWithPreload(
@@ -536,6 +540,7 @@ function preloadSecondaryRoutes() {
     LikedSharedRoutePage,
     MyAccountPage,
     LanguageSettingsPage,
+    ServiceAreaSettingsPage,
     AppInfoPage,
     NotificationCenterPage,
     NotificationSettingsPage,
@@ -729,6 +734,16 @@ function AppRouter() {
               <LanguageSettingsPage />,
               <LanguageLazyFallback />
             )}
+          />
+          <Route
+            path="/me/service-area"
+            element={
+              isDevelopmentServiceAreaEnabled() ? (
+                withRouteSuspense(<ServiceAreaSettingsPage />)
+              ) : (
+                <Navigate to="/me" replace />
+              )
+            }
           />
           <Route
             path="/me/notifications"

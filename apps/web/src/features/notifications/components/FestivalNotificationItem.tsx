@@ -10,6 +10,7 @@ import { festivalApi } from "@/api/festivalApi";
 import {
   GANGWON_REGIONS,
   GANGWON_SIGNGU_ADMIN_CODES,
+  GANGWON_TATS_AREA_CODE,
 } from "@/data/gangwonRegions";
 import type {
   FestivalNotificationKind,
@@ -242,6 +243,7 @@ function FestivalNotificationItem({
         createMapSheetPlaceFromAttraction({
           attraction,
           markerType,
+          areaCode: GANGWON_TATS_AREA_CODE,
           signguCode:
             GANGWON_SIGNGU_ADMIN_CODES[festival.regionCode] ?? "",
           touristTrendName: festival.title,

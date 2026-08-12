@@ -1,5 +1,4 @@
 import type { MapMarkerBadge } from "@/components/map/NaverMapMarkerIcon";
-import { GANGWON_TATS_AREA_CODE } from "@/data/gangwonRegions";
 import {
   getPlaceCategoryIcon,
   getPlaceCategoryLabel,
@@ -327,6 +326,7 @@ export function getMarkerTypeIcon(markerType: ResolvedMarkerType) {
 type AttractionMapSheetPlaceInput = {
   attraction: GangwonAttraction;
   markerType: ResolvedMarkerType;
+  areaCode: string;
   signguCode: string;
   touristTrendName: string;
   topRank: number | null;
@@ -335,6 +335,7 @@ type AttractionMapSheetPlaceInput = {
 export function createMapSheetPlaceFromAttraction({
   attraction,
   markerType,
+  areaCode,
   signguCode,
   touristTrendName,
   topRank,
@@ -343,7 +344,7 @@ export function createMapSheetPlaceFromAttraction({
     id: `${attraction.id}-${attraction.contentTypeId}`,
     contentId: attraction.id,
     contentTypeId: attraction.contentTypeId,
-    areaCode: GANGWON_TATS_AREA_CODE,
+    areaCode,
     signguCode,
     touristTrendName,
     topRank,

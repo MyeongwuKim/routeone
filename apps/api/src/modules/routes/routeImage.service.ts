@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { UserFacingError } from "../../graphql/userFacingError.js";
 
 const MAX_POSTER_IMAGE_PROXY_BYTES = 8 * 1024 * 1024;
 
@@ -6,7 +7,7 @@ function assertPosterImageProxyUrl(imageUrl: string) {
   const url = new URL(imageUrl);
 
   if (url.protocol !== "https:" || url.hostname !== "imagedelivery.net") {
-    throw new Error("포토카드에 사용할 수 없는 이미지 URL입니다.");
+    throw new UserFacingError("포토카드에 사용할 수 없는 이미지 URL입니다.");
   }
 
   return url;
@@ -36,13 +37,13 @@ export async function fetchPosterImageDataUrl(imageUrl: string) {
     Number.isFinite(contentLength) &&
     contentLength > MAX_POSTER_IMAGE_PROXY_BYTES
   ) {
-    throw new Error("포토카드 이미지가 너무 큽니다.");
+    throw new UserFacingError("포토카드 이미지가 너무 큽니다.");
   }
 
   const arrayBuffer = await response.arrayBuffer();
 
   if (arrayBuffer.byteLength > MAX_POSTER_IMAGE_PROXY_BYTES) {
-    throw new Error("포토카드 이미지가 너무 큽니다.");
+    throw new UserFacingError("포토카드 이미지가 너무 큽니다.");
   }
 
   return `data:${contentType};base64,${Buffer.from(arrayBuffer).toString("base64")}`;

@@ -14,6 +14,7 @@ type HomeExploreState = {
   searchFilter: SearchFilter;
   visibleSearchState: VisibleSearchState | null;
   resolveInitialRegion: (sigunguCode: string) => void;
+  resetForArea: (defaultSigunguCode: string) => void;
   selectRegion: (sigunguCode: string) => void;
   setSearchKeyword: (keyword: string) => void;
   setSearchFilter: (filter: SearchFilter) => void;
@@ -35,6 +36,14 @@ export const useHomeExploreStore = create<HomeExploreState>((set) => ({
             isInitialRegionResolved: true,
           }
     ),
+  resetForArea: (defaultSigunguCode) =>
+    set({
+      selectedSigunguCode: defaultSigunguCode,
+      isInitialRegionResolved: false,
+      searchKeyword: "",
+      searchFilter: "all",
+      visibleSearchState: null,
+    }),
   selectRegion: (sigunguCode) =>
     set({
       selectedSigunguCode: sigunguCode,

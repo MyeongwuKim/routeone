@@ -14,11 +14,7 @@ import HomeMapControls, {
 import PlaceSearchPopup from "@/components/search/PlaceSearchPopup";
 import { useHomeAttractionData } from "@/features/home/useHomeAttractionData";
 import { useHomeMap } from "@/features/home/useHomeMap";
-import {
-  DEFAULT_GANGWON_REGION,
-  GANGWON_REGIONS,
-  GANGWON_SIGNGU_ADMIN_CODES,
-} from "@/data/gangwonRegions";
+import type { ServiceRegion } from "@/data/serviceAreas";
 import { useUiText } from "@/lib/uiText";
 import { getAuthToken } from "@/lib/authToken";
 import {
@@ -43,6 +39,7 @@ import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
+import { useEffectiveServiceArea } from "@/stores/serviceAreaStore";
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import {
@@ -51,8 +48,16 @@ import {
   TOUR_API_SERVICE_KEY,
 } from "@/pages/HomePage.constants";
 
-function getNearestGangwonRegion(currentLocation: CurrentLocation) {
-  return GANGWON_REGIONS.reduce((nearest, region) => {
+function getNearestServiceRegion(
+  currentLocation: CurrentLocation,
+  regions: readonly ServiceRegion[]
+) {
+  const [firstRegion, ...remainingRegions] = regions;
+  if (!firstRegion) {
+    return null;
+  }
+
+  return remainingRegions.reduce((nearest, region) => {
     const nearestDistance = calculateDistanceMeters(
       currentLocation,
       nearest.center
@@ -63,7 +68,7 @@ function getNearestGangwonRegion(currentLocation: CurrentLocation) {
     );
 
     return regionDistance < nearestDistance ? region : nearest;
-  }, GANGWON_REGIONS[0]);
+  }, firstRegion);
 }
 
 type TestNotificationKind = "festival" | "route-review";
@@ -73,6 +78,7 @@ function HomePage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const hasAuthToken = Boolean(getAuthToken());
+  const serviceArea = useEffectiveServiceArea();
 
   const openSheet = useMapSheetStore((state) => state.openSheet);
   const resetSheet = useMapSheetStore((state) => state.resetSheet);
@@ -120,7 +126,7 @@ function HomePage() {
   const [canLoadHomeAttractions, setCanLoadHomeAttractions] =
     useState(false);
   const [isSearchPopupOpen, setIsSearchPopupOpen] = useState(false);
-  const searchResultScope = `${selectedSigunguCode}:${searchFilter}:${searchKeyword}`;
+  const searchResultScope = `${serviceArea.id}:${selectedSigunguCode}:${searchFilter}:${searchKeyword}`;
   const visibleSearchResultCount =
     visibleSearchState?.scope === searchResultScope
       ? visibleSearchState.count
@@ -253,7 +259,7 @@ function HomePage() {
     setAttractionLoadingStage,
     topRankByAttractionId,
     trendNameByAttractionId,
-  } = useHomeAttractionData(selectedSigunguCode, {
+  } = useHomeAttractionData(selectedSigunguCode, serviceArea, {
     enabled: canLoadHomeAttractions,
   });
   const handleSelectAttraction = useCallback(
@@ -266,9 +272,9 @@ function HomePage() {
     }: OpenPlaceSheetFromAttractionOptions) => {
       const currentLocationForOrigin = currentLocationRef.current;
       const selectedRegionForOrigin =
-        GANGWON_REGIONS.find(
+        serviceArea.regions.find(
           (region) => region.sigunguCode === selectedSigunguCode
-        ) ?? DEFAULT_GANGWON_REGION;
+        ) ?? serviceArea.defaultRegion;
       const selectedRegionOriginLabel =
         text.labels.regions[selectedRegionForOrigin.label] ??
         selectedRegionForOrigin.label;
@@ -277,7 +283,8 @@ function HomePage() {
         createMapSheetPlaceFromAttraction({
           attraction,
           markerType,
-          signguCode: GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode] ?? "",
+          areaCode: serviceArea.tatsAreaCode,
+          signguCode: selectedRegionForOrigin.adminCode,
           touristTrendName,
           topRank: rank ?? null,
         }),
@@ -299,7 +306,7 @@ function HomePage() {
         }
       );
     },
-    [openSheet, selectedSigunguCode, text]
+    [openSheet, selectedSigunguCode, serviceArea, text]
   );
   const {
     currentLocation,
@@ -315,6 +322,8 @@ function HomePage() {
     isUpdatingPlaceLabelsRef,
     onSelectAttraction: handleSelectAttraction,
     searchFilter,
+    mapCenter: serviceArea.center,
+    regions: serviceArea.regions,
     selectedSigunguCode,
     setAttractionLoadingStage,
     topRankByAttractionId,
@@ -332,8 +341,11 @@ function HomePage() {
 
     const frameId = window.requestAnimationFrame(() => {
       const initialRegion = currentLocation
-        ? getNearestGangwonRegion(currentLocation)
-        : DEFAULT_GANGWON_REGION;
+        ? getNearestServiceRegion(currentLocation, serviceArea.regions)
+        : serviceArea.defaultRegion;
+      if (!initialRegion) {
+        return;
+      }
       resolveInitialRegion(initialRegion.sigunguCode);
     });
 
@@ -345,6 +357,7 @@ function HomePage() {
     isCurrentLocationLookupPending,
     isInitialRegionResolved,
     resolveInitialRegion,
+    serviceArea,
   ]);
 
   useEffect(() => {
@@ -386,19 +399,37 @@ function HomePage() {
   const shouldShowMapSetupSkeleton = !isInitialRegionResolved;
   const shouldShowInteractiveMapUi = isInitialRegionResolved;
   const orderedRegions = useMemo(() => {
-    if (!currentLocation || !isInitialRegionResolved) {
-      return GANGWON_REGIONS;
+    if (!isInitialRegionResolved) {
+      return serviceArea.regions;
     }
 
-    return [...GANGWON_REGIONS].sort((a, b) => {
+    if (!currentLocation) {
+      return [...serviceArea.regions].sort((a, b) => {
+        if (a.sigunguCode === selectedSigunguCode) {
+          return -1;
+        }
+        if (b.sigunguCode === selectedSigunguCode) {
+          return 1;
+        }
+        return 0;
+      });
+    }
+
+    return [...serviceArea.regions].sort((a, b) => {
       const distanceA = calculateDistanceMeters(currentLocation, a.center);
       const distanceB = calculateDistanceMeters(currentLocation, b.center);
       return distanceA - distanceB;
     });
-  }, [currentLocation, isInitialRegionResolved]);
+  }, [
+    currentLocation,
+    isInitialRegionResolved,
+    selectedSigunguCode,
+    serviceArea.regions,
+  ]);
   const selectedRegion =
-    GANGWON_REGIONS.find((region) => region.sigunguCode === selectedSigunguCode) ??
-    DEFAULT_GANGWON_REGION;
+    serviceArea.regions.find(
+      (region) => region.sigunguCode === selectedSigunguCode
+    ) ?? serviceArea.defaultRegion;
   const selectedRegionLabel =
     text.labels.regions[selectedRegion.label] ?? selectedRegion.label;
   const routeStartLocation = currentLocation;
@@ -415,11 +446,14 @@ function HomePage() {
       };
   const placeSearchFilters = useMemo(
     () =>
-      PLACE_SEARCH_FILTERS.map((filter) => ({
-        ...filter,
-        label: text.search.filters[filter.key],
-      })),
-    [text]
+      PLACE_SEARCH_FILTERS.filter(
+        (filter) =>
+          serviceArea.hasFestivalSource || filter.key !== "festival"
+      ).map((filter) => ({
+          ...filter,
+          label: text.search.filters[filter.key],
+        })),
+    [serviceArea.hasFestivalSource, text]
   );
 
   useEffect(() => {
@@ -430,7 +464,11 @@ function HomePage() {
       return;
     }
 
-    const festivalRegion = GANGWON_REGIONS.find(
+    if (!serviceArea.hasFestivalSource) {
+      return;
+    }
+
+    const festivalRegion = serviceArea.regions.find(
       (region) => region.sigunguCode === festivalRegionCode
     );
 
@@ -464,6 +502,7 @@ function HomePage() {
     setSearchFilter,
     setSearchKeyword,
     setSearchParams,
+    serviceArea,
     text,
   ]);
 
@@ -566,7 +605,8 @@ function HomePage() {
         return createMapSheetPlaceFromAttraction({
           attraction,
           markerType,
-          signguCode: GANGWON_SIGNGU_ADMIN_CODES[selectedSigunguCode] ?? "",
+          areaCode: serviceArea.tatsAreaCode,
+          signguCode: selectedRegion.adminCode,
           touristTrendName:
             trendNameByAttractionId.get(attraction.id) ?? attraction.title,
           topRank: rank,
@@ -575,7 +615,8 @@ function HomePage() {
       .slice(0, 160);
   }, [
     attractionData,
-    selectedSigunguCode,
+    selectedRegion.adminCode,
+    serviceArea.tatsAreaCode,
     topRankByAttractionId,
     trendNameByAttractionId,
   ]);
@@ -851,21 +892,23 @@ function HomePage() {
                 : text.home.routeReviewTestSend}
             </span>
           </button>
-          <button
-            type="button"
-            aria-label={text.home.festivalTestSendAria}
-            disabled={testNotificationMutation.isPending}
-            onClick={() => testNotificationMutation.mutate("festival")}
-            className="pointer-events-auto inline-flex h-12 items-center gap-2 rounded-full border border-white/80 bg-rose-500 px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(244,63,94,0.35)] transition hover:bg-rose-600 active:scale-[0.98] disabled:cursor-wait disabled:bg-rose-300"
-          >
-            <MdCelebration aria-hidden="true" className="text-lg" />
-            <span>
-              {testNotificationMutation.isPending &&
-              testNotificationMutation.variables === "festival"
-                ? text.home.festivalTestSending
-                : text.home.festivalTestSend}
-            </span>
-          </button>
+          {serviceArea.hasFestivalSource ? (
+            <button
+              type="button"
+              aria-label={text.home.festivalTestSendAria}
+              disabled={testNotificationMutation.isPending}
+              onClick={() => testNotificationMutation.mutate("festival")}
+              className="pointer-events-auto inline-flex h-12 items-center gap-2 rounded-full border border-white/80 bg-rose-500 px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(244,63,94,0.35)] transition hover:bg-rose-600 active:scale-[0.98] disabled:cursor-wait disabled:bg-rose-300"
+            >
+              <MdCelebration aria-hidden="true" className="text-lg" />
+              <span>
+                {testNotificationMutation.isPending &&
+                testNotificationMutation.variables === "festival"
+                  ? text.home.festivalTestSending
+                  : text.home.festivalTestSend}
+              </span>
+            </button>
+          ) : null}
         </div>
       ) : null}
 

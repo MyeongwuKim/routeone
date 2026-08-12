@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  GANGWON_CENTER,
-  GANGWON_REGIONS,
-} from "@/data/gangwonRegions";
+import { GANGWON_CENTER } from "@/data/gangwonRegions";
+import { SERVICE_AREAS } from "@/data/serviceAreas";
 import {
   IoBagAdd,
   IoBagAddOutline,
@@ -64,13 +62,18 @@ function PlaceBottomSheet() {
       )
     : null;
 
+  const fallbackDirectionArea = selectedPlace
+    ? Object.values(SERVICE_AREAS).find(
+        (area) => area.tatsAreaCode === selectedPlace.areaCode
+      )
+    : null;
   const fallbackDirectionRegion = selectedPlace
-    ? GANGWON_REGIONS.find(
+    ? fallbackDirectionArea?.regions.find(
         (region) =>
           region.sigunguCode === selectedPlace.signguCode ||
           region.adminCode === selectedPlace.signguCode
       ) ??
-      GANGWON_REGIONS.find((region) =>
+      fallbackDirectionArea?.regions.find((region) =>
         selectedPlace.address.includes(region.label)
       )
     : null;
@@ -79,9 +82,17 @@ function PlaceBottomSheet() {
         text.labels.regions[fallbackDirectionRegion.label] ??
           fallbackDirectionRegion.label
       )
-    : text.placeSheet.gangwonReferenceLocation;
+    : fallbackDirectionArea
+      ? text.placeSheet.referenceLocation(
+          text.labels.regions[fallbackDirectionArea.label] ??
+            fallbackDirectionArea.label
+        )
+      : text.placeSheet.gangwonReferenceLocation;
   const resolvedDirectionOrigin = directionOrigin ?? {
-    coordinates: fallbackDirectionRegion?.center ?? GANGWON_CENTER,
+    coordinates:
+      fallbackDirectionRegion?.center ??
+      fallbackDirectionArea?.center ??
+      GANGWON_CENTER,
     label: fallbackDirectionLabel,
     isCurrentLocation: false,
   };

@@ -5,6 +5,7 @@ import type {
   RouteStop,
   RouteStopVerificationStatus,
 } from "@prisma/client";
+import { UserFacingError } from "../../graphql/userFacingError.js";
 import type { PlaceSnapshotInput } from "./route.types.js";
 
 type RouteSharedPrisma = PrismaClient | Prisma.TransactionClient;
@@ -160,11 +161,11 @@ export function buildPlacePhotoThumbnailUrl(imageUrl: string) {
 
 export function normalizePlaceSnapshot(place: PlaceSnapshotInput) {
   if (!place.title.trim()) {
-    throw new Error("장소 이름이 필요합니다.");
+    throw new UserFacingError("장소 이름이 필요합니다.");
   }
 
   if (!Number.isFinite(place.lat) || !Number.isFinite(place.lng)) {
-    throw new Error("장소 좌표가 올바르지 않습니다.");
+    throw new UserFacingError("장소 좌표가 올바르지 않습니다.");
   }
 
   return {
@@ -204,7 +205,44 @@ const REGION_TAG_RULES = [
   { token: "경남", tag: "경남" },
 ];
 
+const REGION_CODE_TAG_RULES = [
+  {
+    tag: "강원",
+    areaCodes: ["32", "51"],
+    adminCodePrefixes: ["51"],
+  },
+  {
+    tag: "서울",
+    areaCodes: ["1", "11"],
+    adminCodePrefixes: ["11"],
+  },
+];
+
 function getRouteRegionTag(route: Route, stops: RouteStop[]) {
+  const regionLabelKeys = [
+    route.primaryRegionLabelKey,
+    ...stops.map((stop) => stop.place.regionLabelKey),
+  ].filter((value): value is string => Boolean(value));
+  const regionCodes = [
+    route.primaryRegionCode,
+    ...stops.map((stop) => stop.place.regionCode),
+  ].filter((value): value is string => Boolean(value));
+  const codedRegionRule = REGION_CODE_TAG_RULES.find(
+    (rule) =>
+      regionLabelKeys.some((labelKey) => {
+        const [areaCode, sigunguCode] = labelKey.split(":");
+
+        return Boolean(sigunguCode && rule.areaCodes.includes(areaCode));
+      }) ||
+      regionCodes.some((regionCode) =>
+        rule.adminCodePrefixes.some((prefix) => regionCode.startsWith(prefix))
+      )
+  );
+
+  if (codedRegionRule) {
+    return codedRegionRule.tag;
+  }
+
   const sourceText = [
     route.primaryRegionLabelKey,
     route.primaryRegionCode,
@@ -396,11 +434,11 @@ export async function assertRouteOwner(
   });
 
   if (!route) {
-    throw new Error("루트를 찾을 수 없습니다.");
+    throw new UserFacingError("루트를 찾을 수 없습니다.");
   }
 
   if (route.ownerId !== userId) {
-    throw new Error("루트에 접근할 수 없습니다.");
+    throw new UserFacingError("루트에 접근할 수 없습니다.");
   }
 
   return route;
@@ -430,7 +468,7 @@ export async function refreshRouteProgress(
   });
 
   if (!route) {
-    throw new Error("루트를 찾을 수 없습니다.");
+    throw new UserFacingError("루트를 찾을 수 없습니다.");
   }
 
   const isCompleted = totalStopCount > 0 && totalStopCount === completedStopCount;

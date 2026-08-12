@@ -5,6 +5,7 @@ import {
   type PrismaClient,
   type User,
 } from "@prisma/client";
+import { UserFacingError } from "../../graphql/userFacingError.js";
 
 export const GANGWON_REGION_BY_CODE = {
   "1": "강릉",
@@ -55,7 +56,7 @@ function normalizeRegionCodes(regionCodes: string[]) {
     normalized.length > MAX_FESTIVAL_REGION_COUNT ||
     normalized.some((regionCode) => !GANGWON_REGION_CODES.has(regionCode))
   ) {
-    throw new Error("축제 알림 지역은 강원 지역 중 최대 2곳까지 선택할 수 있습니다.");
+    throw new UserFacingError("축제 알림 지역은 강원 지역 중 최대 2곳까지 선택할 수 있습니다.");
   }
 
   return normalized;
@@ -65,7 +66,7 @@ function normalizeExpoPushToken(value: string) {
   const token = value.trim();
 
   if (!EXPO_PUSH_TOKEN_PATTERN.test(token)) {
-    throw new Error("Expo 푸시 토큰이 올바르지 않습니다.");
+    throw new UserFacingError("Expo 푸시 토큰이 올바르지 않습니다.");
   }
 
   return token;
@@ -75,7 +76,7 @@ function normalizeAppVariant(value?: string | null) {
   const appVariant = value?.trim() ?? "";
 
   if (appVariant.length > 40) {
-    throw new Error("앱 환경 값이 올바르지 않습니다.");
+    throw new UserFacingError("앱 환경 값이 올바르지 않습니다.");
   }
 
   return appVariant || null;
@@ -89,7 +90,7 @@ function normalizeNotificationLocale(value?: string | null) {
   }
 
   if (locale !== "ko" && locale !== "en") {
-    throw new Error("알림 언어 값이 올바르지 않습니다.");
+    throw new UserFacingError("알림 언어 값이 올바르지 않습니다.");
   }
 
   return locale;
@@ -130,7 +131,7 @@ export async function updateNotificationSettings(
   }
 
   if (festivalEnabled && festivalRegionCodes.length === 0) {
-    throw new Error("축제 알림을 받을 지역을 1곳 이상 선택해 주세요.");
+    throw new UserFacingError("축제 알림을 받을 지역을 1곳 이상 선택해 주세요.");
   }
 
   return prisma.$transaction(async (transaction) => {

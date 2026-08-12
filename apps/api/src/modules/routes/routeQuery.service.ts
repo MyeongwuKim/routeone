@@ -69,6 +69,58 @@ type RouteConnection = {
   };
 };
 
+const REGION_QUERY_RULES: Record<
+  string,
+  { areaCodes: string[]; adminCodePrefixes: string[] }
+> = {
+  강원: {
+    areaCodes: ["32", "51"],
+    adminCodePrefixes: ["51"],
+  },
+  서울: {
+    areaCodes: ["1", "11"],
+    adminCodePrefixes: ["11"],
+  },
+};
+
+function getRegionTagWhere(regionTag?: string | null): Prisma.RouteWhereInput {
+  const normalizedRegionTag = regionTag?.trim();
+
+  if (!normalizedRegionTag) {
+    return {};
+  }
+
+  const rule = REGION_QUERY_RULES[normalizedRegionTag];
+
+  if (!rule) {
+    return {
+      shareTags: {
+        has: normalizedRegionTag,
+      },
+    };
+  }
+
+  return {
+    OR: [
+      {
+        shareTags: {
+          has: normalizedRegionTag,
+        },
+      },
+      ...rule.areaCodes.map((areaCode) => ({
+        primaryRegionLabelKey: {
+          startsWith: `${areaCode}:`,
+        },
+      })),
+      ...rule.adminCodePrefixes.map((prefix) => ({
+        primaryRegionCode: {
+          startsWith: prefix,
+        },
+      })),
+    ],
+  };
+}
+
 function getRouteHistoryTodayStart(today?: Date | null) {
   const baseDate = today ?? new Date();
   const todayKey = baseDate.toISOString().slice(0, 10);
@@ -154,6 +206,7 @@ export async function getLikedRouteConnection(
   prisma: PrismaClient,
   user: User,
   options: {
+    regionTag?: string | null;
     limit?: number | null;
     cursor?: string | null;
   }
@@ -203,6 +256,7 @@ export async function getLikedRouteConnection(
           in: likes.map((like) => like.routeId),
         },
         visibility: "PUBLIC",
+        ...getRegionTagWhere(options.regionTag),
       },
     });
     const routeById = new Map(routes.map((route) => [route.id, route]));
@@ -240,6 +294,7 @@ export async function getPublicRoutes(
   prisma: PrismaClient,
   options: {
     regionCode?: string | null;
+    regionTag?: string | null;
     limit?: number | null;
   }
 ) {
@@ -251,6 +306,7 @@ export async function getPublicRoutes(
             primaryRegionCode: options.regionCode,
           }
         : {}),
+      ...getRegionTagWhere(options.regionTag),
     },
     orderBy: {
       sharedAt: "desc",
@@ -263,6 +319,7 @@ export async function getPublicRouteConnection(
   prisma: PrismaClient,
   options: {
     regionCode?: string | null;
+    regionTag?: string | null;
     limit?: number | null;
     cursor?: string | null;
   }
@@ -276,6 +333,7 @@ export async function getPublicRouteConnection(
             primaryRegionCode: options.regionCode,
           }
         : {}),
+      ...getRegionTagWhere(options.regionTag),
     },
     orderBy: [
       {

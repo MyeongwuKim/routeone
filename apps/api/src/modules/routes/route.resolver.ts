@@ -336,10 +336,19 @@ export const routeTypeDefs = gql`
     ): RouteConnection!
     savedRoutes: [Route!]!
     likedRoutes: [Route!]!
-    likedRouteConnection(limit: Int, cursor: String): RouteConnection!
-    sharedRoutes(regionCode: String, limit: Int): [Route!]!
+    likedRouteConnection(
+      regionTag: String
+      limit: Int
+      cursor: String
+    ): RouteConnection!
+    sharedRoutes(
+      regionCode: String
+      regionTag: String
+      limit: Int
+    ): [Route!]!
     sharedRouteConnection(
       regionCode: String
+      regionTag: String
       limit: Int
       cursor: String
     ): RouteConnection!
@@ -397,11 +406,13 @@ type MyRoutesArgs = {
 
 type SharedRoutesArgs = {
   regionCode?: string | null;
+  regionTag?: string | null;
   limit?: number | null;
 };
 
 type RouteConnectionArgs = {
   regionCode?: string | null;
+  regionTag?: string | null;
   limit?: number | null;
   cursor?: string | null;
   today?: Date | null;
@@ -575,6 +586,7 @@ export const routeResolvers = {
     ) {
       const user = requireUser(context);
       return getLikedRouteConnection(context.prisma, user, {
+        regionTag: args.regionTag,
         limit: args.limit,
         cursor: args.cursor,
       });
@@ -586,6 +598,7 @@ export const routeResolvers = {
     ) {
       return getPublicRoutes(context.prisma, {
         regionCode: args.regionCode,
+        regionTag: args.regionTag,
         limit: args.limit,
       });
     },
@@ -596,6 +609,7 @@ export const routeResolvers = {
     ) {
       return getPublicRouteConnection(context.prisma, {
         regionCode: args.regionCode,
+        regionTag: args.regionTag,
         limit: args.limit,
         cursor: args.cursor,
       });

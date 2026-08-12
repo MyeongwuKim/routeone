@@ -8,11 +8,7 @@ import {
   type SetStateAction,
 } from "react";
 import { createBadgeMarkerIconHtml } from "@/components/map/NaverMapMarkerIcon";
-import {
-  DEFAULT_GANGWON_REGION,
-  GANGWON_CENTER,
-  GANGWON_REGIONS,
-} from "@/data/gangwonRegions";
+import type { ServiceRegion } from "@/data/serviceAreas";
 import {
   convertUtmkToWgs84,
   type CurrentLocation,
@@ -97,6 +93,8 @@ type UseHomeMapOptions = {
     options: OpenPlaceSheetFromAttractionOptions
   ) => void;
   searchFilter: SearchFilter;
+  mapCenter: CurrentLocation;
+  regions: readonly ServiceRegion[];
   selectedSigunguCode: string;
   setAttractionLoadingStage: Dispatch<
     SetStateAction<AttractionLoadingStage>
@@ -126,6 +124,8 @@ export function useHomeMap({
   isUpdatingPlaceLabelsRef,
   onSelectAttraction,
   searchFilter,
+  mapCenter,
+  regions,
   selectedSigunguCode,
   setAttractionLoadingStage,
   topRankByAttractionId,
@@ -405,11 +405,11 @@ export function useHomeMap({
       const mapInstance = mapInstanceRef.current;
       const naverMaps = naverMapsRef.current;
       const currentRegion =
-        GANGWON_REGIONS.find(
+        regions.find(
           (region) => region.sigunguCode === selectedSigunguCode
-        ) ?? DEFAULT_GANGWON_REGION;
+        ) ?? regions[0];
 
-      if (!mapInstance || !naverMaps) {
+      if (!mapInstance || !naverMaps || !currentRegion) {
         return;
       }
 
@@ -444,6 +444,7 @@ export function useHomeMap({
     }, [
       drawSelectedRegionBoundary,
       moveMapToBounds,
+      regions,
       selectedSigunguCode,
     ]
   );
@@ -538,7 +539,7 @@ export function useHomeMap({
         naverMapsRef.current = naverMaps;
         const shouldUseDarkMap = useUiThemeStore.getState().mode === "dark";
         const mapInstance = new naverMaps.Map(container, {
-          center: new naverMaps.LatLng(GANGWON_CENTER.lat, GANGWON_CENTER.lng),
+          center: new naverMaps.LatLng(mapCenter.lat, mapCenter.lng),
           zoom: 10,
           mapTypeId: naverMaps.MapTypeId.NORMAL,
           ...getNaverMapThemeOptions(shouldUseDarkMap),
@@ -630,6 +631,8 @@ export function useHomeMap({
     clearBoundaryPolygons,
     clearMarkers,
     closeSheet,
+    mapCenter.lat,
+    mapCenter.lng,
     text,
   ]);
 

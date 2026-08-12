@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient, type User } from "@prisma/client";
+import { UserFacingError } from "../../graphql/userFacingError.js";
 import {
   addDays,
   assertRouteOwner,
@@ -44,7 +45,7 @@ function normalizeRouteCreateRequestId(value?: string | null) {
   }
 
   if (normalized.length > MAX_ROUTE_CREATE_REQUEST_ID_LENGTH) {
-    throw new Error("경로 생성 요청 식별값이 너무 깁니다.");
+    throw new UserFacingError("경로 생성 요청 식별값이 너무 깁니다.");
   }
 
   return normalized;
@@ -160,7 +161,7 @@ function normalizeRouteStopDayInputs(
 
 function assertValidDate(value: Date) {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
-    throw new Error("시작 날짜가 올바르지 않습니다.");
+    throw new UserFacingError("시작 날짜가 올바르지 않습니다.");
   }
 }
 
@@ -198,7 +199,7 @@ async function assertNoRouteDateConflict(
   });
 
   if (existingRoute) {
-    throw new Error(
+    throw new UserFacingError(
       "이미 해당 기간에 저장된 일정이 있어요. 기존 일정을 정리한 뒤 다시 만들어 주세요."
     );
   }
@@ -221,7 +222,7 @@ function assertNoDuplicateRouteStops(stops: CreateRouteStopInput[]) {
     const duplicatedKey = duplicateKeys.find((key) => usedKeys.has(key));
 
     if (duplicatedKey) {
-      throw new Error("같은 장소는 루트에 한 번만 추가할 수 있어요.");
+      throw new UserFacingError("같은 장소는 루트에 한 번만 추가할 수 있어요.");
     }
 
     duplicateKeys.forEach((key) => usedKeys.add(key));
@@ -239,7 +240,7 @@ function normalizeRouteStartLocation(
     !Number.isFinite(startLocation.lat) ||
     !Number.isFinite(startLocation.lng)
   ) {
-    throw new Error("출발 위치 좌표가 올바르지 않습니다.");
+    throw new UserFacingError("출발 위치 좌표가 올바르지 않습니다.");
   }
 
   return {
@@ -391,7 +392,7 @@ export async function createRoute(
 
     if (existingRequest) {
       if (existingRequest.inputHash !== inputHash) {
-        throw new Error(
+        throw new UserFacingError(
           "같은 경로 생성 요청에 서로 다른 일정 정보가 전달됐습니다. 다시 시도해 주세요."
         );
       }
@@ -443,7 +444,7 @@ export async function appendRouteDays(
   assertNoDuplicateRouteStops(stopInputs);
 
   if (stopInputs.length === 0) {
-    throw new Error("추가할 장소가 없습니다.");
+    throw new UserFacingError("추가할 장소가 없습니다.");
   }
 
   const existingDayCount = await prisma.routeDay.count({
@@ -464,7 +465,7 @@ export async function appendRouteDays(
     travelStartDate &&
     travelStartDate <= route.travelEndDate
   ) {
-    throw new Error("추가할 DAY는 기존 일정 마지막 날짜 이후로 선택해 주세요.");
+    throw new UserFacingError("추가할 DAY는 기존 일정 마지막 날짜 이후로 선택해 주세요.");
   }
 
   await assertNoRouteDateConflict(
@@ -539,11 +540,11 @@ export async function startRoute(
   assertValidDate(input.startedAt);
 
   if (route.status === "COMPLETED") {
-    throw new Error("이미 완료된 일정은 다시 시작할 수 없어요.");
+    throw new UserFacingError("이미 완료된 일정은 다시 시작할 수 없어요.");
   }
 
   if (getRouteDateKey(input.startedAt) > getRouteDateKey(new Date())) {
-    throw new Error("미래 날짜의 여행은 아직 시작할 수 없어요.");
+    throw new UserFacingError("미래 날짜의 여행은 아직 시작할 수 없어요.");
   }
 
   const routeDays = await prisma.routeDay.findMany({
@@ -608,7 +609,7 @@ export async function updateRouteStopStayMinutes(
   });
 
   if (!stop) {
-    throw new Error("장소를 찾을 수 없습니다.");
+    throw new UserFacingError("장소를 찾을 수 없습니다.");
   }
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
@@ -659,7 +660,7 @@ export async function reorderRouteStops(
   const uniqueStopIds = new Set(stopIds);
 
   if (uniqueStopIds.size !== stopIds.length) {
-    throw new Error("중복된 장소가 포함되어 있습니다.");
+    throw new UserFacingError("중복된 장소가 포함되어 있습니다.");
   }
 
   const day = await prisma.routeDay.findUnique({
@@ -669,7 +670,7 @@ export async function reorderRouteStops(
   });
 
   if (!day || day.routeId !== route.id) {
-    throw new Error("일정 날짜를 찾을 수 없습니다.");
+    throw new UserFacingError("일정 날짜를 찾을 수 없습니다.");
   }
 
   const existingStops = await prisma.routeStop.findMany({
@@ -683,14 +684,14 @@ export async function reorderRouteStops(
   });
 
   if (existingStops.length !== stopIds.length) {
-    throw new Error("같은 날짜 안의 모든 장소를 포함해야 합니다.");
+    throw new UserFacingError("같은 날짜 안의 모든 장소를 포함해야 합니다.");
   }
 
   const existingStopIds = new Set(existingStops.map((stop) => stop.id));
   const hasUnknownStop = stopIds.some((stopId) => !existingStopIds.has(stopId));
 
   if (hasUnknownStop) {
-    throw new Error("다른 일정의 장소는 순서를 바꿀 수 없습니다.");
+    throw new UserFacingError("다른 일정의 장소는 순서를 바꿀 수 없습니다.");
   }
 
   const orderSlots = existingStops
@@ -810,7 +811,7 @@ export async function deleteRouteDay(
   });
 
   if (!day) {
-    throw new Error("일정 날짜를 찾을 수 없습니다.");
+    throw new UserFacingError("일정 날짜를 찾을 수 없습니다.");
   }
 
   const route = await assertRouteOwner(prisma, day.routeId, user.id);
@@ -824,7 +825,7 @@ export async function deleteRouteDay(
   });
 
   if (routeDays.length <= 1) {
-    throw new Error("마지막 DAY는 전체 일정 삭제로 지워 주세요.");
+    throw new UserFacingError("마지막 DAY는 전체 일정 삭제로 지워 주세요.");
   }
 
   const routeStops = await prisma.routeStop.findMany({
@@ -916,7 +917,7 @@ export async function cloneRoute(
   });
 
   if (!sourceRoute || sourceRoute.visibility !== "PUBLIC") {
-    throw new Error("복사할 수 있는 공유 루트를 찾을 수 없습니다.");
+    throw new UserFacingError("복사할 수 있는 공유 루트를 찾을 수 없습니다.");
   }
 
   const route = await prisma.route.create({

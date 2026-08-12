@@ -1,5 +1,6 @@
 import { gql } from "graphql-tag";
 import type { GraphQLContext } from "../../context.js";
+import { UserFacingError } from "../../graphql/userFacingError.js";
 import {
   createAuthToken,
   hashPassword,
@@ -228,11 +229,11 @@ export const userResolvers = {
       const password = args.input.password;
 
       if (accountId.length < 3) {
-        throw new Error("아이디는 3자 이상이어야 합니다.");
+        throw new UserFacingError("아이디는 3자 이상이어야 합니다.");
       }
 
       if (password.length < 4) {
-        throw new Error("비밀번호는 4자 이상이어야 합니다.");
+        throw new UserFacingError("비밀번호는 4자 이상이어야 합니다.");
       }
 
       const existingUser = await context.prisma.user.findFirst({
@@ -246,7 +247,7 @@ export const userResolvers = {
           !existingUser.passwordHash ||
           !verifyPassword(password, existingUser.passwordHash)
         ) {
-          throw new Error("아이디 또는 비밀번호가 올바르지 않습니다.");
+          throw new UserFacingError("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
 
         return {
@@ -288,7 +289,7 @@ export const userResolvers = {
       context: GraphQLContext
     ) {
       if (!context.authenticatedUserId) {
-        throw new Error(
+        throw new UserFacingError(
           "로그인 세션이 만료되었어요. 다시 로그인해 주세요."
         );
       }
@@ -304,7 +305,7 @@ export const userResolvers = {
       context: GraphQLContext
     ) {
       if (!context.authenticatedUserId) {
-        throw new Error("로그인한 계정만 탈퇴할 수 있습니다.");
+        throw new UserFacingError("로그인한 계정만 탈퇴할 수 있습니다.");
       }
 
       return deleteUserAccount(context.prisma, context.authenticatedUserId);
