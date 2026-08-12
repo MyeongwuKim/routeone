@@ -35,8 +35,10 @@ function ServiceAreaSettingsPage() {
     const nextArea = SERVICE_AREAS[nextAreaId];
     const nextAreaLabel =
       text.labels.regions[nextArea.label] ?? nextArea.label;
+    const nextInitialRegion =
+      nextArea.developmentFixedRegion ?? nextArea.defaultRegion;
     setSelectedAreaId(nextAreaId);
-    resetForArea(nextArea.defaultRegion.sigunguCode);
+    resetForArea(nextInitialRegion.sigunguCode);
     resetSheet();
     void queryClient.invalidateQueries({ queryKey: ["tour-attractions"] });
     void queryClient.invalidateQueries({ queryKey: ["gangwon-attractions"] });

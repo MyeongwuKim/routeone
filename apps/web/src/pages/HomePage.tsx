@@ -39,7 +39,10 @@ import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
-import { useEffectiveServiceArea } from "@/stores/serviceAreaStore";
+import {
+  isDevelopmentServiceAreaEnabled,
+  useEffectiveServiceArea,
+} from "@/stores/serviceAreaStore";
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import {
@@ -79,6 +82,10 @@ function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasAuthToken = Boolean(getAuthToken());
   const serviceArea = useEffectiveServiceArea();
+  const canSelectServiceArea = isDevelopmentServiceAreaEnabled();
+  const developmentFixedRegion = canSelectServiceArea
+    ? serviceArea.developmentFixedRegion
+    : undefined;
 
   const openSheet = useMapSheetStore((state) => state.openSheet);
   const resetSheet = useMapSheetStore((state) => state.resetSheet);
@@ -335,14 +342,19 @@ function HomePage() {
   }, [currentLocation]);
 
   useEffect(() => {
-    if (isCurrentLocationLookupPending || isInitialRegionResolved) {
+    if (
+      (!developmentFixedRegion && isCurrentLocationLookupPending) ||
+      isInitialRegionResolved
+    ) {
       return;
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      const initialRegion = currentLocation
-        ? getNearestServiceRegion(currentLocation, serviceArea.regions)
-        : serviceArea.defaultRegion;
+      const initialRegion =
+        developmentFixedRegion ??
+        (currentLocation
+          ? getNearestServiceRegion(currentLocation, serviceArea.regions)
+          : serviceArea.defaultRegion);
       if (!initialRegion) {
         return;
       }
@@ -354,6 +366,7 @@ function HomePage() {
     };
   }, [
     currentLocation,
+    developmentFixedRegion,
     isCurrentLocationLookupPending,
     isInitialRegionResolved,
     resolveInitialRegion,
@@ -403,7 +416,7 @@ function HomePage() {
       return serviceArea.regions;
     }
 
-    if (!currentLocation) {
+    if (developmentFixedRegion || !currentLocation) {
       return [...serviceArea.regions].sort((a, b) => {
         if (a.sigunguCode === selectedSigunguCode) {
           return -1;
@@ -422,6 +435,7 @@ function HomePage() {
     });
   }, [
     currentLocation,
+    developmentFixedRegion,
     isInitialRegionResolved,
     selectedSigunguCode,
     serviceArea.regions,

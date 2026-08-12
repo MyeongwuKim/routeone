@@ -35,6 +35,7 @@ export type ServiceArea = {
     lng: number;
   };
   defaultRegion: ServiceRegion;
+  developmentFixedRegion?: ServiceRegion;
   regions: readonly ServiceRegion[];
   hasBoundaryAsset: boolean;
   hasFestivalSource: boolean;
@@ -48,6 +49,9 @@ export const SERVICE_AREAS: Record<ServiceAreaId, ServiceArea> = {
     tatsAreaCode: GANGWON_TATS_AREA_CODE,
     center: GANGWON_CENTER,
     defaultRegion: DEFAULT_GANGWON_REGION,
+    developmentFixedRegion:
+      GANGWON_REGIONS.find((region) => region.label === "춘천") ??
+      DEFAULT_GANGWON_REGION,
     regions: GANGWON_REGIONS,
     hasBoundaryAsset: true,
     hasFestivalSource: true,

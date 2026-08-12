@@ -460,6 +460,11 @@ export function useHomeAttractionData(
 
     return countByCode;
   }, [festivalsQuery.data, serviceArea.hasFestivalSource]);
+  const boundaryBySigunguCode = useMemo(
+    () =>
+      serviceArea.hasBoundaryAsset ? boundaryQuery.data ?? {} : {},
+    [boundaryQuery.data, serviceArea.hasBoundaryAsset]
+  );
 
   const topRankByAttractionId = useMemo(() => {
     const rankById = new Map<string, number>();
@@ -487,9 +492,7 @@ export function useHomeAttractionData(
     attractionLoadingStage: attractionsQuery.isError
       ? "idle"
       : attractionLoadingStage,
-    boundaryBySigunguCode: serviceArea.hasBoundaryAsset
-      ? boundaryQuery.data ?? {}
-      : {},
+    boundaryBySigunguCode,
     festivalCountBySigunguCode,
     festivals: serviceArea.hasFestivalSource
       ? festivalsQuery.data ?? []

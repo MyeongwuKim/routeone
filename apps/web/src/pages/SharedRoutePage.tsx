@@ -121,7 +121,10 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     toggleDraftFilter: handleToggleDraftFilter,
   } = useSharedRouteFilters(appLanguage);
   const [defaultFilterRegion, setDefaultFilterRegion] = useState(
-    serviceArea.defaultRegion.label
+    canSelectServiceArea
+      ? (serviceArea.developmentFixedRegion?.label ??
+        serviceArea.defaultRegion.label)
+      : serviceArea.defaultRegion.label
   );
   const routeListScrollRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
@@ -266,9 +269,11 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       }
 
       const nextArea = SERVICE_AREAS[nextAreaId];
-      setDefaultFilterRegion(nextArea.defaultRegion.label);
+      const nextInitialRegion =
+        nextArea.developmentFixedRegion ?? nextArea.defaultRegion;
+      setDefaultFilterRegion(nextInitialRegion.label);
       setSelectedAreaId(nextAreaId);
-      resetForArea(nextArea.defaultRegion.sigunguCode);
+      resetForArea(nextInitialRegion.sigunguCode);
       resetMapSheet();
       handleClearActiveFilters();
       handleClearDraftFilters();
@@ -439,6 +444,10 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   );
 
   useEffect(() => {
+    if (canSelectServiceArea && serviceArea.developmentFixedRegion) {
+      return;
+    }
+
     let isMounted = true;
 
     getCurrentPosition()
@@ -460,7 +469,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     return () => {
       isMounted = false;
     };
-  }, [serviceArea]);
+  }, [canSelectServiceArea, serviceArea]);
 
   useEffect(() => {
     const root = routeListScrollRef.current;
