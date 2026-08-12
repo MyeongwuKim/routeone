@@ -38,6 +38,7 @@ export type ServiceArea = {
   developmentFixedRegion?: ServiceRegion;
   regions: readonly ServiceRegion[];
   hasBoundaryAsset: boolean;
+  boundaryAssetPath?: string;
   hasFestivalSource: boolean;
 };
 
@@ -54,6 +55,7 @@ export const SERVICE_AREAS: Record<ServiceAreaId, ServiceArea> = {
       DEFAULT_GANGWON_REGION,
     regions: GANGWON_REGIONS,
     hasBoundaryAsset: true,
+    boundaryAssetPath: "/gangwon-sigungu-boundary.json",
     hasFestivalSource: true,
   },
   seoul: {
@@ -64,7 +66,8 @@ export const SERVICE_AREAS: Record<ServiceAreaId, ServiceArea> = {
     center: SEOUL_CENTER,
     defaultRegion: DEFAULT_SEOUL_REGION,
     regions: SEOUL_REGIONS,
-    hasBoundaryAsset: false,
+    hasBoundaryAsset: true,
+    boundaryAssetPath: "/seoul-sigungu-boundary.json",
     hasFestivalSource: false,
   },
 };

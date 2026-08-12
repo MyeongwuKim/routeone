@@ -23,6 +23,7 @@ import {
 } from "@/lib/recentPlaceSearches";
 import {
   calculateDistanceMeters,
+  findRegionContainingLocation,
   type CurrentLocation,
 } from "@/lib/gangwonBoundaryUtils";
 import {
@@ -343,7 +344,8 @@ function HomePage() {
 
   useEffect(() => {
     if (
-      (!developmentFixedRegion && isCurrentLocationLookupPending) ||
+      (!developmentFixedRegion &&
+        (isCurrentLocationLookupPending || !isBoundaryDataReady)) ||
       isInitialRegionResolved
     ) {
       return;
@@ -353,7 +355,11 @@ function HomePage() {
       const initialRegion =
         developmentFixedRegion ??
         (currentLocation
-          ? getNearestServiceRegion(currentLocation, serviceArea.regions)
+          ? findRegionContainingLocation(
+              currentLocation,
+              serviceArea.regions,
+              boundaryBySigunguCode
+            ) ?? getNearestServiceRegion(currentLocation, serviceArea.regions)
           : serviceArea.defaultRegion);
       if (!initialRegion) {
         return;
@@ -367,6 +373,8 @@ function HomePage() {
   }, [
     currentLocation,
     developmentFixedRegion,
+    boundaryBySigunguCode,
+    isBoundaryDataReady,
     isCurrentLocationLookupPending,
     isInitialRegionResolved,
     resolveInitialRegion,
@@ -407,7 +415,6 @@ function HomePage() {
     canLoadHomeAttractions &&
     mapReady &&
     !mapError &&
-    !attractionData &&
     (attractionLoadingStage !== "idle" || isAttractionFetching);
   const shouldShowMapSetupSkeleton = !isInitialRegionResolved;
   const shouldShowInteractiveMapUi = isInitialRegionResolved;
@@ -429,6 +436,13 @@ function HomePage() {
     }
 
     return [...serviceArea.regions].sort((a, b) => {
+      if (a.sigunguCode === selectedSigunguCode) {
+        return -1;
+      }
+      if (b.sigunguCode === selectedSigunguCode) {
+        return 1;
+      }
+
       const distanceA = calculateDistanceMeters(currentLocation, a.center);
       const distanceB = calculateDistanceMeters(currentLocation, b.center);
       return distanceA - distanceB;

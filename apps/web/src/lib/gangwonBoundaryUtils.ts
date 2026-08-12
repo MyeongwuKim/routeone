@@ -18,6 +18,8 @@ export type GangwonBoundaryFeature = {
   properties?: {
     id?: string;
     title?: string;
+    SIG_CD?: string;
+    SIG_KOR_NM?: string;
   };
   geometry?: {
     type?: string;
@@ -32,6 +34,12 @@ export type GangwonBoundaryCollection = {
 export type CurrentLocation = {
   lat: number;
   lng: number;
+};
+
+type BoundaryRegion = {
+  label: string;
+  sigunguCode: string;
+  adminCode: string;
 };
 
 function toMultiPolygonCoordinates(
@@ -58,13 +66,26 @@ function toMultiPolygonCoordinates(
 export function buildBoundaryMapBySigunguCode(
   collection: GangwonBoundaryCollection
 ): Record<string, GeoMultiPolygon> {
+  return buildBoundaryMapByRegions(collection, GANGWON_REGIONS);
+}
+
+export function buildBoundaryMapByRegions(
+  collection: GangwonBoundaryCollection,
+  regions: readonly BoundaryRegion[]
+): Record<string, GeoMultiPolygon> {
   const features = collection.features ?? [];
   const mapByCode: Record<string, GeoMultiPolygon> = {};
 
-  GANGWON_REGIONS.forEach((region) => {
-    const matchedFeature = features.find((feature) =>
-      feature.properties?.title?.startsWith(region.label)
-    );
+  regions.forEach((region) => {
+    const matchedFeature = features.find((feature) => {
+      const properties = feature.properties;
+
+      return (
+        properties?.SIG_CD === region.adminCode ||
+        properties?.SIG_KOR_NM === region.label ||
+        properties?.title?.startsWith(region.label)
+      );
+    });
 
     if (matchedFeature) {
       mapByCode[region.sigunguCode] = toMultiPolygonCoordinates(matchedFeature);
@@ -72,6 +93,100 @@ export function buildBoundaryMapBySigunguCode(
   });
 
   return mapByCode;
+}
+
+function isPointOnSegment(
+  point: CurrentLocation,
+  start: CurrentLocation,
+  end: CurrentLocation
+) {
+  const crossProduct =
+    (point.lng - start.lng) * (end.lat - start.lat) -
+    (point.lat - start.lat) * (end.lng - start.lng);
+  if (Math.abs(crossProduct) > 1e-9) {
+    return false;
+  }
+
+  return (
+    point.lng >= Math.min(start.lng, end.lng) - 1e-9 &&
+    point.lng <= Math.max(start.lng, end.lng) + 1e-9 &&
+    point.lat >= Math.min(start.lat, end.lat) - 1e-9 &&
+    point.lat <= Math.max(start.lat, end.lat) + 1e-9
+  );
+}
+
+function normalizeBoundaryPoint(
+  coordinate: [number, number]
+): CurrentLocation | null {
+  const [x, y] = coordinate;
+
+  if (Math.abs(x) <= 180 && Math.abs(y) <= 90) {
+    return { lat: y, lng: x };
+  }
+
+  return convertUtmkToWgs84(x, y);
+}
+
+function isLocationInsideRing(
+  location: CurrentLocation,
+  ring: GeoRing
+) {
+  let isInside = false;
+
+  for (
+    let index = 0, previousIndex = ring.length - 1;
+    index < ring.length;
+    previousIndex = index, index += 1
+  ) {
+    const current = normalizeBoundaryPoint(ring[index]);
+    const previous = normalizeBoundaryPoint(ring[previousIndex]);
+    if (!current || !previous) {
+      continue;
+    }
+
+    if (isPointOnSegment(location, previous, current)) {
+      return true;
+    }
+
+    const intersects =
+      current.lat > location.lat !== previous.lat > location.lat &&
+      location.lng <
+        ((previous.lng - current.lng) * (location.lat - current.lat)) /
+          (previous.lat - current.lat) +
+          current.lng;
+
+    if (intersects) {
+      isInside = !isInside;
+    }
+  }
+
+  return isInside;
+}
+
+function isLocationInsidePolygon(
+  location: CurrentLocation,
+  polygon: GeoPolygon
+) {
+  const [outerRing, ...innerRings] = polygon;
+
+  return (
+    Boolean(outerRing && isLocationInsideRing(location, outerRing)) &&
+    !innerRings.some((ring) => isLocationInsideRing(location, ring))
+  );
+}
+
+export function findRegionContainingLocation(
+  location: CurrentLocation,
+  regions: readonly BoundaryRegion[],
+  boundaryBySigunguCode: Record<string, GeoMultiPolygon>
+) {
+  return (
+    regions.find((region) =>
+      boundaryBySigunguCode[region.sigunguCode]?.some((polygon) =>
+        isLocationInsidePolygon(location, polygon)
+      )
+    ) ?? null
+  );
 }
 
 function getMeridianArc(radianLat: number) {

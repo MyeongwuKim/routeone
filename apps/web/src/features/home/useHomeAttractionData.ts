@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { festivalApi } from "@/api/festivalApi";
 import type { ServiceArea } from "@/data/serviceAreas";
 import {
-  buildBoundaryMapBySigunguCode,
+  buildBoundaryMapByRegions,
   type GangwonBoundaryCollection,
 } from "@/lib/gangwonBoundaryUtils";
 import {
@@ -43,7 +43,6 @@ type UseHomeAttractionDataOptions = {
   enabled?: boolean;
 };
 
-const GANGWON_BOUNDARY_ASSET_PATH = "/gangwon-sigungu-boundary.json";
 const FESTIVAL_LOOK_AHEAD_DAYS = 6;
 
 function formatLocalDateKey(date: Date) {
@@ -65,13 +64,13 @@ function getFestivalDateWindow() {
   };
 }
 
-function getGangwonBoundaryAssetUrl() {
-  if (GANGWON_BOUNDARY_ASSET_PATH.startsWith("data:")) {
-    return GANGWON_BOUNDARY_ASSET_PATH;
+function getBoundaryAssetUrl(assetPath: string) {
+  if (assetPath.startsWith("data:")) {
+    return assetPath;
   }
 
   return new URL(
-    GANGWON_BOUNDARY_ASSET_PATH.replace(/^\/+/, ""),
+    assetPath.replace(/^\/+/, ""),
     document.baseURI
   ).toString();
 }
@@ -172,15 +171,21 @@ export function useHomeAttractionData(
   );
 
   const boundaryQuery = useQuery({
-    queryKey: ["gangwon-boundary"],
-    enabled: serviceArea.hasBoundaryAsset,
+    queryKey: ["service-area-boundary", serviceArea.id],
+    enabled: Boolean(serviceArea.boundaryAssetPath),
     queryFn: async () => {
-      const response = await fetch(getGangwonBoundaryAssetUrl());
+      if (!serviceArea.boundaryAssetPath) {
+        return {};
+      }
+
+      const response = await fetch(
+        getBoundaryAssetUrl(serviceArea.boundaryAssetPath)
+      );
       if (!response.ok) {
         throw new Error("Failed to load boundary data.");
       }
       const data = (await response.json()) as GangwonBoundaryCollection;
-      return buildBoundaryMapBySigunguCode(data);
+      return buildBoundaryMapByRegions(data, serviceArea.regions);
     },
     staleTime: Infinity,
     gcTime: Infinity,

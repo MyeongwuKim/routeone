@@ -51,7 +51,6 @@ type HomeMapInstance = {
   fitBounds: (bounds: unknown) => void;
   getZoom: () => number;
   panTo?: (position: unknown, options?: { duration: number }) => void;
-  panToBounds?: (bounds: unknown) => void;
   setCenter: (position: unknown) => void;
   setOptions?: (
     optionsOrKey: Record<string, unknown> | string,
@@ -66,7 +65,6 @@ type HomeMapOverlay = {
 
 type HomeMapBounds = {
   extend: (position: unknown) => void;
-  getCenter?: () => unknown;
 };
 
 type CoordinateLike = {
@@ -143,6 +141,7 @@ export function useHomeMap({
   const boundaryPolygonRefs = useRef<HomeMapOverlay[]>([]);
   const markerRefs = useRef<HomeMapOverlay[]>([]);
   const markerListenerRefs = useRef<unknown[]>([]);
+  const mapBoundsMoveRequestRef = useRef(0);
   const hasRenderedAttractionMarkersRef = useRef(false);
   const onSelectAttractionRef = useRef(onSelectAttraction);
   const [currentLocation, setCurrentLocation] =
@@ -340,44 +339,17 @@ export function useHomeMap({
   ]);
 
   const moveMapToBounds = useCallback(
-    (bounds: HomeMapBounds, smooth: boolean) => {
+    (bounds: HomeMapBounds, requestId: number) => {
       const move = (attempt: number) => {
         const mapInstance = mapInstanceRef.current;
-        if (!mapInstance) {
+        if (
+          !mapInstance ||
+          mapBoundsMoveRequestRef.current !== requestId
+        ) {
           return;
         }
 
         try {
-          if (!smooth) {
-            mapInstance.fitBounds(bounds);
-            return;
-          }
-
-          if (typeof mapInstance.panToBounds === "function") {
-            mapInstance.panToBounds(bounds);
-            return;
-          }
-
-          const center = bounds.getCenter?.();
-          if (center && typeof mapInstance.panTo === "function") {
-            mapInstance.panTo(center, { duration: 450 });
-            window.setTimeout(() => {
-              if (mapInstanceRef.current === mapInstance) {
-                try {
-                  mapInstance.fitBounds(bounds);
-                } catch (error) {
-                  if (!isNaverMapModelPendingError(error)) {
-                    console.warn(
-                      "[routeone-web] failed to fit map bounds",
-                      error
-                    );
-                  }
-                }
-              }
-            }, 220);
-            return;
-          }
-
           mapInstance.fitBounds(bounds);
         } catch (error) {
           if (
@@ -401,7 +373,7 @@ export function useHomeMap({
   );
 
   const fitMapToSelectedRegion = useCallback(
-    (options?: { smooth?: boolean; fallbackBounds?: HomeMapBounds | null }) => {
+    () => {
       const mapInstance = mapInstanceRef.current;
       const naverMaps = naverMapsRef.current;
       const currentRegion =
@@ -413,15 +385,11 @@ export function useHomeMap({
         return;
       }
 
-      const smooth = options?.smooth ?? false;
+      const moveRequestId = mapBoundsMoveRequestRef.current + 1;
+      mapBoundsMoveRequestRef.current = moveRequestId;
       const regionBounds = drawSelectedRegionBoundary();
       if (regionBounds) {
-        moveMapToBounds(regionBounds, smooth);
-        return;
-      }
-
-      if (options?.fallbackBounds) {
-        moveMapToBounds(options.fallbackBounds, smooth);
+        moveMapToBounds(regionBounds, moveRequestId);
         return;
       }
 
@@ -429,16 +397,6 @@ export function useHomeMap({
         currentRegion.center.lat,
         currentRegion.center.lng
       );
-      if (smooth && typeof mapInstance.panTo === "function") {
-        mapInstance.panTo(center, { duration: 450 });
-        window.setTimeout(() => {
-          if (mapInstanceRef.current === mapInstance) {
-            mapInstance.setZoom(10);
-          }
-        }, 220);
-        return;
-      }
-
       mapInstance.setCenter(center);
       mapInstance.setZoom(10);
     }, [
@@ -601,6 +559,7 @@ export function useHomeMap({
 
     return () => {
       isDisposed = true;
+      mapBoundsMoveRequestRef.current += 1;
       window.cancelAnimationFrame(resetFrameId);
       if (readyFallbackTimeoutId !== null) {
         window.clearTimeout(readyFallbackTimeoutId);
@@ -676,8 +635,6 @@ export function useHomeMap({
     }
 
     clearMarkers();
-    const markerBounds = new naverMaps.LatLngBounds() as HomeMapBounds;
-    let visibleMarkerCount = 0;
     let isCancelled = false;
     let frameId: number | null = null;
     const visibleAttractions = attractionData.allAttractions
@@ -700,12 +657,6 @@ export function useHomeMap({
         return;
       }
 
-      if (!isPlaceLabelUpdate) {
-        fitMapToSelectedRegion({
-          smooth: true,
-          fallbackBounds: visibleMarkerCount > 0 ? markerBounds : null,
-        });
-      }
       hasRenderedAttractionMarkersRef.current = true;
       setAttractionLoadingStage("idle");
       isUpdatingPlaceLabelsRef.current = false;
@@ -738,9 +689,6 @@ export function useHomeMap({
           spreadPosition.lat,
           spreadPosition.lng
         );
-        markerBounds.extend(position);
-        visibleMarkerCount += 1;
-
         const rank = topRankByAttractionId.get(attraction.id) ?? null;
         const touristTrendName =
           trendNameByAttractionId.get(attraction.id) ?? attraction.title;
@@ -801,7 +749,6 @@ export function useHomeMap({
   }, [
     attractionData,
     clearMarkers,
-    fitMapToSelectedRegion,
     focusAttraction,
     isUpdatingPlaceLabelsRef,
     mapReady,
