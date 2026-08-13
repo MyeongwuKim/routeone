@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  MdAccessTime,
   MdArrowBack,
   MdCelebration,
   MdCheck,
@@ -13,12 +14,14 @@ import {
   notificationApi,
   NOTIFICATION_SETTINGS_QUERY_KEY,
 } from "@/api/notificationApi";
+import NotificationSettingsSkeleton from "@/components/feedback/NotificationSettingsSkeleton";
 import { GANGWON_REGIONS } from "@/data/gangwonRegions";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 type NotificationSettingKey =
+  | "routeStartEnabled"
   | "routeReviewEnabled"
   | "routeArrivalEnabled";
 
@@ -291,6 +294,10 @@ function NotificationSettingsPage() {
   };
 
   if (!settings) {
+    if (!settingsQuery.isError) {
+      return <NotificationSettingsSkeleton />;
+    }
+
     return (
       <section className="space-y-4 pb-4 text-slate-900 dark:text-slate-100">
         <header className="flex items-center gap-3">
@@ -307,9 +314,7 @@ function NotificationSettingsPage() {
           </h1>
         </header>
         <p className="px-1 text-sm font-semibold text-slate-500">
-          {settingsQuery.isError
-            ? text.notificationSettings.saveError
-            : text.notificationSettings.loading}
+          {text.notificationSettings.saveError}
         </p>
       </section>
     );
@@ -436,6 +441,15 @@ function NotificationSettingsPage() {
             </section>
           </div>
         </div>
+        <div className="border-b border-brand-50 dark:border-brand-400/15" />
+        <NotificationToggleRow
+          checked={settings.routeStartEnabled}
+          disabled={updateMutation.isPending}
+          icon={<MdAccessTime />}
+          title={text.notificationSettings.routeStartTitle}
+          description={text.notificationSettings.routeStartDescription}
+          onToggle={() => handleToggle("routeStartEnabled")}
+        />
         <div className="border-b border-brand-50 dark:border-brand-400/15" />
         <NotificationToggleRow
           checked={settings.routeReviewEnabled}

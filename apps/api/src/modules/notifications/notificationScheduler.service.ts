@@ -18,6 +18,8 @@ import { deliverPendingNotifications } from "./pushDelivery.service.js";
 
 const KST_OFFSET_MS = 1000 * 60 * 60 * 9;
 const DAY_MS = 1000 * 60 * 60 * 24;
+const ROUTE_START_REMINDER_MS = 1000 * 60 * 60;
+const ROUTE_START_LOOKAHEAD_DAYS = 2;
 const ROUTE_CORRECTION_GRACE_DAYS = 7;
 const ROUTE_REVIEW_DELAY_MS = DAY_MS;
 const NOTIFICATION_WINDOW_START_HOUR = 9;
@@ -149,6 +151,256 @@ async function upsertPendingNotification(
   }
 
   return existing;
+}
+
+type RouteStartNotificationInput = {
+  userId: string;
+  routeId: string;
+  routeTitle: string;
+  dayId: string;
+  dayIndex: number;
+  routeStartAt: Date;
+  availableAt: Date;
+};
+
+async function upsertRouteStartNotification(
+  prisma: PrismaClient,
+  input: RouteStartNotificationInput
+) {
+  const notificationKey = `route-start:${input.routeId}:${input.dayId}`;
+  const existing = await prisma.userNotification.findUnique({
+    where: {
+      userId_notificationKey: {
+        userId: input.userId,
+        notificationKey,
+      },
+    },
+  });
+
+  if (!existing) {
+    try {
+      await prisma.userNotification.create({
+        data: {
+          userId: input.userId,
+          notificationKey,
+          type: UserNotificationType.ROUTE_START,
+          routeId: input.routeId,
+          routeTitle: input.routeTitle,
+          dayId: input.dayId,
+          routeDayIndex: input.dayIndex,
+          routeStartAt: input.routeStartAt,
+          availableAt: input.availableAt,
+          expiresAt: input.routeStartAt,
+          pushStatus: UserNotificationPushStatus.PENDING,
+        },
+      });
+    } catch (error) {
+      const duplicatedNotification =
+        await prisma.userNotification.findUnique({
+          where: {
+            userId_notificationKey: {
+              userId: input.userId,
+              notificationKey,
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+      if (!duplicatedNotification) {
+        throw error;
+      }
+    }
+
+    return notificationKey;
+  }
+
+  if (
+    existing.pushStatus === UserNotificationPushStatus.SENT ||
+    existing.pushStatus === UserNotificationPushStatus.SENDING
+  ) {
+    return notificationKey;
+  }
+
+  const hasScheduleChanged =
+    existing.routeStartAt?.getTime() !== input.routeStartAt.getTime() ||
+    existing.availableAt.getTime() !== input.availableAt.getTime() ||
+    existing.routeDayIndex !== input.dayIndex ||
+    existing.routeTitle !== input.routeTitle;
+
+  if (
+    !hasScheduleChanged &&
+    existing.pushStatus !== UserNotificationPushStatus.CANCELED
+  ) {
+    return notificationKey;
+  }
+
+  await prisma.userNotification.update({
+    where: {
+      id: existing.id,
+    },
+    data: {
+      routeTitle: input.routeTitle,
+      routeDayIndex: input.dayIndex,
+      routeStartAt: input.routeStartAt,
+      availableAt: input.availableAt,
+      expiresAt: input.routeStartAt,
+      pushStatus: UserNotificationPushStatus.PENDING,
+      pushAttemptCount: 0,
+      pushClaimedAt: null,
+      pushSentAt: null,
+      pushTicketIds: [],
+      pushError: null,
+      nextPushAttemptAt: null,
+    },
+  });
+
+  return notificationKey;
+}
+
+async function createRouteStartNotifications(
+  prisma: PrismaClient,
+  now: Date
+) {
+  const todayKey = toDateKey(now);
+  const horizonEndKey = addDays(todayKey, ROUTE_START_LOOKAHEAD_DAYS);
+  const horizonEndAt = atKst(horizonEndKey, 0);
+  const routeDays = await prisma.routeDay.findMany({
+    where: {
+      date: {
+        gte: new Date(`${todayKey}T00:00:00.000Z`),
+        lt: new Date(`${horizonEndKey}T00:00:00.000Z`),
+      },
+      stops: {
+        some: {},
+      },
+      route: {
+        status: {
+          not: RouteStatus.COMPLETED,
+        },
+        dailyStartMinutes: {
+          not: null,
+        },
+        owner: {
+          pushDevices: {
+            some: {
+              enabled: true,
+              sessionExpiresAt: {
+                gt: now,
+              },
+            },
+          },
+        },
+      },
+    },
+    include: {
+      route: {
+        select: {
+          id: true,
+          ownerId: true,
+          travelStartDate: true,
+          travelEndDate: true,
+          dailyStartMinutes: true,
+          startedAt: true,
+          owner: {
+            select: {
+              notificationSetting: {
+                select: {
+                  routeStartEnabled: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      stops: {
+        select: {
+          visitStatus: true,
+        },
+      },
+    },
+    orderBy: {
+      date: "asc",
+    },
+  });
+  const activeNotificationKeys: string[] = [];
+
+  for (const routeDay of routeDays) {
+    const { route } = routeDay;
+    const dailyStartMinutes = route.dailyStartMinutes;
+
+    if (
+      !routeDay.date ||
+      typeof dailyStartMinutes !== "number" ||
+      (routeDay.dayIndex === 1 && Boolean(route.startedAt)) ||
+      routeDay.stops.every((stop) => stop.visitStatus === "VISITED") ||
+      route.owner.notificationSetting?.routeStartEnabled === false
+    ) {
+      continue;
+    }
+
+    const dateKey = toStoredDateKey(routeDay.date);
+    const routeStartAt = atKst(
+      dateKey,
+      Math.floor(dailyStartMinutes / 60),
+      dailyStartMinutes % 60
+    );
+
+    if (routeStartAt <= now) {
+      continue;
+    }
+
+    const availableAt = new Date(
+      routeStartAt.getTime() - ROUTE_START_REMINDER_MS
+    );
+    const notificationKey = await upsertRouteStartNotification(prisma, {
+      userId: route.ownerId,
+      routeId: route.id,
+      routeTitle: getRouteTitle(
+        route.travelStartDate,
+        route.travelEndDate
+      ),
+      dayId: routeDay.id,
+      dayIndex: routeDay.dayIndex,
+      routeStartAt,
+      availableAt,
+    });
+    activeNotificationKeys.push(notificationKey);
+  }
+
+  await prisma.userNotification.deleteMany({
+    where: {
+      type: UserNotificationType.ROUTE_START,
+      pushStatus: {
+        in: [
+          UserNotificationPushStatus.PENDING,
+          UserNotificationPushStatus.FAILED,
+          UserNotificationPushStatus.CANCELED,
+        ],
+      },
+      OR: [
+        {
+          routeStartAt: {
+            lte: now,
+          },
+        },
+        {
+          routeStartAt: {
+            gt: now,
+            lt: horizonEndAt,
+          },
+          ...(activeNotificationKeys.length > 0
+            ? {
+                notificationKey: {
+                  notIn: activeNotificationKeys,
+                },
+              }
+            : {}),
+        },
+      ],
+    },
+  });
 }
 
 async function createRouteReviewNotifications(
@@ -650,6 +902,7 @@ export async function runNotificationSchedulerOnce(
     },
   });
 
+  await createRouteStartNotifications(prisma, now);
   await createRouteReviewNotifications(prisma, now);
   await createFestivalNotifications(prisma, now);
   await deliverPendingNotifications(prisma, now);

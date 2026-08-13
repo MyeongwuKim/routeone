@@ -112,6 +112,61 @@ function localizeGeneratedRouteTitle(
   return `${dateRange} trip`;
 }
 
+function getKstDateKey(date: Date) {
+  return new Date(date.getTime() + KST_OFFSET_MS)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function formatRouteStartTitle(
+  startAt: Date,
+  dayIndex: number,
+  locale: PushLocale,
+  now: Date
+) {
+  const startDateKey = getKstDateKey(startAt);
+  const todayKey = getKstDateKey(now);
+  const tomorrow = new Date(`${todayKey}T00:00:00.000Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+  const timeLabel = startAt.toLocaleTimeString(
+    locale === "en" ? "en-US" : "ko-KR",
+    {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "Asia/Seoul",
+    }
+  );
+
+  if (locale === "en") {
+    const dateLabel =
+      startDateKey === todayKey
+        ? "Today"
+        : startDateKey === tomorrowKey
+          ? "Tomorrow"
+          : startAt.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              timeZone: "Asia/Seoul",
+            });
+
+    return `${dateLabel} at ${timeLabel}, DAY ${dayIndex} begins`;
+  }
+
+  const dateLabel =
+    startDateKey === todayKey
+      ? "오늘"
+      : startDateKey === tomorrowKey
+        ? "내일"
+        : startAt.toLocaleDateString("ko-KR", {
+            month: "long",
+            day: "numeric",
+            timeZone: "Asia/Seoul",
+          });
+
+  return `${dateLabel} ${timeLabel}에 DAY ${dayIndex} 일정이 시작돼요`;
+}
+
 function formatFestivalPeriod(
   startDate: string,
   endDate: string,
@@ -185,7 +240,8 @@ function createPushMessage(
   notification: UserNotification,
   device: PushDevice,
   locale: PushLocale,
-  localizedFestivalTitleById: ReadonlyMap<string, string>
+  localizedFestivalTitleById: ReadonlyMap<string, string>,
+  now: Date
 ): ExpoPushMessage | null {
   if (notification.type === UserNotificationType.FESTIVAL_SUMMARY) {
     const festivalCount = notification.festivalTitles.length;
@@ -232,6 +288,34 @@ function createPushMessage(
         notificationId: notification.notificationKey,
         regionCode: notification.regionCode ?? "",
         dateKey: notification.dateKey ?? "",
+      },
+    };
+  }
+
+  if (
+    notification.type === UserNotificationType.ROUTE_START &&
+    notification.routeId &&
+    notification.dayId &&
+    notification.routeStartAt
+  ) {
+    return {
+      to: device.expoPushToken,
+      sound: "default",
+      title: formatRouteStartTitle(
+        notification.routeStartAt,
+        notification.routeDayIndex ?? 1,
+        locale,
+        now
+      ),
+      body:
+        locale === "en"
+          ? "Check today's places and travel route before you leave."
+          : "오늘 방문할 장소와 이동 경로를 미리 확인해 보세요.",
+      data: {
+        type: "route-start",
+        notificationId: notification.notificationKey,
+        routeId: notification.routeId,
+        dayId: notification.dayId,
       },
     };
   }
@@ -379,9 +463,20 @@ async function deliverClaimedNotification(
             ))))) ||
     (notification.type === UserNotificationType.ROUTE_REVIEW &&
       !isRouteReviewTestNotification &&
-      !settings?.routeReviewEnabled);
+      !settings?.routeReviewEnabled) ||
+    (notification.type === UserNotificationType.ROUTE_START &&
+      settings?.routeStartEnabled === false);
 
   if (isDisabled) {
+    if (notification.type === UserNotificationType.ROUTE_START) {
+      await prisma.userNotification.delete({
+        where: {
+          id: notification.id,
+        },
+      });
+      return;
+    }
+
     await prisma.userNotification.update({
       where: {
         id: notification.id,
@@ -439,7 +534,8 @@ async function deliverClaimedNotification(
         notification,
         device,
         locale,
-        localizedFestivalTitleById
+        localizedFestivalTitleById,
+        now
       )
     )
     .filter((message): message is ExpoPushMessage => Boolean(message));
@@ -560,11 +656,13 @@ export async function deliverPendingNotifications(
     return;
   }
 
-  if (!targetNotificationIds && !isNotificationDeliveryWindow(now)) {
-    return;
-  }
-
   const staleClaimedAt = new Date(now.getTime() - PUSH_CLAIM_TIMEOUT_MS);
+  const deliveryWindowFilter =
+    !targetNotificationIds && !isNotificationDeliveryWindow(now)
+      ? {
+          type: UserNotificationType.ROUTE_START,
+        }
+      : {};
   const excludeTestNotifications = targetNotificationIds
     ? {}
     : {
@@ -584,6 +682,7 @@ export async function deliverPendingNotifications(
   await prisma.userNotification.updateMany({
     where: {
       ...excludeTestNotifications,
+      ...deliveryWindowFilter,
       ...(targetNotificationIds
         ? {
             id: {
@@ -606,6 +705,7 @@ export async function deliverPendingNotifications(
   const candidates = await prisma.userNotification.findMany({
     where: {
       ...excludeTestNotifications,
+      ...deliveryWindowFilter,
       ...(targetNotificationIds
         ? {
             id: {
@@ -678,14 +778,24 @@ export async function deliverPendingNotifications(
         ...candidates
           .reduce((candidateByUser, candidate) => {
             const currentCandidate = candidateByUser.get(candidate.userId);
+            const shouldPreferRouteStart =
+              currentCandidate &&
+              currentCandidate.type !== UserNotificationType.ROUTE_START &&
+              candidate.type === UserNotificationType.ROUTE_START;
             const shouldPreferFestival =
               currentCandidate &&
+              !shouldPreferRouteStart &&
               currentCandidate.availableAt.getTime() ===
                 candidate.availableAt.getTime() &&
+              currentCandidate.type !== UserNotificationType.ROUTE_START &&
               currentCandidate.type !== UserNotificationType.FESTIVAL_SUMMARY &&
               candidate.type === UserNotificationType.FESTIVAL_SUMMARY;
 
-            if (!currentCandidate || shouldPreferFestival) {
+            if (
+              !currentCandidate ||
+              shouldPreferRouteStart ||
+              shouldPreferFestival
+            ) {
               candidateByUser.set(candidate.userId, candidate);
             }
 

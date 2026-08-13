@@ -319,6 +319,7 @@ function HomePage() {
   const {
     currentLocation,
     focusAttraction,
+    focusCurrentLocation,
     isCurrentLocationLookupPending,
     mapError,
     mapReady,
@@ -814,11 +815,20 @@ function HomePage() {
           savedPlaceCount={savedPlaceIds.length}
           unreadNotificationCount={unreadNotificationCount}
           isSavedPlaceCountLoading={isAttractionLoading}
+          isCurrentLocationLookupPending={isCurrentLocationLookupPending}
+          isMapReady={mapReady}
           onOpenNotifications={() => navigate("/notifications")}
           onOpenSearch={() => setIsSearchPopupOpen(true)}
           onOpenSavedList={() => {
             resetSheet();
             openSavedList();
+          }}
+          onFocusCurrentLocation={() => {
+            void focusCurrentLocation().then((didFocus) => {
+              if (!didFocus) {
+                showToast(text.home.currentLocationUnavailable);
+              }
+            });
           }}
           onSelectRegion={selectRegion}
           onSelectFilter={(filter) => {
@@ -924,7 +934,7 @@ function HomePage() {
       ) : null}
 
       {shouldShowInteractiveMapUi && hasAuthToken ? (
-        <div className="pointer-events-none absolute bottom-4 right-4 z-30 flex flex-col items-end gap-2">
+        <div className="pointer-events-none absolute bottom-20 right-4 z-30 flex flex-col items-end gap-2">
           <button
             type="button"
             aria-label={text.home.routeReviewTestSendAria}

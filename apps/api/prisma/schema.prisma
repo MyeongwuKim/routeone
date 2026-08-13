@@ -358,6 +358,8 @@ model UserNotification {
   routeId              String?                      @db.ObjectId
   routeTitle           String?
   dayId                String?                      @db.ObjectId
+  routeDayIndex        Int?
+  routeStartAt         DateTime?
   stopId               String?                      @db.ObjectId
   placeTitle           String?
   correctionDeadlineAt DateTime?
@@ -382,6 +384,7 @@ model UserNotification {
   @@index([userId, availableAt, id])
   @@index([userId, readAt, availableAt])
   @@index([pushStatus, nextPushAttemptAt, availableAt])
+  @@index([type, routeStartAt])
 }
 
 model UserNotificationSetting {
@@ -390,6 +393,7 @@ model UserNotificationSetting {
   festivalEnabled           Boolean  @default(false)
   festivalRegionCodes       String[] @default([])
   festivalLastEvaluationKey String?
+  routeStartEnabled         Boolean? @default(true)
   routeReviewEnabled        Boolean  @default(true)
   routeArrivalEnabled       Boolean  @default(true)
 
@@ -480,6 +484,7 @@ enum PlacePhotoSource {
 
 enum UserNotificationType {
   FESTIVAL_SUMMARY
+  ROUTE_START
   ROUTE_ARRIVAL
   ROUTE_REVIEW
 }

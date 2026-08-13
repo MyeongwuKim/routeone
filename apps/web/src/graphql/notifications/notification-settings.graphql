@@ -2,6 +2,7 @@ query NotificationSettings {
   notificationSettings {
     festivalEnabled
     festivalRegionCodes
+    routeStartEnabled
     routeReviewEnabled
     routeArrivalEnabled
     createdAt

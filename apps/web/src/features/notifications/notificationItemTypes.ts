@@ -23,6 +23,15 @@ type RouteArrivalNotificationInboxItem = NotificationInboxItem & {
   placeTitle: string;
 };
 
+type RouteStartNotificationInboxItem = NotificationInboxItem & {
+  type: "ROUTE_START";
+  routeId: string;
+  routeTitle: string;
+  dayId: string;
+  routeDayIndex: number;
+  routeStartAt: string;
+};
+
 type RouteReviewNotificationInboxItem = NotificationInboxItem & {
   type: "ROUTE_REVIEW";
   routeReviewKind: RouteReviewNotificationKind;
@@ -33,6 +42,7 @@ type RouteReviewNotificationInboxItem = NotificationInboxItem & {
 };
 
 export type ScheduleNotificationInboxItem =
+  | RouteStartNotificationInboxItem
   | RouteArrivalNotificationInboxItem
   | RouteReviewNotificationInboxItem;
 
@@ -60,6 +70,21 @@ function isRouteArrivalNotificationInboxItem(
   );
 }
 
+function isRouteStartNotificationInboxItem(
+  item: NotificationInboxItem
+): item is RouteStartNotificationInboxItem {
+  return (
+    item.type === "ROUTE_START" &&
+    Boolean(
+      item.routeId &&
+        item.routeTitle &&
+        item.dayId &&
+        item.routeDayIndex &&
+        item.routeStartAt
+    )
+  );
+}
+
 function isRouteReviewNotificationInboxItem(
   item: NotificationInboxItem
 ): item is RouteReviewNotificationInboxItem {
@@ -79,6 +104,7 @@ export function isScheduleNotificationInboxItem(
   item: NotificationInboxItem
 ): item is ScheduleNotificationInboxItem {
   return (
+    isRouteStartNotificationInboxItem(item) ||
     isRouteArrivalNotificationInboxItem(item) ||
     isRouteReviewNotificationInboxItem(item)
   );

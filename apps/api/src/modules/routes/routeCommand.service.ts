@@ -28,6 +28,21 @@ const ROUTE_START_TIME_ZONE = "Asia/Seoul";
 const MAX_ROUTE_CREATE_REQUEST_ID_LENGTH = 160;
 const ROUTE_CREATE_TRANSACTION_MAX_ATTEMPTS = 4;
 
+function deletePendingRouteStartNotifications(
+  prisma: RouteCommandPrisma,
+  routeId: string
+) {
+  return prisma.userNotification.deleteMany({
+    where: {
+      routeId,
+      type: "ROUTE_START",
+      pushStatus: {
+        in: ["PENDING", "FAILED", "CANCELED"],
+      },
+    },
+  });
+}
+
 function getRouteDateKey(value: Date) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: ROUTE_START_TIME_ZONE,
@@ -528,6 +543,8 @@ export async function appendRouteDays(
     },
   });
 
+  await deletePendingRouteStartNotifications(prisma, route.id);
+
   return refreshRouteProgress(prisma, route.id);
 }
 
@@ -593,6 +610,8 @@ export async function startRoute(
       completedAt: null,
     },
   });
+
+  await deletePendingRouteStartNotifications(prisma, route.id);
 
   return refreshRouteProgress(prisma, route.id);
 }
@@ -731,6 +750,8 @@ export async function clearRoute(
     },
   });
 
+  await deletePendingRouteStartNotifications(prisma, routeId);
+
   return refreshRouteProgress(prisma, routeId);
 }
 
@@ -861,6 +882,7 @@ export async function deleteRouteDay(
         id: day.id,
       },
     });
+    await deletePendingRouteStartNotifications(transaction, route.id);
 
     for (const [index, remainingDay] of remainingDays.entries()) {
       await transaction.routeDay.update({

@@ -35,6 +35,7 @@ import {
 export const notificationTypeDefs = gql`
   enum UserNotificationType {
     FESTIVAL_SUMMARY
+    ROUTE_START
     ROUTE_ARRIVAL
     ROUTE_REVIEW
   }
@@ -74,6 +75,8 @@ export const notificationTypeDefs = gql`
     routeId: ID
     routeTitle: String
     dayId: ID
+    routeDayIndex: Int
+    routeStartAt: DateTime
     stopId: ID
     placeTitle: String
     correctionDeadlineAt: DateTime
@@ -168,6 +171,7 @@ export const notificationTypeDefs = gql`
   type NotificationSettings {
     festivalEnabled: Boolean!
     festivalRegionCodes: [String!]!
+    routeStartEnabled: Boolean!
     routeReviewEnabled: Boolean!
     routeArrivalEnabled: Boolean!
     createdAt: DateTime!
@@ -177,6 +181,7 @@ export const notificationTypeDefs = gql`
   input UpdateNotificationSettingsInput {
     festivalEnabled: Boolean
     festivalRegionCodes: [String!]
+    routeStartEnabled: Boolean
     routeReviewEnabled: Boolean
     routeArrivalEnabled: Boolean
   }
@@ -312,6 +317,11 @@ export const notificationResolvers = {
     },
     festivalEndDates(parent: { festivalEndDates?: string[] | null }) {
       return parent.festivalEndDates ?? [];
+    },
+  },
+  NotificationSettings: {
+    routeStartEnabled(parent: { routeStartEnabled?: boolean | null }) {
+      return parent.routeStartEnabled ?? true;
     },
   },
   Query: {

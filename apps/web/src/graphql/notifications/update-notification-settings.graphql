@@ -2,6 +2,7 @@ mutation UpdateNotificationSettings($input: UpdateNotificationSettingsInput!) {
   updateNotificationSettings(input: $input) {
     festivalEnabled
     festivalRegionCodes
+    routeStartEnabled
     routeReviewEnabled
     routeArrivalEnabled
     createdAt

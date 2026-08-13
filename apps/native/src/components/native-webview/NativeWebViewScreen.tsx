@@ -204,6 +204,14 @@ function getNotificationWebPath(
     }).toString()}`;
   }
 
+  if (type === "route-start" && routeId && dayId) {
+    return `/my-route?${new URLSearchParams({
+      routeId,
+      dayId,
+      source: "route-start"
+    }).toString()}`;
+  }
+
   if (type !== "route-arrival" || !routeId || !dayId) {
     return null;
   }

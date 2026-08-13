@@ -36,6 +36,7 @@ const EXPO_PUSH_TOKEN_PATTERN =
 export type UpdateNotificationSettingsInput = {
   festivalEnabled?: boolean | null;
   festivalRegionCodes?: string[] | null;
+  routeStartEnabled?: boolean | null;
   routeReviewEnabled?: boolean | null;
   routeArrivalEnabled?: boolean | null;
 };
@@ -150,6 +151,8 @@ export async function updateNotificationSettings(
             : {}),
           routeReviewEnabled:
             input.routeReviewEnabled ?? current.routeReviewEnabled,
+          routeStartEnabled:
+            input.routeStartEnabled ?? current.routeStartEnabled ?? true,
           routeArrivalEnabled:
             input.routeArrivalEnabled ?? current.routeArrivalEnabled,
         },
@@ -176,6 +179,22 @@ export async function updateNotificationSettings(
           pushStatus: UserNotificationPushStatus.CANCELED,
           nextPushAttemptAt: null,
           pushError: "축제 알림 설정이 변경되어 다시 계산합니다.",
+        },
+      });
+    }
+
+    if (input.routeStartEnabled === false) {
+      await transaction.userNotification.deleteMany({
+        where: {
+          userId: user.id,
+          type: UserNotificationType.ROUTE_START,
+          pushStatus: {
+            in: [
+              UserNotificationPushStatus.PENDING,
+              UserNotificationPushStatus.FAILED,
+              UserNotificationPushStatus.CANCELED,
+            ],
+          },
         },
       });
     }

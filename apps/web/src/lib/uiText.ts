@@ -136,6 +136,8 @@ export type UiText = {
     festivalOnDescription: (regions: string) => string;
     festivalOffDescription: string;
     festivalStatus: (count: number) => string;
+    routeStartTitle: string;
+    routeStartDescription: string;
     routeReviewTitle: string;
     routeReviewDescription: string;
     routeArrivalTitle: string;
@@ -209,6 +211,9 @@ export type UiText = {
     searchPrompt: (region: string) => string;
     savedPlacesAria: string;
     notificationsAria: string;
+    currentLocation: string;
+    focusCurrentLocationAria: string;
+    currentLocationUnavailable: string;
     festivalTestSend: string;
     festivalTestSending: string;
     festivalTestSendAria: string;
@@ -238,6 +243,8 @@ export type UiText = {
     summaryTitle: (regionLabel: string, count: number) => string;
     arrivalTitle: (placeTitle: string) => string;
     arrivalDescription: string;
+    routeStartTitle: (startAt: string, dayIndex: number) => string;
+    routeStartDescription: string;
     routeReviewCompletedTitle: (routeTitle: string) => string;
     routeReviewIncompleteTitle: (routeTitle: string) => string;
     routeReviewUnstartedTitle: (routeTitle: string) => string;
@@ -1091,6 +1098,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       festivalOffDescription: "지역을 선택하면 축제 소식을 받을 수 있어요",
       festivalStatus: (count) =>
         count > 0 ? `${count}곳 알림 중` : "꺼짐",
+      routeStartTitle: "일정 시작 알림",
+      routeStartDescription: "각 DAY 시작 전에 예정 시각과 일정을 미리 안내",
       routeReviewTitle: "루트 종료 알림",
       routeReviewDescription:
         "루트 종료 후 7일 안에 방문 기록을 확인·정리하도록 보내는 리마인더",
@@ -1176,6 +1185,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       searchPrompt: (region) => `${region} 명소 검색`,
       savedPlacesAria: "담은 장소",
       notificationsAria: "알림함 열기",
+      currentLocation: "현재 위치",
+      focusCurrentLocationAria: "현재 위치로 이동",
+      currentLocationUnavailable: "현재 위치를 확인하지 못했어요.",
       festivalTestSend: "축제 알림 바로 보내기",
       festivalTestSending: "보내는 중",
       festivalTestSendAria: "알림 설정 지역의 실제 축제 알림 보내기",
@@ -1201,17 +1213,35 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       close: "알림함 닫기",
       emptyTitle: "아직 받은 알림이 없어요",
       emptyDescription:
-        "축제 소식, 장소 도착, 루트 기록 안내가 도착하면 여기에 모여요.",
+        "축제 소식, 일정 시작, 장소 도착과 루트 기록 안내가 여기에 모여요.",
       loadError: "알림을 불러오지 못했어요",
       collapse: "접기",
       showMore: (count) => `${count}개 더 보기`,
       openFestivalAria: (festivalTitle) => `${festivalTitle} 축제 보기`,
       festivalDetailLoadError: "축제 상세 정보를 불러오지 못했어요.",
-      openRouteAria: (routeTitle) => `${routeTitle} 기록 보기`,
+      openRouteAria: (routeTitle) => `${routeTitle} 일정 보기`,
       summaryTitle: (regionLabel, count) =>
         `${regionLabel} 축제 ${count}개`,
       arrivalTitle: (placeTitle) => `${placeTitle}에 도착했어요`,
       arrivalDescription: "방문 인증 사진을 남겨보세요.",
+      routeStartTitle: (startAt, dayIndex) => {
+        const date = new Date(startAt);
+        const dateTimeLabel = Number.isFinite(date.getTime())
+          ? `${date.toLocaleDateString("ko-KR", {
+              month: "long",
+              day: "numeric",
+              timeZone: "Asia/Seoul",
+            })} ${date.toLocaleTimeString("ko-KR", {
+              hour: "numeric",
+              minute: "2-digit",
+              timeZone: "Asia/Seoul",
+            })}`
+          : startAt;
+
+        return `${dateTimeLabel}에 DAY ${dayIndex} 일정이 시작돼요`;
+      },
+      routeStartDescription:
+        "방문할 장소와 이동 경로를 미리 확인해 보세요.",
       routeReviewCompletedTitle: (routeTitle) =>
         `${routeTitle}, 무사히 잘 마쳤네요`,
       routeReviewIncompleteTitle: (routeTitle) =>
@@ -2206,6 +2236,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         count > 0
           ? `${count} area${count === 1 ? "" : "s"} active`
           : "Off",
+      routeStartTitle: "Schedule Start Alerts",
+      routeStartDescription:
+        "A reminder with the start time before each DAY begins",
       routeReviewTitle: "Route Review Alerts",
       routeReviewDescription:
         "A reminder to review and organize visit records within 7 days after a route ends",
@@ -2294,6 +2327,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       searchPrompt: (region) => `Search ${region} places`,
       savedPlacesAria: "Saved places",
       notificationsAria: "Open notifications",
+      currentLocation: "Current location",
+      focusCurrentLocationAria: "Move to current location",
+      currentLocationUnavailable: "Could not find your current location.",
       festivalTestSend: "Send Festival Alert",
       festivalTestSending: "Sending",
       festivalTestSendAria:
@@ -2320,17 +2356,33 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       close: "Close notifications",
       emptyTitle: "No notifications yet",
       emptyDescription:
-        "Festival, arrival, and route record updates will appear here.",
+        "Festival, schedule start, arrival, and route record updates will appear here.",
       loadError: "Could not load notifications",
       collapse: "Show less",
       showMore: (count) => `Show ${count} more`,
       openFestivalAria: (festivalTitle) => `View ${festivalTitle}`,
       festivalDetailLoadError: "Could not load the festival details.",
-      openRouteAria: (routeTitle) => `View ${routeTitle} record`,
+      openRouteAria: (routeTitle) => `View ${routeTitle}`,
       summaryTitle: (regionLabel, count) =>
         `${count} ${regionLabel} festival${count === 1 ? "" : "s"}`,
       arrivalTitle: (placeTitle) => `You arrived near ${placeTitle}`,
       arrivalDescription: "Leave a verification photo.",
+      routeStartTitle: (startAt, dayIndex) => {
+        const date = new Date(startAt);
+        const dateTimeLabel = Number.isFinite(date.getTime())
+          ? date.toLocaleString("en-US", {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              timeZone: "Asia/Seoul",
+            })
+          : startAt;
+
+        return `DAY ${dayIndex} begins ${dateTimeLabel}`;
+      },
+      routeStartDescription:
+        "Check your places and travel route before you leave.",
       routeReviewCompletedTitle: (routeTitle) =>
         `${routeTitle}—you made it!`,
       routeReviewIncompleteTitle: (routeTitle) =>

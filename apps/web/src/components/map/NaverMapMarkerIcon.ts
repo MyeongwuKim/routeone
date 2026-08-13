@@ -28,6 +28,31 @@ export const PLACE_BUBBLE_MARKER_SIZE = {
   anchorY: 66,
 } as const;
 
+export const CURRENT_LOCATION_MARKER_SIZE = 24;
+
+export function createCurrentLocationMarkerIconHtml() {
+  return `
+    <div style="
+      width:${CURRENT_LOCATION_MARKER_SIZE}px;
+      height:${CURRENT_LOCATION_MARKER_SIZE}px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      pointer-events:none;
+    ">
+      <span style="
+        width:16px;
+        height:16px;
+        border:3px solid #ffffff;
+        border-radius:9999px;
+        background:#2563eb;
+        box-sizing:border-box;
+        box-shadow:0 2px 7px rgba(15,23,42,0.38);
+      "></span>
+    </div>
+  `;
+}
+
 function escapeHtml(text: string) {
   return text
     .replaceAll("&", "&amp;")

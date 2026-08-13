@@ -29,6 +29,7 @@ import {
   MdPhotoLibrary,
 } from "react-icons/md";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import NotificationSettingsSkeleton from "@/components/feedback/NotificationSettingsSkeleton";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import RoutePageHeader from "@/components/layout/RoutePageHeader";
 import NativeNotificationInboxSync from "@/features/notifications/NativeNotificationInboxSync";
@@ -747,7 +748,10 @@ function AppRouter() {
           />
           <Route
             path="/me/notifications"
-            element={withRouteSuspense(<NotificationSettingsPage />)}
+            element={withRouteSuspense(
+              <NotificationSettingsPage />,
+              <NotificationSettingsSkeleton />
+            )}
           />
           <Route
             path="/me/app-info"

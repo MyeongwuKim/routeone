@@ -7,7 +7,7 @@ import {
   IoRestaurantOutline,
   IoSearch,
 } from "react-icons/io5";
-import { MdCelebration } from "react-icons/md";
+import { MdCelebration, MdMyLocation } from "react-icons/md";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import { useUiText } from "@/lib/uiText";
@@ -32,9 +32,12 @@ type HomeMapControlsProps = {
   savedPlaceCount: number;
   unreadNotificationCount: number;
   isSavedPlaceCountLoading: boolean;
+  isCurrentLocationLookupPending: boolean;
+  isMapReady: boolean;
   onOpenNotifications: () => void;
   onOpenSearch: () => void;
   onOpenSavedList: () => void;
+  onFocusCurrentLocation: () => void;
   onSelectRegion: (sigunguCode: string) => void;
   onSelectFilter: (filter: SearchFilter) => void;
 };
@@ -72,9 +75,12 @@ function HomeMapControls({
   savedPlaceCount,
   unreadNotificationCount,
   isSavedPlaceCountLoading,
+  isCurrentLocationLookupPending,
+  isMapReady,
   onOpenNotifications,
   onOpenSearch,
   onOpenSavedList,
+  onFocusCurrentLocation,
   onSelectRegion,
   onSelectFilter,
 }: HomeMapControlsProps) {
@@ -170,6 +176,19 @@ function HomeMapControls({
           })}
         </div>
       </div>
+
+      <button
+        type="button"
+        aria-label={text.home.focusCurrentLocationAria}
+        disabled={!isMapReady || isCurrentLocationLookupPending}
+        onClick={onFocusCurrentLocation}
+        className="pointer-events-auto absolute bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-30 inline-flex size-12 items-center justify-center rounded-full border border-brand-200 bg-white/95 text-xl text-brand-700 shadow-lg backdrop-blur transition hover:bg-brand-50 active:scale-95 disabled:cursor-wait disabled:text-slate-300"
+      >
+        <MdMyLocation
+          aria-hidden="true"
+          className={isCurrentLocationLookupPending ? "animate-pulse" : ""}
+        />
+      </button>
     </>
   );
 }

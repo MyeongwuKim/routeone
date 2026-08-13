@@ -6,11 +6,15 @@
 POST https://API_HOST/internal/notifications/run
 ```
 
-- 한국시간 09:00부터 20:50까지 10분 간격으로 실행한다.
+- 24시간 10분 간격으로 실행한다.
+- 일정 시작 알림은 각 DAY 예정 시각 1시간 전부터 발송 대상으로 처리하고, 메시지에는 실제 시작 시각을 표시한다.
+- 일정 시작 알림은 `route-start:{routeId}:{dayId}` 키로 중복 생성을 막는다.
 - 축제 알림은 로그인 세션과 푸시가 활성화된 사용자별·한국 날짜별 최대 1건으로 합친다.
 - 루트 회고 알림은 완료 시각 24시간 후부터 루트별 1건만 발송한다.
 - 로그인 세션이 만료된 기기는 다시 로그인해 푸시 기기를 갱신하기 전까지 발송 대상에서 제외한다.
 - 한 번의 실행에서는 사용자별 알림 1건만 처리한다.
+- 여러 알림이 겹치면 일정 시작 알림을 먼저 처리하고 나머지는 다음 실행에서 이어서 처리한다.
+- 일정 시작 시각이 지난 미발송 시작 알림은 제거한다.
 - 실패한 알림은 `nextPushAttemptAt` 이후 실행에서 재시도한다.
 
 ## API 환경 변수
@@ -29,7 +33,7 @@ Cloud Scheduler의 `Authorization` 헤더에도 같은 값을 Bearer 토큰으�
 - 대상 유형: HTTP
 - URL: `https://API_HOST/internal/notifications/run`
 - HTTP 메서드: `POST`
-- 빈도: `*/10 9-20 * * *`
+- 빈도: `*/10 * * * *`
 - 시간대: `Asia/Seoul`
 - 헤더 `Content-Type`: `application/json`
 - 헤더 `Authorization`: `Bearer RANDOM_SECRET`

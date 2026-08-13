@@ -7,7 +7,11 @@ import {
   type RefObject,
   type SetStateAction,
 } from "react";
-import { createBadgeMarkerIconHtml } from "@/components/map/NaverMapMarkerIcon";
+import {
+  createBadgeMarkerIconHtml,
+  createCurrentLocationMarkerIconHtml,
+  CURRENT_LOCATION_MARKER_SIZE,
+} from "@/components/map/NaverMapMarkerIcon";
 import type { ServiceRegion } from "@/data/serviceAreas";
 import {
   convertUtmkToWgs84,
@@ -23,7 +27,10 @@ import {
   type OpenPlaceSheetFromAttractionOptions,
   type SearchFilter,
 } from "@/lib/gangwonAttractionMap";
-import { getCurrentPosition } from "@/lib/currentPosition";
+import {
+  getCurrentPosition,
+  type RouteOnePosition,
+} from "@/lib/currentPosition";
 import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
 import {
   getNaverMapAuthHref,
@@ -140,12 +147,13 @@ export function useHomeMap({
   >(null);
   const boundaryPolygonRefs = useRef<HomeMapOverlay[]>([]);
   const markerRefs = useRef<HomeMapOverlay[]>([]);
+  const currentLocationOverlayRefs = useRef<HomeMapOverlay[]>([]);
   const markerListenerRefs = useRef<unknown[]>([]);
   const mapBoundsMoveRequestRef = useRef(0);
   const hasRenderedAttractionMarkersRef = useRef(false);
   const onSelectAttractionRef = useRef(onSelectAttraction);
   const [currentLocation, setCurrentLocation] =
-    useState<CurrentLocation | null>(null);
+    useState<RouteOnePosition | null>(null);
   const [isCurrentLocationLookupPending, setIsCurrentLocationLookupPending] =
     useState(true);
   const [mapStatus, setMapStatus] = useState<HomeMapStatus>({
@@ -181,6 +189,13 @@ export function useHomeMap({
     boundaryPolygonRefs.current = [];
   }, []);
 
+  const clearCurrentLocationOverlays = useCallback(() => {
+    currentLocationOverlayRefs.current.forEach((overlay) =>
+      overlay.setMap(null)
+    );
+    currentLocationOverlayRefs.current = [];
+  }, []);
+
   const focusAttraction = useCallback((attraction: GangwonAttraction) => {
     const mapInstance = mapInstanceRef.current;
     const naverMaps = naverMapsRef.current;
@@ -196,6 +211,43 @@ export function useHomeMap({
       mapInstance.setCenter(position);
     }
   }, []);
+
+  const focusCurrentLocation = useCallback(async () => {
+    let nextLocation = currentLocation;
+
+    if (!nextLocation) {
+      setIsCurrentLocationLookupPending(true);
+      try {
+        nextLocation = await getCurrentPosition();
+        setCurrentLocation(nextLocation);
+      } catch {
+        return false;
+      } finally {
+        setIsCurrentLocationLookupPending(false);
+      }
+    }
+
+    const mapInstance = mapInstanceRef.current;
+    const naverMaps = naverMapsRef.current;
+    if (!mapInstance || !naverMaps) {
+      return false;
+    }
+
+    const position = new naverMaps.LatLng(
+      nextLocation.lat,
+      nextLocation.lng
+    );
+    if (mapInstance.getZoom() < 14) {
+      mapInstance.setZoom(14);
+    }
+    if (typeof mapInstance.panTo === "function") {
+      mapInstance.panTo(position, { duration: 500 });
+    } else {
+      mapInstance.setCenter(position);
+    }
+
+    return true;
+  }, [currentLocation]);
 
   const drawSelectedRegionBoundary = useCallback(() => {
     const mapInstance = mapInstanceRef.current;
@@ -413,7 +465,7 @@ export function useHomeMap({
     getCurrentPosition()
       .then((position) => {
         if (isMounted) {
-          setCurrentLocation({ lat: position.lat, lng: position.lng });
+          setCurrentLocation(position);
         }
       })
       .catch(() => {
@@ -572,6 +624,7 @@ export function useHomeMap({
       });
       clearMarkers();
       clearBoundaryPolygons();
+      clearCurrentLocationOverlays();
       if (mapReadyListener) {
         naverMapsRef.current?.Event?.removeListener(mapReadyListener);
       }
@@ -588,6 +641,7 @@ export function useHomeMap({
   }, [
     appLanguage,
     clearBoundaryPolygons,
+    clearCurrentLocationOverlays,
     clearMarkers,
     closeSheet,
     mapCenter.lat,
@@ -605,6 +659,64 @@ export function useHomeMap({
       fitMapToSelectedRegion();
     }
   }, [fitMapToSelectedRegion, isBoundaryDataReady, mapReady]);
+
+  useEffect(() => {
+    const mapInstance = mapInstanceRef.current;
+    const naverMaps = naverMapsRef.current;
+
+    clearCurrentLocationOverlays();
+    if (!mapReady || !mapInstance || !naverMaps || !currentLocation) {
+      return;
+    }
+
+    const position = new naverMaps.LatLng(
+      currentLocation.lat,
+      currentLocation.lng
+    );
+    const accuracyMeters = currentLocation.accuracyMeters;
+
+    if (
+      typeof accuracyMeters === "number" &&
+      Number.isFinite(accuracyMeters) &&
+      accuracyMeters > 0
+    ) {
+      const accuracyCircle = new naverMaps.Circle({
+        map: mapInstance,
+        center: position,
+        radius: accuracyMeters,
+        strokeColor: "#2563eb",
+        strokeWeight: 1,
+        strokeOpacity: 0.45,
+        fillColor: "#60a5fa",
+        fillOpacity: 0.14,
+        clickable: false,
+        zIndex: 1000,
+      }) as HomeMapOverlay;
+      currentLocationOverlayRefs.current.push(accuracyCircle);
+    }
+
+    const marker = new naverMaps.Marker({
+      map: mapInstance,
+      position,
+      title: text.home.currentLocation,
+      zIndex: 2800,
+      icon: {
+        content: createCurrentLocationMarkerIconHtml(),
+        anchor: new naverMaps.Point(
+          CURRENT_LOCATION_MARKER_SIZE / 2,
+          CURRENT_LOCATION_MARKER_SIZE / 2
+        ),
+      },
+    }) as HomeMapOverlay;
+    currentLocationOverlayRefs.current.push(marker);
+
+    return clearCurrentLocationOverlays;
+  }, [
+    clearCurrentLocationOverlays,
+    currentLocation,
+    mapReady,
+    text.home.currentLocation,
+  ]);
 
   useEffect(() => {
     if (!mapReady) {
@@ -768,6 +880,7 @@ export function useHomeMap({
   return {
     currentLocation,
     focusAttraction,
+    focusCurrentLocation,
     isCurrentLocationLookupPending,
     mapError,
     mapReady,

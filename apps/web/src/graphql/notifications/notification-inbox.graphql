@@ -16,6 +16,8 @@ query NotificationInbox($first: Int!, $after: String) {
       routeId
       routeTitle
       dayId
+      routeDayIndex
+      routeStartAt
       stopId
       placeTitle
       correctionDeadlineAt

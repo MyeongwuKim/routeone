@@ -1,4 +1,9 @@
-import { MdChevronRight, MdLocationOn, MdOutlineRoute } from "react-icons/md";
+import {
+  MdAccessTime,
+  MdChevronRight,
+  MdLocationOn,
+  MdOutlineRoute,
+} from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import type { ScheduleNotificationInboxItem } from "@/features/notifications/notificationItemTypes";
 import { useUiText } from "@/lib/uiText";
@@ -69,6 +74,7 @@ function ScheduleNotificationItem({
   const navigate = useNavigate();
   const appLanguage = useAppLanguageStore((state) => state.language);
   const isArrival = item.type === "ROUTE_ARRIVAL";
+  const isRouteStart = item.type === "ROUTE_START";
   const routeTitle = localizeGeneratedRouteTitle(
     item.routeTitle?.trim() || "",
     appLanguage
@@ -78,23 +84,30 @@ function ScheduleNotificationItem({
     : routeTitle;
   const title = isArrival
     ? text.notifications.arrivalTitle(item.placeTitle)
-    : item.routeReviewKind === "COMPLETED"
+    : isRouteStart
+      ? text.notifications.routeStartTitle(
+          item.routeStartAt,
+          item.routeDayIndex
+        )
+      : item.routeReviewKind === "COMPLETED"
       ? text.notifications.routeReviewCompletedTitle(routeTitle)
       : item.routeReviewKind === "UNSTARTED"
         ? text.notifications.routeReviewUnstartedTitle(routeTitle)
         : text.notifications.routeReviewIncompleteTitle(routeTitle);
   const description = isArrival
     ? text.notifications.arrivalDescription
-    : item.routeReviewKind === "COMPLETED"
+    : isRouteStart
+      ? text.notifications.routeStartDescription
+      : item.routeReviewKind === "COMPLETED"
       ? text.notifications.routeReviewCompletedDescription(
           item.correctionDeadlineAt
         )
       : text.notifications.routeReviewDescription(item.correctionDeadlineAt);
-  const destination = isArrival
+  const destination = isArrival || isRouteStart
     ? `/my-route?${new URLSearchParams({
         routeId: item.routeId,
         dayId: item.dayId,
-        stopId: item.stopId,
+        ...(isArrival ? { stopId: item.stopId } : {}),
         source: "notification-inbox",
       }).toString()}`
     : `/me/routes?${new URLSearchParams({
@@ -119,10 +132,18 @@ function ScheduleNotificationItem({
         className={`flex size-10 shrink-0 items-center justify-center rounded-lg text-xl ${
           isArrival
             ? "bg-sky-50 text-sky-600 dark:bg-sky-400/15 dark:text-sky-200"
+            : isRouteStart
+              ? "bg-brand-50 text-brand-700 dark:bg-brand-400/15 dark:text-brand-200"
             : "bg-amber-50 text-amber-600 dark:bg-amber-400/15 dark:text-amber-200"
         }`}
       >
-        {isArrival ? <MdLocationOn /> : <MdOutlineRoute />}
+        {isArrival ? (
+          <MdLocationOn />
+        ) : isRouteStart ? (
+          <MdAccessTime />
+        ) : (
+          <MdOutlineRoute />
+        )}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-bold text-slate-400 dark:text-slate-300">
