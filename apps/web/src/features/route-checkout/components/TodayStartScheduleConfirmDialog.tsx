@@ -7,7 +7,6 @@ type TodayStartScheduleConfirmDialogProps = {
   onClose: () => void;
   onConfirm: () => void;
   onUseCurrentTime: () => void;
-  onChangeToTwoDays: () => void;
 };
 
 export default function TodayStartScheduleConfirmDialog({
@@ -16,7 +15,6 @@ export default function TodayStartScheduleConfirmDialog({
   onClose,
   onConfirm,
   onUseCurrentTime,
-  onChangeToTwoDays,
 }: TodayStartScheduleConfirmDialogProps) {
   const text = useUiText();
   const isOneDayTrip = tripDays === 1;
@@ -80,35 +78,22 @@ export default function TodayStartScheduleConfirmDialog({
               </div>
             </>
           ) : (
-            <>
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={onConfirm}
-                className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
+                className="rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
               >
                 {text.cart.continueToday}
               </button>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className={`rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 ${
-                    isOneDayTrip ? "" : "col-span-2"
-                  } dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-200`}
-                >
-                  {text.cart.chooseAgain}
-                </button>
-                {isOneDayTrip ? (
-                  <button
-                    type="button"
-                    onClick={onChangeToTwoDays}
-                    className="rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-700 dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-100"
-                  >
-                    {text.cart.changeToTwoDays}
-                  </button>
-                ) : null}
-              </div>
-            </>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-slate-200"
+              >
+                {text.cart.chooseAgain}
+              </button>
+            </div>
           )}
         </div>
       </div>

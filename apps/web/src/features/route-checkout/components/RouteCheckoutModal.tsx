@@ -72,7 +72,6 @@ function RouteCheckoutModalContent({
     startLocation,
     travelStartDate,
     tripDays,
-    setTripDays,
     dailyStartTime,
     setDailyStartTime,
     isScheduleValid,
@@ -144,14 +143,6 @@ function RouteCheckoutModalContent({
     setConfirmedTodayStartScheduleKey(todayStartScheduleKey);
     setIsTodayStartConfirmOpen(false);
     moveToNextStep();
-  };
-
-  const handleChangeToTwoDays = () => {
-    setTripDays(2);
-    setConfirmedTodayStartScheduleKey(
-      getTodayStartScheduleKey(travelStartDate, 2, dailyStartTime)
-    );
-    setIsTodayStartConfirmOpen(false);
   };
 
   const handleUseCurrentTime = () => {
@@ -270,7 +261,6 @@ function RouteCheckoutModalContent({
           onClose={() => setIsTodayStartConfirmOpen(false)}
           onConfirm={handleConfirmTodayStartSchedule}
           onUseCurrentTime={handleUseCurrentTime}
-          onChangeToTwoDays={handleChangeToTwoDays}
         />
       ) : null}
     </section>

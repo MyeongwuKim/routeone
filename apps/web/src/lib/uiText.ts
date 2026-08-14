@@ -720,7 +720,6 @@ export type UiText = {
     continueAnyway: string;
     chooseAgain: string;
     continueToday: string;
-    changeToTwoDays: string;
     scheduleTitle: string;
     startDateLabel: string;
     tripDaysLabel: string;
@@ -1223,7 +1222,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       festivalDetailLoadError: "축제 상세 정보를 불러오지 못했어요.",
       openRouteAria: (routeTitle) => `${routeTitle} 일정 보기`,
       summaryTitle: (regionLabel, count) =>
-        `${regionLabel} 축제 ${count}개`,
+        `${regionLabel}에서 열리는 축제 ${count}개`,
       arrivalTitle: (placeTitle) => `${placeTitle}에 도착했어요`,
       arrivalDescription: "방문 인증 사진을 남겨보세요.",
       routeStartTitle: (dayIndex) =>
@@ -1809,7 +1808,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       continueAnyway: "그대로 계속",
       chooseAgain: "다시 선택",
       continueToday: "오늘 시작으로 계속",
-      changeToTwoDays: "2일로 변경",
       scheduleTitle: "여행 일정 정보를 정해주세요",
       startDateLabel: "여행 시작일",
       tripDaysLabel: "여행 일수",
@@ -2354,7 +2352,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       festivalDetailLoadError: "Could not load the festival details.",
       openRouteAria: (routeTitle) => `View ${routeTitle}`,
       summaryTitle: (regionLabel, count) =>
-        `${count} ${regionLabel} festival${count === 1 ? "" : "s"}`,
+        `${count} festival${count === 1 ? "" : "s"} in ${regionLabel}`,
       arrivalTitle: (placeTitle) => `You arrived near ${placeTitle}`,
       arrivalDescription: "Leave a verification photo.",
       routeStartTitle: (dayIndex) => `DAY ${dayIndex} begins`,
@@ -2961,7 +2959,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       continueAnyway: "Continue anyway",
       chooseAgain: "Choose again",
       continueToday: "Continue from today",
-      changeToTwoDays: "Change to 2 days",
       scheduleTitle: "Set your trip schedule",
       startDateLabel: "Trip start date",
       tripDaysLabel: "Trip length",

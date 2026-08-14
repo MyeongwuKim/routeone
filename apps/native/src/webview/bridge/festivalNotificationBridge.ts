@@ -200,15 +200,16 @@ function createFestivalNotificationContent(
     })
     .join(" · ");
   const remainingCount = Math.max(0, festivalCount - 2);
-  const body = remainingCount
+  const festivalSummary = remainingCount
     ? `${visibleTitles} 외 ${remainingCount}개`
     : visibleTitles;
+  const body = `${festivalSummary}\n일정과 위치를 확인해 보세요.`;
   const titleByKind = {
-    today: `오늘 ${notification.regionLabel} 축제 ${festivalCount}개`,
-    weekly: `이번 주 ${notification.regionLabel} 축제 ${festivalCount}개`,
-    monthly: `이번 달 ${notification.regionLabel} 축제 ${festivalCount}개`,
-    trip: `${notification.regionLabel} 여행일 축제 ${festivalCount}개`,
-    test: `[테스트] ${notification.regionLabel} 축제 ${festivalCount}개`,
+    today: `오늘 ${notification.regionLabel}에서 열리는 축제를 확인해 보세요`,
+    weekly: `이번 주 ${notification.regionLabel}에서 열리는 축제를 확인해 보세요`,
+    monthly: `이번 달 ${notification.regionLabel}에서 열리는 축제를 확인해 보세요`,
+    trip: `여행 가는 날, ${notification.regionLabel}에서 축제도 열려요`,
+    test: `[테스트] ${notification.regionLabel} 축제 알림`,
   } as const;
 
   return {

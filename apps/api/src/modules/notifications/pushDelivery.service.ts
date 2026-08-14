@@ -227,12 +227,18 @@ function createFestivalBody(
     )}`;
   });
 
-  return `${visibleFestivalLabels.join(" · ")}${
+  const festivalSummary = `${visibleFestivalLabels.join(" · ")}${
     remainingCount > 0
       ? locale === "en"
         ? ` and ${remainingCount} more`
         : ` 외 ${remainingCount}개`
       : ""
+  }`;
+
+  return `${festivalSummary}\n${
+    locale === "en"
+      ? "Check the dates and locations."
+      : "일정과 위치를 확인해 보세요."
   }`;
 }
 
@@ -244,35 +250,30 @@ function createPushMessage(
   now: Date
 ): ExpoPushMessage | null {
   if (notification.type === UserNotificationType.FESTIVAL_SUMMARY) {
-    const festivalCount = notification.festivalTitles.length;
     const regionLabel =
       locale === "en"
         ? GANGWON_REGION_LABELS_EN[notification.regionCode ?? ""] ?? "Gangwon"
         : notification.regionLabel ?? "강원";
-    const festivalLabel =
-      locale === "en"
-        ? `${festivalCount} festival${festivalCount === 1 ? "" : "s"}`
-        : `축제 ${festivalCount}개`;
     const title =
       locale === "en"
         ? notification.festivalKind === "TODAY"
-          ? `${festivalLabel} in ${regionLabel} today`
+          ? `See what's on in ${regionLabel} today`
           : notification.festivalKind === "WEEKLY"
-            ? `${festivalLabel} in ${regionLabel} this week`
+            ? `See festivals in ${regionLabel} this week`
             : notification.festivalKind === "MONTHLY"
-              ? `${festivalLabel} in ${regionLabel} this month`
+              ? `See festivals in ${regionLabel} this month`
               : notification.festivalKind === "TRIP"
-                ? `${festivalLabel} in ${regionLabel} on your travel day`
-                : `[Test] ${festivalLabel} in ${regionLabel}`
+                ? `Festivals are on in ${regionLabel} on your travel day`
+                : `[Test] Festival alert for ${regionLabel}`
         : notification.festivalKind === "TODAY"
-          ? `오늘 ${regionLabel} ${festivalLabel}`
+          ? `오늘 ${regionLabel}에서 열리는 축제를 확인해 보세요`
           : notification.festivalKind === "WEEKLY"
-            ? `이번 주 ${regionLabel} ${festivalLabel}`
+            ? `이번 주 ${regionLabel}에서 열리는 축제를 확인해 보세요`
             : notification.festivalKind === "MONTHLY"
-              ? `이번 달 ${regionLabel} ${festivalLabel}`
+              ? `이번 달 ${regionLabel}에서 열리는 축제를 확인해 보세요`
               : notification.festivalKind === "TRIP"
-                ? `${regionLabel} 여행일 ${festivalLabel}`
-                : `[테스트] ${regionLabel} ${festivalLabel}`;
+                ? `여행 가는 날, ${regionLabel}에서 축제도 열려요`
+                : `[테스트] ${regionLabel} 축제 알림`;
 
     return {
       to: device.expoPushToken,
