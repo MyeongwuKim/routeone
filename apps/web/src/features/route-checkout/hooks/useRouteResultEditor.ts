@@ -8,6 +8,7 @@ import {
   recalculateRouteDay,
   recalculateRoutePlanDays,
 } from "../utils/routePlanBuilder";
+import { useRoutePlanDrivingTimes } from "./useRoutePlanDrivingTimes";
 import type {
   ManualRouteInsertion,
   PlannedRouteDay,
@@ -374,7 +375,7 @@ export function useRouteResultEditor({
     ]
   );
 
-  const routePlan = useMemo(() => {
+  const estimatedRoutePlan = useMemo(() => {
     if (!tempo || !isScheduleValid) {
       return [];
     }
@@ -434,6 +435,16 @@ export function useRouteResultEditor({
     travelStartDate,
     tripDays,
   ]);
+
+  const {
+    routePlan,
+    isLoading: isRouteTravelLoading,
+    hasFallback: hasRouteTravelFallback,
+  } = useRoutePlanDrivingTimes({
+    routePlan: estimatedRoutePlan,
+    dailyStartMinutes,
+    dailyEndMinutes,
+  });
 
   const appliedRoutePlan = useMemo(() => {
     if (!tempo || !isScheduleValid) {
@@ -585,6 +596,8 @@ export function useRouteResultEditor({
     appliedRoutePlan,
     startLocation: resolvedDraftStartLocation,
     isRouteEditDirty,
+    isRouteTravelLoading,
+    hasRouteTravelFallback,
     handleChangeStayMinutes,
     handleChangeStartLocation,
     handleInsertPlace,

@@ -24,6 +24,7 @@ type PlaceCartRouteDayCardProps = {
   day: PlannedRouteDay;
   routePlan: PlannedRouteDay[];
   isOrderEditing: boolean;
+  isTravelTimeEstimated: boolean;
   comparisonDay?: PlannedRouteDay | null;
   candidatePlaces: MapSheetPlace[];
   excludedPlaceKeys: string[];
@@ -46,6 +47,7 @@ function PlaceCartRouteDayCard({
   day,
   routePlan,
   isOrderEditing,
+  isTravelTimeEstimated,
   comparisonDay,
   candidatePlaces,
   excludedPlaceKeys,
@@ -204,7 +206,11 @@ function PlaceCartRouteDayCard({
           ) : (
             <div className="mt-3 flex items-center justify-between rounded-2xl border border-brand-100 bg-brand-50/60 px-3 py-2 text-[10px] text-slate-500 dark:border-brand-400/30 dark:bg-slate-900/80 dark:text-slate-200">
               <span>{text.cart.sOrder}</span>
-              <span>{text.cart.carTravelEstimate}</span>
+              <span>
+                {isTravelTimeEstimated
+                  ? text.cart.carTravelEstimate
+                  : text.cart.carTravelDirections}
+              </span>
             </div>
           )}
           {isOrderEditing && nextDay ? (

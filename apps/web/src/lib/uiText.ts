@@ -811,6 +811,9 @@ export type UiText = {
     dropToEnd: string;
     sOrder: string;
     carTravelEstimate: string;
+    carTravelDirections: string;
+    routeTravelCalculatingDescription: string;
+    routeTravelFallbackWarning: string;
     noPlacedPlaces: string;
     routeOriginal: string;
     routeCurrent: string;
@@ -1918,6 +1921,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       dropToEnd: "맨 뒤로 옮기려면 여기에 놓기",
       sOrder: "S자 순서",
       carTravelEstimate: "차량 이동 추정",
+      carTravelDirections: "네이버 길찾기 기준",
+      routeTravelCalculatingDescription:
+        "확정된 장소 순서대로 실제 차량 이동 시간을 확인하고 있어요.",
+      routeTravelFallbackWarning:
+        "일부 구간의 길찾기 정보를 불러오지 못해 해당 구간은 추정 시간을 표시합니다.",
       noPlacedPlaces: "배치된 장소가 없습니다",
       routeOriginal: "기존 경로",
       routeCurrent: "재계산 경로",
@@ -3072,6 +3080,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       dropToEnd: "Drop here to move to the end",
       sOrder: "S-order",
       carTravelEstimate: "Estimated car travel",
+      carTravelDirections: "Naver driving directions",
+      routeTravelCalculatingDescription:
+        "Checking driving times for the finalized stop order.",
+      routeTravelFallbackWarning:
+        "Directions were unavailable for some segments, so estimated times are shown for those segments.",
       noPlacedPlaces: "No places arranged",
       routeOriginal: "Original route",
       routeCurrent: "Recalculated route",

@@ -14,6 +14,7 @@ import {
 import { useUiToastStore } from "@/stores/uiToastStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
+import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import { createPlaceDuplicateKeySet } from "@/lib/placeDuplicate";
 import {
   getMapSheetPlaceStaySummaryKey,
@@ -126,6 +127,8 @@ function PlaceCartRouteResultStep({
     appliedRoutePlan,
     startLocation,
     isRouteEditDirty,
+    isRouteTravelLoading,
+    hasRouteTravelFallback,
     handleChangeStayMinutes,
     handleChangeStartLocation,
     handleInsertPlace,
@@ -449,9 +452,15 @@ function PlaceCartRouteResultStep({
             </p>
           </div>
 
-          {hasOverSchedule ? (
+          {!isRouteTravelLoading && hasOverSchedule ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
               {text.cart.overScheduleWarning(formatClock(scheduleEndMinutes))}
+            </div>
+          ) : null}
+
+          {!isRouteTravelLoading && hasRouteTravelFallback ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+              {text.cart.routeTravelFallbackWarning}
             </div>
           ) : null}
 
@@ -465,7 +474,9 @@ function PlaceCartRouteResultStep({
                       {text.cart.startLocationLabel}
                     </p>
                     <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">
-                      {firstTravelMinutes != null && firstTravelMinutes >= 60
+                      {isRouteTravelLoading
+                        ? text.dayRoute.travelLoading
+                        : firstTravelMinutes != null && firstTravelMinutes >= 60
                         ? text.cart.firstPlaceTravelWarning(
                             formatDurationText(firstTravelMinutes, text)
                           )
@@ -483,26 +494,37 @@ function PlaceCartRouteResultStep({
               </section>
             ) : null}
 
-            {routePlan.map((day) => (
-              <PlaceCartRouteDayCard
-                key={day.day}
-                day={day}
-                routePlan={routePlan}
-                isOrderEditing={isRouteOrderEditing}
-                comparisonDay={getComparisonDay(day)}
-                candidatePlaces={candidatePlaces}
-                excludedPlaceKeys={excludedPlaceKeys}
-                placeStaySummaryByPlaceId={placeStaySummaryByPlaceId}
-                onChangeStayMinutes={handleChangeStayMinutes}
-                onInsertPlace={handleInsertPlace}
-                onRemovePlace={handleRemoveRoutePlace}
-                onReorderDayItems={handleReorderDayItems}
-                onMovePlaceToDay={handleMovePlaceToDay}
-                onRequestOrderEditing={startOrderEditing}
-                onFinishOrderEditing={finishOrderEditing}
-                onRequestSearchPlace={onRequestSearchPlace}
+            {isRouteTravelLoading ? (
+              <PotatoLoadingCard
+                title={text.dayRoute.routeCalculating}
+                description={text.cart.routeTravelCalculatingDescription}
+                animation="running"
+                compact
+                className="shadow-sm"
               />
-            ))}
+            ) : (
+              routePlan.map((day) => (
+                <PlaceCartRouteDayCard
+                  key={day.day}
+                  day={day}
+                  routePlan={routePlan}
+                  isOrderEditing={isRouteOrderEditing}
+                  isTravelTimeEstimated={hasRouteTravelFallback}
+                  comparisonDay={getComparisonDay(day)}
+                  candidatePlaces={candidatePlaces}
+                  excludedPlaceKeys={excludedPlaceKeys}
+                  placeStaySummaryByPlaceId={placeStaySummaryByPlaceId}
+                  onChangeStayMinutes={handleChangeStayMinutes}
+                  onInsertPlace={handleInsertPlace}
+                  onRemovePlace={handleRemoveRoutePlace}
+                  onReorderDayItems={handleReorderDayItems}
+                  onMovePlaceToDay={handleMovePlaceToDay}
+                  onRequestOrderEditing={startOrderEditing}
+                  onFinishOrderEditing={finishOrderEditing}
+                  onRequestSearchPlace={onRequestSearchPlace}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -537,11 +559,15 @@ function PlaceCartRouteResultStep({
           <button
             type="button"
             onClick={handleSaveRoute}
-            disabled={isSavingRoute || !hasEditableRoute}
+            disabled={
+              isSavingRoute || isRouteTravelLoading || !hasEditableRoute
+            }
             className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
           >
             {isSavingRoute
               ? text.cart.saving
+              : isRouteTravelLoading
+                ? text.dayRoute.routeCalculating
               : appendTarget
                 ? text.cart.addDay
                 : text.cart.done}
