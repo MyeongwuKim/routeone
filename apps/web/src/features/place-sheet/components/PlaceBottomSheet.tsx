@@ -51,6 +51,10 @@ function PlaceBottomSheet() {
   const { savedPlaceIds, toggleSavedPlace } = usePlaceCartStore();
   const showToast = useUiToastStore((state) => state.showToast);
   const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
+  const [cartAddAnimationPlaceId, setCartAddAnimationPlaceId] = useState<
+    string | null
+  >(null);
+  const cartAddAnimationTimeoutRef = useRef<number | null>(null);
   const [imageViewerTarget, setImageViewerTarget] =
     useState<PlaceImageViewerTarget | null>(null);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
@@ -102,6 +106,17 @@ function PlaceBottomSheet() {
   const isCurrentPlaceSaved = selectedPlace
     ? savedPlaceIds.includes(selectedPlace.id)
     : false;
+  const isCartAddAnimating =
+    selectedPlace?.id === cartAddAnimationPlaceId;
+
+  useEffect(
+    () => () => {
+      if (cartAddAnimationTimeoutRef.current !== null) {
+        window.clearTimeout(cartAddAnimationTimeoutRef.current);
+      }
+    },
+    []
+  );
 
   const {
     isSheetExpanded,
@@ -375,6 +390,7 @@ function PlaceBottomSheet() {
                   <button
                     type="button"
                     aria-label={text.placeSheet.addToRouteAria}
+                    aria-pressed={isCurrentPlaceSaved}
                     onClick={() => {
                       if (selectedPlace) {
                         const willAddToCart = !isCurrentPlaceSaved;
@@ -384,13 +400,38 @@ function PlaceBottomSheet() {
                           appLanguage
                         );
                         if (willAddToCart) {
+                          if (cartAddAnimationTimeoutRef.current !== null) {
+                            window.clearTimeout(
+                              cartAddAnimationTimeoutRef.current
+                            );
+                          }
+                          setCartAddAnimationPlaceId(selectedPlace.id);
+                          cartAddAnimationTimeoutRef.current = window.setTimeout(
+                            () => {
+                              setCartAddAnimationPlaceId(null);
+                              cartAddAnimationTimeoutRef.current = null;
+                            },
+                            420
+                          );
                           showToast(text.placeSheet.addToCartToast);
+                        } else {
+                          if (cartAddAnimationTimeoutRef.current !== null) {
+                            window.clearTimeout(
+                              cartAddAnimationTimeoutRef.current
+                            );
+                            cartAddAnimationTimeoutRef.current = null;
+                          }
+                          setCartAddAnimationPlaceId(null);
                         }
                       }
                     }}
-                    className="rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700"
+                    className={`rounded-full border border-brand-200 bg-brand-50 p-2 text-brand-700 transition active:scale-90 ${
+                      isCartAddAnimating ? "place-cart-add-button" : ""
+                    }`}
                   >
-                    {isCurrentPlaceSaved ? <IoBagAdd /> : <IoBagAddOutline />}
+                    <span className="place-cart-add-icon block">
+                      {isCurrentPlaceSaved ? <IoBagAdd /> : <IoBagAddOutline />}
+                    </span>
                   </button>
                 </div>
               </div>

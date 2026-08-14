@@ -423,49 +423,25 @@ function HomePage() {
     !mapError;
   const shouldShowMapSetupSkeleton = !isInitialRegionResolved;
   const shouldShowInteractiveMapUi = isInitialRegionResolved;
-  const orderedRegions = useMemo(() => {
-    if (!isInitialRegionResolved) {
-      return serviceArea.regions;
-    }
-
-    if (developmentFixedRegion || !currentLocation) {
-      return [...serviceArea.regions].sort((a, b) => {
-        if (a.sigunguCode === selectedSigunguCode) {
-          return -1;
-        }
-        if (b.sigunguCode === selectedSigunguCode) {
-          return 1;
-        }
-        return 0;
-      });
-    }
-
-    return [...serviceArea.regions].sort((a, b) => {
-      if (a.sigunguCode === selectedSigunguCode) {
-        return -1;
-      }
-      if (b.sigunguCode === selectedSigunguCode) {
-        return 1;
-      }
-
-      const distanceA = calculateDistanceMeters(currentLocation, a.center);
-      const distanceB = calculateDistanceMeters(currentLocation, b.center);
-      return distanceA - distanceB;
-    });
-  }, [
-    currentLocation,
-    developmentFixedRegion,
-    isInitialRegionResolved,
-    selectedSigunguCode,
-    serviceArea.regions,
-  ]);
+  const orderedRegions = useMemo(
+    () =>
+      [...serviceArea.regions].sort((left, right) =>
+        left.label.localeCompare(right.label, "ko-KR")
+      ),
+    [serviceArea.regions]
+  );
   const selectedRegion =
     serviceArea.regions.find(
       (region) => region.sigunguCode === selectedSigunguCode
     ) ?? serviceArea.defaultRegion;
   const selectedRegionLabel =
     text.labels.regions[selectedRegion.label] ?? selectedRegion.label;
-  const routeStartLocation = currentLocation;
+  const routeStartLocation = currentLocation
+    ? {
+        lat: currentLocation.lat,
+        lng: currentLocation.lng,
+      }
+    : null;
   const selectedRegionDirectionOrigin = currentLocation
     ? {
         coordinates: currentLocation,
@@ -846,10 +822,15 @@ function HomePage() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-black text-slate-900">
-                {text.home.appendDayTitle(appendTarget.routeTitle)}
+                {text.home.appendDayTitle(
+                  appendTarget.routeTitle,
+                  appendTarget.nextDayIndex
+                )}
               </p>
               <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                {text.home.appendDayDescription}
+                {text.home.appendDayDescription(
+                  appendTarget.nextDayIndex
+                )}
               </p>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <button

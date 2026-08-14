@@ -86,6 +86,19 @@ function hasValidTravelPoint(
   );
 }
 
+function toRouteStartLocation(
+  point: RouteTravelPoint | null | undefined
+): RouteTravelPoint | null {
+  if (!hasValidTravelPoint(point)) {
+    return null;
+  }
+
+  return {
+    lat: point.lat,
+    lng: point.lng,
+  };
+}
+
 async function resolveTravelMinutesFromPrevious({
   from,
   to,
@@ -117,6 +130,7 @@ async function buildCreateRouteInput(
   input: SaveRoutePlanInput
 ): Promise<CreateRouteInput> {
   const normalizedPlan = normalizeRoutePlanDays(input.routePlan);
+  const startLocation = toRouteStartLocation(input.startLocation);
   const routeStops = normalizedPlan.routePlan.flatMap((day) =>
     day.items.map((item) => ({
       day,
@@ -138,14 +152,14 @@ async function buildCreateRouteInput(
     travelStartDate: input.travelStartDate,
     dailyStartMinutes: input.dailyStartMinutes,
     scheduleEndMinutes: input.scheduleEndMinutes,
-    startLocation: input.startLocation ?? null,
+    startLocation,
     stops: [],
   };
 
   let order = 1;
 
   for (const day of normalizedPlan.routePlan) {
-    let previousPoint: RouteTravelPoint | null = input.startLocation ?? null;
+    let previousPoint: RouteTravelPoint | null = startLocation;
 
     for (const item of day.items) {
       const travelMinutesFromPrevious = await resolveTravelMinutesFromPrevious({

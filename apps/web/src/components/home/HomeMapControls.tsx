@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   IoBagHandleOutline,
   IoCafeOutline,
@@ -85,6 +86,38 @@ function HomeMapControls({
   onSelectFilter,
 }: HomeMapControlsProps) {
   const text = useUiText();
+  const regionScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const regionScroll = regionScrollRef.current;
+    const selectedRegionButton =
+      regionScroll?.querySelector<HTMLButtonElement>(
+        'button[aria-pressed="true"]'
+      );
+
+    if (!regionScroll || !selectedRegionButton) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const scrollBounds = regionScroll.getBoundingClientRect();
+      const buttonBounds = selectedRegionButton.getBoundingClientRect();
+      const centeredScrollLeft =
+        regionScroll.scrollLeft +
+        buttonBounds.left -
+        scrollBounds.left -
+        (scrollBounds.width - buttonBounds.width) / 2;
+
+      regionScroll.scrollTo({
+        left: Math.max(0, centeredScrollLeft),
+        behavior: "smooth",
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [regions, selectedSigunguCode]);
 
   return (
     <>
@@ -128,7 +161,10 @@ function HomeMapControls({
         </button>
       </div>
 
-      <div className="scrollbar-hide pointer-events-auto absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+3.4rem)] z-20 overflow-x-auto px-3 pb-1">
+      <div
+        ref={regionScrollRef}
+        className="scrollbar-hide pointer-events-auto absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+3.4rem)] z-20 overflow-x-auto px-3 pb-1"
+      >
         <div className="flex w-max min-w-full gap-2 pr-3">
           {regions.map((region) => {
             const isActive = selectedSigunguCode === region.sigunguCode;

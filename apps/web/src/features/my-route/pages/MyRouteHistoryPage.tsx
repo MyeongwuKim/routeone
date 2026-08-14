@@ -14,6 +14,7 @@ import {
   MdHistory,
   MdShare,
 } from "react-icons/md";
+import { NOTIFICATION_INBOX_QUERY_KEY } from "@/api/notificationApi";
 import { routeApi } from "@/api/routeApi";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
@@ -279,6 +280,9 @@ function MyRouteHistoryPage() {
         }),
         queryClient.invalidateQueries({
           queryKey: ["place-stay-summary"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: NOTIFICATION_INBOX_QUERY_KEY,
         }),
       ]);
 

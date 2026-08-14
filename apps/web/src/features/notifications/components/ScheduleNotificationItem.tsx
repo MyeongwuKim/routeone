@@ -86,7 +86,6 @@ function ScheduleNotificationItem({
     ? text.notifications.arrivalTitle(item.placeTitle)
     : isRouteStart
       ? text.notifications.routeStartTitle(
-          item.routeStartAt,
           item.routeDayIndex
         )
       : item.routeReviewKind === "COMPLETED"
@@ -147,7 +146,9 @@ function ScheduleNotificationItem({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[11px] font-bold text-slate-400 dark:text-slate-300">
-          {text.notifications.formatTimestamp(item.availableAt)}
+          {text.notifications.formatTimestamp(
+            isRouteStart ? item.routeStartAt : item.availableAt
+          )}
         </span>
         <span className="mt-1 block text-sm font-black text-slate-900 dark:text-white">
           {title}

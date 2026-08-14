@@ -381,6 +381,47 @@ body {
   }
 }
 
+@keyframes placeCartAddButtonPop {
+  0% {
+    box-shadow: 0 0 0 0 rgb(20 184 166 / 0.32);
+    transform: scale(1) rotate(0deg);
+  }
+  35% {
+    transform: scale(0.82) rotate(-8deg);
+  }
+  68% {
+    box-shadow: 0 0 0 8px rgb(20 184 166 / 0);
+    transform: scale(1.18) rotate(6deg);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgb(20 184 166 / 0);
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes placeCartAddIconPop {
+  0% {
+    opacity: 0.55;
+    transform: translateY(3px) scale(0.72);
+  }
+  58% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.24);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.place-cart-add-button {
+  animation: placeCartAddButtonPop 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.place-cart-add-button .place-cart-add-icon {
+  animation: placeCartAddIconPop 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @keyframes sharedRouteFilterBackdropEnter {
   from {
     opacity: 0;
@@ -506,6 +547,8 @@ body {
   .route-page-slide-enter,
   .route-day-accordion-enter,
   .route-checkout-bottom-sheet-enter,
+  .place-cart-add-button,
+  .place-cart-add-button .place-cart-add-icon,
   .shared-route-filter-backdrop-enter,
   .shared-route-filter-panel-enter,
   .global-modal-backdrop-enter,

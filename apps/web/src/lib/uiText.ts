@@ -204,8 +204,8 @@ export type UiText = {
     mapLoadError: string;
     today: string;
     ongoing: string;
-    appendDayTitle: (routeTitle: string) => string;
-    appendDayDescription: string;
+    appendDayTitle: (routeTitle: string, dayIndex: number) => string;
+    appendDayDescription: (dayIndex: number) => string;
     checkout: string;
     openSearchAria: string;
     searchPrompt: (region: string) => string;
@@ -243,7 +243,7 @@ export type UiText = {
     summaryTitle: (regionLabel: string, count: number) => string;
     arrivalTitle: (placeTitle: string) => string;
     arrivalDescription: string;
-    routeStartTitle: (startAt: string, dayIndex: number) => string;
+    routeStartTitle: (dayIndex: number) => string;
     routeStartDescription: string;
     routeReviewCompletedTitle: (routeTitle: string) => string;
     routeReviewIncompleteTitle: (routeTitle: string) => string;
@@ -1178,9 +1178,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       mapLoadError: "지도 로드에 실패했습니다. 키와 도메인 등록을 확인해 주세요.",
       today: "오늘",
       ongoing: "진행 중",
-      appendDayTitle: (routeTitle) => `${routeTitle}에 DAY 추가 중`,
-      appendDayDescription: "장소를 담고 체크아웃에서 추가할 일정을 확인해요",
-      checkout: "체크아웃",
+      appendDayTitle: (routeTitle, dayIndex) =>
+        `${routeTitle}에 DAY ${dayIndex} 추가 중`,
+      appendDayDescription: (dayIndex) =>
+        `지도에서 장소를 담은 뒤 DAY ${dayIndex} 일정을 완성해 보세요`,
+      checkout: "담은 장소 확인",
       openSearchAria: "장소 검색 열기",
       searchPrompt: (region) => `${region} 명소 검색`,
       savedPlacesAria: "담은 장소",
@@ -1224,22 +1226,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `${regionLabel} 축제 ${count}개`,
       arrivalTitle: (placeTitle) => `${placeTitle}에 도착했어요`,
       arrivalDescription: "방문 인증 사진을 남겨보세요.",
-      routeStartTitle: (startAt, dayIndex) => {
-        const date = new Date(startAt);
-        const dateTimeLabel = Number.isFinite(date.getTime())
-          ? `${date.toLocaleDateString("ko-KR", {
-              month: "long",
-              day: "numeric",
-              timeZone: "Asia/Seoul",
-            })} ${date.toLocaleTimeString("ko-KR", {
-              hour: "numeric",
-              minute: "2-digit",
-              timeZone: "Asia/Seoul",
-            })}`
-          : startAt;
-
-        return `${dateTimeLabel}에 DAY ${dayIndex} 일정이 시작돼요`;
-      },
+      routeStartTitle: (dayIndex) =>
+        `DAY ${dayIndex} 일정이 시작돼요`,
       routeStartDescription:
         "방문할 장소와 이동 경로를 미리 확인해 보세요.",
       routeReviewCompletedTitle: (routeTitle) =>
@@ -2320,9 +2308,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       mapLoadError: "Failed to load the map. Check the key and registered domain.",
       today: "Today",
       ongoing: "Ongoing",
-      appendDayTitle: (routeTitle) => `Adding a day to ${routeTitle}`,
-      appendDayDescription: "Pick places and review the added schedule at checkout",
-      checkout: "Checkout",
+      appendDayTitle: (routeTitle, dayIndex) =>
+        `Adding DAY ${dayIndex} to ${routeTitle}`,
+      appendDayDescription: (dayIndex) =>
+        `Save places from the map, then complete your DAY ${dayIndex} schedule`,
+      checkout: "Review Saved Places",
       openSearchAria: "Open place search",
       searchPrompt: (region) => `Search ${region} places`,
       savedPlacesAria: "Saved places",
@@ -2367,20 +2357,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `${count} ${regionLabel} festival${count === 1 ? "" : "s"}`,
       arrivalTitle: (placeTitle) => `You arrived near ${placeTitle}`,
       arrivalDescription: "Leave a verification photo.",
-      routeStartTitle: (startAt, dayIndex) => {
-        const date = new Date(startAt);
-        const dateTimeLabel = Number.isFinite(date.getTime())
-          ? date.toLocaleString("en-US", {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-              timeZone: "Asia/Seoul",
-            })
-          : startAt;
-
-        return `DAY ${dayIndex} begins ${dateTimeLabel}`;
-      },
+      routeStartTitle: (dayIndex) => `DAY ${dayIndex} begins`,
       routeStartDescription:
         "Check your places and travel route before you leave.",
       routeReviewCompletedTitle: (routeTitle) =>

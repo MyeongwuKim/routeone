@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { NOTIFICATION_INBOX_QUERY_KEY } from "@/api/notificationApi";
 import { routeApi } from "@/api/routeApi";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
@@ -283,6 +284,9 @@ function MyRoutePage() {
         }),
         queryClient.invalidateQueries({
           queryKey: ["place-stay-summary"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: NOTIFICATION_INBOX_QUERY_KEY,
         }),
       ]);
     },
