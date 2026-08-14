@@ -167,6 +167,15 @@ function formatRouteStartTitle(
   return `${dateLabel} ${timeLabel}에 DAY ${dayIndex} 일정이 시작돼요`;
 }
 
+function formatRouteStartOverdueTitle(
+  dayIndex: number,
+  locale: PushLocale
+) {
+  return locale === "en"
+    ? `DAY ${dayIndex} was scheduled to start`
+    : `DAY ${dayIndex} 시작 시간이 지났어요`;
+}
+
 function formatFestivalPeriod(
   startDate: string,
   endDate: string,
@@ -299,17 +308,29 @@ function createPushMessage(
     notification.dayId &&
     notification.routeStartAt
   ) {
+    const isOverdue = notification.notificationKey.startsWith(
+      "route-start-overdue:"
+    );
+
     return {
       to: device.expoPushToken,
       sound: "default",
-      title: formatRouteStartTitle(
-        notification.routeStartAt,
-        notification.routeDayIndex ?? 1,
-        locale,
-        now
-      ),
-      body:
-        locale === "en"
+      title: isOverdue
+        ? formatRouteStartOverdueTitle(
+            notification.routeDayIndex ?? 1,
+            locale
+          )
+        : formatRouteStartTitle(
+            notification.routeStartAt,
+            notification.routeDayIndex ?? 1,
+            locale,
+            now
+          ),
+      body: isOverdue
+        ? locale === "en"
+          ? "If you haven't left yet, check today's schedule and travel route."
+          : "아직 출발하지 않았다면 오늘 일정과 이동 경로를 확인해 보세요."
+        : locale === "en"
           ? "Check today's places and travel route before you leave."
           : "오늘 방문할 장소와 이동 경로를 미리 확인해 보세요.",
       data: {
@@ -317,6 +338,7 @@ function createPushMessage(
         notificationId: notification.notificationKey,
         routeId: notification.routeId,
         dayId: notification.dayId,
+        kind: isOverdue ? "overdue" : "upcoming",
       },
     };
   }

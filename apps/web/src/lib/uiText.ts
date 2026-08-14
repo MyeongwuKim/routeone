@@ -245,6 +245,8 @@ export type UiText = {
     arrivalDescription: string;
     routeStartTitle: (dayIndex: number) => string;
     routeStartDescription: string;
+    routeStartOverdueTitle: (dayIndex: number) => string;
+    routeStartOverdueDescription: string;
     routeReviewCompletedTitle: (routeTitle: string) => string;
     routeReviewIncompleteTitle: (routeTitle: string) => string;
     routeReviewUnstartedTitle: (routeTitle: string) => string;
@@ -1098,7 +1100,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       festivalStatus: (count) =>
         count > 0 ? `${count}곳 알림 중` : "꺼짐",
       routeStartTitle: "일정 시작 알림",
-      routeStartDescription: "각 DAY 시작 전에 예정 시각과 일정을 미리 안내",
+      routeStartDescription:
+        "각 DAY 시작 1시간 전과 미시작 시 한 번 더 안내",
       routeReviewTitle: "루트 종료 알림",
       routeReviewDescription:
         "루트 종료 후 7일 안에 방문 기록을 확인·정리하도록 보내는 리마인더",
@@ -1229,6 +1232,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `DAY ${dayIndex} 일정이 시작돼요`,
       routeStartDescription:
         "방문할 장소와 이동 경로를 미리 확인해 보세요.",
+      routeStartOverdueTitle: (dayIndex) =>
+        `DAY ${dayIndex} 시작 시간이 지났어요`,
+      routeStartOverdueDescription:
+        "아직 출발하지 않았다면 오늘 일정과 이동 경로를 확인해 보세요.",
       routeReviewCompletedTitle: (routeTitle) =>
         `${routeTitle}, 무사히 잘 마쳤네요`,
       routeReviewIncompleteTitle: (routeTitle) =>
@@ -2224,7 +2231,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
           : "Off",
       routeStartTitle: "Schedule Start Alerts",
       routeStartDescription:
-        "A reminder with the start time before each DAY begins",
+        "An alert 1 hour before each DAY and one follow-up if it has not started",
       routeReviewTitle: "Route Review Alerts",
       routeReviewDescription:
         "A reminder to review and organize visit records within 7 days after a route ends",
@@ -2358,6 +2365,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       routeStartTitle: (dayIndex) => `DAY ${dayIndex} begins`,
       routeStartDescription:
         "Check your places and travel route before you leave.",
+      routeStartOverdueTitle: (dayIndex) =>
+        `DAY ${dayIndex} was scheduled to start`,
+      routeStartOverdueDescription:
+        "If you haven't left yet, check today's schedule and travel route.",
       routeReviewCompletedTitle: (routeTitle) =>
         `${routeTitle}—you made it!`,
       routeReviewIncompleteTitle: (routeTitle) =>

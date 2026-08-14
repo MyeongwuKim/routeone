@@ -75,6 +75,9 @@ function ScheduleNotificationItem({
   const appLanguage = useAppLanguageStore((state) => state.language);
   const isArrival = item.type === "ROUTE_ARRIVAL";
   const isRouteStart = item.type === "ROUTE_START";
+  const isRouteStartOverdue =
+    isRouteStart &&
+    item.notificationKey.startsWith("route-start-overdue:");
   const routeTitle = localizeGeneratedRouteTitle(
     item.routeTitle?.trim() || "",
     appLanguage
@@ -85,9 +88,9 @@ function ScheduleNotificationItem({
   const title = isArrival
     ? text.notifications.arrivalTitle(item.placeTitle)
     : isRouteStart
-      ? text.notifications.routeStartTitle(
-          item.routeDayIndex
-        )
+      ? isRouteStartOverdue
+        ? text.notifications.routeStartOverdueTitle(item.routeDayIndex)
+        : text.notifications.routeStartTitle(item.routeDayIndex)
       : item.routeReviewKind === "COMPLETED"
       ? text.notifications.routeReviewCompletedTitle(routeTitle)
       : item.routeReviewKind === "UNSTARTED"
@@ -96,7 +99,9 @@ function ScheduleNotificationItem({
   const description = isArrival
     ? text.notifications.arrivalDescription
     : isRouteStart
-      ? text.notifications.routeStartDescription
+      ? isRouteStartOverdue
+        ? text.notifications.routeStartOverdueDescription
+        : text.notifications.routeStartDescription
       : item.routeReviewKind === "COMPLETED"
       ? text.notifications.routeReviewCompletedDescription(
           item.correctionDeadlineAt

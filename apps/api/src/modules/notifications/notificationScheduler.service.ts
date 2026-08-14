@@ -19,6 +19,7 @@ import { deliverPendingNotifications } from "./pushDelivery.service.js";
 const KST_OFFSET_MS = 1000 * 60 * 60 * 9;
 const DAY_MS = 1000 * 60 * 60 * 24;
 const ROUTE_START_REMINDER_MS = 1000 * 60 * 60;
+const ROUTE_START_OVERDUE_DELAY_MS = 1000 * 60 * 30;
 const ROUTE_START_LOOKAHEAD_DAYS = 2;
 const ROUTE_CORRECTION_GRACE_DAYS = 7;
 const ROUTE_REVIEW_DELAY_MS = DAY_MS;
@@ -159,15 +160,20 @@ type RouteStartNotificationInput = {
   routeTitle: string;
   dayId: string;
   dayIndex: number;
+  kind: "UPCOMING" | "OVERDUE";
   routeStartAt: Date;
   availableAt: Date;
+  expiresAt: Date;
 };
 
 async function upsertRouteStartNotification(
   prisma: PrismaClient,
   input: RouteStartNotificationInput
 ) {
-  const notificationKey = `route-start:${input.routeId}:${input.dayId}`;
+  const notificationKey =
+    input.kind === "OVERDUE"
+      ? `route-start-overdue:${input.routeId}:${input.dayId}`
+      : `route-start:${input.routeId}:${input.dayId}`;
   const existing = await prisma.userNotification.findUnique({
     where: {
       userId_notificationKey: {
@@ -190,7 +196,7 @@ async function upsertRouteStartNotification(
           routeDayIndex: input.dayIndex,
           routeStartAt: input.routeStartAt,
           availableAt: input.availableAt,
-          expiresAt: input.routeStartAt,
+          expiresAt: input.expiresAt,
           pushStatus: UserNotificationPushStatus.PENDING,
         },
       });
@@ -226,6 +232,7 @@ async function upsertRouteStartNotification(
   const hasScheduleChanged =
     existing.routeStartAt?.getTime() !== input.routeStartAt.getTime() ||
     existing.availableAt.getTime() !== input.availableAt.getTime() ||
+    existing.expiresAt?.getTime() !== input.expiresAt.getTime() ||
     existing.routeDayIndex !== input.dayIndex ||
     existing.routeTitle !== input.routeTitle;
 
@@ -245,7 +252,7 @@ async function upsertRouteStartNotification(
       routeDayIndex: input.dayIndex,
       routeStartAt: input.routeStartAt,
       availableAt: input.availableAt,
-      expiresAt: input.routeStartAt,
+      expiresAt: input.expiresAt,
       pushStatus: UserNotificationPushStatus.PENDING,
       pushAttemptCount: 0,
       pushClaimedAt: null,
@@ -302,6 +309,7 @@ async function createRouteStartNotifications(
           travelStartDate: true,
           travelEndDate: true,
           dailyStartMinutes: true,
+          scheduleEndMinutes: true,
           startedAt: true,
           owner: {
             select: {
@@ -317,6 +325,7 @@ async function createRouteStartNotifications(
       stops: {
         select: {
           visitStatus: true,
+          checkedInAt: true,
         },
       },
     },
@@ -329,12 +338,15 @@ async function createRouteStartNotifications(
   for (const routeDay of routeDays) {
     const { route } = routeDay;
     const dailyStartMinutes = route.dailyStartMinutes;
+    const hasDayActivity = routeDay.stops.some(
+      (stop) => stop.visitStatus === "VISITED" || Boolean(stop.checkedInAt)
+    );
 
     if (
       !routeDay.date ||
       typeof dailyStartMinutes !== "number" ||
+      hasDayActivity ||
       (routeDay.dayIndex === 1 && Boolean(route.startedAt)) ||
-      routeDay.stops.every((stop) => stop.visitStatus === "VISITED") ||
       route.owner.notificationSetting?.routeStartEnabled === false
     ) {
       continue;
@@ -347,24 +359,56 @@ async function createRouteStartNotifications(
       dailyStartMinutes % 60
     );
 
-    if (routeStartAt <= now) {
+    const routeTitle = getRouteTitle(
+      route.travelStartDate,
+      route.travelEndDate
+    );
+
+    if (routeStartAt > now) {
+      const notificationKey = await upsertRouteStartNotification(prisma, {
+        userId: route.ownerId,
+        routeId: route.id,
+        routeTitle,
+        dayId: routeDay.id,
+        dayIndex: routeDay.dayIndex,
+        kind: "UPCOMING",
+        routeStartAt,
+        availableAt: new Date(
+          routeStartAt.getTime() - ROUTE_START_REMINDER_MS
+        ),
+        expiresAt: routeStartAt,
+      });
+      activeNotificationKeys.push(notificationKey);
       continue;
     }
 
-    const availableAt = new Date(
-      routeStartAt.getTime() - ROUTE_START_REMINDER_MS
+    const overdueAvailableAt = new Date(
+      routeStartAt.getTime() + ROUTE_START_OVERDUE_DELAY_MS
     );
+    const scheduleEndMinutes = route.scheduleEndMinutes;
+    const overdueExpiresAt =
+      typeof scheduleEndMinutes === "number"
+        ? atKst(
+            dateKey,
+            Math.floor(scheduleEndMinutes / 60),
+            scheduleEndMinutes % 60
+          )
+        : atKst(addDays(dateKey, 1), 0);
+
+    if (overdueAvailableAt > now || overdueExpiresAt <= now) {
+      continue;
+    }
+
     const notificationKey = await upsertRouteStartNotification(prisma, {
       userId: route.ownerId,
       routeId: route.id,
-      routeTitle: getRouteTitle(
-        route.travelStartDate,
-        route.travelEndDate
-      ),
+      routeTitle,
       dayId: routeDay.id,
       dayIndex: routeDay.dayIndex,
+      kind: "OVERDUE",
       routeStartAt,
-      availableAt,
+      availableAt: overdueAvailableAt,
+      expiresAt: overdueExpiresAt,
     });
     activeNotificationKeys.push(notificationKey);
   }
@@ -379,26 +423,16 @@ async function createRouteStartNotifications(
           UserNotificationPushStatus.CANCELED,
         ],
       },
-      OR: [
-        {
-          routeStartAt: {
-            lte: now,
-          },
-        },
-        {
-          routeStartAt: {
-            gt: now,
-            lt: horizonEndAt,
-          },
-          ...(activeNotificationKeys.length > 0
-            ? {
-                notificationKey: {
-                  notIn: activeNotificationKeys,
-                },
-              }
-            : {}),
-        },
-      ],
+      routeStartAt: {
+        lt: horizonEndAt,
+      },
+      ...(activeNotificationKeys.length > 0
+        ? {
+            notificationKey: {
+              notIn: activeNotificationKeys,
+            },
+          }
+        : {}),
     },
   });
 }
