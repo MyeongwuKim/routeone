@@ -3,6 +3,7 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { Platform } from "react-native";
+import { syncIosRouteArrivalNotifications } from "@/nativeModules/routeArrivalNotifications";
 import {
   postNativeDeliveredNotificationHistoryResponse,
   postNativeRouteArrivalNotificationSyncResponse,
@@ -91,6 +92,13 @@ function getTodayDateKey() {
 
 function getRouteArrivalRegionId(place: NativeRouteArrivalNotificationPlace) {
   return `${place.routeId}:${place.stopId}`;
+}
+
+function getRouteArrivalNotificationId(
+  place: NativeRouteArrivalNotificationPlace,
+  dateKey: string
+) {
+  return `arrival:${place.routeId}:${place.stopId}:${dateKey}`;
 }
 
 function toRadians(degree: number) {
@@ -239,12 +247,147 @@ async function readDeliveredNotificationHistory() {
   }
 }
 
+type PresentedRouteArrivalNotification = {
+  nativeIdentifier: string;
+  notification: NativeDeliveredRouteArrivalNotification | null;
+  notificationId: string;
+};
+
+function getNotificationDataString(
+  data: Record<string, unknown>,
+  key: string
+) {
+  const value = data[key];
+  return typeof value === "string" && value ? value : null;
+}
+
+async function readPresentedRouteArrivalNotifications(): Promise<
+  PresentedRouteArrivalNotification[]
+> {
+  const presentedNotifications =
+    await Notifications.getPresentedNotificationsAsync();
+
+  return presentedNotifications.flatMap((notification) => {
+    const routeArrivalNotification =
+      parsePresentedRouteArrivalNotification(notification);
+
+    return routeArrivalNotification ? [routeArrivalNotification] : [];
+  });
+}
+
+function parsePresentedRouteArrivalNotification(
+  presentedNotification: Notifications.Notification
+): PresentedRouteArrivalNotification | null {
+  const data = presentedNotification.request.content.data;
+
+  if (!data || data.type !== "route-arrival") {
+    return null;
+  }
+
+  const notificationId = getNotificationDataString(data, "notificationId");
+
+  if (!notificationId) {
+    return null;
+  }
+
+  const routeId = getNotificationDataString(data, "routeId");
+  const dayId = getNotificationDataString(data, "dayId");
+  const stopId = getNotificationDataString(data, "stopId");
+  const placeTitle = getNotificationDataString(data, "placeTitle");
+  const dateKey = getNotificationDataString(data, "dateKey");
+  const deliveredTimestamp =
+    presentedNotification.date < 1_000_000_000_000
+      ? presentedNotification.date * 1000
+      : presentedNotification.date;
+  const deliveredAt = new Date(deliveredTimestamp);
+  const notification =
+    routeId &&
+    dayId &&
+    stopId &&
+    placeTitle &&
+    dateKey &&
+    Number.isFinite(deliveredAt.getTime())
+      ? {
+          id: notificationId,
+          type: "route-arrival" as const,
+          routeId,
+          routeTitle: getNotificationDataString(data, "routeTitle"),
+          dayId,
+          stopId,
+          placeTitle,
+          dateKey,
+          deliveredAt: deliveredAt.toISOString(),
+        }
+      : null;
+
+  return {
+    nativeIdentifier: presentedNotification.request.identifier,
+    notification,
+    notificationId,
+  };
+}
+
+function mergeDeliveredNotificationHistory(
+  ...notificationGroups: NativeDeliveredRouteArrivalNotification[][]
+) {
+  const notificationById = new Map<
+    string,
+    NativeDeliveredRouteArrivalNotification
+  >();
+
+  for (const notifications of notificationGroups) {
+    for (const notification of notifications) {
+      const previousNotification = notificationById.get(notification.id);
+
+      if (
+        !previousNotification ||
+        Date.parse(notification.deliveredAt) >=
+          Date.parse(previousNotification.deliveredAt)
+      ) {
+        notificationById.set(notification.id, notification);
+      }
+    }
+  }
+
+  return [...notificationById.values()]
+    .sort(
+      (left, right) =>
+        Date.parse(right.deliveredAt) - Date.parse(left.deliveredAt)
+    )
+    .slice(0, MAX_DELIVERED_NOTIFICATION_HISTORY_COUNT);
+}
+
+async function writeDeliveredNotificationHistory(
+  notifications: NativeDeliveredRouteArrivalNotification[]
+) {
+  await AsyncStorage.setItem(
+    DELIVERED_NOTIFICATION_HISTORY_STORAGE_KEY,
+    JSON.stringify(notifications)
+  );
+}
+
+export async function recordDeliveredRouteArrivalNotification(
+  notification: Notifications.Notification
+) {
+  const routeArrivalNotification =
+    parsePresentedRouteArrivalNotification(notification)?.notification;
+
+  if (!routeArrivalNotification) {
+    return;
+  }
+
+  const history = await readDeliveredNotificationHistory();
+  await writeDeliveredNotificationHistory(
+    mergeDeliveredNotificationHistory(history, [routeArrivalNotification])
+  );
+}
+
 async function appendDeliveredRouteArrivalNotification(
   place: StoredRouteArrivalPlace,
   dateKey: string
 ) {
   const notification: NativeDeliveredRouteArrivalNotification = {
-    id: `arrival:${place.routeId}:${place.stopId}:${dateKey}`,
+    id: getRouteArrivalNotificationId(place, dateKey),
     type: "route-arrival",
     routeId: place.routeId,
     routeTitle: place.routeTitle ?? null,
@@ -260,10 +403,7 @@ async function appendDeliveredRouteArrivalNotification(
     ...history.filter((item) => item.id !== notification.id),
   ].slice(0, MAX_DELIVERED_NOTIFICATION_HISTORY_COUNT);
 
-  await AsyncStorage.setItem(
-    DELIVERED_NOTIFICATION_HISTORY_STORAGE_KEY,
-    JSON.stringify(nextHistory)
-  );
+  await writeDeliveredNotificationHistory(nextHistory);
 }
 
 async function ensureNotificationChannel(language?: NativeAppLanguage) {
@@ -328,6 +468,13 @@ async function ensureRouteArrivalPermissions(language: NativeAppLanguage) {
     );
   }
 
+  if (Platform.OS === "ios") {
+    return {
+      backgroundLocationStatus: "system-managed",
+      notificationStatus: notificationPermission.status,
+    };
+  }
+
   const backgroundLocationPermission =
     await Location.getBackgroundPermissionsAsync();
   const nextBackgroundLocationPermission =
@@ -389,10 +536,13 @@ async function deliverRouteArrivalNotification(
       title: place.notificationTitle,
       body: place.notificationBody,
       data: {
-        notificationId: `arrival:${place.routeId}:${place.stopId}:${dateKey}`,
+        notificationId: getRouteArrivalNotificationId(place, dateKey),
         routeId: place.routeId,
+        routeTitle: place.routeTitle ?? null,
         dayId: place.dayId,
         stopId: place.stopId,
+        placeTitle: place.title,
+        dateKey,
         type: "route-arrival",
       },
     },
@@ -404,7 +554,10 @@ async function deliverRouteArrivalNotification(
   );
 }
 
-if (!TaskManager.isTaskDefined(ROUTE_ARRIVAL_GEOFENCE_TASK)) {
+if (
+  Platform.OS === "android" &&
+  !TaskManager.isTaskDefined(ROUTE_ARRIVAL_GEOFENCE_TASK)
+) {
   TaskManager.defineTask(
     ROUTE_ARRIVAL_GEOFENCE_TASK,
     async ({ data, error }: RouteArrivalTaskBody) => {
@@ -435,7 +588,12 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
     const places = getUniqueStoredPlaces(message.places, message.language);
 
     if (places.length === 0) {
-      await stopRouteArrivalGeofencingIfStarted();
+      if (Platform.OS === "ios") {
+        await stopRouteArrivalGeofencingIfStarted().catch(() => undefined);
+        await syncIosRouteArrivalNotifications([], DEFAULT_GEOFENCE_RADIUS_METERS);
+      } else {
+        await stopRouteArrivalGeofencingIfStarted();
+      }
       await AsyncStorage.removeItem(ROUTE_ARRIVAL_PLACES_STORAGE_KEY);
       postNativeRouteArrivalNotificationSyncResponse(webViewRef, message.id, {
         ok: true,
@@ -455,21 +613,46 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
       ROUTE_ARRIVAL_PLACES_STORAGE_KEY,
       JSON.stringify(places)
     );
-    await Location.startGeofencingAsync(
-      ROUTE_ARRIVAL_GEOFENCE_TASK,
-      places.map((place) => ({
-        identifier: getRouteArrivalRegionId(place),
-        latitude: place.lat,
-        longitude: place.lng,
-        notifyOnEnter: true,
-        notifyOnExit: false,
-        radius,
-      }))
-    );
+
+    let activeCount = places.length;
+
+    if (Platform.OS === "ios") {
+      await stopRouteArrivalGeofencingIfStarted().catch(() => undefined);
+      const dateKey = getTodayDateKey();
+      activeCount = await syncIosRouteArrivalNotifications(
+        places.map((place) => ({
+          identifier: getRouteArrivalNotificationId(place, dateKey),
+          regionIdentifier: getRouteArrivalRegionId(place),
+          title: place.notificationTitle,
+          body: place.notificationBody,
+          routeId: place.routeId,
+          routeTitle: place.routeTitle ?? null,
+          dayId: place.dayId,
+          stopId: place.stopId,
+          placeTitle: place.title,
+          dateKey,
+          latitude: place.lat,
+          longitude: place.lng,
+        })),
+        radius
+      );
+    } else {
+      await Location.startGeofencingAsync(
+        ROUTE_ARRIVAL_GEOFENCE_TASK,
+        places.map((place) => ({
+          identifier: getRouteArrivalRegionId(place),
+          latitude: place.lat,
+          longitude: place.lng,
+          notifyOnEnter: true,
+          notifyOnExit: false,
+          radius,
+        }))
+      );
+    }
 
     postNativeRouteArrivalNotificationSyncResponse(webViewRef, message.id, {
       ok: true,
-      activeCount: places.length,
+      activeCount,
       ...permissionStatus,
     });
   } catch (error) {
@@ -557,16 +740,28 @@ export async function handleNativeDeliveredNotificationHistoryRequest(
   try {
     const acknowledgedIds = new Set(message.acknowledgedIds ?? []);
     const history = await readDeliveredNotificationHistory();
-    const notifications = history.filter(
-      (notification) => !acknowledgedIds.has(notification.id)
-    );
+    const presentedNotifications =
+      await readPresentedRouteArrivalNotifications();
 
-    if (notifications.length !== history.length) {
-      await AsyncStorage.setItem(
-        DELIVERED_NOTIFICATION_HISTORY_STORAGE_KEY,
-        JSON.stringify(notifications)
-      );
-    }
+    await Promise.all(
+      presentedNotifications
+        .filter((notification) =>
+          acknowledgedIds.has(notification.notificationId)
+        )
+        .map((notification) =>
+          Notifications.dismissNotificationAsync(
+            notification.nativeIdentifier
+          )
+        )
+    );
+    const notifications = mergeDeliveredNotificationHistory(
+      history,
+      presentedNotifications.flatMap((notification) =>
+        notification.notification ? [notification.notification] : []
+      )
+    ).filter((notification) => !acknowledgedIds.has(notification.id));
+
+    await writeDeliveredNotificationHistory(notifications);
 
     postNativeDeliveredNotificationHistoryResponse(webViewRef, message.id, {
       ok: true,

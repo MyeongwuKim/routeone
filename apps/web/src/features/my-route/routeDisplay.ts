@@ -116,7 +116,7 @@ export function getRouteTimelineLabel(
       return getTodayRouteDay(route, todayKey) ? "오늘 시작" : "시작 필요";
     }
 
-    return getTodayRouteDay(route, todayKey) ? "오늘 여행 중" : "여행 중";
+    return "여행 중";
   }
 
   if (state === "upcoming") {

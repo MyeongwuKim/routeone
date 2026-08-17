@@ -4,7 +4,7 @@ dist
 build
 coverage
 *.log
-ios
+/ios
 android
 
 # Env files

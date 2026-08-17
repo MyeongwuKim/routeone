@@ -74,9 +74,10 @@ function getStopTravelMinutes(
 
 function buildRouteStopSchedules(
   stops: MyRouteStop[],
-  startLocation: MyRoute["startLocation"]
+  startLocation: MyRoute["startLocation"],
+  dailyStartMinutes: number
 ) {
-  let currentMinutes = DEFAULT_ROUTE_DAY_START_MINUTES;
+  let currentMinutes = dailyStartMinutes;
 
   return stops.map((stop, index): RouteStopSchedule => {
     const actualEndMinutes = getDateTimeClockMinutes(
@@ -180,6 +181,7 @@ type DayRouteAccordionItemProps = {
   isExpanded: boolean;
   orderedStops: MyRouteStop[];
   startLocation: MyRoute["startLocation"];
+  dailyStartMinutes: MyRoute["dailyStartMinutes"];
   isOrderEditing: boolean;
   activeDropIndex: number | null;
   draggedStopId: string | null;
@@ -215,6 +217,7 @@ function DayRouteAccordionItem({
   isExpanded,
   orderedStops,
   startLocation,
+  dailyStartMinutes,
   isOrderEditing,
   activeDropIndex,
   draggedStopId,
@@ -243,9 +246,18 @@ function DayRouteAccordionItem({
   const text = useUiText();
   const dayStops = orderedStops;
   const hasDayStops = dayStops.length > 0;
+  const routeDayStartMinutes =
+    typeof dailyStartMinutes === "number"
+      ? dailyStartMinutes
+      : DEFAULT_ROUTE_DAY_START_MINUTES;
   const stopSchedules = useMemo(
-    () => buildRouteStopSchedules(dayStops, startLocation),
-    [dayStops, startLocation]
+    () =>
+      buildRouteStopSchedules(
+        dayStops,
+        startLocation,
+        routeDayStartMinutes
+      ),
+    [dayStops, routeDayStartMinutes, startLocation]
   );
   const firstStopSchedule = stopSchedules[0] ?? null;
   const lastStopSchedule = stopSchedules.at(-1) ?? null;
@@ -253,7 +265,7 @@ function DayRouteAccordionItem({
     firstStopSchedule?.kind === "actual" ||
     firstStopSchedule?.kind === "ongoing"
       ? firstStopSchedule.startMinutes
-      : DEFAULT_ROUTE_DAY_START_MINUTES;
+      : routeDayStartMinutes;
   const totalScheduleMinutes = lastStopSchedule
     ? Math.max(0, lastStopSchedule.endMinutes - scheduleStartMinutes)
     : 0;

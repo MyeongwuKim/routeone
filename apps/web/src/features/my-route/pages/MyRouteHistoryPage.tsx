@@ -448,7 +448,7 @@ function MyRouteHistoryPage() {
           variant: "secondary",
         },
         {
-          label: text.routeHistory.notVisited,
+          label: text.routeHistory.deleteRoute,
           variant: "danger",
           onClick: () => deleteRouteMutation.mutate(route.id),
         },

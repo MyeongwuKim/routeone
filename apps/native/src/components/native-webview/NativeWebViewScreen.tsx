@@ -36,6 +36,7 @@ import {
   openNativeExternalUrl,
   shouldKeepUrlInWebView
 } from "@/webview/bridge/externalLinkBridge";
+import { recordDeliveredRouteArrivalNotification } from "@/webview/bridge/routeArrivalNotificationBridge";
 import NativeDevBuildBadge from "./NativeDevBuildBadge";
 import RouteOneLaunchScreen from "./RouteOneLaunchScreen";
 
@@ -488,6 +489,12 @@ export default function NativeWebViewScreen({
     const handleNotificationResponse = (
       response: Notifications.NotificationResponse | null
     ) => {
+      if (response?.notification) {
+        void recordDeliveredRouteArrivalNotification(
+          response.notification
+        ).catch(() => undefined);
+      }
+
       const webPath = getNotificationWebPath(response);
 
       if (webPath) {

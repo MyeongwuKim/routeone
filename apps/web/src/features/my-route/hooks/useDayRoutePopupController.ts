@@ -658,6 +658,7 @@ export function useDayRoutePopupController({
       expandedDayIds,
       orderedStops,
       startLocation: route.startLocation,
+      dailyStartMinutes: route.dailyStartMinutes,
       isOrderEditing,
       activeDropIndex,
       draggedStopId: draggedStop?.stop.id ?? null,

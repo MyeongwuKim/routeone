@@ -427,8 +427,37 @@ function MyRoutePage() {
     myRoutesQuery.isError,
     myRoutesQuery.isLoading,
   ]);
+  const shouldOpenDeepLinkInHistory = Boolean(
+    deepLinkedRouteDay &&
+      getRouteTimelineState(deepLinkedRouteDay.route, getTodayDateKey()) ===
+        "past"
+  );
+  useEffect(() => {
+    if (!deepLinkedRouteDay || !shouldOpenDeepLinkInHistory) {
+      return;
+    }
+
+    const historySearchParams = new URLSearchParams({
+      routeId: deepLinkedRouteDay.route.id,
+      dayId: deepLinkedRouteDay.day.id,
+    });
+    const source = searchParams.get("source")?.trim();
+
+    if (source) {
+      historySearchParams.set("source", source);
+    }
+
+    navigate(`/me/routes?${historySearchParams.toString()}`, {
+      replace: true,
+    });
+  }, [
+    deepLinkedRouteDay,
+    navigate,
+    searchParams,
+    shouldOpenDeepLinkInHistory,
+  ]);
   const selectedRouteDay = useMemo(() => {
-    if (deepLinkedRouteDay) {
+    if (deepLinkedRouteDay && !shouldOpenDeepLinkInHistory) {
       return deepLinkedRouteDay;
     }
 
@@ -454,7 +483,12 @@ function MyRoutePage() {
           day,
         }
       : null;
-  }, [deepLinkedRouteDay, localizedMyRoutes, selectedDayRoute]);
+  }, [
+    deepLinkedRouteDay,
+    localizedMyRoutes,
+    selectedDayRoute,
+    shouldOpenDeepLinkInHistory,
+  ]);
   const hasRoutes = routeGroups.totalCount > 0;
   const selectDayRoute = useCallback(
     (routeId: string, dayId: string) => {

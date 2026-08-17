@@ -368,6 +368,7 @@ export type UiText = {
     dayCard: string;
     createPosterAria: (routeTitle: string) => string;
     notVisited: string;
+    deleteRoute: string;
     notVisitedTitle: string;
     notVisitedDescription: (routeTitle: string) => string;
     notVisitedDetail: string;
@@ -1388,13 +1389,14 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       making: "제작 중",
       dayCard: "DAY 카드",
       createPosterAria: (routeTitle) => `${routeTitle} DAY 포스터 만들기`,
-      notVisited: "안 다녀왔어요",
-      notVisitedTitle: "다녀오지 않은 일정인가요?",
+      notVisited: "완료한 장소가 없어요",
+      deleteRoute: "일정 삭제",
+      notVisitedTitle: "이 일정을 삭제할까요?",
       notVisitedDescription: (routeTitle) =>
-        `${routeTitle}을 다녀온 루트에서 정리해요.`,
+        `${routeTitle}에는 완료된 방문 기록이 없어요.`,
       notVisitedDetail: "일정과 장소 기록이 삭제되며 다시 되돌릴 수 없어요.",
-      notVisitedSuccess: "다녀오지 않은 일정을 정리했어요.",
-      notVisitedError: "일정을 정리하지 못했어요.",
+      notVisitedSuccess: "일정을 삭제했어요.",
+      notVisitedError: "일정을 삭제하지 못했어요.",
     },
     sharedRoute: {
       feedTitle: "공유 루트",
@@ -1542,10 +1544,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       emptyStartDescription: "장소를 추가하면 첫 장소가 출발 기준으로 표시돼요.",
       start: "출발",
       firstPlace: "첫 장소",
-      nextPlace: "다음 장소",
+      nextPlace: "다음 목적지",
       noStartGps: "출발 GPS 없음",
       firstPlaceTravel: (label) => `첫 장소까지 ${label}`,
-      nextPlaceTravel: (label) => `다음 장소까지 ${label}`,
+      nextPlaceTravel: (label) => `다음 목적지까지 ${label}`,
       travelLoading: "이동 시간 계산 중",
       travelError: "이동 시간 확인 불가",
       travelByCar: (duration) => `차량 약 ${duration}`,
@@ -1583,7 +1585,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       visitTimePreviousStopOngoingError: (title) =>
         `앞 장소 '${title}' 방문을 먼저 완료해 주세요.`,
       visitTimeNextStopError: (title) =>
-        `방문시간은 다음 장소 '${title}'의 도착시간보다 늦을 수 없어요.`,
+        `방문시간은 다음 목적지 '${title}'의 도착시간보다 늦을 수 없어요.`,
       saveVisitTimes: "시간 저장",
       placeFallback: "장소",
       gpsVerification: "GPS 인증",
@@ -2544,14 +2546,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       making: "Creating",
       dayCard: "DAY Card",
       createPosterAria: (routeTitle) => `Create DAY poster for ${routeTitle}`,
-      notVisited: "Did not go",
-      notVisitedTitle: "Did you skip this trip?",
+      notVisited: "No completed places",
+      deleteRoute: "Delete trip",
+      notVisitedTitle: "Delete this trip?",
       notVisitedDescription: (routeTitle) =>
-        `Remove ${routeTitle} from your visited routes.`,
+        `${routeTitle} has no completed visits.`,
       notVisitedDetail:
         "The schedule and its place records will be deleted permanently.",
-      notVisitedSuccess: "The skipped trip was removed.",
-      notVisitedError: "Could not remove the trip.",
+      notVisitedSuccess: "The trip was deleted.",
+      notVisitedError: "Could not delete the trip.",
     },
     sharedRoute: {
       feedTitle: "Shared Routes",
@@ -2699,10 +2702,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       emptyStartDescription: "Add places to use the first place as the start.",
       start: "Start",
       firstPlace: "First place",
-      nextPlace: "Next place",
+      nextPlace: "Next destination",
       noStartGps: "No start GPS",
       firstPlaceTravel: (label) => `To first place: ${label}`,
-      nextPlaceTravel: (label) => `To next place: ${label}`,
+      nextPlaceTravel: (label) => `To next destination: ${label}`,
       travelLoading: "Calculating travel time",
       travelError: "Travel time unavailable",
       travelByCar: (duration) => `About ${duration} by car`,

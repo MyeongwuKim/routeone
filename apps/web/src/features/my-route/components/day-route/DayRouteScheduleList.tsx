@@ -12,6 +12,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
     expandedDayIds,
     orderedStops,
     startLocation,
+    dailyStartMinutes,
     isOrderEditing,
     activeDropIndex,
     draggedStopId,
@@ -54,6 +55,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               isExpanded={expandedDayIds.has(routeDay.id)}
               orderedStops={routeDayStops}
               startLocation={startLocation}
+              dailyStartMinutes={dailyStartMinutes}
               isOrderEditing={isRouteDayActive && isOrderEditing}
               activeDropIndex={isRouteDayActive ? activeDropIndex : null}
               draggedStopId={isRouteDayActive ? draggedStopId : null}
