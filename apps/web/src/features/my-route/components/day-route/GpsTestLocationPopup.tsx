@@ -347,17 +347,42 @@ function GpsTestLocationPopup({
           </div>
 
           {lastResult ? (
-            <p
-              className={`mt-2 rounded-xl px-3 py-2 text-xs font-bold ${
-                lastResult.notificationScheduled
-                  ? "bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-100"
-                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200"
-              }`}
-            >
-              {lastResult.notificationScheduled
-                ? text.dayRoute.gpsTestAppliedWithNotification
-                : text.dayRoute.gpsTestAppliedWithoutNotification}
-            </p>
+            <div className="mt-2 space-y-2">
+              <p
+                className={`rounded-xl px-3 py-2 text-xs font-bold ${
+                  lastResult.notificationScheduled
+                    ? "bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-100"
+                    : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                }`}
+              >
+                {lastResult.notificationScheduled
+                  ? text.dayRoute.gpsTestAppliedWithNotification
+                  : text.dayRoute.gpsTestAppliedWithoutNotification}
+              </p>
+              {lastResult.backgroundNotificationStatus ? (
+                <p
+                  className={`rounded-xl px-3 py-2 text-xs font-black ${
+                    lastResult.backgroundNotificationStatus === "registered"
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-100"
+                      : lastResult.backgroundNotificationStatus === "delivered"
+                        ? "bg-sky-50 text-sky-700 dark:bg-sky-400/10 dark:text-sky-100"
+                        : lastResult.backgroundNotificationStatus ===
+                            "not-registered"
+                          ? "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-100"
+                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                  }`}
+                >
+                  {lastResult.backgroundNotificationStatus === "registered"
+                    ? text.dayRoute.gpsTestBackgroundRegistered
+                    : lastResult.backgroundNotificationStatus === "delivered"
+                      ? text.dayRoute.gpsTestBackgroundDelivered
+                      : lastResult.backgroundNotificationStatus ===
+                          "not-registered"
+                        ? text.dayRoute.gpsTestBackgroundNotRegistered
+                        : text.dayRoute.gpsTestBackgroundUnsupported}
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           <div className="mt-3 grid grid-cols-2 gap-2">

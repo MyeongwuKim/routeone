@@ -42,6 +42,14 @@ private struct RouteArrivalNotificationRecord: Record {
   var longitude: Double
 }
 
+private struct RouteArrivalNotificationStatusRecord: Record {
+  @Field
+  var pendingIdentifiers: [String] = []
+
+  @Field
+  var deliveredIdentifiers: [String] = []
+}
+
 public final class RouteArrivalNotificationsModule: Module {
   public func definition() -> ModuleDefinition {
     Name("RouteArrivalNotifications")
@@ -49,14 +57,11 @@ public final class RouteArrivalNotificationsModule: Module {
     AsyncFunction("syncAsync") {
       (notifications: [RouteArrivalNotificationRecord], radiusMeters: Double) async throws -> Int in
       let center = UNUserNotificationCenter.current()
-      let pendingRequests = await center.pendingNotificationRequests()
-      let managedPendingIdentifiers = pendingRequests
-        .filter { self.isRouteArrivalNotification($0.content) }
-        .map(\.identifier)
+      let managedPendingIdentifiers = await self.pendingIdentifiers(center)
 
       if !managedPendingIdentifiers.isEmpty {
         center.removePendingNotificationRequests(
-          withIdentifiers: managedPendingIdentifiers
+          withIdentifiers: Array(managedPendingIdentifiers)
         )
       }
 
@@ -71,7 +76,7 @@ public final class RouteArrivalNotificationsModule: Module {
           .map { $0.request.identifier }
       )
       let radius = max(300, min(500, radiusMeters.rounded()))
-      var activeCount = 0
+      var requestsByIdentifier: [String: UNNotificationRequest] = [:]
 
       for notification in notifications where !deliveredIdentifiers.contains(notification.identifier) {
         let content = UNMutableNotificationContent()
@@ -112,12 +117,68 @@ public final class RouteArrivalNotificationsModule: Module {
           trigger: trigger
         )
 
+        requestsByIdentifier[notification.identifier] = request
         try await center.add(request)
-        activeCount += 1
       }
 
-      return activeCount
+      let expectedIdentifiers = Set(requestsByIdentifier.keys)
+      var registeredIdentifiers = await self.pendingIdentifiers(center)
+      var missingIdentifiers = expectedIdentifiers.subtracting(registeredIdentifiers)
+
+      if !missingIdentifiers.isEmpty {
+        for identifier in missingIdentifiers.sorted() {
+          if let request = requestsByIdentifier[identifier] {
+            try await center.add(request)
+          }
+        }
+
+        registeredIdentifiers = await self.pendingIdentifiers(center)
+        missingIdentifiers = expectedIdentifiers.subtracting(registeredIdentifiers)
+      }
+
+      guard missingIdentifiers.isEmpty else {
+        throw NSError(
+          domain: "RouteArrivalNotifications",
+          code: 1,
+          userInfo: [
+            NSLocalizedDescriptionKey:
+              "iOS가 장소 도착 알림을 등록하지 못했어요. 앱을 다시 열어 주세요."
+          ]
+        )
+      }
+
+      return expectedIdentifiers.count
     }
+
+    AsyncFunction("getStatusAsync") { () async -> RouteArrivalNotificationStatusRecord in
+      let center = UNUserNotificationCenter.current()
+      let status = RouteArrivalNotificationStatusRecord()
+      status.pendingIdentifiers = Array(await self.pendingIdentifiers(center)).sorted()
+      status.deliveredIdentifiers = Array(await self.deliveredIdentifiers(center)).sorted()
+      return status
+    }
+  }
+
+  private func pendingIdentifiers(
+    _ center: UNUserNotificationCenter
+  ) async -> Set<String> {
+    let pendingRequests = await center.pendingNotificationRequests()
+    return Set(
+      pendingRequests
+        .filter { self.isRouteArrivalNotification($0.content) }
+        .map(\.identifier)
+    )
+  }
+
+  private func deliveredIdentifiers(
+    _ center: UNUserNotificationCenter
+  ) async -> Set<String> {
+    let deliveredNotifications = await center.deliveredNotifications()
+    return Set(
+      deliveredNotifications
+        .filter { self.isRouteArrivalNotification($0.request.content) }
+        .map { $0.request.identifier }
+    )
   }
 
   private func isRouteArrivalNotification(

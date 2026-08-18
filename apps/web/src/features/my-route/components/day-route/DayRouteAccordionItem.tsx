@@ -544,9 +544,7 @@ function DayRouteAccordionItem({
                 <div className="mb-4 grid grid-cols-3 gap-2">
                   <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400">
-                      {hasActualStart
-                        ? text.dayRoute.actualStart
-                        : text.dayRoute.plannedDeparture}
+                      {text.dayRoute.expectedStart}
                     </p>
                     <p className="mt-0.5 text-sm font-black text-slate-900">
                       {formatClock(routeDayStartMinutes, text)}
@@ -554,9 +552,7 @@ function DayRouteAccordionItem({
                   </div>
                   <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400">
-                      {hasActualEnd
-                        ? text.dayRoute.actualEnd
-                        : text.dayRoute.expectedEnd}
+                      {text.dayRoute.expectedEnd}
                     </p>
                     <p className="mt-0.5 text-sm font-black text-slate-900">
                       {formatClock(lastStopSchedule.endMinutes, text)}

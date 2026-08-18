@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -292,6 +293,7 @@ function MyRoutePage() {
   );
   const openModal = useUiModalStore((state) => state.openModal);
   const showToast = useUiToastStore((state) => state.showToast);
+  const lastArrivalNotificationStatusRef = useRef<string | null>(null);
   const myRoutesQuery = useQuery({
     queryKey: MY_ROUTES_QUERY_KEY,
     queryFn: () => routeApi.myRoutes(),
@@ -456,21 +458,74 @@ function MyRoutePage() {
       return;
     }
 
-    const syncRouteArrivalNotifications = () => {
-      void syncTodayRouteArrivalNotifications(localizedMyRoutes, appLanguage);
+    const runtimeAppVariant =
+      window.RouteOneRuntimeConfig?.nativeAppVariant?.trim().toLowerCase() ||
+      window.RouteOneRuntimeConfig?.webBundleChannel?.trim().toLowerCase();
+    const shouldShowRegistrationStatus =
+      runtimeAppVariant === "dev" && nativeBridge.runtime.isAvailable();
+
+    const syncRouteArrivalNotifications = async () => {
+      try {
+        const result = await syncTodayRouteArrivalNotifications(
+          localizedMyRoutes,
+          appLanguage
+        );
+
+        if (!shouldShowRegistrationStatus || !result) {
+          return;
+        }
+
+        const statusKey = `${result.registrationStatus}:${result.pendingCount ?? "unknown"}`;
+
+        if (lastArrivalNotificationStatusRef.current === statusKey) {
+          return;
+        }
+
+        lastArrivalNotificationStatusRef.current = statusKey;
+
+        if (result.registrationStatus === "registered") {
+          showToast(
+            text.myRoute.arrivalNotificationRegistered(
+              result.pendingCount ?? result.activeCount
+            ),
+            2600
+          );
+        } else if (result.registrationStatus === "delivered") {
+          showToast(text.myRoute.arrivalNotificationDelivered, 2600);
+        }
+      } catch (error) {
+        if (!shouldShowRegistrationStatus) {
+          return;
+        }
+
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : text.myRoute.arrivalNotificationRegistrationFailed;
+        const statusKey = `error:${errorMessage}`;
+
+        if (lastArrivalNotificationStatusRef.current === statusKey) {
+          return;
+        }
+
+        lastArrivalNotificationStatusRef.current = statusKey;
+        showToast(errorMessage, 3200);
+      }
     };
 
-    syncRouteArrivalNotifications();
+    void syncRouteArrivalNotifications();
 
-    return nativeBridge.events.subscribeAppActive(
-      syncRouteArrivalNotifications
-    );
+    return nativeBridge.events.subscribeAppActive(() => {
+      void syncRouteArrivalNotifications();
+    });
   }, [
     appLanguage,
     isMyRouteLocalizationLoading,
     localizedMyRoutes,
     myRoutesQuery.isError,
     myRoutesQuery.isLoading,
+    showToast,
+    text.myRoute,
   ]);
   const deepLinkedRouteDay = useMemo(() => {
     if (

@@ -614,8 +614,8 @@ export function useDayRoutePopupController({
             startedAt: value as string,
           },
       target.mode === "planned"
-        ? `DAY ${target.routeDay.dayIndex} 계획 출발시간을 저장했어요.`
-        : `DAY ${target.routeDay.dayIndex} 출발 시각을 저장했어요.`
+        ? `DAY ${target.routeDay.dayIndex} 계획 시작 시각을 저장했어요.`
+        : `DAY ${target.routeDay.dayIndex} 시작 시각을 저장했어요.`
     );
 
     if (didUpdate) {

@@ -78,6 +78,12 @@ export type NativeArrivalNotificationPlace = {
 
 export type NativeArrivalNotificationSyncResult = {
   activeCount: number;
+  pendingCount: number | null;
+  registrationStatus:
+    | "registered"
+    | "delivered"
+    | "inactive"
+    | "unsupported";
   backgroundLocationStatus: string;
   notificationStatus: string;
 };
@@ -90,6 +96,12 @@ export type NativeArrivalTestLocationResult = {
   distanceMeters: number | null;
   withinRadius: boolean | null;
   notificationScheduled: boolean;
+  backgroundNotificationStatus:
+    | "registered"
+    | "delivered"
+    | "not-registered"
+    | "unsupported"
+    | null;
 };
 
 export type NativeDeliveredRouteArrivalNotification = {

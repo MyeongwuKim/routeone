@@ -469,6 +469,8 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
 
     handlers.resolve({
       activeCount: payload.activeCount,
+      pendingCount: payload.pendingCount,
+      registrationStatus: payload.registrationStatus,
       backgroundLocationStatus: payload.backgroundLocationStatus,
       notificationStatus: payload.notificationStatus
     });
@@ -495,7 +497,8 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
       lng: payload.lng,
       distanceMeters: payload.distanceMeters,
       withinRadius: payload.withinRadius,
-      notificationScheduled: payload.notificationScheduled
+      notificationScheduled: payload.notificationScheduled,
+      backgroundNotificationStatus: payload.backgroundNotificationStatus
     });
   };
 

@@ -15,11 +15,17 @@ export type IosRouteArrivalNotification = {
   longitude: number;
 };
 
+export type IosRouteArrivalNotificationStatus = {
+  pendingIdentifiers: string[];
+  deliveredIdentifiers: string[];
+};
+
 type RouteArrivalNotificationsNativeModule = {
   syncAsync: (
     notifications: IosRouteArrivalNotification[],
     radiusMeters: number
   ) => Promise<number>;
+  getStatusAsync: () => Promise<IosRouteArrivalNotificationStatus>;
 };
 
 const nativeModule =
@@ -38,4 +44,14 @@ export async function syncIosRouteArrivalNotifications(
   }
 
   return nativeModule.syncAsync(notifications, radiusMeters);
+}
+
+export async function getIosRouteArrivalNotificationStatus() {
+  if (!nativeModule) {
+    throw new Error(
+      "iOS 장소 도착 알림 모듈이 설치되지 않았어요. 네이티브 앱을 다시 빌드해 주세요."
+    );
+  }
+
+  return nativeModule.getStatusAsync();
 }

@@ -261,6 +261,12 @@ export type NativeRouteArrivalNotificationSyncResponse =
   | {
       ok: true;
       activeCount: number;
+      pendingCount: number | null;
+      registrationStatus:
+        | "registered"
+        | "delivered"
+        | "inactive"
+        | "unsupported";
       backgroundLocationStatus: string;
       notificationStatus: string;
     }
@@ -279,6 +285,12 @@ export type NativeRouteArrivalTestLocationResponse =
       distanceMeters: number | null;
       withinRadius: boolean | null;
       notificationScheduled: boolean;
+      backgroundNotificationStatus:
+        | "registered"
+        | "delivered"
+        | "not-registered"
+        | "unsupported"
+        | null;
     }
   | {
       ok: false;

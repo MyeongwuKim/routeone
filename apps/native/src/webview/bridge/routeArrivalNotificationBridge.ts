@@ -3,7 +3,10 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { Platform } from "react-native";
-import { syncIosRouteArrivalNotifications } from "@/nativeModules/routeArrivalNotifications";
+import {
+  getIosRouteArrivalNotificationStatus,
+  syncIosRouteArrivalNotifications,
+} from "@/nativeModules/routeArrivalNotifications";
 import {
   postNativeDeliveredNotificationHistoryResponse,
   postNativeRouteArrivalNotificationSyncResponse,
@@ -65,6 +68,7 @@ const ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE = TRUTHY_ENV_VALUES.has(
 );
 
 let routeArrivalDeliveryQueue: Promise<void> = Promise.resolve();
+let routeArrivalSyncQueue: Promise<void> = Promise.resolve();
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
@@ -111,6 +115,69 @@ function getRouteArrivalNotificationId(
   dateKey: string
 ) {
   return `arrival:${place.routeId}:${place.stopId}:${dateKey}`;
+}
+
+async function getIosRegistrationSummary(
+  places: NativeRouteArrivalNotificationPlace[]
+) {
+  const dateKey = getTodayDateKey();
+  const expectedIdentifiers = places.map((place) =>
+    getRouteArrivalNotificationId(place, dateKey)
+  );
+  const status = await getIosRouteArrivalNotificationStatus();
+  const pendingIdentifiers = new Set(status.pendingIdentifiers);
+  const deliveredIdentifiers = new Set(status.deliveredIdentifiers);
+  const pendingCount = expectedIdentifiers.filter((identifier) =>
+    pendingIdentifiers.has(identifier)
+  ).length;
+  const deliveredCount = expectedIdentifiers.filter((identifier) =>
+    deliveredIdentifiers.has(identifier)
+  ).length;
+
+  return {
+    pendingCount,
+    registrationStatus:
+      pendingCount > 0
+        ? ("registered" as const)
+        : deliveredCount > 0
+          ? ("delivered" as const)
+          : ("inactive" as const),
+  };
+}
+
+async function getBackgroundNotificationStatus(
+  place: NativeRouteArrivalNotificationPlace
+) {
+  if (Platform.OS === "ios") {
+    const notificationId = getRouteArrivalNotificationId(
+      place,
+      getTodayDateKey()
+    );
+    const status = await getIosRouteArrivalNotificationStatus();
+
+    if (status.pendingIdentifiers.includes(notificationId)) {
+      return "registered" as const;
+    }
+
+    if (status.deliveredIdentifiers.includes(notificationId)) {
+      return "delivered" as const;
+    }
+
+    return "not-registered" as const;
+  }
+
+  if (Platform.OS === "android") {
+    const [hasStarted, placeByRegionId] = await Promise.all([
+      Location.hasStartedGeofencingAsync(ROUTE_ARRIVAL_GEOFENCE_TASK),
+      readStoredRouteArrivalPlaces(),
+    ]);
+
+    return hasStarted && placeByRegionId.has(getRouteArrivalRegionId(place))
+      ? ("registered" as const)
+      : ("not-registered" as const);
+  }
+
+  return "unsupported" as const;
 }
 
 function toRadians(degree: number) {
@@ -791,7 +858,7 @@ if (
   );
 }
 
-export async function handleNativeRouteArrivalNotificationSyncRequest(
+async function syncNativeRouteArrivalNotifications(
   message: NativeRouteArrivalNotificationSyncRequest,
   webViewRef: WebViewRef
 ) {
@@ -809,6 +876,8 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
       postNativeRouteArrivalNotificationSyncResponse(webViewRef, message.id, {
         ok: true,
         activeCount: 0,
+        pendingCount: 0,
+        registrationStatus: "inactive",
         backgroundLocationStatus: "unused",
         notificationStatus: "unused",
       });
@@ -826,6 +895,12 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
     );
 
     let activeCount = places.length;
+    let pendingCount: number | null = null;
+    let registrationStatus:
+      | "registered"
+      | "delivered"
+      | "inactive"
+      | "unsupported" = "registered";
 
     if (Platform.OS === "ios") {
       await stopRouteArrivalGeofencingIfStarted().catch(() => undefined);
@@ -863,9 +938,17 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
 
     await reconcileCurrentRouteArrival(places, radius).catch(() => undefined);
 
+    if (Platform.OS === "ios") {
+      const registrationSummary = await getIosRegistrationSummary(places);
+      pendingCount = registrationSummary.pendingCount;
+      registrationStatus = registrationSummary.registrationStatus;
+    }
+
     postNativeRouteArrivalNotificationSyncResponse(webViewRef, message.id, {
       ok: true,
       activeCount,
+      pendingCount,
+      registrationStatus,
       ...permissionStatus,
     });
   } catch (error) {
@@ -877,6 +960,18 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
           : "Route arrival notification sync failed",
     });
   }
+}
+
+export function handleNativeRouteArrivalNotificationSyncRequest(
+  message: NativeRouteArrivalNotificationSyncRequest,
+  webViewRef: WebViewRef
+) {
+  const syncRequest = routeArrivalSyncQueue.then(() =>
+    syncNativeRouteArrivalNotifications(message, webViewRef)
+  );
+
+  routeArrivalSyncQueue = syncRequest.catch(() => undefined);
+  return syncRequest;
 }
 
 export async function handleNativeRouteArrivalTestLocationRequest(
@@ -903,6 +998,7 @@ export async function handleNativeRouteArrivalTestLocationRequest(
         distanceMeters: null,
         withinRadius: null,
         notificationScheduled: false,
+        backgroundNotificationStatus: null,
       });
       return;
     }
@@ -918,6 +1014,8 @@ export async function handleNativeRouteArrivalTestLocationRequest(
     const distanceMeters = calculateDistanceMeters(testPosition, place);
     const withinRadius =
       distanceMeters <= DEFAULT_GEOFENCE_RADIUS_METERS;
+    const backgroundNotificationStatus =
+      await getBackgroundNotificationStatus(place);
 
     if (withinRadius) {
       await ensureRouteArrivalNotificationPermission(message.language);
@@ -938,6 +1036,7 @@ export async function handleNativeRouteArrivalTestLocationRequest(
       distanceMeters,
       withinRadius,
       notificationScheduled: withinRadius,
+      backgroundNotificationStatus,
     });
   } catch (error) {
     postNativeRouteArrivalTestLocationResponse(webViewRef, message.id, {

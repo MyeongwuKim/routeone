@@ -75,6 +75,6 @@ export async function syncTodayRouteArrivalNotifications(
       "[route-arrival-notifications] sync failed",
       error instanceof Error ? error.message : error
     );
-    return null;
+    throw error;
   }
 }
