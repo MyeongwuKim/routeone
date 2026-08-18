@@ -32,6 +32,7 @@ import {
   UnsaveRouteDocument,
   UpdateRouteStopStayMinutesDocument,
   UpdateRouteStopVisitTimesDocument,
+  UpdateRouteDayStartDocument,
   type AppendRouteDaysInput,
   type CloneRouteInput,
   type CreateRouteInput,
@@ -44,6 +45,7 @@ import {
   type StartRouteInput,
   type UpdateRouteStopStayMinutesInput,
   type UpdateRouteStopVisitTimesInput,
+  type UpdateRouteDayStartInput,
 } from "@/generated/graphql";
 import { requestGraphQL } from "@/lib/graphqlClient";
 
@@ -117,6 +119,11 @@ export const routeApi = {
   },
   startRoute(input: StartRouteInput) {
     return requestGraphQL(StartRouteDocument, {
+      input,
+    });
+  },
+  updateRouteDayStart(input: UpdateRouteDayStartInput) {
+    return requestGraphQL(UpdateRouteDayStartDocument, {
       input,
     });
   },

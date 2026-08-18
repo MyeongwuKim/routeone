@@ -7,10 +7,12 @@ import {
   MdDirectionsCar,
   MdDragIndicator,
   MdEdit,
+  MdFlag,
   MdGpsFixed,
   MdImage,
   MdLockOutline,
   MdMyLocation,
+  MdMap,
   MdOutlinePlace,
   MdPublic,
 } from "react-icons/md";
@@ -80,6 +82,8 @@ type RouteStopNodeProps = {
   isVisitSaving: boolean;
   isStaySaving: boolean;
   isReadOnly: boolean;
+  isActiveDestination: boolean;
+  isDirectionsOpening: boolean;
   canToggleVisited: boolean;
   enableVerificationPhotoPreview: boolean;
   isGpsTestEnabled: boolean;
@@ -93,6 +97,7 @@ type RouteStopNodeProps = {
   onRequestVisitTimesEdit: (stop: MyRouteStop) => void;
   onToggleVisited: (stop: MyRouteStop) => void;
   onOpenPlace: (stop: MyRouteStop) => void;
+  onOpenDirections: (stop: MyRouteStop) => void;
   onEditVerificationPhoto: (stop: MyRouteStop) => void;
   onOpenGpsTest: (stop: MyRouteStop) => void;
   onOpenVerificationPhoto: (stop: MyRouteStop) => void;
@@ -107,6 +112,8 @@ function RouteStopNode({
   isVisitSaving,
   isStaySaving,
   isReadOnly,
+  isActiveDestination,
+  isDirectionsOpening,
   canToggleVisited,
   enableVerificationPhotoPreview,
   isGpsTestEnabled,
@@ -120,6 +127,7 @@ function RouteStopNode({
   onRequestVisitTimesEdit,
   onToggleVisited,
   onOpenPlace,
+  onOpenDirections,
   onEditVerificationPhoto,
   onOpenGpsTest,
   onOpenVerificationPhoto,
@@ -150,6 +158,8 @@ function RouteStopNode({
     : null;
   const canOpenVerificationPhoto =
     enableVerificationPhotoPreview && Boolean(stop.verificationPhotoUrl);
+  const canAddVerificationPhoto =
+    canEditVerificationPhoto && isVisited && !stop.verificationPhotoUrl;
   const stayTimeClass =
     "inline-flex items-center justify-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 ring-1 ring-brand-100 disabled:opacity-45 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25";
 
@@ -170,6 +180,8 @@ function RouteStopNode({
             ? "bg-brand-600 text-white shadow-brand-200"
             : isCheckedIn
               ? "bg-brand-100 text-brand-700 ring-2 ring-brand-400 dark:bg-brand-400/15 dark:text-brand-100"
+              : isActiveDestination
+                ? "bg-brand-600 text-white ring-4 ring-brand-200 shadow-lg shadow-brand-200/70 dark:ring-brand-400/30 dark:shadow-none"
             : "bg-white text-slate-400 ring-2 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700"
         }`}
       >
@@ -208,13 +220,16 @@ function RouteStopNode({
                 ? "cursor-pointer border-brand-500 bg-brand-50 shadow-sm active:scale-[0.99] dark:border-brand-400/40 dark:bg-brand-400/10"
                 : isCheckedIn
                   ? "cursor-pointer border-brand-400 bg-brand-50/60 shadow-sm active:scale-[0.99] dark:border-brand-400/40 dark:bg-brand-400/10"
+                  : isActiveDestination
+                    ? "cursor-pointer border-brand-400 bg-brand-50 shadow-[0_12px_30px_rgba(20,184,166,0.16)] ring-2 ring-brand-200 active:scale-[0.99] dark:border-brand-300 dark:bg-brand-400/10 dark:ring-brand-400/25"
                 : "cursor-pointer border-slate-200 bg-white active:scale-[0.99] dark:border-slate-700 dark:bg-slate-950"
           }`}
+          aria-current={isActiveDestination ? "step" : undefined}
         >
-          <div className="flex items-start gap-3">
+          <div className="relative flex items-start gap-3">
             <div
               className={`relative size-12 shrink-0 overflow-hidden rounded-xl ${
-                isVisited || isCheckedIn
+                isVisited || isCheckedIn || isActiveDestination
                   ? "ring-2 ring-brand-400"
                   : "bg-slate-50 dark:bg-slate-900"
               }`}
@@ -244,10 +259,16 @@ function RouteStopNode({
               ) : null}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-black text-slate-900 dark:text-white">
+              {isActiveDestination ? (
+                <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
+                  <MdFlag className="text-xs" />
+                  {text.dayRoute.currentDestination}
+                </span>
+              ) : null}
+              <p className="truncate pr-10 text-sm font-black text-slate-900 dark:text-white">
                 {stop.place.title}
               </p>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <div className="mt-1 flex items-center">
                 <span
                   className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
                     isVisited
@@ -266,6 +287,8 @@ function RouteStopNode({
                   )}
                   {statusLabel}
                 </span>
+              </div>
+              <div className="mt-1.5 flex min-h-6 flex-wrap items-center gap-1.5">
                 {verificationBadge ? (
                   canOpenVerificationPhoto ? (
                     <button
@@ -324,9 +347,7 @@ function RouteStopNode({
                     </span>
                   )
                 ) : null}
-                {canEditVerificationPhoto &&
-                isVisited &&
-                !stop.verificationPhotoUrl ? (
+                {canAddVerificationPhoto ? (
                   <button
                     type="button"
                     disabled={isVisitSaving}
@@ -437,6 +458,31 @@ function RouteStopNode({
                   {stop.place.address}
                 </p>
               ) : null}
+              {!isOrderEditing ? (
+                <button
+                  type="button"
+                  aria-label={text.dayRoute.openPlaceDirectionsAria(
+                    stop.place.title
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenDirections(stop);
+                  }}
+                  disabled={isDirectionsOpening}
+                  className={`mt-2 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition active:scale-[0.99] disabled:opacity-60 ${
+                    isActiveDestination
+                      ? "bg-brand-600 text-white shadow-sm"
+                      : "border border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-100"
+                  }`}
+                >
+                  {isDirectionsOpening ? (
+                    <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <MdMap className="text-base" />
+                  )}
+                  {text.dayRoute.placeDirections}
+                </button>
+              ) : null}
             </div>
             {isOrderEditing ? (
               <button
@@ -447,12 +493,12 @@ function RouteStopNode({
                   onStartDrag(event);
                 }}
                 onClick={(event) => event.stopPropagation()}
-                className="flex size-9 shrink-0 touch-none items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 active:cursor-grabbing"
+                className="absolute right-0 top-0 flex size-9 shrink-0 touch-none items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 active:cursor-grabbing"
               >
                 <MdDragIndicator />
               </button>
             ) : (
-              <div className="flex shrink-0 flex-col items-end gap-2">
+              <div className="absolute right-0 top-0 flex shrink-0 flex-col items-end gap-2">
                 {isGpsTestEnabled ? (
                   <button
                     type="button"

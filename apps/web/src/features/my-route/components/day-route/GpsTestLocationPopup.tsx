@@ -28,7 +28,7 @@ type GpsTestLocationPopupProps = {
   onClose: () => void;
 };
 
-const ARRIVAL_RADIUS_METERS = 100;
+const ARRIVAL_RADIUS_METERS = 300;
 const INITIAL_TEST_POSITION_OFFSET_METERS = 180;
 
 function getInitialTestLocation(

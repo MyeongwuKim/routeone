@@ -1,11 +1,13 @@
 import DayRouteAccordionItem from "./DayRouteAccordionItem";
 import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupController";
+import { getRouteDateKey, getTodayDateKey } from "../../routeDisplay";
 
 type DayRouteScheduleListProps = {
   controller: DayRoutePopupController["schedule"];
 };
 
 function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
+  const todayKey = getTodayDateKey();
   const {
     sortedDays,
     activeDay,
@@ -20,20 +22,25 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
     staySavingStopId,
     isReadOnly,
     canEditVisitTimes,
+    canEditDayStartTime,
+    isRetrospectiveCompletion,
     canEditVerificationPhoto,
     canToggleVisitStatus,
     visitEnabledDayIds,
     enableVerificationPhotoPreview,
     isGpsTestEnabled,
     gpsTestLocationStopId,
+    directionsOpeningStopId,
     travelSegmentByKey,
     registerDropZone,
     startDragStop,
     handleSelectDay,
+    setDayStartTimeTarget,
     setStayMinutesEditTarget,
     setVisitTimesEditTarget,
     handleToggleStopVisited,
     handleOpenPlaceDetail,
+    handleOpenStopDirections,
     handleReplaceVerificationPhoto,
     setGpsTestTarget,
     setVerificationPhotoPreviewTarget,
@@ -63,16 +70,57 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               staySavingStopId={staySavingStopId}
               isReadOnly={isReadOnly}
               canEditVisitTimes={canEditVisitTimes}
+              canEditDayStartTime={canEditDayStartTime}
+              canStartDay={
+                canEditDayStartTime &&
+                !isRetrospectiveCompletion &&
+                !routeDay.startedAt &&
+                visitEnabledDayIds.has(routeDay.id)
+              }
+              canRecordDayStart={
+                canEditDayStartTime &&
+                !routeDay.startedAt &&
+                (isRetrospectiveCompletion ||
+                  (getRouteDateKey(routeDay.date) ?? todayKey) < todayKey)
+              }
               canEditVerificationPhoto={canEditVerificationPhoto}
-              canToggleVisited={canToggleVisitStatus}
+              canToggleVisited={
+                canToggleVisitStatus &&
+                (isRetrospectiveCompletion || Boolean(routeDay.startedAt))
+              }
               isVisitDateAllowed={visitEnabledDayIds.has(routeDay.id)}
+              showActiveDestination={
+                !isReadOnly &&
+                !isRetrospectiveCompletion &&
+                Boolean(routeDay.startedAt) &&
+                visitEnabledDayIds.has(routeDay.id)
+              }
               enableVerificationPhotoPreview={
                 enableVerificationPhotoPreview
               }
               isGpsTestEnabled={isGpsTestEnabled}
               gpsTestLocationStopId={gpsTestLocationStopId}
+              directionsOpeningStopId={directionsOpeningStopId}
               travelSegmentByKey={travelSegmentByKey}
               onSelect={handleSelectDay}
+              onRequestDayStart={(selectedDay) =>
+                setDayStartTimeTarget({
+                  routeDay: selectedDay,
+                  mode: "start",
+                })
+              }
+              onRequestPlannedStartEdit={(selectedDay) =>
+                setDayStartTimeTarget({
+                  routeDay: selectedDay,
+                  mode: "planned",
+                })
+              }
+              onRequestActualStartEdit={(selectedDay) =>
+                setDayStartTimeTarget({
+                  routeDay: selectedDay,
+                  mode: "actual",
+                })
+              }
               onRegisterDropZone={
                 isRouteDayActive ? registerDropZone : () => undefined
               }
@@ -93,6 +141,9 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
                 handleToggleStopVisited(routeDay, stop)
               }
               onOpenPlace={handleOpenPlaceDetail}
+              onOpenDirections={(stop) => {
+                void handleOpenStopDirections(stop);
+              }}
               onEditVerificationPhoto={(stop) =>
                 handleReplaceVerificationPhoto({ routeDay, stop })
               }

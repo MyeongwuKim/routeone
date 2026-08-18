@@ -70,13 +70,14 @@ public final class RouteArrivalNotificationsModule: Module {
           .filter { self.isRouteArrivalNotification($0.request.content) }
           .map { $0.request.identifier }
       )
-      let radius = max(100, min(500, radiusMeters.rounded()))
+      let radius = max(300, min(500, radiusMeters.rounded()))
       var activeCount = 0
 
       for notification in notifications where !deliveredIdentifiers.contains(notification.identifier) {
         let content = UNMutableNotificationContent()
         content.title = notification.title
         content.body = notification.body
+        content.sound = .default
         content.threadIdentifier = "route-arrivals"
         content.userInfo = [
           "notificationId": notification.identifier,

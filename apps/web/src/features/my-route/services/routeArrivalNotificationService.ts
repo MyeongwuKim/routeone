@@ -1,8 +1,8 @@
 import {
-  getNextRouteStop,
   getRouteTitle,
   getTodayDateKey,
   getTodayRouteDay,
+  isVisitedStop,
 } from "../routeDisplay";
 import type { MyRoute } from "../types";
 import {
@@ -12,7 +12,7 @@ import {
 import { notificationApi } from "@/api/notificationApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
 
-const ROUTE_ARRIVAL_NOTIFICATION_RADIUS_METERS = 100;
+const ROUTE_ARRIVAL_NOTIFICATION_RADIUS_METERS = 300;
 
 function isStartedActiveRoute(route: MyRoute) {
   return route.status === "ACTIVE" && Boolean(route.startedAt);
@@ -33,25 +33,19 @@ function getNativeRouteArrivalNotificationPlaces(
       return [];
     }
 
-    const nextStop = getNextRouteStop(todayRouteDay);
-
-    if (!nextStop) {
-      return [];
-    }
-
-    return [
-      {
-        id: `${route.id}:${nextStop.id}`,
+    return todayRouteDay.stops
+      .filter((stop) => !isVisitedStop(stop))
+      .map((stop) => ({
+        id: `${route.id}:${stop.id}`,
         routeId: route.id,
         routeTitle: getRouteTitle(route),
         dayId: todayRouteDay.id,
         dayIndex: todayRouteDay.dayIndex,
-        stopId: nextStop.id,
-        title: nextStop.place.title,
-        lat: nextStop.place.lat,
-        lng: nextStop.place.lng,
-      },
-    ];
+        stopId: stop.id,
+        title: stop.place.title,
+        lat: stop.place.lat,
+        lng: stop.place.lng,
+      }));
   });
 }
 

@@ -1,0 +1,5 @@
+mutation UpdateRouteDayStart($input: UpdateRouteDayStartInput!) {
+  updateRouteDayStart(input: $input) {
+    ...RouteDetailFields
+  }
+}

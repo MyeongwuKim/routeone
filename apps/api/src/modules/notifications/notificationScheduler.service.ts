@@ -286,9 +286,22 @@ async function createRouteStartNotifications(
         status: {
           not: RouteStatus.COMPLETED,
         },
-        dailyStartMinutes: {
-          not: null,
-        },
+        OR: [
+          {
+            dailyStartMinutes: {
+              not: null,
+            },
+          },
+          {
+            days: {
+              some: {
+                plannedStartMinutes: {
+                  not: null,
+                },
+              },
+            },
+          },
+        ],
         owner: {
           pushDevices: {
             some: {
@@ -337,7 +350,8 @@ async function createRouteStartNotifications(
 
   for (const routeDay of routeDays) {
     const { route } = routeDay;
-    const dailyStartMinutes = route.dailyStartMinutes;
+    const dailyStartMinutes =
+      routeDay.plannedStartMinutes ?? route.dailyStartMinutes;
     const hasDayActivity = routeDay.stops.some(
       (stop) => stop.visitStatus === "VISITED" || Boolean(stop.checkedInAt)
     );
@@ -346,7 +360,7 @@ async function createRouteStartNotifications(
       !routeDay.date ||
       typeof dailyStartMinutes !== "number" ||
       hasDayActivity ||
-      (routeDay.dayIndex === 1 && Boolean(route.startedAt)) ||
+      Boolean(routeDay.startedAt) ||
       route.owner.notificationSetting?.routeStartEnabled === false
     ) {
       continue;

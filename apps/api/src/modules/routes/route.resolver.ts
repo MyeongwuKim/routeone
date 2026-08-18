@@ -36,6 +36,7 @@ import {
   setRouteSave,
   shareRoute,
   startRoute,
+  updateRouteDayStart,
   updateRouteStopStayMinutes,
   updateRouteStopVisitTimes,
   type CloneRouteInput,
@@ -45,6 +46,7 @@ import {
   type ReorderRouteStopsInput,
   type RouteStopVisitVerificationInput,
   type StartRouteInput,
+  type UpdateRouteDayStartInput,
   type UpdateRouteStopStayMinutesInput,
   type UpdateRouteStopVisitTimesInput,
 } from "./route.service.js";
@@ -148,6 +150,8 @@ export const routeTypeDefs = gql`
     routeId: ID!
     dayIndex: Int!
     date: DateTime
+    plannedStartMinutes: Int
+    startedAt: DateTime
     stops: [RouteStop!]!
     createdAt: DateTime!
     updatedAt: DateTime!
@@ -299,6 +303,13 @@ export const routeTypeDefs = gql`
   input StartRouteInput {
     routeId: ID!
     startedAt: DateTime!
+    dayStartedAt: DateTime
+  }
+
+  input UpdateRouteDayStartInput {
+    dayId: ID!
+    plannedStartMinutes: Int
+    startedAt: DateTime
   }
 
   input ReorderRouteStopsInput {
@@ -363,6 +374,7 @@ export const routeTypeDefs = gql`
     createRoute(input: CreateRouteInput!): Route!
     appendRouteDays(input: AppendRouteDaysInput!): Route!
     startRoute(input: StartRouteInput!): Route!
+    updateRouteDayStart(input: UpdateRouteDayStartInput!): Route!
     deleteRoute(routeId: ID!): DeletedRoutePayload!
     deleteRouteDay(dayId: ID!): Route!
     markRouteStopVisited(
@@ -445,6 +457,10 @@ type AppendRouteDaysArgs = {
 
 type StartRouteArgs = {
   input: StartRouteInput;
+};
+
+type UpdateRouteDayStartArgs = {
+  input: UpdateRouteDayStartInput;
 };
 
 type MarkRouteStopVisitedArgs = {
@@ -687,6 +703,14 @@ export const routeResolvers = {
     ) {
       const user = requireUser(context);
       return startRoute(context.prisma, user, args.input);
+    },
+    updateRouteDayStart(
+      _parent: unknown,
+      args: UpdateRouteDayStartArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return updateRouteDayStart(context.prisma, user, args.input);
     },
     deleteRoute(_parent: unknown, args: RouteIdArgs, context: GraphQLContext) {
       const user = requireUser(context);

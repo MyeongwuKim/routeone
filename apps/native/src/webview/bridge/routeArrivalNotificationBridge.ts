@@ -36,6 +36,7 @@ type StoredRouteArrivalPlace = NativeRouteArrivalNotificationPlace & {
   language: NativeAppLanguage;
   notificationTitle: string;
   notificationBody: string;
+  syncedDateKey: string;
 };
 
 const ROUTE_ARRIVAL_GEOFENCE_TASK = "routeone-route-arrival-geofence";
@@ -50,9 +51,11 @@ const MAX_GEOFENCE_REGION_COUNT = 20;
 const MAX_DELIVERED_NOTIFICATION_HISTORY_COUNT = 120;
 const DELIVERED_NOTIFICATION_HISTORY_TTL_MS =
   1000 * 60 * 60 * 24 * 180;
-const DEFAULT_GEOFENCE_RADIUS_METERS = 100;
-const MIN_GEOFENCE_RADIUS_METERS = 100;
+const DEFAULT_GEOFENCE_RADIUS_METERS = 300;
+const MIN_GEOFENCE_RADIUS_METERS = 300;
 const MAX_GEOFENCE_RADIUS_METERS = 500;
+const CURRENT_POSITION_MAX_AGE_MS = 1000 * 60;
+const CURRENT_POSITION_TIMEOUT_MS = 6000;
 const EARTH_RADIUS_METERS = 6_371_000;
 const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 const ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE = TRUTHY_ENV_VALUES.has(
@@ -61,13 +64,22 @@ const ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE = TRUTHY_ENV_VALUES.has(
     .toLowerCase() ?? ""
 );
 
+let routeArrivalDeliveryQueue: Promise<void> = Promise.resolve();
+
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    const notificationType = notification.request.content.data?.type;
+    const isRouteArrivalNotification =
+      notificationType === "route-arrival" ||
+      notificationType === "route-arrival-test";
+
+    return {
+      shouldPlaySound: isRouteArrivalNotification,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    };
+  },
 });
 
 function clampGeofenceRadiusMeters(value?: number | null) {
@@ -128,6 +140,7 @@ function createStoredRouteArrivalPlace(
   return {
     ...place,
     language,
+    syncedDateKey: getTodayDateKey(),
     notificationTitle:
       language === "en"
         ? `You've arrived at ${place.title}`
@@ -173,7 +186,9 @@ async function readStoredRouteArrivalPlaces() {
   try {
     const places = JSON.parse(rawPlaces) as StoredRouteArrivalPlace[];
     return new Map(
-      places.map((place) => [getRouteArrivalRegionId(place), place] as const)
+      places
+        .filter((place) => place.syncedDateKey === getTodayDateKey())
+        .map((place) => [getRouteArrivalRegionId(place), place] as const)
     );
   } catch {
     return new Map<string, StoredRouteArrivalPlace>();
@@ -380,6 +395,14 @@ export async function recordDeliveredRouteArrivalNotification(
   await writeDeliveredNotificationHistory(
     mergeDeliveredNotificationHistory(history, [routeArrivalNotification])
   );
+
+  const regionId = `${routeArrivalNotification.routeId}:${routeArrivalNotification.stopId}`;
+  const notifiedRegionDates = await readNotifiedRegionDates();
+
+  if (notifiedRegionDates[regionId] !== routeArrivalNotification.dateKey) {
+    notifiedRegionDates[regionId] = routeArrivalNotification.dateKey;
+    await writeNotifiedRegionDates(notifiedRegionDates);
+  }
 }
 
 async function appendDeliveredRouteArrivalNotification(
@@ -508,12 +531,6 @@ async function stopRouteArrivalGeofencingIfStarted() {
 
 async function scheduleRouteArrivalNotification(regionId: string) {
   const todayKey = getTodayDateKey();
-  const notifiedRegionDates = await readNotifiedRegionDates();
-
-  if (notifiedRegionDates[regionId] === todayKey) {
-    return;
-  }
-
   const placeByRegionId = await readStoredRouteArrivalPlaces();
   const place = placeByRegionId.get(regionId);
 
@@ -521,37 +538,203 @@ async function scheduleRouteArrivalNotification(regionId: string) {
     return;
   }
 
-  await deliverRouteArrivalNotification(place, todayKey);
-  notifiedRegionDates[regionId] = todayKey;
-  await writeNotifiedRegionDates(notifiedRegionDates);
+  await deliverRouteArrivalNotificationOnce(place, todayKey);
+}
+
+async function getCurrentRouteArrivalPosition(radiusMeters: number) {
+  const lastKnownPosition = await Location.getLastKnownPositionAsync({
+    maxAge: CURRENT_POSITION_MAX_AGE_MS,
+    requiredAccuracy: radiusMeters,
+  });
+
+  if (lastKnownPosition) {
+    return lastKnownPosition;
+  }
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      }),
+      new Promise<null>((resolve) => {
+        timeoutId = setTimeout(() => resolve(null), CURRENT_POSITION_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+async function reconcileCurrentRouteArrival(
+  places: StoredRouteArrivalPlace[],
+  radiusMeters: number
+) {
+  const todayKey = getTodayDateKey();
+  const notifiedRegionDates = await readNotifiedRegionDates();
+  const presentedNotifications =
+    await readPresentedRouteArrivalNotifications().catch(() => []);
+  let didUpdateNotifiedDates = false;
+
+  for (const place of places) {
+    const regionId = getRouteArrivalRegionId(place);
+    const notificationId = getRouteArrivalNotificationId(place, todayKey);
+
+    if (
+      presentedNotifications.some(
+        (notification) => notification.notificationId === notificationId
+      ) &&
+      notifiedRegionDates[regionId] !== todayKey
+    ) {
+      notifiedRegionDates[regionId] = todayKey;
+      didUpdateNotifiedDates = true;
+    }
+  }
+
+  if (didUpdateNotifiedDates) {
+    await writeNotifiedRegionDates(notifiedRegionDates);
+  }
+
+  const currentPosition = await getCurrentRouteArrivalPosition(radiusMeters);
+
+  if (!currentPosition) {
+    return;
+  }
+
+  const accuracyMeters = currentPosition.coords.accuracy;
+
+  if (
+    typeof accuracyMeters === "number" &&
+    Number.isFinite(accuracyMeters) &&
+    accuracyMeters > radiusMeters
+  ) {
+    return;
+  }
+
+  const currentCoordinates = {
+    lat: currentPosition.coords.latitude,
+    lng: currentPosition.coords.longitude,
+  };
+  const latestNotifiedRegionDates = await readNotifiedRegionDates();
+  const nearestPlace = places
+    .filter(
+      (place) =>
+        latestNotifiedRegionDates[getRouteArrivalRegionId(place)] !== todayKey
+    )
+    .map((place) => ({
+      distanceMeters: calculateDistanceMeters(currentCoordinates, place),
+      place,
+    }))
+    .filter(({ distanceMeters }) => distanceMeters <= radiusMeters)
+    .sort((left, right) => left.distanceMeters - right.distanceMeters)[0]
+    ?.place;
+
+  if (nearestPlace) {
+    const notificationId = getRouteArrivalNotificationId(
+      nearestPlace,
+      todayKey
+    );
+
+    await Notifications.cancelScheduledNotificationAsync(notificationId).catch(
+      () => undefined
+    );
+    await deliverRouteArrivalNotificationOnce(nearestPlace, todayKey);
+  }
+}
+
+export async function reconcileStoredRouteArrivalNotifications() {
+  const [locationPermission, notificationPermission, placeByRegionId] =
+    await Promise.all([
+      Location.getForegroundPermissionsAsync(),
+      Notifications.getPermissionsAsync(),
+      readStoredRouteArrivalPlaces(),
+    ]);
+
+  if (
+    locationPermission.status !== "granted" ||
+    !notificationPermission.granted ||
+    placeByRegionId.size === 0
+  ) {
+    return;
+  }
+
+  await reconcileCurrentRouteArrival(
+    [...placeByRegionId.values()],
+    DEFAULT_GEOFENCE_RADIUS_METERS
+  );
 }
 
 async function deliverRouteArrivalNotification(
   place: StoredRouteArrivalPlace,
-  dateKey: string
+  dateKey: string,
+  options: {
+    notificationId?: string;
+    notificationType?: "route-arrival" | "route-arrival-test";
+    shouldRecordHistory?: boolean;
+  } = {}
 ) {
+  const notificationId =
+    options.notificationId ?? getRouteArrivalNotificationId(place, dateKey);
+  const notificationType = options.notificationType ?? "route-arrival";
+
   await ensureNotificationChannel(place.language);
   await Notifications.scheduleNotificationAsync({
+    identifier: notificationId,
     content: {
       title: place.notificationTitle,
       body: place.notificationBody,
+      sound: "default",
+      priority: Notifications.AndroidNotificationPriority.HIGH,
       data: {
-        notificationId: getRouteArrivalNotificationId(place, dateKey),
+        notificationId,
         routeId: place.routeId,
         routeTitle: place.routeTitle ?? null,
         dayId: place.dayId,
         stopId: place.stopId,
         placeTitle: place.title,
         dateKey,
-        type: "route-arrival",
+        type: notificationType,
       },
     },
-    trigger: null,
+    trigger:
+      Platform.OS === "android"
+        ? { channelId: ROUTE_ARRIVAL_NOTIFICATION_CHANNEL_ID }
+        : null,
   });
 
-  await appendDeliveredRouteArrivalNotification(place, dateKey).catch(
-    () => undefined
-  );
+  if (options.shouldRecordHistory !== false) {
+    await appendDeliveredRouteArrivalNotification(place, dateKey).catch(
+      () => undefined
+    );
+  }
+}
+
+async function deliverRouteArrivalNotificationOnce(
+  place: StoredRouteArrivalPlace,
+  dateKey: string
+) {
+  const regionId = getRouteArrivalRegionId(place);
+  let didDeliver = false;
+  const delivery = routeArrivalDeliveryQueue.then(async () => {
+    const notifiedRegionDates = await readNotifiedRegionDates();
+
+    if (notifiedRegionDates[regionId] === dateKey) {
+      return;
+    }
+
+    await deliverRouteArrivalNotification(place, dateKey);
+    notifiedRegionDates[regionId] = dateKey;
+    await writeNotifiedRegionDates(notifiedRegionDates);
+    didDeliver = true;
+  });
+
+  routeArrivalDeliveryQueue = delivery.catch(() => undefined);
+  await delivery;
+
+  return didDeliver;
 }
 
 if (
@@ -650,6 +833,8 @@ export async function handleNativeRouteArrivalNotificationSyncRequest(
       );
     }
 
+    await reconcileCurrentRouteArrival(places, radius).catch(() => undefined);
+
     postNativeRouteArrivalNotificationSyncResponse(webViewRef, message.id, {
       ok: true,
       activeCount,
@@ -708,7 +893,11 @@ export async function handleNativeRouteArrivalTestLocationRequest(
 
     if (withinRadius) {
       await ensureRouteArrivalNotificationPermission(message.language);
-      await deliverRouteArrivalNotification(place, getTodayDateKey());
+      await deliverRouteArrivalNotification(place, getTodayDateKey(), {
+        notificationId: `arrival-test:${place.routeId}:${place.stopId}:${Date.now()}`,
+        notificationType: "route-arrival-test",
+        shouldRecordHistory: false,
+      });
     }
 
     setNativeRouteArrivalTestPosition(testPosition);

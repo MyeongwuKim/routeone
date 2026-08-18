@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import type { MapSheetPlace } from "@/types/place";
 
-export type MapSheetMode = "bottom-sheet" | "full-popup";
+export type MapSheetMode =
+  | "bottom-sheet"
+  | "full-popup"
+  | "directions-popup";
 
 export type MapSheetDirectionOrigin = {
   coordinates: {

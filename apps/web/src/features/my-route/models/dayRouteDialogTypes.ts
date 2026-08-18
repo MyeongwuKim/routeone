@@ -17,6 +17,11 @@ export type ActualStayMinutesTarget = VisitCompletionTarget & {
 
 export type VisitTimesEditTarget = VisitCompletionTarget;
 
+export type DayStartTimeTarget = {
+  routeDay: MyRouteDay;
+  mode: "start" | "planned" | "actual";
+};
+
 export type VerificationPhotoPreviewTarget = {
   routeDay: MyRouteDay;
   stop: MyRouteStop;

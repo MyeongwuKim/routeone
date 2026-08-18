@@ -36,7 +36,10 @@ import {
   openNativeExternalUrl,
   shouldKeepUrlInWebView
 } from "@/webview/bridge/externalLinkBridge";
-import { recordDeliveredRouteArrivalNotification } from "@/webview/bridge/routeArrivalNotificationBridge";
+import {
+  reconcileStoredRouteArrivalNotifications,
+  recordDeliveredRouteArrivalNotification
+} from "@/webview/bridge/routeArrivalNotificationBridge";
 import NativeDevBuildBadge from "./NativeDevBuildBadge";
 import RouteOneLaunchScreen from "./RouteOneLaunchScreen";
 
@@ -462,6 +465,9 @@ export default function NativeWebViewScreen({
       previousAppState = nextAppState;
 
       if (isReturningToActive) {
+        void reconcileStoredRouteArrivalNotifications().catch(
+          () => undefined
+        );
         webViewRef.current?.injectJavaScript(APP_ACTIVE_EVENT_SCRIPT);
       }
     });
@@ -472,8 +478,15 @@ export default function NativeWebViewScreen({
   }, []);
 
   useEffect(() => {
+    void reconcileStoredRouteArrivalNotifications().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     const subscription = Notifications.addNotificationReceivedListener(
       (notification) => {
+        void recordDeliveredRouteArrivalNotification(notification).catch(
+          () => undefined
+        );
         webViewRef.current?.injectJavaScript(
           createNotificationReceivedEventScript(notification)
         );

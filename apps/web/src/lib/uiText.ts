@@ -277,6 +277,7 @@ export type UiText = {
     conflictDetail: (routeTitle: string) => string;
     appendToast: string;
     startNow: string;
+    chooseStartTime: string;
     plannedPeriodPastTitle: string;
     plannedStartDiffTitle: string;
     plannedPeriodDescription: (start: string, end: string) => string;
@@ -506,6 +507,9 @@ export type UiText = {
     start: string;
     firstPlace: string;
     nextPlace: string;
+    currentDestination: string;
+    placeDirections: string;
+    openPlaceDirectionsAria: (title: string) => string;
     noStartGps: string;
     firstPlaceTravel: (label: string) => string;
     nextPlaceTravel: (label: string) => string;
@@ -580,6 +584,9 @@ export type UiText = {
     gpsTestUnavailable: string;
     photoRecord: string;
     manualCompletion: string;
+    retrospectiveCompletionDescription: string;
+    retrospectivePhotoCompletionAction: string;
+    retrospectiveCompletionAction: string;
     noGps: string;
     closeImageAria: (label: string) => string;
     verificationImageAlt: (title: string, label: string) => string;
@@ -609,9 +616,24 @@ export type UiText = {
     allPlacesCompleted: string;
     remainingPlaces: (count: number) => string;
     expectedStart: string;
+    plannedDeparture: string;
     expectedEnd: string;
     totalDuration: string;
     actualStart: string;
+    startDay: string;
+    recordActualStart: string;
+    editPlannedStartAria: (dayIndex: number) => string;
+    editActualStartAria: (dayIndex: number) => string;
+    dayStartTitle: (dayIndex: number) => string;
+    plannedStartEditTitle: (dayIndex: number) => string;
+    actualStartEditTitle: (dayIndex: number) => string;
+    dayStartPlannedDescription: (timeLabel: string) => string;
+    dayStartNow: (timeLabel: string) => string;
+    startAtSelectedTime: string;
+    savePlannedStart: string;
+    saveActualStart: string;
+    dayStartFutureError: string;
+    dayStartAfterVisitError: string;
     actualEnd: string;
     actualTotalDuration: string;
     dragGuide: string;
@@ -1296,17 +1318,19 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       conflictDetail: (routeTitle) =>
         `${routeTitle} 일정이 같은 날짜를 사용 중이라 바로 이어 붙일 수 없어요. 아래 일정을 수정하거나 날짜를 먼저 비워주세요.`,
       appendToast: "지도에서 장소를 담아 추가할 DAY를 만들어요.",
-      startNow: "지금 시작",
+      startNow: "지금 시작하기",
+      chooseStartTime: "시작시간 선택",
       plannedPeriodPastTitle: "예정 기간이 지났어요",
-      plannedStartDiffTitle: "예정 시작일과 오늘 날짜가 달라요",
+      plannedStartDiffTitle: "여행을 오늘 시작할까요?",
       plannedPeriodDescription: (start, end) =>
         `예정 기간은 ${start} ~ ${end}였어요.`,
-      plannedStartDescription: (start, today) =>
-        `예정 시작일은 ${start}, 오늘은 ${today}예요.`,
-      startTodayDetail: "오늘로 시작하면 DAY 날짜가 오늘 기준으로 다시 맞춰져요.",
-      startToday: "오늘로 시작",
+      plannedStartDescription: (start) =>
+        `설정된 시작일은 ${start}이에요.`,
+      startTodayDetail:
+        "지금 시작하면 DAY 1 일정만 오늘과 현재 시간 기준으로 다시 계산돼요.",
+      startToday: "지금 시작하기",
       startPlannedDate: "예정일로 시작",
-      chooseDate: "날짜 선택",
+      chooseDate: "다른 날짜 선택",
       deleteTitle: "일정을 삭제할까요?",
       deleteDescription: (routeTitle) =>
         `${routeTitle} 전체와 포함된 DAY, 장소가 모두 삭제돼요.`,
@@ -1318,7 +1342,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       needsReviewSection: "시작 확인 필요",
       upcomingSection: "다가오는 일정",
       undatedSection: "날짜 미정 루트",
-      startDateModalTitle: "실제 시작일 선택",
+      startDateModalTitle: "다른 시작일 선택",
       startDateModalDescription: (routeTitle) =>
         `${routeTitle}의 DAY 1 기준 날짜를 선택해요.`,
       startDateLabel: "시작 날짜",
@@ -1326,8 +1350,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startTimeLateTitle: "출발 예정 시간이 지났어요",
       startTimeEarlyTitle: "예정 출발시간보다 빨라요",
       startTimeReviewDescription: (scheduledLabel, currentLabel) =>
-        `예정 출발시간은 ${scheduledLabel}, 현재 시간은 ${currentLabel}예요. 지금 시작하는 게 맞는지 한 번 더 확인해주세요.`,
-      startTimeReviewDetail: "지금 시작하면 DAY 날짜는 오늘 기준으로 유지돼요.",
+        `계획 출발시간은 ${scheduledLabel}, 현재 시간은 ${currentLabel}예요.`,
+      startTimeReviewDetail:
+        "지금 시작하면 DAY 1 일정만 현재 시간 기준으로 다시 계산돼요.",
       emptyTitle: "아직 만든 루트가 없어요",
       emptyDescription: "감자가 빈 여행 가방을 보고 있어요.",
       emptyFooter: "지도에서 장소를 담고 루트를 만들어 보세요.",
@@ -1545,6 +1570,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       start: "출발",
       firstPlace: "첫 장소",
       nextPlace: "다음 목적지",
+      currentDestination: "현재 목적지",
+      placeDirections: "지도·길찾기",
+      openPlaceDirectionsAria: (title) => `${title} 지도와 길찾기 보기`,
       noStartGps: "출발 GPS 없음",
       firstPlaceTravel: (label) => `첫 장소까지 ${label}`,
       nextPlaceTravel: (label) => `다음 목적지까지 ${label}`,
@@ -1631,7 +1659,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestMoveFailed: "테스트 위치를 바꾸지 못했어요.",
       gpsTestUnavailable: "이 앱에서는 GPS 테스트를 사용할 수 없어요.",
       photoRecord: "사진 기록",
-      manualCompletion: "수동",
+      manualCompletion: "완료 기록",
+      retrospectiveCompletionDescription:
+        "지난 일정은 사진과 함께 또는 사진 없이 완료할 수 있어요.",
+      retrospectivePhotoCompletionAction: "사진 남기고 완료",
+      retrospectiveCompletionAction: "사진 없이 완료",
       noGps: "GPS 없음",
       closeImageAria: (label) => `${label} 이미지 닫기`,
       verificationImageAlt: (title, label) => `${title} ${label} 이미지`,
@@ -1663,9 +1695,29 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       allPlacesCompleted: "모든 장소 완료",
       remainingPlaces: (count) => `${count}곳 남음`,
       expectedStart: "예상 출발",
+      plannedDeparture: "계획 출발",
       expectedEnd: "예상 종료",
       totalDuration: "총 소요",
       actualStart: "실제 시작",
+      startDay: "DAY 시작하기",
+      recordActualStart: "실제 시작 기록",
+      editPlannedStartAria: (dayIndex) =>
+        `DAY ${dayIndex} 계획 출발시간 수정`,
+      editActualStartAria: (dayIndex) =>
+        `DAY ${dayIndex} 실제 시작시간 수정`,
+      dayStartTitle: (dayIndex) => `DAY ${dayIndex}를 시작할까요?`,
+      plannedStartEditTitle: (dayIndex) =>
+        `DAY ${dayIndex} 계획 출발시간`,
+      actualStartEditTitle: (dayIndex) =>
+        `DAY ${dayIndex} 실제 시작시간`,
+      dayStartPlannedDescription: (timeLabel) =>
+        `계획 출발시간은 ${timeLabel}이에요.`,
+      dayStartNow: (timeLabel) => `지금 시작 · ${timeLabel}`,
+      startAtSelectedTime: "선택한 시간으로 시작",
+      savePlannedStart: "계획시간 저장",
+      saveActualStart: "실제시간 저장",
+      dayStartFutureError: "현재보다 이후 시간으로는 시작할 수 없어요.",
+      dayStartAfterVisitError: "실제 시작시간은 첫 방문 기록보다 빨라야 해요.",
       actualEnd: "실제 종료",
       actualTotalDuration: "실제 소요",
       dragGuide: "오른쪽 핸들을 잡고 원하는 위치로 옮겨 주세요.",
@@ -2454,16 +2506,18 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `${routeTitle} already uses the same date, so this day cannot be appended yet. Edit that schedule or free up the date first.`,
       appendToast: "Add places on the map to create another DAY.",
       startNow: "Start now",
+      chooseStartTime: "Choose start time",
       plannedPeriodPastTitle: "The planned period has passed",
-      plannedStartDiffTitle: "The planned start date is not today",
+      plannedStartDiffTitle: "Start this trip today?",
       plannedPeriodDescription: (start, end) =>
         `The planned period was ${start} - ${end}.`,
-      plannedStartDescription: (start, today) =>
-        `The planned start date is ${start}, and today is ${today}.`,
-      startTodayDetail: "Starting today will realign DAY dates from today.",
+      plannedStartDescription: (start) =>
+        `The configured start date is ${start}.`,
+      startTodayDetail:
+        "Starting now recalculates only DAY 1 from today and the current time.",
       startToday: "Start today",
       startPlannedDate: "Start on planned date",
-      chooseDate: "Choose date",
+      chooseDate: "Choose another date",
       deleteTitle: "Delete this schedule?",
       deleteDescription: (routeTitle) =>
         `${routeTitle} and all included DAYs and places will be deleted.`,
@@ -2483,8 +2537,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startTimeLateTitle: "The scheduled departure time has passed",
       startTimeEarlyTitle: "This is earlier than the scheduled departure",
       startTimeReviewDescription: (scheduledLabel, currentLabel) =>
-        `The scheduled departure is ${scheduledLabel}, and the current time is ${currentLabel}. Please confirm you want to start now.`,
-      startTimeReviewDetail: "Starting now keeps DAY dates based on today.",
+        `The planned departure is ${scheduledLabel}, and the current time is ${currentLabel}.`,
+      startTimeReviewDetail:
+        "Starting now recalculates only DAY 1 from the current time.",
       emptyTitle: "No routes yet",
       emptyDescription: "Your travel bag is still empty.",
       emptyFooter: "Save places on the map and create a route.",
@@ -2703,6 +2758,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       start: "Start",
       firstPlace: "First place",
       nextPlace: "Next destination",
+      currentDestination: "Current destination",
+      placeDirections: "Map & directions",
+      openPlaceDirectionsAria: (title) => `View map and directions to ${title}`,
       noStartGps: "No start GPS",
       firstPlaceTravel: (label) => `To first place: ${label}`,
       nextPlaceTravel: (label) => `To next destination: ${label}`,
@@ -2789,7 +2847,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestMoveFailed: "Could not change the test location.",
       gpsTestUnavailable: "GPS testing is unavailable in this app.",
       photoRecord: "Photo record",
-      manualCompletion: "Manual",
+      manualCompletion: "Completion record",
+      retrospectiveCompletionDescription:
+        "Complete a past schedule with or without a photo.",
+      retrospectivePhotoCompletionAction: "Complete with a photo",
+      retrospectiveCompletionAction: "Complete without a photo",
       noGps: "No GPS",
       closeImageAria: (label) => `Close ${label}`,
       verificationImageAlt: (title, label) => `${title} ${label}`,
@@ -2821,9 +2883,29 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       allPlacesCompleted: "All places completed",
       remainingPlaces: (count) => `${count} left`,
       expectedStart: "Expected Start",
+      plannedDeparture: "Planned departure",
       expectedEnd: "Expected End",
       totalDuration: "Total Time",
       actualStart: "Actual Start",
+      startDay: "Start DAY",
+      recordActualStart: "Record actual start",
+      editPlannedStartAria: (dayIndex) =>
+        `Edit planned departure for DAY ${dayIndex}`,
+      editActualStartAria: (dayIndex) =>
+        `Edit actual start for DAY ${dayIndex}`,
+      dayStartTitle: (dayIndex) => `Start DAY ${dayIndex}?`,
+      plannedStartEditTitle: (dayIndex) =>
+        `DAY ${dayIndex} planned departure`,
+      actualStartEditTitle: (dayIndex) => `DAY ${dayIndex} actual start`,
+      dayStartPlannedDescription: (timeLabel) =>
+        `The planned departure is ${timeLabel}.`,
+      dayStartNow: (timeLabel) => `Start now · ${timeLabel}`,
+      startAtSelectedTime: "Start at selected time",
+      savePlannedStart: "Save planned time",
+      saveActualStart: "Save actual time",
+      dayStartFutureError: "The start time cannot be later than now.",
+      dayStartAfterVisitError:
+        "The actual start must be earlier than the first visit record.",
       actualEnd: "Actual End",
       actualTotalDuration: "Actual Time",
       dragGuide: "Grab the handle on the right and move it where you want.",

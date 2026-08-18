@@ -8,6 +8,7 @@ export type {
   ReorderRouteStopsInput,
   RouteStopVisitVerificationInput,
   StartRouteInput,
+  UpdateRouteDayStartInput,
   UpdateRouteStopStayMinutesInput,
   UpdateRouteStopVisitTimesInput,
 } from "./route.types.js";
@@ -34,6 +35,7 @@ export {
   markRouteStopVisited,
   setRouteStopPhotoPublication,
   setRouteStopVisitPhoto,
+  updateRouteDayStart,
   updateRouteStopVisitTimes,
 } from "./routeVisit.service.js";
 export {

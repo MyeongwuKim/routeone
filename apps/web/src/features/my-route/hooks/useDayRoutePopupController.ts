@@ -6,6 +6,7 @@ import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useUiText } from "@/lib/uiText";
+import { getCurrentPosition } from "@/lib/currentPosition";
 import { nativeBridge } from "@/native-bridge";
 import {
   addDaysToDateKey,
@@ -23,6 +24,7 @@ import {
 } from "../adapters/dayRouteAdapters";
 import type {
   ActualStayMinutesTarget,
+  DayStartTimeTarget,
   VisitCompletionTarget,
 } from "../models/dayRouteDialogTypes";
 import type { DayRoutePopupProps } from "../models/dayRoutePopupTypes";
@@ -39,6 +41,7 @@ import { useRouteDayDeleteMutation } from "./useRouteDayDeleteMutation";
 import { useRouteShareMutation } from "./useRouteShareMutation";
 import { useRouteStartDateMutation } from "./useRouteStartDateMutation";
 import { useRouteStopVisitMutation } from "./useRouteStopVisitMutation";
+import { useRouteDayStartMutation } from "./useRouteDayStartMutation";
 import { isSameStopOrder, restoreStopOrder } from "../utils/dayRouteStops";
 
 export function useDayRoutePopupController({
@@ -76,6 +79,11 @@ export function useDayRoutePopupController({
   const [gpsTestTarget, setGpsTestTarget] =
     useState<VisitCompletionTarget | null>(null);
   const [isGpsTestApplying, setIsGpsTestApplying] = useState(false);
+  const [dayStartTimeTarget, setDayStartTimeTarget] =
+    useState<DayStartTimeTarget | null>(null);
+  const [directionsOpeningStopId, setDirectionsOpeningStopId] = useState<
+    string | null
+  >(null);
   const sortedDays = useMemo(() => getSortedRouteDays(route), [route]);
   const {
     activeDayId,
@@ -172,6 +180,8 @@ export function useDayRoutePopupController({
     setExpandedDayIds,
   });
   const { isSharingRoute, shareRoute } = useRouteShareMutation(route.id);
+  const { isUpdatingRouteDayStart, updateRouteDayStart } =
+    useRouteDayStartMutation();
   const { isUpdatingRouteStartDate, updateRouteStartDate } =
     useRouteStartDateMutation(route.id);
   const isRetrospectiveCompletion = visitCompletionMode === "retrospective";
@@ -202,6 +212,8 @@ export function useDayRoutePopupController({
   const isRouteCompleted =
     routeStopCount > 0 && routeCompletedStopCount === routeStopCount;
   const canToggleVisitStatus = !isReadOnly || allowVisitCompletion;
+  const canEditDayStartTime =
+    route.isMine && (!isRetrospectiveCompletion || allowVisitCompletion);
   const visitEnabledDayIds = new Set(
     sortedDays
       .filter(
@@ -539,6 +551,71 @@ export function useDayRoutePopupController({
     });
   };
 
+  const handleOpenStopDirections = async (stop: MyRouteStop) => {
+    if (directionsOpeningStopId) {
+      return;
+    }
+
+    setDirectionsOpeningStopId(stop.id);
+
+    try {
+      const currentPosition = gpsTestLocation ?? (await getCurrentPosition());
+
+      openSheet(createMapSheetPlaceFromRouteStop(stop), {
+        mode: "directions-popup",
+        directionOrigin: {
+          coordinates: {
+            lat: currentPosition.lat,
+            lng: currentPosition.lng,
+          },
+          label: text.placeSheet.currentLocation,
+          isCurrentLocation: true,
+        },
+      });
+    } catch {
+      openSheet(createMapSheetPlaceFromRouteStop(stop), {
+        mode: "directions-popup",
+        directionOrigin: route.startLocation
+          ? {
+              coordinates: {
+                lat: route.startLocation.lat,
+                lng: route.startLocation.lng,
+              },
+              label: text.dayRoute.savedStartLocation,
+              isCurrentLocation: false,
+            }
+          : undefined,
+      });
+      showToast(text.home.currentLocationUnavailable);
+    } finally {
+      setDirectionsOpeningStopId(null);
+    }
+  };
+
+  const handleApplyDayStartTime = async (
+    target: DayStartTimeTarget,
+    value: number | string
+  ) => {
+    const didUpdate = await updateRouteDayStart(
+      target.mode === "planned"
+        ? {
+            dayId: target.routeDay.id,
+            plannedStartMinutes: value as number,
+          }
+        : {
+            dayId: target.routeDay.id,
+            startedAt: value as string,
+          },
+      target.mode === "planned"
+        ? `DAY ${target.routeDay.dayIndex} 계획 출발시간을 저장했어요.`
+        : `DAY ${target.routeDay.dayIndex} 실제 시작시간을 저장했어요.`
+    );
+
+    if (didUpdate) {
+      setDayStartTimeTarget(null);
+    }
+  };
+
   const runtimeAppVariant =
     window.RouteOneRuntimeConfig?.nativeAppVariant?.trim().toLowerCase() ||
     window.RouteOneRuntimeConfig?.webBundleChannel?.trim().toLowerCase();
@@ -668,6 +745,8 @@ export function useDayRoutePopupController({
       canEditVisitTimes:
         route.isMine &&
         (!isRetrospectiveCompletion || allowVisitCompletion),
+      canEditDayStartTime,
+      isRetrospectiveCompletion,
       canEditVerificationPhoto:
         route.isMine && isRetrospectiveCompletion && allowVisitCompletion,
       canToggleVisitStatus,
@@ -675,14 +754,17 @@ export function useDayRoutePopupController({
       enableVerificationPhotoPreview,
       isGpsTestEnabled,
       gpsTestLocationStopId,
+      directionsOpeningStopId,
       travelSegmentByKey,
       registerDropZone,
       startDragStop,
       handleSelectDay,
+      setDayStartTimeTarget,
       setStayMinutesEditTarget,
       setVisitTimesEditTarget,
       handleToggleStopVisited,
       handleOpenPlaceDetail,
+      handleOpenStopDirections,
       handleReplaceVerificationPhoto,
       setGpsTestTarget,
       setVerificationPhotoPreviewTarget,
@@ -720,6 +802,11 @@ export function useDayRoutePopupController({
       handleRequestCheckoutFromMap,
       closeMap: () => setMapTargetDayId(null),
       draggedStop,
+      dayStartTimeTarget,
+      defaultDayStartMinutes: route.dailyStartMinutes,
+      isUpdatingRouteDayStart,
+      setDayStartTimeTarget,
+      handleApplyDayStartTime,
       stayMinutesEditTarget,
       closeStayMinutesEdit: () => setStayMinutesEditTarget(null),
       handleChangeStayMinutes,

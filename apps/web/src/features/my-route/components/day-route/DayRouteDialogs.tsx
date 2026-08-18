@@ -8,6 +8,7 @@ import {
   MdLockOutline,
   MdMyLocation,
   MdPhotoCamera,
+  MdPlayArrow,
   MdPublic,
   MdRemove,
 } from "react-icons/md";
@@ -15,11 +16,13 @@ import { useUiText } from "@/lib/uiText";
 import { TimeWheelPicker } from "@/components/inputs";
 import {
   clampStayMinutes,
+  formatClock,
   formatStayMinutes,
 } from "../../utils/dayRouteFormatting";
 import type { VisitPhotoSource } from "../../services/visitPhotoService";
 import type {
   ActualStayMinutesTarget,
+  DayStartTimeTarget,
   EarlyRouteCompletionTarget,
   PhotoPublicationTarget,
   StayMinutesEditTarget,
@@ -27,6 +30,20 @@ import type {
   VisitCompletionTarget,
   VisitTimesEditTarget,
 } from "../../models/dayRouteDialogTypes";
+
+function toTimeValue(minutes: number) {
+  const normalized = Math.max(0, Math.min(24 * 60 - 1, Math.round(minutes)));
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function toMinutesValue(timeValue: string) {
+  const [hourText, minuteText] = timeValue.split(":");
+
+  return Number(hourText) * 60 + Number(minuteText);
+}
 
 function toLocalTimeInputValue(value: string | null | undefined) {
   if (!value) {
@@ -95,6 +112,194 @@ function getVisitTimeEditInitialArrival(target: VisitTimesEditTarget) {
     target.stop.actualStayMinutes ?? target.stop.stayMinutes ?? 60;
 
   return new Date(checkedOutTimestamp - stayMinutes * 60_000).toISOString();
+}
+
+export function DayStartTimePopup({
+  target,
+  defaultStartMinutes,
+  isSaving,
+  onClose,
+  onApply,
+}: {
+  target: DayStartTimeTarget;
+  defaultStartMinutes: number | null;
+  isSaving: boolean;
+  onClose: () => void;
+  onApply: (target: DayStartTimeTarget, value: number | string) => void;
+}) {
+  const text = useUiText();
+  const plannedStartMinutes =
+    target.routeDay.plannedStartMinutes ?? defaultStartMinutes ?? 9 * 60;
+  const [openedAt] = useState(() => Date.now());
+  const [timeValue, setTimeValue] = useState(() => {
+    if (target.mode === "start") {
+      return toLocalTimeInputValue(new Date(openedAt).toISOString());
+    }
+
+    if (target.mode === "actual" && target.routeDay.startedAt) {
+      return toLocalTimeInputValue(target.routeDay.startedAt);
+    }
+
+    return toTimeValue(plannedStartMinutes);
+  });
+  const selectedTimestamp = combineDateWithTimeInput(
+    target.routeDay.date,
+    timeValue
+  );
+  const firstRecordedVisitTimestamp = target.routeDay.stops
+    .flatMap((stop) => {
+      const completedAt = stop.checkedOutAt ?? stop.visitedAt;
+      const completedTimestamp = completedAt
+        ? Date.parse(completedAt)
+        : Number.NaN;
+      const inferredArrivalAt =
+        stop.checkedInAt ??
+        (Number.isFinite(completedTimestamp) && stop.actualStayMinutes
+          ? new Date(
+              completedTimestamp - stop.actualStayMinutes * 60_000
+            ).toISOString()
+          : null);
+
+      return [inferredArrivalAt, completedAt];
+    })
+    .map((value) => (value ? Date.parse(value) : Number.NaN))
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right)[0];
+  const isActualMode = target.mode !== "planned";
+  const isFuture = isActualMode && selectedTimestamp > openedAt + 60_000;
+  const isAfterFirstVisit = Boolean(
+    isActualMode &&
+    Number.isFinite(firstRecordedVisitTimestamp) &&
+    selectedTimestamp > firstRecordedVisitTimestamp
+  );
+  const isValid =
+    target.mode === "planned"
+      ? Number.isFinite(toMinutesValue(timeValue))
+      : Number.isFinite(selectedTimestamp) && !isFuture && !isAfterFirstVisit;
+  const title =
+    target.mode === "start"
+      ? text.dayRoute.dayStartTitle(target.routeDay.dayIndex)
+      : target.mode === "planned"
+        ? text.dayRoute.plannedStartEditTitle(target.routeDay.dayIndex)
+        : text.dayRoute.actualStartEditTitle(target.routeDay.dayIndex);
+
+  const applySelectedTime = () => {
+    if (!isValid) {
+      return;
+    }
+
+    onApply(
+      target,
+      target.mode === "planned"
+        ? toMinutesValue(timeValue)
+        : new Date(selectedTimestamp).toISOString()
+    );
+  };
+
+  return (
+    <div className="center-modal-backdrop-enter fixed inset-0 z-[3200] flex items-center justify-center bg-slate-950/45 px-4">
+      <button
+        type="button"
+        aria-label={text.common.close}
+        className="absolute inset-0 cursor-default"
+        disabled={isSaving}
+        onClick={onClose}
+      />
+      <section className="center-modal-panel-enter relative w-full max-w-[360px] rounded-[1.5rem] border border-brand-100 bg-white p-4 shadow-2xl dark:border-brand-400/20 dark:bg-slate-950">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-trip text-sm text-brand-700">DAY START</p>
+            <h3 className="mt-1 text-lg font-black text-slate-900 dark:text-white">
+              {title}
+            </h3>
+            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-300">
+              {text.dayRoute.dayStartPlannedDescription(
+                formatClock(plannedStartMinutes, text)
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label={text.common.close}
+            disabled={isSaving}
+            onClick={onClose}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            <MdClose />
+          </button>
+        </div>
+
+        <div className="mt-4">
+          <TimeWheelPicker
+            value={timeValue}
+            disabled={isSaving}
+            onChange={setTimeValue}
+          />
+        </div>
+
+        {isFuture || isAfterFirstVisit ? (
+          <p className="mt-3 rounded-2xl bg-rose-50 px-3 py-2.5 text-xs font-bold leading-5 text-rose-600 dark:bg-rose-400/10 dark:text-rose-200">
+            {isFuture
+              ? text.dayRoute.dayStartFutureError
+              : text.dayRoute.dayStartAfterVisitError}
+          </p>
+        ) : null}
+
+        <div className="mt-5 grid gap-2">
+          {target.mode === "start" ? (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => onApply(target, new Date().toISOString())}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+            >
+              {isSaving ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <MdPlayArrow className="text-lg" />
+              )}
+              {text.dayRoute.dayStartNow(
+                formatClock(
+                  new Date(openedAt).getHours() * 60 +
+                    new Date(openedAt).getMinutes(),
+                  text
+                )
+              )}
+            </button>
+          ) : null}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={onClose}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              {text.common.cancel}
+            </button>
+            <button
+              type="button"
+              disabled={isSaving || !isValid}
+              onClick={applySelectedTime}
+              className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold disabled:opacity-50 ${
+                target.mode === "start"
+                  ? "border border-brand-200 bg-brand-50 text-brand-700"
+                  : "bg-brand-600 text-white"
+              }`}
+            >
+              {isSaving && target.mode !== "start" ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : null}
+              {target.mode === "start"
+                ? text.dayRoute.startAtSelectedTime
+                : target.mode === "planned"
+                  ? text.dayRoute.savePlannedStart
+                  : text.dayRoute.saveActualStart}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function sanitizeMinutesInput(value: string) {
@@ -882,11 +1087,6 @@ export function VisitCompletionPopup({
                 ? target.stop.place.title
                 : text.dayRoute.arrivalCheckTitle}
             </h3>
-            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-              {isRetrospective
-                ? "지난 일정은 GPS 없이 사진 기록 또는 수동으로 저장해요."
-                : text.dayRoute.arrivalCheckDescription}
-            </p>
           </div>
           <button
             type="button"
@@ -898,6 +1098,11 @@ export function VisitCompletionPopup({
             <MdClose />
           </button>
         </div>
+        <p className="mt-1 text-balance text-xs font-semibold leading-5 text-slate-500">
+          {isRetrospective
+            ? text.dayRoute.retrospectiveCompletionDescription
+            : text.dayRoute.arrivalCheckDescription}
+        </p>
 
         <div className="mt-5 grid gap-2">
           {isRetrospective ? (
@@ -912,7 +1117,7 @@ export function VisitCompletionPopup({
               ) : (
                 <MdImage className="text-lg" />
               )}
-              사진 기록
+              {text.dayRoute.retrospectivePhotoCompletionAction}
             </button>
           ) : (
             <>
@@ -962,7 +1167,7 @@ export function VisitCompletionPopup({
             className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
           >
             {isRetrospective
-              ? text.dayRoute.manualCompletion
+              ? text.dayRoute.retrospectiveCompletionAction
               : text.dayRoute.manualVisitCompletion}
           </button>
         </div>

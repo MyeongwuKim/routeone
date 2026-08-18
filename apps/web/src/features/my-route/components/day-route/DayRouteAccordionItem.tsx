@@ -1,9 +1,12 @@
 import { useMemo, type PointerEvent as ReactPointerEvent } from "react";
 import {
+  MdAccessTime,
   MdCheckCircle,
   MdDirectionsCar,
+  MdEdit,
   MdExpandMore,
   MdMyLocation,
+  MdPlayArrow,
 } from "react-icons/md";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import { useUiText, type UiText } from "@/lib/uiText";
@@ -189,14 +192,22 @@ type DayRouteAccordionItemProps = {
   staySavingStopId: string | null;
   isReadOnly: boolean;
   canEditVisitTimes: boolean;
+  canEditDayStartTime: boolean;
+  canStartDay: boolean;
+  canRecordDayStart: boolean;
   canEditVerificationPhoto: boolean;
   canToggleVisited: boolean;
   isVisitDateAllowed: boolean;
+  showActiveDestination: boolean;
   enableVerificationPhotoPreview: boolean;
   isGpsTestEnabled: boolean;
   gpsTestLocationStopId: string | null;
+  directionsOpeningStopId: string | null;
   travelSegmentByKey: Record<string, TravelSegmentState>;
   onSelect: (day: MyRouteDay) => void;
+  onRequestDayStart: (day: MyRouteDay) => void;
+  onRequestPlannedStartEdit: (day: MyRouteDay) => void;
+  onRequestActualStartEdit: (day: MyRouteDay) => void;
   onRegisterDropZone: (index: number, node: HTMLDivElement | null) => void;
   onStartDrag: (
     stop: MyRouteStop,
@@ -207,6 +218,7 @@ type DayRouteAccordionItemProps = {
   onRequestVisitTimesEdit: (stop: MyRouteStop) => void;
   onToggleVisited: (stop: MyRouteStop) => void;
   onOpenPlace: (stop: MyRouteStop) => void;
+  onOpenDirections: (stop: MyRouteStop) => void;
   onEditVerificationPhoto: (stop: MyRouteStop) => void;
   onOpenGpsTest: (stop: MyRouteStop) => void;
   onOpenVerificationPhoto: (target: VerificationPhotoPreviewTarget) => void;
@@ -225,20 +237,29 @@ function DayRouteAccordionItem({
   staySavingStopId,
   isReadOnly,
   canEditVisitTimes,
+  canEditDayStartTime,
+  canStartDay,
+  canRecordDayStart,
   canEditVerificationPhoto,
   canToggleVisited,
   isVisitDateAllowed,
+  showActiveDestination,
   enableVerificationPhotoPreview,
   isGpsTestEnabled,
   gpsTestLocationStopId,
+  directionsOpeningStopId,
   travelSegmentByKey,
   onSelect,
+  onRequestDayStart,
+  onRequestPlannedStartEdit,
+  onRequestActualStartEdit,
   onRegisterDropZone,
   onStartDrag,
   onRequestStayMinutesEdit,
   onRequestVisitTimesEdit,
   onToggleVisited,
   onOpenPlace,
+  onOpenDirections,
   onEditVerificationPhoto,
   onOpenGpsTest,
   onOpenVerificationPhoto,
@@ -246,10 +267,18 @@ function DayRouteAccordionItem({
   const text = useUiText();
   const dayStops = orderedStops;
   const hasDayStops = dayStops.length > 0;
+  const plannedDayStartMinutes =
+    typeof routeDay.plannedStartMinutes === "number"
+      ? routeDay.plannedStartMinutes
+      : typeof dailyStartMinutes === "number"
+        ? dailyStartMinutes
+        : DEFAULT_ROUTE_DAY_START_MINUTES;
+  const actualDayStartMinutes = getDateTimeClockMinutes(
+    routeDay.startedAt,
+    plannedDayStartMinutes
+  );
   const routeDayStartMinutes =
-    typeof dailyStartMinutes === "number"
-      ? dailyStartMinutes
-      : DEFAULT_ROUTE_DAY_START_MINUTES;
+    actualDayStartMinutes ?? plannedDayStartMinutes;
   const stopSchedules = useMemo(
     () =>
       buildRouteStopSchedules(
@@ -295,9 +324,10 @@ function DayRouteAccordionItem({
     ? Math.round((completedStopCount / dayStops.length) * 100)
     : 0;
   const isDayCleared = hasDayStops && completedStopCount === dayStops.length;
-  const hasActualStart =
-    firstStopSchedule?.kind === "actual" ||
-    firstStopSchedule?.kind === "ongoing";
+  const activeDestinationStopId = showActiveDestination
+    ? (dayStops.find((stop) => !isVisitedStop(stop))?.id ?? null)
+    : null;
+  const hasActualStart = actualDayStartMinutes != null;
   const hasActualEnd =
     isDayCleared && lastStopSchedule?.kind === "actual";
 
@@ -440,6 +470,70 @@ function DayRouteAccordionItem({
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {canEditDayStartTime && !hasActualStart ? (
+                    <button
+                      type="button"
+                      aria-label={text.dayRoute.editPlannedStartAria(
+                        routeDay.dayIndex
+                      )}
+                      onClick={() => onRequestPlannedStartEdit(routeDay)}
+                      className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-brand-700"
+                    >
+                      <MdAccessTime className="text-sm" />
+                      {text.dayRoute.plannedDeparture}{" "}
+                      {formatClock(plannedDayStartMinutes, text)}
+                      <MdEdit className="text-xs" />
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-brand-700">
+                      <MdAccessTime className="text-sm" />
+                      {text.dayRoute.plannedDeparture}{" "}
+                      {formatClock(plannedDayStartMinutes, text)}
+                    </span>
+                  )}
+                  {hasActualStart ? (
+                    canEditDayStartTime ? (
+                      <button
+                        type="button"
+                        aria-label={text.dayRoute.editActualStartAria(
+                          routeDay.dayIndex
+                        )}
+                        onClick={() => onRequestActualStartEdit(routeDay)}
+                        className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-brand-700"
+                      >
+                        <MdMyLocation className="text-sm" />
+                        {text.dayRoute.actualStart}{" "}
+                        {formatClock(actualDayStartMinutes, text)}
+                        <MdEdit className="text-xs" />
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-brand-700">
+                        <MdMyLocation className="text-sm" />
+                        {text.dayRoute.actualStart}{" "}
+                        {formatClock(actualDayStartMinutes, text)}
+                      </span>
+                    )
+                  ) : canStartDay ? (
+                    <button
+                      type="button"
+                      onClick={() => onRequestDayStart(routeDay)}
+                      className="inline-flex items-center gap-1 rounded-full bg-brand-700 px-3 py-1 text-[11px] font-black text-white ring-1 ring-white/35"
+                    >
+                      <MdPlayArrow className="text-sm" />
+                      {text.dayRoute.startDay}
+                    </button>
+                  ) : canRecordDayStart ? (
+                    <button
+                      type="button"
+                      onClick={() => onRequestActualStartEdit(routeDay)}
+                      className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-brand-700"
+                    >
+                      <MdEdit className="text-xs" />
+                      {text.dayRoute.recordActualStart}
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               {isOrderEditing ? (
@@ -453,10 +547,10 @@ function DayRouteAccordionItem({
                     <p className="text-[10px] font-black text-slate-400">
                       {hasActualStart
                         ? text.dayRoute.actualStart
-                        : text.dayRoute.expectedStart}
+                        : text.dayRoute.plannedDeparture}
                     </p>
                     <p className="mt-0.5 text-sm font-black text-slate-900">
-                      {formatClock(firstStopSchedule.startMinutes, text)}
+                      {formatClock(routeDayStartMinutes, text)}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
@@ -501,6 +595,10 @@ function DayRouteAccordionItem({
                     isVisitSaving={visitSavingStopId === stop.id}
                     isStaySaving={staySavingStopId === stop.id}
                     isReadOnly={isReadOnly}
+                    isActiveDestination={activeDestinationStopId === stop.id}
+                    isDirectionsOpening={
+                      directionsOpeningStopId === stop.id
+                    }
                     canToggleVisited={
                       canToggleVisited &&
                       (isVisitDateAllowed ||
@@ -535,6 +633,7 @@ function DayRouteAccordionItem({
                     onRequestVisitTimesEdit={onRequestVisitTimesEdit}
                     onToggleVisited={onToggleVisited}
                     onOpenPlace={onOpenPlace}
+                    onOpenDirections={onOpenDirections}
                     onEditVerificationPhoto={onEditVerificationPhoto}
                     onOpenGpsTest={onOpenGpsTest}
                     onOpenVerificationPhoto={(selectedStop) =>

@@ -52,6 +52,31 @@ function getRouteDateKey(value: Date) {
   }).format(value);
 }
 
+function getRouteClockMinutes(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: ROUTE_START_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
+  const minute = Number(
+    parts.find((part) => part.type === "minute")?.value ?? 0
+  );
+
+  return hour * 60 + minute;
+}
+
+function combineRouteDateAndMinutes(date: Date, minutes: number) {
+  const dateKey = getRouteDateKey(date);
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+
+  return new Date(
+    `${dateKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+09:00`
+  );
+}
+
 function normalizeRouteCreateRequestId(value?: string | null) {
   const normalized = nullableString(value);
 
@@ -555,6 +580,15 @@ export async function startRoute(
 ) {
   const route = await assertRouteOwner(prisma, input.routeId, user.id);
   assertValidDate(input.startedAt);
+  const dayStartedAt = input.dayStartedAt ?? null;
+
+  if (dayStartedAt) {
+    assertValidDate(dayStartedAt);
+
+    if (dayStartedAt.getTime() > Date.now() + 60_000) {
+      throw new UserFacingError("현재보다 이후 시간으로는 시작할 수 없어요.");
+    }
+  }
 
   if (route.status === "COMPLETED") {
     throw new UserFacingError("이미 완료된 일정은 다시 시작할 수 없어요.");
@@ -575,6 +609,24 @@ export async function startRoute(
   const tripDays = Math.max(1, routeDays.length || route.tripDays);
   const travelStartDate = input.startedAt;
   const travelEndDate = addDays(travelStartDate, tripDays - 1);
+  const resolvedDayStartedAt =
+    dayStartedAt ??
+    combineRouteDateAndMinutes(
+      travelStartDate,
+      route.startedAt
+        ? getRouteClockMinutes(route.startedAt)
+        : (routeDays.find((day) => day.dayIndex === 1)
+              ?.plannedStartMinutes ??
+            route.dailyStartMinutes ??
+            9 * 60)
+    );
+
+  if (
+    dayStartedAt &&
+    getRouteDateKey(dayStartedAt) !== getRouteDateKey(travelStartDate)
+  ) {
+    throw new UserFacingError("실제 시작시간은 여행 시작일과 같은 날짜여야 해요.");
+  }
 
   await assertNoRouteDateConflict(
     prisma,
@@ -592,6 +644,7 @@ export async function startRoute(
         },
         data: {
           date: addDays(travelStartDate, index),
+          ...(index === 0 ? { startedAt: resolvedDayStartedAt } : {}),
         },
       })
     )
@@ -606,7 +659,7 @@ export async function startRoute(
       travelStartDate,
       travelEndDate,
       status: "ACTIVE",
-      startedAt: travelStartDate,
+      startedAt: resolvedDayStartedAt,
       completedAt: null,
     },
   });
@@ -963,11 +1016,15 @@ export async function cloneRoute(
   const dayIdBySourceDayId = new Map<string, string>();
 
   for (const day of sourceRoute.days) {
+    const copiedDayStartedAt =
+      input.startImmediately && day.dayIndex === 1 ? new Date() : null;
     const copiedDay = await prisma.routeDay.create({
       data: {
         routeId: route.id,
         dayIndex: day.dayIndex,
         date: day.date,
+        plannedStartMinutes: day.plannedStartMinutes,
+        startedAt: copiedDayStartedAt,
       },
     });
     dayIdBySourceDayId.set(day.id, copiedDay.id);

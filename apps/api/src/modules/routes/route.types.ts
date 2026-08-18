@@ -61,6 +61,13 @@ export type AppendRouteDaysInput = {
 export type StartRouteInput = {
   routeId: string;
   startedAt: Date;
+  dayStartedAt?: Date | null;
+};
+
+export type UpdateRouteDayStartInput = {
+  dayId: string;
+  plannedStartMinutes?: number | null;
+  startedAt?: Date | null;
 };
 
 export type CloneRouteInput = {

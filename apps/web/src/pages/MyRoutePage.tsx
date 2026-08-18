@@ -39,7 +39,8 @@ import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import type { MyRoutesQuery, StartRouteInput } from "@/generated/graphql";
-import { DateInput } from "@/components/inputs";
+import { DateInput, TimeWheelInput } from "@/components/inputs";
+import { nativeBridge } from "@/native-bridge";
 
 type RouteSectionProps = {
   title: string;
@@ -50,6 +51,10 @@ type RouteSectionProps = {
 type StartRouteDatePickerTarget = {
   route: MyRoute;
   startedAt: string;
+};
+
+type StartRouteTimePickerTarget = StartRouteDatePickerTarget & {
+  timeValue: string;
 };
 
 const ROUTE_DEEP_LINK_SEARCH_PARAM_KEYS = [
@@ -90,6 +95,36 @@ function getCurrentMinutes() {
   return now.getHours() * 60 + now.getMinutes();
 }
 
+function toTimeValue(minutes: number) {
+  const normalized = Math.max(0, Math.min(24 * 60 - 1, Math.round(minutes)));
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function getRoutePlannedStartMinutes(route: MyRoute) {
+  const firstDay = route.days.find((day) => day.dayIndex === 1);
+
+  return firstDay?.plannedStartMinutes ?? route.dailyStartMinutes ?? 9 * 60;
+}
+
+function combineDateKeyAndTime(dateKey: string, timeValue: string) {
+  const [yearText, monthText, dayText] = dateKey.split("-");
+  const [hourText, minuteText] = timeValue.split(":");
+  const date = new Date(
+    Number(yearText),
+    Number(monthText) - 1,
+    Number(dayText),
+    Number(hourText),
+    Number(minuteText),
+    0,
+    0
+  );
+
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 function formatMinutesLabel(minutes: number, text: UiText) {
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
@@ -97,45 +132,6 @@ function formatMinutesLabel(minutes: number, text: UiText) {
   const displayHour = hour % 12 || 12;
 
   return `${period} ${displayHour}:${String(minute).padStart(2, "0")}`;
-}
-
-function getStartTimeReview(route: MyRoute, startedAt: string, text: UiText) {
-  if (startedAt !== getTodayDateKey()) {
-    return null;
-  }
-
-  const scheduledMinutes = route.dailyStartMinutes;
-  if (typeof scheduledMinutes !== "number") {
-    return null;
-  }
-
-  const currentMinutes = getCurrentMinutes();
-  if (currentMinutes === scheduledMinutes) {
-    return null;
-  }
-
-  const scheduledLabel = formatMinutesLabel(scheduledMinutes, text);
-  const currentLabel = formatMinutesLabel(currentMinutes, text);
-
-  if (currentMinutes > scheduledMinutes) {
-    return {
-      title: text.myRoute.startTimeLateTitle,
-      description: text.myRoute.startTimeReviewDescription(
-        scheduledLabel,
-        currentLabel
-      ),
-      detail: text.myRoute.startTimeReviewDetail,
-    };
-  }
-
-  return {
-    title: text.myRoute.startTimeEarlyTitle,
-    description: text.myRoute.startTimeReviewDescription(
-      scheduledLabel,
-      currentLabel
-    ),
-    detail: text.myRoute.startTimeReviewDetail,
-  };
 }
 
 function StartRouteDatePickerModal({
@@ -198,7 +194,78 @@ function StartRouteDatePickerModal({
             disabled={isPending || !target.startedAt}
             className="rounded-2xl border border-brand-500 bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {text.myRoute.startRoute}
+            {text.myRoute.chooseStartTime}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function StartRouteTimePickerModal({
+  target,
+  isPending,
+  onChange,
+  onClose,
+  onConfirm,
+}: {
+  target: StartRouteTimePickerTarget;
+  isPending: boolean;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const text = useUiText();
+  const plannedMinutes = getRoutePlannedStartMinutes(target.route);
+
+  return (
+    <div
+      className="global-modal-backdrop-enter fixed inset-0 z-[2800] flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pb-4"
+      onClick={onClose}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        className="global-modal-panel-enter w-full max-w-sm rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p className="text-base font-bold text-slate-900">
+          {text.dayRoute.actualStartEditTitle(1)}
+        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          {text.dayRoute.dayStartPlannedDescription(
+            formatMinutesLabel(plannedMinutes, text)
+          )}
+        </p>
+
+        <div className="mt-4">
+          <TimeWheelInput
+            value={target.timeValue}
+            title={text.dayRoute.actualStartEditTitle(1)}
+            description={text.dayRoute.dayStartPlannedDescription(
+              formatMinutesLabel(plannedMinutes, text)
+            )}
+            disabled={isPending}
+            onChange={onChange}
+          />
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isPending}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
+          >
+            {text.common.cancel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isPending || !target.timeValue}
+            className="rounded-2xl border border-brand-500 bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {text.dayRoute.startAtSelectedTime}
           </button>
         </div>
       </section>
@@ -218,11 +285,12 @@ function MyRoutePage() {
   } | null>(null);
   const [startDatePickerTarget, setStartDatePickerTarget] =
     useState<StartRouteDatePickerTarget | null>(null);
+  const [startTimePickerTarget, setStartTimePickerTarget] =
+    useState<StartRouteTimePickerTarget | null>(null);
   const startAppendTarget = useRouteEditFlowStore(
     (state) => state.startAppendTarget
   );
   const openModal = useUiModalStore((state) => state.openModal);
-  const closeModal = useUiModalStore((state) => state.closeModal);
   const showToast = useUiToastStore((state) => state.showToast);
   const myRoutesQuery = useQuery({
     queryKey: MY_ROUTES_QUERY_KEY,
@@ -312,6 +380,7 @@ function MyRoutePage() {
         (currentData) => upsertMyRouteCache(currentData, data.startRoute)
       );
       setStartDatePickerTarget(null);
+      setStartTimePickerTarget(null);
       showToast(text.myRoute.startSuccess);
     },
     onError: (error) => {
@@ -387,7 +456,15 @@ function MyRoutePage() {
       return;
     }
 
-    void syncTodayRouteArrivalNotifications(localizedMyRoutes, appLanguage);
+    const syncRouteArrivalNotifications = () => {
+      void syncTodayRouteArrivalNotifications(localizedMyRoutes, appLanguage);
+    };
+
+    syncRouteArrivalNotifications();
+
+    return nativeBridge.events.subscribeAppActive(
+      syncRouteArrivalNotifications
+    );
   }, [
     appLanguage,
     isMyRouteLocalizationLoading,
@@ -553,50 +630,33 @@ function MyRoutePage() {
     showToast(text.myRoute.appendToast);
     navigate("/home");
   };
-  const handleStartRoute = (route: MyRoute, startedAt: string) => {
-    if (startRouteMutation.isPending || !startedAt) {
+  const handleStartRoute = (
+    route: MyRoute,
+    startedAt: string,
+    dayStartedAt: string
+  ) => {
+    if (startRouteMutation.isPending || !startedAt || !dayStartedAt) {
       return;
     }
 
     startRouteMutation.mutate({
       routeId: route.id,
       startedAt,
+      dayStartedAt,
     });
   };
-  const requestStartRouteWithTimeReview = (route: MyRoute, startedAt: string) => {
-    if (startRouteMutation.isPending || !startedAt) {
-      return false;
-    }
-
-    if (startedAt > getTodayDateKey()) {
+  const openStartTimePicker = (route: MyRoute, startedAt: string) => {
+    if (!startedAt || startedAt > getTodayDateKey()) {
       showToast(text.myRoute.futureStartError, 2600);
-      return true;
-    }
-
-    const startTimeReview = getStartTimeReview(route, startedAt, text);
-    if (!startTimeReview) {
-      handleStartRoute(route, startedAt);
-      return false;
+      return;
     }
 
     setStartDatePickerTarget(null);
-    openModal({
-      title: startTimeReview.title,
-      description: startTimeReview.description,
-      detail: startTimeReview.detail,
-      actions: [
-        {
-          label: text.myRoute.startNow,
-          variant: "primary",
-          onClick: () => handleStartRoute(route, startedAt),
-        },
-        {
-          label: text.common.cancel,
-          variant: "secondary",
-        },
-      ],
+    setStartTimePickerTarget({
+      route,
+      startedAt,
+      timeValue: toTimeValue(getRoutePlannedStartMinutes(route)),
     });
-    return true;
   };
   const handleRequestStartRoute = (route: MyRoute) => {
     if (startRouteMutation.isPending) {
@@ -607,8 +667,36 @@ function MyRoutePage() {
     const plannedStartKey = getRouteStartDateKey(route);
     const plannedEndKey = getRouteEndDateKey(route);
 
+    const plannedStartMinutes = getRoutePlannedStartMinutes(route);
+    const plannedTimeLabel = formatMinutesLabel(plannedStartMinutes, text);
+    const currentTimeLabel = formatMinutesLabel(getCurrentMinutes(), text);
+
     if (!plannedStartKey || plannedStartKey === todayKey) {
-      requestStartRouteWithTimeReview(route, todayKey);
+      openModal({
+        title: text.dayRoute.dayStartTitle(1),
+        description: text.myRoute.startTimeReviewDescription(
+          plannedTimeLabel,
+          currentTimeLabel
+        ),
+        detail: text.myRoute.startTimeReviewDetail,
+        actions: [
+          {
+            label: text.myRoute.startNow,
+            variant: "primary",
+            onClick: () =>
+              handleStartRoute(route, todayKey, new Date().toISOString()),
+          },
+          {
+            label: text.myRoute.chooseStartTime,
+            variant: "secondary",
+            onClick: () => openStartTimePicker(route, todayKey),
+          },
+          {
+            label: text.common.cancel,
+            variant: "secondary",
+          },
+        ],
+      });
       return;
     }
 
@@ -632,26 +720,14 @@ function MyRoutePage() {
         {
           label: text.myRoute.startToday,
           variant: "primary",
-          autoClose: false,
-          onClick: () => {
-            const openedTimeReview = requestStartRouteWithTimeReview(
-              route,
-              todayKey
-            );
-            if (!openedTimeReview) {
-              closeModal();
-            }
-          },
+          onClick: () =>
+            handleStartRoute(route, todayKey, new Date().toISOString()),
         },
-        ...(plannedStartKey <= todayKey
-          ? [
-              {
-                label: text.myRoute.startPlannedDate,
-                variant: "secondary" as const,
-                onClick: () => handleStartRoute(route, plannedStartKey),
-              },
-            ]
-          : []),
+        {
+          label: text.myRoute.chooseStartTime,
+          variant: "secondary",
+          onClick: () => openStartTimePicker(route, todayKey),
+        },
         {
           label: text.myRoute.chooseDate,
           variant: "secondary",
@@ -669,9 +745,35 @@ function MyRoutePage() {
       return;
     }
 
-    requestStartRouteWithTimeReview(
+    openStartTimePicker(
       startDatePickerTarget.route,
       startDatePickerTarget.startedAt
+    );
+  };
+  const handleConfirmCustomStartTime = () => {
+    if (!startTimePickerTarget) {
+      return;
+    }
+
+    const dayStartedAt = combineDateKeyAndTime(
+      startTimePickerTarget.startedAt,
+      startTimePickerTarget.timeValue
+    );
+
+    if (!dayStartedAt) {
+      showToast(text.myRoute.startError, 2600);
+      return;
+    }
+
+    if (Date.parse(dayStartedAt) > Date.now() + 60_000) {
+      showToast(text.dayRoute.dayStartFutureError, 2600);
+      return;
+    }
+
+    handleStartRoute(
+      startTimePickerTarget.route,
+      startTimePickerTarget.startedAt,
+      dayStartedAt
     );
   };
   const handleRequestDeleteRoute = (route: MyRoute) => {
@@ -832,6 +934,25 @@ function MyRoutePage() {
           }
           onClose={() => setStartDatePickerTarget(null)}
           onConfirm={handleConfirmCustomStartDate}
+        />
+      ) : null}
+
+      {startTimePickerTarget ? (
+        <StartRouteTimePickerModal
+          target={startTimePickerTarget}
+          isPending={startRouteMutation.isPending}
+          onChange={(timeValue) =>
+            setStartTimePickerTarget((currentTarget) =>
+              currentTarget
+                ? {
+                    ...currentTarget,
+                    timeValue,
+                  }
+                : currentTarget
+            )
+          }
+          onClose={() => setStartTimePickerTarget(null)}
+          onConfirm={handleConfirmCustomStartTime}
         />
       ) : null}
     </section>

@@ -28,6 +28,7 @@ import type {
   PlaceSnapshotInput,
   PlaceStaySummary,
   RouteStopVisitVerificationInput,
+  UpdateRouteDayStartInput,
   UpdateRouteStopVisitTimesInput,
 } from "./route.types.js";
 
@@ -69,12 +70,16 @@ function getDateKey(value: Date) {
 }
 
 function getTodayDateKey() {
+  return getCorrectionDateKey(new Date());
+}
+
+function getCorrectionDateKey(value: Date) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: ROUTE_CORRECTION_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
+  }).format(value);
 }
 
 function getDateKeyDiffInDays(leftDateKey: string, rightDateKey: string) {
@@ -145,6 +150,7 @@ async function assertRouteStopVisitDate(
     },
     select: {
       date: true,
+      startedAt: true,
     },
   });
   const routeDayDateKey = routeDay?.date ? getDateKey(routeDay.date) : null;
@@ -154,6 +160,13 @@ async function assertRouteStopVisitDate(
   }
 
   const todayDateKey = getTodayDateKey();
+
+  if (
+    !routeDay?.startedAt &&
+    (!options.allowPast || routeDayDateKey === todayDateKey)
+  ) {
+    throw new UserFacingError("DAY를 먼저 시작한 뒤 방문을 인증해 주세요.");
+  }
 
   if (routeDayDateKey > todayDateKey) {
     throw new UserFacingError(
@@ -1182,6 +1195,133 @@ export async function updateRouteStopVisitTimes(
   });
 
   return refreshRouteAfterVisitChange(prisma, route);
+}
+
+export async function updateRouteDayStart(
+  prisma: PrismaClient,
+  user: User,
+  input: UpdateRouteDayStartInput
+) {
+  const routeDay = await prisma.routeDay.findUnique({
+    where: {
+      id: input.dayId,
+    },
+    include: {
+      stops: true,
+    },
+  });
+
+  if (!routeDay) {
+    throw new UserFacingError("DAY 일정을 찾을 수 없어요.");
+  }
+
+  const route = await assertRouteOwner(prisma, routeDay.routeId, user.id);
+  assertRouteCorrectionWindow(route);
+
+  const hasPlannedStartUpdate = input.plannedStartMinutes !== undefined;
+  const hasActualStartUpdate = input.startedAt instanceof Date;
+
+  if (!hasPlannedStartUpdate && !hasActualStartUpdate) {
+    throw new UserFacingError("변경할 시작시간을 입력해 주세요.");
+  }
+
+  let plannedStartMinutes: number | null | undefined;
+
+  if (hasPlannedStartUpdate) {
+    if (input.plannedStartMinutes == null) {
+      plannedStartMinutes = null;
+    } else if (
+      !Number.isFinite(input.plannedStartMinutes) ||
+      input.plannedStartMinutes < 0 ||
+      input.plannedStartMinutes >= 24 * 60
+    ) {
+      throw new UserFacingError("계획 출발시간을 다시 확인해 주세요.");
+    } else {
+      plannedStartMinutes = Math.round(input.plannedStartMinutes);
+    }
+  }
+
+  let startedAt: Date | undefined;
+
+  if (hasActualStartUpdate) {
+    startedAt = input.startedAt as Date;
+
+    if (Number.isNaN(startedAt.getTime())) {
+      throw new UserFacingError("실제 시작시간을 다시 확인해 주세요.");
+    }
+
+    if (startedAt.getTime() > Date.now() + 60_000) {
+      throw new UserFacingError("현재보다 이후 시간으로는 시작할 수 없어요.");
+    }
+
+    if (!routeDay.date) {
+      throw new UserFacingError("DAY 날짜를 먼저 설정해 주세요.");
+    }
+
+    const routeDayDateKey = getDateKey(routeDay.date);
+
+    if (routeDayDateKey > getTodayDateKey()) {
+      throw new UserFacingError("미래 DAY는 아직 시작할 수 없어요.");
+    }
+
+    if (getCorrectionDateKey(startedAt) !== routeDayDateKey) {
+      throw new UserFacingError("실제 시작시간은 해당 DAY 날짜 안에서 선택해 주세요.");
+    }
+
+    const firstRecordedVisitAt = routeDay.stops
+      .flatMap((stop) => [
+        getRecordedRouteStopArrivalAt(stop),
+        getRecordedRouteStopCompletionAt(stop),
+      ])
+      .filter((value): value is Date => Boolean(value))
+      .sort((left, right) => left.getTime() - right.getTime())[0];
+
+    if (
+      firstRecordedVisitAt &&
+      startedAt.getTime() > firstRecordedVisitAt.getTime()
+    ) {
+      throw new UserFacingError("실제 시작시간은 첫 방문 기록보다 늦을 수 없어요.");
+    }
+  }
+
+  await prisma.$transaction(async (transaction) => {
+    await transaction.routeDay.update({
+      where: {
+        id: routeDay.id,
+      },
+      data: {
+        ...(hasPlannedStartUpdate ? { plannedStartMinutes } : {}),
+        ...(startedAt ? { startedAt } : {}),
+      },
+    });
+
+    if (startedAt) {
+      await transaction.userNotification.deleteMany({
+        where: {
+          routeId: route.id,
+          dayId: routeDay.id,
+          type: "ROUTE_START",
+          pushStatus: {
+            in: ["PENDING", "FAILED", "CANCELED"],
+          },
+        },
+      });
+
+      if (routeDay.dayIndex === 1) {
+        await transaction.route.update({
+          where: {
+            id: route.id,
+          },
+          data: {
+            startedAt,
+            status: route.status === "COMPLETED" ? "COMPLETED" : "ACTIVE",
+          },
+        });
+      }
+    }
+  });
+
+  return refreshRouteProgress(prisma, route.id);
 }
 
 export async function markRouteStopVisited(

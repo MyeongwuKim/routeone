@@ -4,6 +4,7 @@ import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupContro
 import GpsTestLocationPopup from "./GpsTestLocationPopup";
 import {
   ActualStayMinutesPopup,
+  DayStartTimePopup,
   EarlyRouteCompletionPopup,
   PhotoPublicationPopup,
   StayMinutesPopup,
@@ -27,6 +28,11 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
     handleRequestCheckoutFromMap,
     closeMap,
     draggedStop,
+    dayStartTimeTarget,
+    defaultDayStartMinutes,
+    isUpdatingRouteDayStart,
+    setDayStartTimeTarget,
+    handleApplyDayStartTime,
     stayMinutesEditTarget,
     closeStayMinutesEdit,
     handleChangeStayMinutes,
@@ -99,6 +105,22 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
             {draggedStop.stop.place.title}
           </span>
         </div>
+      ) : null}
+      {dayStartTimeTarget ? (
+        <DayStartTimePopup
+          key={`${dayStartTimeTarget.routeDay.id}:${dayStartTimeTarget.mode}`}
+          target={dayStartTimeTarget}
+          defaultStartMinutes={defaultDayStartMinutes}
+          isSaving={isUpdatingRouteDayStart}
+          onClose={() => {
+            if (!isUpdatingRouteDayStart) {
+              setDayStartTimeTarget(null);
+            }
+          }}
+          onApply={(target, value) => {
+            void handleApplyDayStartTime(target, value);
+          }}
+        />
       ) : null}
       {stayMinutesEditTarget ? (
         <StayMinutesPopup

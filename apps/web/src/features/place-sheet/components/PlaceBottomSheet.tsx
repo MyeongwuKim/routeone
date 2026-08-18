@@ -17,6 +17,7 @@ import {
   type PlaceImageViewerTarget,
 } from "../placeSheetModel";
 import PlaceImageViewer from "./PlaceImageViewer";
+import PlaceDirectionsSection from "./PlaceDirectionsSection";
 import PlaceSheetMediaSection from "./PlaceSheetMediaSection";
 import PlaceSheetOverviewPanel from "./PlaceSheetOverviewPanel";
 import { CompactHoursBadge, SkeletonBar } from "./PlaceSheetPrimitives";
@@ -103,6 +104,7 @@ function PlaceBottomSheet() {
   const currentLocation = resolvedDirectionOrigin.coordinates;
 
   const isFullPopupMode = sheetMode === "full-popup";
+  const isDirectionsPopupMode = sheetMode === "directions-popup";
   const isCurrentPlaceSaved = selectedPlace
     ? savedPlaceIds.includes(selectedPlace.id)
     : false;
@@ -127,12 +129,14 @@ function PlaceBottomSheet() {
     handleSheetPointerMove,
     handleSheetPointerUp,
   } = usePlaceSheetLayout({
-    isSheetOpen: isOpen && !isFullPopupMode,
+    isSheetOpen: isOpen && !isFullPopupMode && !isDirectionsPopupMode,
     onRequestClose: resetSheet,
     resetVersion: sheetResetVersion,
   });
-  const shouldShowOverviewPanel = isFullPopupMode || showOverviewPanel;
-  const shouldShowExpandedSection = isFullPopupMode || isSheetExpanded;
+  const shouldShowOverviewPanel =
+    !isDirectionsPopupMode && (isFullPopupMode || showOverviewPanel);
+  const shouldShowExpandedSection =
+    isDirectionsPopupMode || isFullPopupMode || isSheetExpanded;
 
   const placeSheetData = usePlaceSheetData({
     appLanguage,
@@ -261,6 +265,64 @@ function PlaceBottomSheet() {
 
   if (!isOpen || !selectedPlace) {
     return null;
+  }
+
+  if (isDirectionsPopupMode) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={resetSheet}
+          aria-label={text.placeSheet.bottomSheetCloseAria}
+          className="fixed inset-0 z-[3300] bg-slate-950/55 backdrop-blur-[2px]"
+        />
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${selectedPlace.title} ${text.placeSheet.directions}`}
+          className={`fixed inset-x-0 bottom-0 ${UI_LAYER_CLASS.placeDetail} mx-auto flex max-h-[88dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[2rem] border border-brand-200 bg-brand-50 shadow-[0_-20px_60px_rgba(15,23,42,0.35)] dark:border-brand-400/30 dark:bg-[#071718]`}
+        >
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-brand-100 bg-white px-5 pb-4 pt-5 dark:border-brand-400/20 dark:bg-[#0b211f]">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black text-brand-600">
+                {text.placeSheet.directions}
+              </p>
+              <p className="mt-1 truncate text-lg font-black text-slate-900 dark:text-white">
+                {selectedPlace.title}
+              </p>
+              {selectedPlace.address ? (
+                <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-500 dark:text-slate-300">
+                  {selectedPlace.address}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              aria-label={text.placeSheet.sheetCloseAria}
+              onClick={resetSheet}
+              className="flex size-10 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 transition active:scale-95 dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-100"
+            >
+              <IoClose />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <PlaceDirectionsSection
+              appLanguage={appLanguage}
+              currentLocation={currentLocation}
+              directionOrigin={resolvedDirectionOrigin}
+              isDarkMode={isDarkMode}
+              isRouteLoading={placeSheetData.isRouteLoading}
+              routeDistanceText={placeSheetData.routeDistanceText}
+              routeDurationText={placeSheetData.routeDurationText}
+              routeError={placeSheetData.routeError}
+              routePathPoints={placeSheetData.routePathPoints}
+              selectedPlace={selectedPlace}
+              text={text}
+            />
+          </div>
+        </section>
+      </>
+    );
   }
 
   const shouldOffsetSheetHeader = isSheetExpanded || isFullPopupMode;

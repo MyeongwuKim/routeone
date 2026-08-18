@@ -86,6 +86,8 @@ fragment RouteDetailFields on Route {
     routeId
     dayIndex
     date
+    plannedStartMinutes
+    startedAt
     stops {
       ...RouteStopFields
     }

@@ -111,8 +111,10 @@ model RouteDay {
   id      String @id @default(auto()) @map("_id") @db.ObjectId
   routeId String @db.ObjectId
 
-  dayIndex Int
-  date     DateTime?
+  dayIndex            Int
+  date                DateTime?
+  plannedStartMinutes Int?
+  startedAt           DateTime?
 
   route Route       @relation(fields: [routeId], references: [id])
   stops RouteStop[]
