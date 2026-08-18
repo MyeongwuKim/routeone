@@ -47,7 +47,7 @@ const ROUTE_ARRIVAL_NOTIFIED_STORAGE_KEY =
   "routeone:native-route-arrival-notified:v1";
 const DELIVERED_NOTIFICATION_HISTORY_STORAGE_KEY =
   "routeone:native-delivered-notification-history:v1";
-const MAX_GEOFENCE_REGION_COUNT = 20;
+const MAX_GEOFENCE_REGION_COUNT = 1;
 const MAX_DELIVERED_NOTIFICATION_HISTORY_COUNT = 120;
 const DELIVERED_NOTIFICATION_HISTORY_TTL_MS =
   1000 * 60 * 60 * 24 * 180;
@@ -188,6 +188,7 @@ async function readStoredRouteArrivalPlaces() {
     return new Map(
       places
         .filter((place) => place.syncedDateKey === getTodayDateKey())
+        .slice(0, MAX_GEOFENCE_REGION_COUNT)
         .map((place) => [getRouteArrivalRegionId(place), place] as const)
     );
   } catch {
@@ -661,8 +662,35 @@ export async function reconcileStoredRouteArrivalNotifications() {
     return;
   }
 
+  const places = [...placeByRegionId.values()].slice(
+    0,
+    MAX_GEOFENCE_REGION_COUNT
+  );
+
+  if (Platform.OS === "ios") {
+    const dateKey = getTodayDateKey();
+
+    await syncIosRouteArrivalNotifications(
+      places.map((place) => ({
+        identifier: getRouteArrivalNotificationId(place, dateKey),
+        regionIdentifier: getRouteArrivalRegionId(place),
+        title: place.notificationTitle,
+        body: place.notificationBody,
+        routeId: place.routeId,
+        routeTitle: place.routeTitle ?? null,
+        dayId: place.dayId,
+        stopId: place.stopId,
+        placeTitle: place.title,
+        dateKey,
+        latitude: place.lat,
+        longitude: place.lng,
+      })),
+      DEFAULT_GEOFENCE_RADIUS_METERS
+    );
+  }
+
   await reconcileCurrentRouteArrival(
-    [...placeByRegionId.values()],
+    places,
     DEFAULT_GEOFENCE_RADIUS_METERS
   );
 }

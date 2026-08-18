@@ -1,8 +1,8 @@
 import {
+  getNextRouteStop,
   getRouteTitle,
   getTodayDateKey,
   getTodayRouteDay,
-  isVisitedStop,
 } from "../routeDisplay";
 import type { MyRoute } from "../types";
 import {
@@ -33,19 +33,25 @@ function getNativeRouteArrivalNotificationPlaces(
       return [];
     }
 
-    return todayRouteDay.stops
-      .filter((stop) => !isVisitedStop(stop))
-      .map((stop) => ({
-        id: `${route.id}:${stop.id}`,
+    const activeDestination = getNextRouteStop(todayRouteDay);
+
+    if (!activeDestination) {
+      return [];
+    }
+
+    return [
+      {
+        id: `${route.id}:${activeDestination.id}`,
         routeId: route.id,
         routeTitle: getRouteTitle(route),
         dayId: todayRouteDay.id,
         dayIndex: todayRouteDay.dayIndex,
-        stopId: stop.id,
-        title: stop.place.title,
-        lat: stop.place.lat,
-        lng: stop.place.lng,
-      }));
+        stopId: activeDestination.id,
+        title: activeDestination.place.title,
+        lat: activeDestination.place.lat,
+        lng: activeDestination.place.lng,
+      },
+    ];
   });
 }
 
