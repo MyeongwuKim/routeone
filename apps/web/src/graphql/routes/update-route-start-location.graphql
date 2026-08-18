@@ -1,0 +1,5 @@
+mutation UpdateRouteStartLocation($input: UpdateRouteStartLocationInput!) {
+  updateRouteStartLocation(input: $input) {
+    ...RouteDetailFields
+  }
+}

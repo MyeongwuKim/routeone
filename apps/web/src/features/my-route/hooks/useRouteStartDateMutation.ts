@@ -18,7 +18,7 @@ export function useRouteStartDateMutation(routeId: string) {
         MY_ROUTES_QUERY_KEY,
         (currentData) => upsertMyRouteCache(currentData, result.startRoute)
       );
-      showToast("실제 시작일을 수정했어요.");
+      showToast("실제 출발일을 수정했어요.");
     },
     onError: (error) => {
       showToast(

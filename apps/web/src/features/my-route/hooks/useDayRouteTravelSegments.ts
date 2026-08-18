@@ -147,7 +147,7 @@ export function useDayRouteTravelSegments({
         routeDay.id === activeDayId ? orderedStops : routeDay.stops;
       const firstStop = routeDayStops[0] ?? null;
 
-      if (firstStop && !getStoredTravelSegment(firstStop)) {
+      if (firstStop && startLocation) {
         appendRequest(createTravelSegmentRequest(startLocation, firstStop.place));
       }
 

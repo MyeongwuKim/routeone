@@ -1,4 +1,4 @@
-import { useMemo, type PointerEvent as ReactPointerEvent } from "react";
+import { type PointerEvent as ReactPointerEvent } from "react";
 import {
   MdAccessTime,
   MdCheckCircle,
@@ -66,10 +66,15 @@ function getDateTimeClockMinutes(
 function getStopTravelMinutes(
   stop: MyRouteStop,
   index: number,
-  startLocation: MyRoute["startLocation"]
+  startLocation: MyRoute["startLocation"],
+  firstTravelMinutes: number | null
 ) {
   if (index === 0 && !startLocation) {
     return 0;
+  }
+
+  if (index === 0 && firstTravelMinutes != null) {
+    return firstTravelMinutes;
   }
 
   return Math.max(0, stop.travelMinutesFromPrevious ?? 0);
@@ -78,7 +83,8 @@ function getStopTravelMinutes(
 function buildRouteStopSchedules(
   stops: MyRouteStop[],
   startLocation: MyRoute["startLocation"],
-  dailyStartMinutes: number
+  dailyStartMinutes: number,
+  firstTravelMinutes: number | null
 ) {
   let currentMinutes = dailyStartMinutes;
 
@@ -121,7 +127,12 @@ function buildRouteStopSchedules(
       };
     }
 
-    currentMinutes += getStopTravelMinutes(stop, index, startLocation);
+    currentMinutes += getStopTravelMinutes(
+      stop,
+      index,
+      startLocation,
+      firstTravelMinutes
+    );
 
     const startMinutes = currentMinutes;
     const endMinutes = startMinutes + getStopStayMinutes(stop);
@@ -150,35 +161,6 @@ function formatRouteStopSchedule(schedule: RouteStopSchedule, text: UiText) {
   return text.dayRoute.estimatedTimeRange(start, end);
 }
 
-function getDayStartTitle(
-  dayStops: MyRouteStop[],
-  startLocation: MyRoute["startLocation"],
-  text: UiText
-) {
-  if (startLocation) {
-    return text.dayRoute.savedStartLocation;
-  }
-
-  return dayStops[0]?.place.title ?? text.dayRoute.noStartPlace;
-}
-
-function getDayStartDescription(
-  routeDay: MyRouteDay,
-  dayStops: MyRouteStop[],
-  startLocation: MyRoute["startLocation"],
-  text: UiText
-) {
-  if (startLocation) {
-    return text.dayRoute.startFromMapDescription(routeDay.dayIndex);
-  }
-
-  if (dayStops[0]) {
-    return text.dayRoute.startFromFirstPlaceDescription(routeDay.dayIndex);
-  }
-
-  return text.dayRoute.emptyStartDescription;
-}
-
 type DayRouteAccordionItemProps = {
   routeDay: MyRouteDay;
   isExpanded: boolean;
@@ -193,6 +175,7 @@ type DayRouteAccordionItemProps = {
   isReadOnly: boolean;
   canEditVisitTimes: boolean;
   canEditDayStartTime: boolean;
+  canEditStartLocation: boolean;
   canStartDay: boolean;
   canRecordDayStart: boolean;
   canEditVerificationPhoto: boolean;
@@ -208,6 +191,7 @@ type DayRouteAccordionItemProps = {
   onRequestDayStart: (day: MyRouteDay) => void;
   onRequestPlannedStartEdit: (day: MyRouteDay) => void;
   onRequestActualStartEdit: (day: MyRouteDay) => void;
+  onRequestStartLocationEdit: () => void;
   onRegisterDropZone: (index: number, node: HTMLDivElement | null) => void;
   onStartDrag: (
     stop: MyRouteStop,
@@ -238,6 +222,7 @@ function DayRouteAccordionItem({
   isReadOnly,
   canEditVisitTimes,
   canEditDayStartTime,
+  canEditStartLocation,
   canStartDay,
   canRecordDayStart,
   canEditVerificationPhoto,
@@ -253,6 +238,7 @@ function DayRouteAccordionItem({
   onRequestDayStart,
   onRequestPlannedStartEdit,
   onRequestActualStartEdit,
+  onRequestStartLocationEdit,
   onRegisterDropZone,
   onStartDrag,
   onRequestStayMinutesEdit,
@@ -267,6 +253,23 @@ function DayRouteAccordionItem({
   const text = useUiText();
   const dayStops = orderedStops;
   const hasDayStops = dayStops.length > 0;
+  const firstStop = dayStops[0] ?? null;
+  const getFallbackTravelSegment = (
+    from: RouteLatLng | null | undefined,
+    to: RouteLatLng | null | undefined
+  ) => {
+    const key = getTravelSegmentKey(from, to);
+
+    return key ? (travelSegmentByKey[key] ?? { status: "loading" }) : null;
+  };
+  const firstTravelSegment = startLocation
+    ? getFallbackTravelSegment(startLocation, firstStop?.place)
+    : getStoredTravelSegment(firstStop);
+  const firstTravelMinutes =
+    firstTravelSegment?.status === "success" ||
+    firstTravelSegment?.status === "fallback"
+      ? firstTravelSegment.minutes
+      : null;
   const plannedDayStartMinutes =
     typeof routeDay.plannedStartMinutes === "number"
       ? routeDay.plannedStartMinutes
@@ -279,14 +282,11 @@ function DayRouteAccordionItem({
   );
   const routeDayStartMinutes =
     actualDayStartMinutes ?? plannedDayStartMinutes;
-  const stopSchedules = useMemo(
-    () =>
-      buildRouteStopSchedules(
-        dayStops,
-        startLocation,
-        routeDayStartMinutes
-      ),
-    [dayStops, routeDayStartMinutes, startLocation]
+  const stopSchedules = buildRouteStopSchedules(
+    dayStops,
+    startLocation,
+    routeDayStartMinutes,
+    firstTravelMinutes
   );
   const firstStopSchedule = stopSchedules[0] ?? null;
   const lastStopSchedule = stopSchedules.at(-1) ?? null;
@@ -298,27 +298,17 @@ function DayRouteAccordionItem({
   const totalScheduleMinutes = lastStopSchedule
     ? Math.max(0, lastStopSchedule.endMinutes - scheduleStartMinutes)
     : 0;
-  const dayStartTitle = getDayStartTitle(dayStops, startLocation, text);
-  const dayStartDescription = getDayStartDescription(
-    routeDay,
-    dayStops,
-    startLocation,
-    text
-  );
-  const firstStop = dayStops[0] ?? null;
-  const getFallbackTravelSegment = (
-    from: RouteLatLng | null | undefined,
-    to: RouteLatLng | null | undefined
-  ) => {
-    const key = getTravelSegmentKey(from, to);
-
-    return key ? (travelSegmentByKey[key] ?? { status: "loading" }) : null;
-  };
-  const firstTravelSegment =
-    getStoredTravelSegment(firstStop) ??
-    (firstStop ? getFallbackTravelSegment(startLocation, firstStop.place) : null);
+  const dayStartTitle = firstStop?.place.title ?? text.dayRoute.noStartPlace;
+  const firstTravelLabel = firstTravelSegment
+    ? getTravelSegmentLabel(firstTravelSegment, text)
+    : null;
+  const firstTravelSummary =
+    firstTravelLabel &&
+    firstTravelSegment?.status !== "loading" &&
+    firstTravelSegment?.status !== "error"
+      ? text.dayRoute.firstPlaceTravel(firstTravelLabel)
+      : firstTravelLabel;
   const completedStopCount = dayStops.filter(isVisitedStop).length;
-  const startLabel = startLocation ? text.dayRoute.start : text.dayRoute.firstPlace;
   const startTitlePrefix = startLocation ? "START" : text.dayRoute.firstPlace;
   const progressPercent = hasDayStops
     ? Math.round((completedStopCount / dayStops.length) * 100)
@@ -373,7 +363,9 @@ function DayRouteAccordionItem({
               <p className="mt-1 flex items-center gap-1 truncate text-[11px] font-bold text-brand-700">
                 <MdMyLocation className="shrink-0 text-sm" />
                 <span className="truncate">
-                  {startLabel}: {dayStartTitle}
+                  {startLocation
+                    ? `START → ${dayStartTitle}${firstTravelSummary ? ` · ${firstTravelSummary}` : ""}`
+                    : `${text.dayRoute.firstPlace}: ${dayStartTitle}`}
                 </span>
               </p>
             </div>
@@ -404,19 +396,15 @@ function DayRouteAccordionItem({
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-lg text-brand-700">
                 <MdMyLocation />
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs font-black text-brand-700">
-                  {startTitlePrefix} · {dayStartTitle}
+                  {startTitlePrefix}
+                  {startLocation && firstStop ? ` → ${dayStartTitle}` : ` · ${dayStartTitle}`}
                 </p>
-                <p className="mt-0.5 text-[11px] font-semibold leading-4 text-slate-500">
-                  {dayStartDescription}
-                </p>
-                {firstTravelSegment ? (
+                {firstTravelSummary ? (
                   <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-brand-700">
                     <MdDirectionsCar className="text-sm" />
-                    {text.dayRoute.firstPlaceTravel(
-                      getTravelSegmentLabel(firstTravelSegment, text)
-                    )}
+                    {firstTravelSummary}
                   </p>
                 ) : startLocation || !hasDayStops ? null : (
                   <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-slate-500">
@@ -425,6 +413,17 @@ function DayRouteAccordionItem({
                   </p>
                 )}
               </div>
+              {startLocation && canEditStartLocation ? (
+                <button
+                  type="button"
+                  aria-label={text.dayRoute.editStartLocationAria}
+                  onClick={onRequestStartLocationEdit}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-brand-200 bg-white px-3 py-2 text-[11px] font-black text-brand-700"
+                >
+                  <MdEdit className="text-sm" />
+                  {text.common.edit}
+                </button>
+              ) : null}
             </div>
           </div>
 

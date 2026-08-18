@@ -69,7 +69,7 @@ function PlaceSearchPopup({
 
   return (
     <section
-      className={`fixed inset-0 ${UI_LAYER_CLASS.searchOverlay} bg-slate-50 text-slate-900 dark:bg-[#071718] dark:text-slate-100`}
+      className={`full-page-popup-enter fixed inset-0 ${UI_LAYER_CLASS.searchOverlay} bg-slate-50 text-slate-900 dark:bg-[#071718] dark:text-slate-100`}
     >
       <div className="flex h-full flex-col">
         <div className="border-b border-slate-200 bg-white/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur dark:border-brand-400/20 dark:bg-[#0b211f]/95">
@@ -136,24 +136,31 @@ function PlaceSearchPopup({
             <div className="space-y-2">
               {searchResults.length > 0 ? (
                 <>
-                  {visibleSearchResults.map((item) => (
-                    <PlaceResultCard
+                  {visibleSearchResults.map((item, index) => (
+                    <div
                       key={`${item.attraction.id}-${item.attraction.contentTypeId}`}
-                      title={item.attraction.title}
-                      address={item.attraction.address}
-                      categoryLabel={item.markerType.contentTypeLabel}
-                      thumbnailUrl={item.thumbnailUrl}
-                      fallbackIcon={item.icon}
-                      distanceLabel={item.distanceLabel}
-                      badgeLabel={
-                        item.attraction.isTodayFestival
-                          ? text.search.todayFestival
-                          : item.rank
-                            ? text.search.concentrationRank(item.rank)
-                            : null
-                      }
-                      onClick={() => onResultClick(item)}
-                    />
+                      className="place-search-result-enter"
+                      style={{
+                        animationDelay: `${Math.min(index, 8) * 35}ms`,
+                      }}
+                    >
+                      <PlaceResultCard
+                        title={item.attraction.title}
+                        address={item.attraction.address}
+                        categoryLabel={item.markerType.contentTypeLabel}
+                        thumbnailUrl={item.thumbnailUrl}
+                        fallbackIcon={item.icon}
+                        distanceLabel={item.distanceLabel}
+                        badgeLabel={
+                          item.attraction.isTodayFestival
+                            ? text.search.todayFestival
+                            : item.rank
+                              ? text.search.concentrationRank(item.rank)
+                              : null
+                        }
+                        onClick={() => onResultClick(item)}
+                      />
+                    </div>
                   ))}
                   {visibleSearchResults.length < searchResults.length ? (
                     <button

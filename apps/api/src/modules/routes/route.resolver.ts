@@ -37,6 +37,7 @@ import {
   shareRoute,
   startRoute,
   updateRouteDayStart,
+  updateRouteStartLocation,
   updateRouteStopStayMinutes,
   updateRouteStopVisitTimes,
   type CloneRouteInput,
@@ -47,6 +48,7 @@ import {
   type RouteStopVisitVerificationInput,
   type StartRouteInput,
   type UpdateRouteDayStartInput,
+  type UpdateRouteStartLocationInput,
   type UpdateRouteStopStayMinutesInput,
   type UpdateRouteStopVisitTimesInput,
 } from "./route.service.js";
@@ -312,6 +314,11 @@ export const routeTypeDefs = gql`
     startedAt: DateTime
   }
 
+  input UpdateRouteStartLocationInput {
+    routeId: ID!
+    startLocation: RouteStartLocationInput!
+  }
+
   input ReorderRouteStopsInput {
     routeId: ID!
     dayId: ID!
@@ -375,6 +382,7 @@ export const routeTypeDefs = gql`
     appendRouteDays(input: AppendRouteDaysInput!): Route!
     startRoute(input: StartRouteInput!): Route!
     updateRouteDayStart(input: UpdateRouteDayStartInput!): Route!
+    updateRouteStartLocation(input: UpdateRouteStartLocationInput!): Route!
     deleteRoute(routeId: ID!): DeletedRoutePayload!
     deleteRouteDay(dayId: ID!): Route!
     markRouteStopVisited(
@@ -461,6 +469,10 @@ type StartRouteArgs = {
 
 type UpdateRouteDayStartArgs = {
   input: UpdateRouteDayStartInput;
+};
+
+type UpdateRouteStartLocationArgs = {
+  input: UpdateRouteStartLocationInput;
 };
 
 type MarkRouteStopVisitedArgs = {
@@ -711,6 +723,14 @@ export const routeResolvers = {
     ) {
       const user = requireUser(context);
       return updateRouteDayStart(context.prisma, user, args.input);
+    },
+    updateRouteStartLocation(
+      _parent: unknown,
+      args: UpdateRouteStartLocationArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return updateRouteStartLocation(context.prisma, user, args.input);
     },
     deleteRoute(_parent: unknown, args: RouteIdArgs, context: GraphQLContext) {
       const user = requireUser(context);

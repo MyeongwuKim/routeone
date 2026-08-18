@@ -18,6 +18,7 @@ import type {
   ReorderRouteStopsInput,
   RouteStartLocationInput,
   StartRouteInput,
+  UpdateRouteStartLocationInput,
   UpdateRouteStopStayMinutesInput,
 } from "./route.types.js";
 import { syncPlaceStayStatForRouteStopChange } from "./routeVisit.service.js";
@@ -720,6 +721,30 @@ export async function updateRouteStopStayMinutes(
   }
 
   return refreshedRoute;
+}
+
+export async function updateRouteStartLocation(
+  prisma: PrismaClient,
+  user: User,
+  input: UpdateRouteStartLocationInput
+) {
+  const route = await assertRouteOwner(prisma, input.routeId, user.id);
+  const startLocation = normalizeRouteStartLocation(input.startLocation);
+
+  if (!startLocation) {
+    throw new UserFacingError("스타트 지점을 선택해 주세요.");
+  }
+
+  await prisma.route.update({
+    where: {
+      id: route.id,
+    },
+    data: {
+      startLocation,
+    },
+  });
+
+  return refreshRouteProgress(prisma, route.id);
 }
 
 export async function reorderRouteStops(

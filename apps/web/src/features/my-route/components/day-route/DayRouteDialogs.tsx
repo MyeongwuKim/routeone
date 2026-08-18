@@ -1464,7 +1464,7 @@ export function EarlyRouteCompletionPopup({
         </div>
 
         <label className="mt-4 block text-xs font-black text-slate-500">
-          실제 시작일
+          실제 출발일
           <input
             type="date"
             value={target.startedAt}

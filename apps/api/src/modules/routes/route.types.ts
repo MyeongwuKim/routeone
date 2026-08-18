@@ -70,6 +70,11 @@ export type UpdateRouteDayStartInput = {
   startedAt?: Date | null;
 };
 
+export type UpdateRouteStartLocationInput = {
+  routeId: string;
+  startLocation: RouteStartLocationInput;
+};
+
 export type CloneRouteInput = {
   routeId: string;
   startImmediately?: boolean | null;

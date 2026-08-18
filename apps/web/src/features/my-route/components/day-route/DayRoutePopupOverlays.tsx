@@ -1,5 +1,6 @@
 import { MdDragIndicator } from "react-icons/md";
 import PlaceCartRouteMapPopup from "@/features/route-checkout/components/cart-steps/PlaceCartRouteMapPopup";
+import StartLocationPickerPopup from "@/features/route-checkout/components/cart-steps/StartLocationPickerPopup";
 import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupController";
 import GpsTestLocationPopup from "./GpsTestLocationPopup";
 import {
@@ -27,6 +28,10 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
     onRequestCheckout,
     handleRequestCheckoutFromMap,
     closeMap,
+    isStartLocationPickerOpen,
+    startLocation,
+    closeStartLocationPicker,
+    handleApplyStartLocation,
     draggedStop,
     dayStartTimeTarget,
     defaultDayStartMinutes,
@@ -91,6 +96,14 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
             onRequestCheckout ? handleRequestCheckoutFromMap : undefined
           }
           onClose={closeMap}
+        />
+      ) : null}
+      {isStartLocationPickerOpen && startLocation ? (
+        <StartLocationPickerPopup
+          routePlan={routeMapDayOptions.map((option) => option.day)}
+          initialLocation={startLocation}
+          onClose={closeStartLocationPicker}
+          onApply={handleApplyStartLocation}
         />
       ) : null}
       {draggedStop?.isActive ? (

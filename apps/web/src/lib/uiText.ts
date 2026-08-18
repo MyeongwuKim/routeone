@@ -12,6 +12,7 @@ export type UiText = {
     clearAll: string;
     close: string;
     confirm: string;
+    edit: string;
     retry: string;
     reset: string;
     unknown: string;
@@ -511,6 +512,7 @@ export type UiText = {
     placeDirections: string;
     openPlaceDirectionsAria: (title: string) => string;
     noStartGps: string;
+    editStartLocationAria: string;
     firstPlaceTravel: (label: string) => string;
     nextPlaceTravel: (label: string) => string;
     travelLoading: string;
@@ -863,6 +865,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       clearAll: "비우기",
       close: "닫기",
       confirm: "확인",
+      edit: "수정",
       retry: "다시 시도",
       reset: "초기화",
       unknown: "미정",
@@ -1574,7 +1577,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       placeDirections: "지도·길찾기",
       openPlaceDirectionsAria: (title) => `${title} 지도와 길찾기 보기`,
       noStartGps: "출발 GPS 없음",
-      firstPlaceTravel: (label) => `첫 장소까지 ${label}`,
+      editStartLocationAria: "스타트 지점 수정",
+      firstPlaceTravel: (label) => `이동 · ${label}`,
       nextPlaceTravel: (label) => `다음 목적지까지 ${label}`,
       travelLoading: "이동 시간 계산 중",
       travelError: "이동 시간 확인 불가",
@@ -1695,29 +1699,29 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       allPlacesCompleted: "모든 장소 완료",
       remainingPlaces: (count) => `${count}곳 남음`,
       expectedStart: "예상 출발",
-      plannedDeparture: "계획 출발",
-      expectedEnd: "예상 종료",
+      plannedDeparture: "출발 예정",
+      expectedEnd: "도착 예정",
       totalDuration: "총 소요",
-      actualStart: "실제 시작",
+      actualStart: "출발 시각",
       startDay: "DAY 시작하기",
-      recordActualStart: "실제 시작 기록",
+      recordActualStart: "출발 시각 기록",
       editPlannedStartAria: (dayIndex) =>
         `DAY ${dayIndex} 계획 출발시간 수정`,
       editActualStartAria: (dayIndex) =>
-        `DAY ${dayIndex} 실제 시작시간 수정`,
+        `DAY ${dayIndex} 출발 시각 수정`,
       dayStartTitle: (dayIndex) => `DAY ${dayIndex}를 시작할까요?`,
       plannedStartEditTitle: (dayIndex) =>
         `DAY ${dayIndex} 계획 출발시간`,
       actualStartEditTitle: (dayIndex) =>
-        `DAY ${dayIndex} 실제 시작시간`,
+        `DAY ${dayIndex} 출발 시각`,
       dayStartPlannedDescription: (timeLabel) =>
         `계획 출발시간은 ${timeLabel}이에요.`,
       dayStartNow: (timeLabel) => `지금 시작 · ${timeLabel}`,
       startAtSelectedTime: "선택한 시간으로 시작",
       savePlannedStart: "계획시간 저장",
-      saveActualStart: "실제시간 저장",
+      saveActualStart: "출발 시각 저장",
       dayStartFutureError: "현재보다 이후 시간으로는 시작할 수 없어요.",
-      dayStartAfterVisitError: "실제 시작시간은 첫 방문 기록보다 빨라야 해요.",
+      dayStartAfterVisitError: "출발 시각은 첫 방문 기록보다 빨라야 해요.",
       actualEnd: "실제 종료",
       actualTotalDuration: "실제 소요",
       dragGuide: "오른쪽 핸들을 잡고 원하는 위치로 옮겨 주세요.",
@@ -2005,6 +2009,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       clearAll: "Empty",
       close: "Close",
       confirm: "OK",
+      edit: "Edit",
       retry: "Try again",
       reset: "Reset",
       unknown: "TBD",
@@ -2762,7 +2767,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       placeDirections: "Map & directions",
       openPlaceDirectionsAria: (title) => `View map and directions to ${title}`,
       noStartGps: "No start GPS",
-      firstPlaceTravel: (label) => `To first place: ${label}`,
+      editStartLocationAria: "Edit start point",
+      firstPlaceTravel: (label) => `Travel · ${label}`,
       nextPlaceTravel: (label) => `To next destination: ${label}`,
       travelLoading: "Calculating travel time",
       travelError: "Travel time unavailable",
@@ -2886,26 +2892,27 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       plannedDeparture: "Planned departure",
       expectedEnd: "Expected End",
       totalDuration: "Total Time",
-      actualStart: "Actual Start",
+      actualStart: "Actual Departure",
       startDay: "Start DAY",
-      recordActualStart: "Record actual start",
+      recordActualStart: "Record departure time",
       editPlannedStartAria: (dayIndex) =>
         `Edit planned departure for DAY ${dayIndex}`,
       editActualStartAria: (dayIndex) =>
-        `Edit actual start for DAY ${dayIndex}`,
+        `Edit actual departure for DAY ${dayIndex}`,
       dayStartTitle: (dayIndex) => `Start DAY ${dayIndex}?`,
       plannedStartEditTitle: (dayIndex) =>
         `DAY ${dayIndex} planned departure`,
-      actualStartEditTitle: (dayIndex) => `DAY ${dayIndex} actual start`,
+      actualStartEditTitle: (dayIndex) =>
+        `DAY ${dayIndex} actual departure`,
       dayStartPlannedDescription: (timeLabel) =>
         `The planned departure is ${timeLabel}.`,
       dayStartNow: (timeLabel) => `Start now · ${timeLabel}`,
       startAtSelectedTime: "Start at selected time",
       savePlannedStart: "Save planned time",
-      saveActualStart: "Save actual time",
+      saveActualStart: "Save departure time",
       dayStartFutureError: "The start time cannot be later than now.",
       dayStartAfterVisitError:
-        "The actual start must be earlier than the first visit record.",
+        "The actual departure must be earlier than the first visit record.",
       actualEnd: "Actual End",
       actualTotalDuration: "Actual Time",
       dragGuide: "Grab the handle on the right and move it where you want.",

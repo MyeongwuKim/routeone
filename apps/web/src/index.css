@@ -482,7 +482,19 @@ body {
   }
 }
 
-.route-checkout-modal-enter {
+@keyframes placeSearchResultEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.route-checkout-modal-enter,
+.full-page-popup-enter {
   animation: routeCheckoutEnter 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -530,6 +542,10 @@ body {
   animation: centerModalPanelEnter 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.place-search-result-enter {
+  animation: placeSearchResultEnter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .route-order-drag-node {
   touch-action: pan-y;
   user-select: none;
@@ -543,6 +559,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .route-checkout-modal-enter,
+  .full-page-popup-enter,
   .route-checkout-step-enter,
   .route-page-slide-enter,
   .route-day-accordion-enter,
@@ -554,7 +571,8 @@ body {
   .global-modal-backdrop-enter,
   .global-modal-panel-enter,
   .center-modal-backdrop-enter,
-  .center-modal-panel-enter {
+  .center-modal-panel-enter,
+  .place-search-result-enter {
     animation: none;
   }
 }

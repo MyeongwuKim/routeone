@@ -23,6 +23,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
     isReadOnly,
     canEditVisitTimes,
     canEditDayStartTime,
+    canEditStartLocation,
     isRetrospectiveCompletion,
     canEditVerificationPhoto,
     canToggleVisitStatus,
@@ -36,6 +37,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
     startDragStop,
     handleSelectDay,
     setDayStartTimeTarget,
+    openStartLocationPicker,
     setStayMinutesEditTarget,
     setVisitTimesEditTarget,
     handleToggleStopVisited,
@@ -71,6 +73,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               isReadOnly={isReadOnly}
               canEditVisitTimes={canEditVisitTimes}
               canEditDayStartTime={canEditDayStartTime}
+              canEditStartLocation={canEditStartLocation}
               canStartDay={
                 canEditDayStartTime &&
                 !isRetrospectiveCompletion &&
@@ -121,6 +124,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
                   mode: "actual",
                 })
               }
+              onRequestStartLocationEdit={openStartLocationPicker}
               onRegisterDropZone={
                 isRouteDayActive ? registerDropZone : () => undefined
               }

@@ -16,7 +16,9 @@ type StartLocationPickerPopupProps = {
   routePlan: PlannedRouteDay[];
   initialLocation: RouteStartLocation;
   onClose: () => void;
-  onApply: (location: RouteStartLocation) => void;
+  onApply: (
+    location: RouteStartLocation
+  ) => boolean | void | Promise<boolean | void>;
 };
 
 function createStartMarkerIconHtml() {
@@ -93,6 +95,7 @@ function StartLocationPickerPopup({
   const mapInstanceRef = useRef<NaverMapInstance | null>(null);
   const startMarkerRef = useRef<NaverMarkerInstance | null>(null);
   const [draftLocation, setDraftLocation] = useState(initialLocation);
+  const [isApplying, setIsApplying] = useState(false);
   const visiblePlaces = useMemo(
     () => routePlan.flatMap((day) => day.items).slice(0, 40),
     [routePlan]
@@ -290,13 +293,20 @@ function StartLocationPickerPopup({
             </button>
             <button
               type="button"
+              disabled={isApplying}
               onClick={() => {
-                onApply(draftLocation);
-                onClose();
+                setIsApplying(true);
+                void Promise.resolve(onApply(draftLocation))
+                  .then((didApply) => {
+                    if (didApply !== false) {
+                      onClose();
+                    }
+                  })
+                  .finally(() => setIsApplying(false));
               }}
-              className="rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
+              className="rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
             >
-              {text.cart.apply}
+              {isApplying ? text.cart.saving : text.cart.apply}
             </button>
           </div>
         </footer>

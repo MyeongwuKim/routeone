@@ -379,7 +379,7 @@ function NotificationCenterPage() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="notification-center-title"
-      className={`fixed inset-0 ${UI_LAYER_CLASS.searchOverlay} bg-slate-50 text-slate-900 dark:bg-[#071718] dark:text-slate-100`}
+      className={`full-page-popup-enter fixed inset-0 ${UI_LAYER_CLASS.searchOverlay} bg-slate-50 text-slate-900 dark:bg-[#071718] dark:text-slate-100`}
     >
       <div className="flex h-full flex-col">
         <header className="border-b border-slate-200 bg-white/95 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur dark:border-brand-400/20 dark:bg-[#0b211f]/95">
