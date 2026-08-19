@@ -261,7 +261,7 @@ function MyRouteHistoryCard({
       </button>
 
       {canMarkNotVisited ? (
-        <div className="relative flex justify-end px-4 pb-3 before:pointer-events-none before:absolute before:left-4 before:right-4 before:top-0 before:h-px before:bg-brand-100 before:content-[''] dark:before:bg-brand-400/30">
+        <div className="relative flex justify-start px-4 pb-3 before:pointer-events-none before:absolute before:left-4 before:right-4 before:top-0 before:h-px before:bg-brand-100 before:content-[''] dark:before:bg-brand-400/30">
           <button
             type="button"
             onClick={() => onRequestDeleteRoute?.(route)}

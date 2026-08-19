@@ -220,11 +220,6 @@ export type UiText = {
     festivalTestSendAria: string;
     festivalTestSent: string;
     festivalTestFailed: (reason: string) => string;
-    routeReviewTestSend: string;
-    routeReviewTestSending: string;
-    routeReviewTestSendAria: string;
-    routeReviewTestSent: string;
-    routeReviewTestFailed: (reason: string) => string;
     festivalTestPermissionDenied: string;
     festivalTestDeviceUnavailable: string;
     festivalTestProjectUnavailable: string;
@@ -267,9 +262,6 @@ export type UiText = {
     startSuccess: string;
     startError: string;
     futureStartError: string;
-    arrivalNotificationRegistered: (count: number) => string;
-    arrivalNotificationDelivered: string;
-    arrivalNotificationRegistrationFailed: string;
     viewConflictingRoute: string;
     conflictConfirm: string;
     conflictTitle: string;
@@ -349,6 +341,15 @@ export type UiText = {
     posterAlt: (label: string) => string;
     share: string;
     save: string;
+    backgroundTitle: string;
+    backgroundPaper: string;
+    backgroundSunset: string;
+    backgroundOcean: string;
+    backgroundForest: string;
+    backgroundLavender: string;
+    backgroundDawn: string;
+    backgroundAlbum: string;
+    backgroundChangeErrorToast: string;
     generatingTitle: string;
     generatingDescription: string;
     generatingFooter: string;
@@ -1234,12 +1235,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       festivalTestSent: "실제 축제 알림을 보냈어요.",
       festivalTestFailed: (reason) =>
         reason || "축제 테스트 알림을 보내지 못했어요.",
-      routeReviewTestSend: "루트 종료 알림 바로 보내기",
-      routeReviewTestSending: "보내는 중",
-      routeReviewTestSendAria: "종료된 루트의 기록 확인 알림 바로 보내기",
-      routeReviewTestSent: "루트 종료 알림을 보냈어요.",
-      routeReviewTestFailed: (reason) =>
-        reason || "루트 종료 테스트 알림을 보내지 못했어요.",
       festivalTestPermissionDenied:
         "알림 권한이 꺼져 있어요. 기기 설정에서 알림을 허용해 주세요.",
       festivalTestDeviceUnavailable:
@@ -1320,11 +1315,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startSuccess: "여행을 시작했어요.",
       startError: "여행을 시작하지 못했어요.",
       futureStartError: "미래 날짜의 여행은 아직 시작할 수 없어요.",
-      arrivalNotificationRegistered: (count) =>
-        `종료 상태 도착 알림 ${count}개가 등록됐어요.`,
-      arrivalNotificationDelivered: "오늘 도착 알림은 이미 발송됐어요.",
-      arrivalNotificationRegistrationFailed:
-        "종료 상태 도착 알림을 등록하지 못했어요.",
       viewConflictingRoute: "해당 일정 보기",
       conflictConfirm: "확인",
       conflictTitle: "다음 날짜에 이미 일정이 있어요",
@@ -1406,6 +1396,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       posterAlt: (label) => `${label} 포스터 미리보기`,
       share: "공유",
       save: "저장",
+      backgroundTitle: "배경 선택",
+      backgroundPaper: "종이",
+      backgroundSunset: "노을",
+      backgroundOcean: "바다",
+      backgroundForest: "숲",
+      backgroundLavender: "라벤더",
+      backgroundDawn: "새벽",
+      backgroundAlbum: "앨범",
+      backgroundChangeErrorToast: "포토카드 배경을 바꾸지 못했어요.",
       generatingTitle: "감자가 DAY 카드를 변환 중...",
       generatingDescription: "폴라로이드 사진을 PNG로 굽고 있어요.",
       generatingFooter: "잠시만 기다려주세요",
@@ -1715,7 +1714,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       allPlacesCompleted: "모든 장소 완료",
       remainingPlaces: (count) => `${count}곳 남음`,
       expectedStart: "시작 시간",
-      plannedDeparture: "계획 시작",
+      plannedDeparture: "예정 시각",
       expectedEnd: "종료 시간",
       totalDuration: "총 소요",
       actualStart: "시작 시각",
@@ -2415,12 +2414,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       festivalTestSent: "Real festival alert sent.",
       festivalTestFailed: (reason) =>
         reason || "Could not send the festival test alert.",
-      routeReviewTestSend: "Send Route Review Alert",
-      routeReviewTestSending: "Sending",
-      routeReviewTestSendAria: "Send a review alert for an ended route",
-      routeReviewTestSent: "Route review alert sent.",
-      routeReviewTestFailed: (reason) =>
-        reason || "Could not send the route review test alert.",
       festivalTestPermissionDenied:
         "Notifications are disabled. Allow them in device settings.",
       festivalTestDeviceUnavailable:
@@ -2518,11 +2511,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startSuccess: "Trip started.",
       startError: "Could not start the trip.",
       futureStartError: "A trip with a future start date cannot be started yet.",
-      arrivalNotificationRegistered: (count) =>
-        `${count} closed-app arrival alert${count === 1 ? "" : "s"} registered.`,
-      arrivalNotificationDelivered: "Today's arrival alert was already sent.",
-      arrivalNotificationRegistrationFailed:
-        "Could not register the closed-app arrival alert.",
       viewConflictingRoute: "View schedule",
       conflictConfirm: "OK",
       conflictTitle: "Another schedule already uses that date",
@@ -2604,6 +2592,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       posterAlt: (label) => `${label} poster preview`,
       share: "Share",
       save: "Save",
+      backgroundTitle: "Choose background",
+      backgroundPaper: "Paper",
+      backgroundSunset: "Sunset",
+      backgroundOcean: "Ocean",
+      backgroundForest: "Forest",
+      backgroundLavender: "Lavender",
+      backgroundDawn: "Dawn",
+      backgroundAlbum: "Album",
+      backgroundChangeErrorToast: "Could not change the photo card background.",
       generatingTitle: "Creating DAY card...",
       generatingDescription: "Converting polaroid photos into PNG.",
       generatingFooter: "Please wait a moment",

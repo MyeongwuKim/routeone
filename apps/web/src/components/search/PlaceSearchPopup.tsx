@@ -188,18 +188,19 @@ function PlaceSearchPopup({
             </div>
           ) : (
             <div>
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-4 flex items-center justify-between">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   {text.search.recentTitle}
                 </p>
                 {recentSearches.length > 0 ? (
                   <button
                     type="button"
+                    aria-label={text.search.clearRecent}
+                    title={text.search.clearRecent}
                     onClick={onRecentSearchClear}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 transition hover:text-rose-600 dark:hover:text-rose-300"
+                    className="inline-flex size-8 items-center justify-center rounded-full border border-slate-200 bg-white text-base text-slate-400 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:border-brand-400/20 dark:bg-[#0b211f] dark:text-slate-400 dark:hover:border-rose-400/30 dark:hover:bg-rose-400/10 dark:hover:text-rose-300"
                   >
                     <IoTrashOutline aria-hidden="true" />
-                    {text.search.clearRecent}
                   </button>
                 ) : null}
               </div>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { IoArrowBack } from "react-icons/io5";
+import { IoArrowBack, IoTrashOutline } from "react-icons/io5";
 import {
   RouteCheckoutProvider,
 } from "./RouteCheckoutContext";
@@ -182,14 +182,16 @@ function RouteCheckoutModalContent({
           </div>
 
           {step === "cart" ? (
-            <button
-              type="button"
-              onClick={onClearPlaces}
-              disabled={savedPlaces.length === 0}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-40"
-            >
-              {text.common.clearAll}
-            </button>
+                <button
+                  type="button"
+                  onClick={onClearPlaces}
+                  disabled={savedPlaces.length === 0}
+                  aria-label={text.common.clearAll}
+                  title={text.common.clearAll}
+                  className="inline-flex size-9 items-center justify-center rounded-full border border-slate-200 bg-white text-base text-slate-500 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:border-brand-400/20 dark:bg-[#0b211f] dark:text-slate-300 dark:hover:border-rose-400/30 dark:hover:bg-rose-400/10 dark:hover:text-rose-300"
+                >
+                  <IoTrashOutline aria-hidden="true" />
+                </button>
           ) : canRestartCheckout ? (
             <button
               type="button"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { MdCelebration, MdOutlineRoute } from "react-icons/md";
+import { MdCelebration } from "react-icons/md";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   notificationApi,
@@ -75,8 +75,6 @@ function getNearestServiceRegion(
   }, firstRegion);
 }
 
-type TestNotificationKind = "festival" | "route-review";
-
 function HomePage() {
   const text = useUiText();
   const navigate = useNavigate();
@@ -128,6 +126,7 @@ function HomePage() {
   const setSearchFilter = useHomeExploreStore(
     (state) => state.setSearchFilter
   );
+  const resetSearch = useHomeExploreStore((state) => state.resetSearch);
   const loadMoreSearchResults = useHomeExploreStore(
     (state) => state.loadMoreSearchResults
   );
@@ -198,59 +197,28 @@ function HomePage() {
     text.home.festivalTestProjectUnavailable,
   ]);
   const testNotificationMutation = useMutation({
-    mutationFn: async (kind: TestNotificationKind) => {
-      const pushDeviceId = await registerNativePushDevice();
-
-      if (kind === "route-review") {
-        if (!pushDeviceId) {
-          throw new Error(text.home.festivalTestDeviceUnavailable);
-        }
-
-        const result =
-          await notificationApi.sendRouteReviewTest(pushDeviceId);
-
-        return {
-          kind,
-          delivery: result.sendRouteReviewTestNotification,
-        };
-      }
+    mutationFn: async () => {
+      await registerNativePushDevice();
 
       const result = await notificationApi.sendFestivalTest();
 
-      return {
-        kind,
-        delivery: result.sendFestivalTestNotification,
-      };
+      return result.sendFestivalTestNotification;
     },
-    onSuccess: ({ kind, delivery }) => {
+    onSuccess: (delivery) => {
       if (delivery.pushStatus === "SENT") {
-        showToast(
-          kind === "festival"
-            ? text.home.festivalTestSent
-            : text.home.routeReviewTestSent
-        );
+        showToast(text.home.festivalTestSent);
       } else {
         const pushError = delivery.pushError ?? "";
 
-        showToast(
-          kind === "festival"
-            ? text.home.festivalTestFailed(pushError)
-            : text.home.routeReviewTestFailed(pushError),
-          3200
-        );
+        showToast(text.home.festivalTestFailed(pushError), 3200);
       }
 
       void notificationInboxQuery.refetch();
     },
-    onError: (error, kind) => {
+    onError: (error) => {
       const reason = error instanceof Error ? error.message : "";
 
-      showToast(
-        kind === "festival"
-          ? text.home.festivalTestFailed(reason)
-          : text.home.routeReviewTestFailed(reason),
-        3200
-      );
+      showToast(text.home.festivalTestFailed(reason), 3200);
     },
   });
 
@@ -654,7 +622,8 @@ function HomePage() {
   };
   const closeSearchPopup = useCallback(() => {
     setIsSearchPopupOpen(false);
-  }, []);
+    resetSearch();
+  }, [resetSearch]);
 
   useEffect(() => {
     if (!isSearchPopupOpen) {
@@ -914,40 +883,24 @@ function HomePage() {
         />
       ) : null}
 
-      {shouldShowInteractiveMapUi && hasAuthToken ? (
+      {shouldShowInteractiveMapUi &&
+      hasAuthToken &&
+      serviceArea.hasFestivalSource ? (
         <div className="pointer-events-none absolute bottom-20 right-4 z-30 flex flex-col items-end gap-2">
           <button
             type="button"
-            aria-label={text.home.routeReviewTestSendAria}
+            aria-label={text.home.festivalTestSendAria}
             disabled={testNotificationMutation.isPending}
-            onClick={() => testNotificationMutation.mutate("route-review")}
-            className="pointer-events-auto inline-flex h-12 items-center gap-2 rounded-full border border-white/80 bg-amber-500 px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(245,158,11,0.32)] transition hover:bg-amber-600 active:scale-[0.98] disabled:cursor-wait disabled:bg-amber-300"
+            onClick={() => testNotificationMutation.mutate()}
+            className="pointer-events-auto inline-flex h-12 items-center gap-2 rounded-full border border-white/80 bg-rose-500 px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(244,63,94,0.35)] transition hover:bg-rose-600 active:scale-[0.98] disabled:cursor-wait disabled:bg-rose-300"
           >
-            <MdOutlineRoute aria-hidden="true" className="text-lg" />
+            <MdCelebration aria-hidden="true" className="text-lg" />
             <span>
-              {testNotificationMutation.isPending &&
-              testNotificationMutation.variables === "route-review"
-                ? text.home.routeReviewTestSending
-                : text.home.routeReviewTestSend}
+              {testNotificationMutation.isPending
+                ? text.home.festivalTestSending
+                : text.home.festivalTestSend}
             </span>
           </button>
-          {serviceArea.hasFestivalSource ? (
-            <button
-              type="button"
-              aria-label={text.home.festivalTestSendAria}
-              disabled={testNotificationMutation.isPending}
-              onClick={() => testNotificationMutation.mutate("festival")}
-              className="pointer-events-auto inline-flex h-12 items-center gap-2 rounded-full border border-white/80 bg-rose-500 px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(244,63,94,0.35)] transition hover:bg-rose-600 active:scale-[0.98] disabled:cursor-wait disabled:bg-rose-300"
-            >
-              <MdCelebration aria-hidden="true" className="text-lg" />
-              <span>
-                {testNotificationMutation.isPending &&
-                testNotificationMutation.variables === "festival"
-                  ? text.home.festivalTestSending
-                  : text.home.festivalTestSend}
-              </span>
-            </button>
-          ) : null}
         </div>
       ) : null}
 

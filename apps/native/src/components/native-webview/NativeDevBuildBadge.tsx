@@ -40,11 +40,10 @@ const styles = StyleSheet.create({
     left: 0,
     zIndex: 1000,
     elevation: 1000,
-    alignItems: "flex-end"
+    alignItems: "center"
   },
   badge: {
     marginTop: 8,
-    marginRight: 12,
     borderRadius: 6,
     backgroundColor: "#dc2626",
     paddingHorizontal: 8,

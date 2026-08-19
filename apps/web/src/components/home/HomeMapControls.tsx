@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   IoBagHandleOutline,
   IoCafeOutline,
@@ -12,6 +12,7 @@ import { MdCelebration, MdMyLocation } from "react-icons/md";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import { useUiText } from "@/lib/uiText";
+import { useHomeExploreStore } from "@/stores/homeExploreStore";
 
 type RegionOption = {
   label: string;
@@ -87,37 +88,73 @@ function HomeMapControls({
 }: HomeMapControlsProps) {
   const text = useUiText();
   const regionScrollRef = useRef<HTMLDivElement>(null);
+  const restoredRegionScrollLeftRef = useRef(
+    useHomeExploreStore.getState().regionScrollLeft
+  );
+  const latestRegionScrollLeftRef = useRef(
+    useHomeExploreStore.getState().regionScrollLeft ?? 0
+  );
+  const previousSelectedRegionRef = useRef<string | null>(null);
+  const setRegionScrollLeft = useHomeExploreStore(
+    (state) => state.setRegionScrollLeft
+  );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const regionScroll = regionScrollRef.current;
+    const previousSelectedRegion = previousSelectedRegionRef.current;
+    const isFirstRender = previousSelectedRegion === null;
+    const didSelectedRegionChange =
+      !isFirstRender && previousSelectedRegion !== selectedSigunguCode;
+    previousSelectedRegionRef.current = selectedSigunguCode;
+
+    if (!regionScroll) {
+      return;
+    }
+
+    if (
+      isFirstRender &&
+      restoredRegionScrollLeftRef.current !== null
+    ) {
+      regionScroll.scrollLeft = Math.max(
+        0,
+        restoredRegionScrollLeftRef.current
+      );
+      latestRegionScrollLeftRef.current = regionScroll.scrollLeft;
+      return;
+    }
+
+    if (!isFirstRender && !didSelectedRegionChange) {
+      return;
+    }
+
     const selectedRegionButton =
       regionScroll?.querySelector<HTMLButtonElement>(
         'button[aria-pressed="true"]'
       );
 
-    if (!regionScroll || !selectedRegionButton) {
+    if (!selectedRegionButton) {
       return;
     }
 
-    const frameId = window.requestAnimationFrame(() => {
-      const scrollBounds = regionScroll.getBoundingClientRect();
-      const buttonBounds = selectedRegionButton.getBoundingClientRect();
-      const centeredScrollLeft =
-        regionScroll.scrollLeft +
-        buttonBounds.left -
-        scrollBounds.left -
-        (scrollBounds.width - buttonBounds.width) / 2;
+    const scrollBounds = regionScroll.getBoundingClientRect();
+    const buttonBounds = selectedRegionButton.getBoundingClientRect();
+    const centeredScrollLeft =
+      regionScroll.scrollLeft +
+      buttonBounds.left -
+      scrollBounds.left -
+      (scrollBounds.width - buttonBounds.width) / 2;
 
-      regionScroll.scrollTo({
-        left: Math.max(0, centeredScrollLeft),
-        behavior: "smooth",
-      });
+    regionScroll.scrollTo({
+      left: Math.max(0, centeredScrollLeft),
+      behavior: isFirstRender ? "auto" : "smooth",
     });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
   }, [regions, selectedSigunguCode]);
+
+  useEffect(() => {
+    return () => {
+      setRegionScrollLeft(latestRegionScrollLeftRef.current);
+    };
+  }, [setRegionScrollLeft]);
 
   return (
     <>
@@ -163,6 +200,9 @@ function HomeMapControls({
 
       <div
         ref={regionScrollRef}
+        onScroll={(event) => {
+          latestRegionScrollLeftRef.current = event.currentTarget.scrollLeft;
+        }}
         className="scrollbar-hide pointer-events-auto absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+3.4rem)] z-20 overflow-x-auto px-3 pb-1"
       >
         <div className="flex w-max min-w-full gap-2 pr-3">

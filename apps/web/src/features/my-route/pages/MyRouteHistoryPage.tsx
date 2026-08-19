@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   useInfiniteQuery,
@@ -12,6 +18,7 @@ import {
   MdClose,
   MdDownload,
   MdHistory,
+  MdPhotoLibrary,
   MdShare,
 } from "react-icons/md";
 import { NOTIFICATION_INBOX_QUERY_KEY } from "@/api/notificationApi";
@@ -26,10 +33,13 @@ import {
   MY_ROUTES_QUERY_KEY,
 } from "@/features/my-route/myRouteCache";
 import {
+  ROUTE_COMPLETION_POSTER_BACKGROUNDS,
   createRouteCompletionPosterCards,
   downloadRouteCompletionPoster,
   getRouteCompletionPosterStats,
+  prepareRouteCompletionPosterBackgroundImage,
   shareRouteCompletionPoster,
+  type RouteCompletionPosterBackgroundId,
   type RouteCompletionPosterCard,
 } from "@/features/my-route/routeCompletionPoster";
 import {
@@ -45,6 +55,7 @@ import type {
   MyRoutesQuery,
 } from "@/generated/graphql";
 import { useUiText } from "@/lib/uiText";
+import { nativeBridge } from "@/native-bridge";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
@@ -52,6 +63,8 @@ type RoutePosterPreview = {
   route: MyRoute;
   cards: RouteCompletionPosterCard[];
   currentIndex: number;
+  backgroundId: RouteCompletionPosterBackgroundId;
+  customBackgroundDataUrl: string | null;
 };
 
 const PAST_ROUTE_COMPLETION_GRACE_DAYS = 7;
@@ -90,18 +103,98 @@ function RoutePosterPreviewModal({
   preview,
   onClose,
   onSelectCard,
+  onSelectBackground,
+  onSelectCustomBackground,
   onDownload,
   onShare,
 }: {
   preview: RoutePosterPreview;
   onClose: () => void;
   onSelectCard: (index: number) => void;
+  onSelectBackground: (backgroundId: RouteCompletionPosterBackgroundId) => void;
+  onSelectCustomBackground: (dataUrl: string) => void;
   onDownload: () => void;
   onShare: () => void;
 }) {
   const text = useUiText();
+  const showToast = useUiToastStore((state) => state.showToast);
+  const backgroundFileInputRef = useRef<HTMLInputElement>(null);
   const currentCard =
     preview.cards[preview.currentIndex] ?? preview.cards[0] ?? null;
+  const backgroundLabels = {
+    paper: text.routeHistory.backgroundPaper,
+    sunset: text.routeHistory.backgroundSunset,
+    ocean: text.routeHistory.backgroundOcean,
+    forest: text.routeHistory.backgroundForest,
+    lavender: text.routeHistory.backgroundLavender,
+    dawn: text.routeHistory.backgroundDawn,
+  } satisfies Record<
+    (typeof ROUTE_COMPLETION_POSTER_BACKGROUNDS)[number]["id"],
+    string
+  >;
+
+  const handleChooseAlbumBackground = async () => {
+    const nativePhotoRequest = nativeBridge.media.takeVisitPhoto("library");
+
+    if (!nativePhotoRequest) {
+      backgroundFileInputRef.current?.click();
+      return;
+    }
+
+    try {
+      const photo = await nativePhotoRequest;
+
+      if (!photo.dataUrl) {
+        throw new Error("Selected photo data is unavailable.");
+      }
+
+      const backgroundDataUrl =
+        await prepareRouteCompletionPosterBackgroundImage(photo.dataUrl);
+      onSelectCustomBackground(backgroundDataUrl);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "";
+
+      if (/취소|cancel/i.test(errorMessage)) {
+        return;
+      }
+
+      console.error(error);
+      showToast(text.routeHistory.backgroundChangeErrorToast);
+    }
+  };
+
+  const handleBackgroundFileChange = (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+
+    input.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        if (typeof reader.result !== "string") {
+          throw new Error("Selected photo data is unavailable.");
+        }
+
+        const backgroundDataUrl =
+          await prepareRouteCompletionPosterBackgroundImage(reader.result);
+        onSelectCustomBackground(backgroundDataUrl);
+      } catch (error) {
+        console.error(error);
+        showToast(text.routeHistory.backgroundChangeErrorToast);
+      }
+    };
+    reader.onerror = () => {
+      showToast(text.routeHistory.backgroundChangeErrorToast);
+    };
+    reader.readAsDataURL(file);
+  };
 
   if (!currentCard) {
     return null;
@@ -111,9 +204,9 @@ function RoutePosterPreviewModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[3200] flex flex-col bg-[#f6ead4] text-slate-900"
+      className="fixed inset-0 z-[3200] flex flex-col bg-[#f6ead4] text-slate-900 dark:bg-[#071718] dark:text-slate-100"
     >
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-900/10 bg-[#fff7df]/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-900/10 bg-[#fff7df]/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm dark:border-white/10 dark:bg-[#0b2523]/95">
         <div className="min-w-0">
           <p className="text-xs font-black text-brand-700">
             {text.routeHistory.posterTitle}
@@ -133,7 +226,7 @@ function RoutePosterPreviewModal({
       </header>
 
       {preview.cards.length > 1 ? (
-        <div className="flex shrink-0 gap-2 overflow-x-auto border-b border-amber-900/10 bg-[#fff7df]/80 px-4 py-3">
+        <div className="flex shrink-0 gap-2 overflow-x-auto border-b border-amber-900/10 bg-[#fff7df]/80 px-4 py-3 dark:border-white/10 dark:bg-[#0b2523]/80">
           {preview.cards.map((card, index) => {
             const isSelected = index === preview.currentIndex;
 
@@ -155,17 +248,79 @@ function RoutePosterPreviewModal({
         </div>
       ) : null}
 
+      <div className="shrink-0 border-b border-amber-900/10 bg-[#fff7df]/80 px-4 py-3 dark:border-white/10 dark:bg-[#0b2523]/80">
+        <p className="mb-2 text-xs font-black text-slate-600">
+          {text.routeHistory.backgroundTitle}
+        </p>
+        <div className="flex gap-2 overflow-x-auto pb-0.5">
+          {ROUTE_COMPLETION_POSTER_BACKGROUNDS.map((background) => {
+            const isSelected = preview.backgroundId === background.id;
+
+            return (
+              <button
+                key={background.id}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => onSelectBackground(background.id)}
+                className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-3 text-xs font-black transition active:scale-95 ${
+                  isSelected
+                    ? "bg-brand-600 text-white shadow-sm ring-2 ring-brand-600 ring-offset-1 dark:ring-brand-300 dark:ring-offset-[#0b2523]"
+                    : "border border-brand-100 bg-white text-brand-700"
+                }`}
+              >
+                <span
+                  className="size-9 rounded-full border border-black/10 shadow-inner"
+                  style={{ background: background.preview }}
+                />
+                {backgroundLabels[background.id]}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            aria-pressed={preview.backgroundId === "custom"}
+            onClick={() => void handleChooseAlbumBackground()}
+            className={`inline-flex h-11 shrink-0 items-center gap-2 rounded-full py-1 pl-1 pr-3 text-xs font-black transition active:scale-95 ${
+              preview.backgroundId === "custom"
+                ? "bg-brand-600 text-white shadow-sm ring-2 ring-brand-600 ring-offset-1 dark:ring-brand-300 dark:ring-offset-[#0b2523]"
+                : "border border-brand-100 bg-white text-brand-700"
+            }`}
+          >
+            <span
+              className="flex size-9 items-center justify-center rounded-full border border-black/10 bg-cover bg-center text-lg shadow-inner"
+              style={
+                preview.customBackgroundDataUrl
+                  ? {
+                      backgroundImage: `url(${preview.customBackgroundDataUrl})`,
+                    }
+                  : undefined
+              }
+            >
+              {preview.customBackgroundDataUrl ? null : <MdPhotoLibrary />}
+            </span>
+            {text.routeHistory.backgroundAlbum}
+          </button>
+        </div>
+        <input
+          ref={backgroundFileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleBackgroundFileChange}
+        />
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="mx-auto flex max-w-[440px] justify-center">
           <img
             src={currentCard.dataUrl}
             alt={text.routeHistory.posterAlt(currentCard.label)}
-            className="h-auto w-full rounded-[18px] border border-amber-950/15 bg-white shadow-[0_20px_48px_rgba(84,52,10,0.25)]"
+            className="h-auto w-full rounded-[18px] border border-amber-950/15 bg-white shadow-[0_20px_48px_rgba(84,52,10,0.25)] dark:border-white/15 dark:shadow-[0_20px_48px_rgba(0,0,0,0.42)]"
           />
         </div>
       </div>
 
-      <footer className="flex shrink-0 gap-2 border-t border-amber-900/10 bg-[#fff7df]/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+      <footer className="flex shrink-0 gap-2 border-t border-amber-900/10 bg-[#fff7df]/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:border-white/10 dark:bg-[#0b2523]/95">
         <button
           type="button"
           onClick={onShare}
@@ -477,6 +632,8 @@ function MyRouteHistoryPage() {
         route: posterRoute,
         cards,
         currentIndex: 0,
+        backgroundId: "paper",
+        customBackgroundDataUrl: null,
       });
 
       if (missingPhotoCount > 0) {
@@ -501,6 +658,66 @@ function MyRouteHistoryPage() {
         currentIndex: Math.max(0, Math.min(preview.cards.length - 1, index)),
       };
     });
+  };
+
+  const handleSelectPosterBackground = async (
+    backgroundId: RouteCompletionPosterBackgroundId,
+    customBackgroundDataUrl?: string | null
+  ) => {
+    const currentPreview = posterPreview;
+
+    if (!currentPreview || posterGeneratingRouteId) {
+      return;
+    }
+
+    const selectedCustomBackgroundDataUrl =
+      customBackgroundDataUrl ?? currentPreview.customBackgroundDataUrl;
+
+    if (
+      backgroundId === currentPreview.backgroundId &&
+      (backgroundId !== "custom" ||
+        selectedCustomBackgroundDataUrl ===
+          currentPreview.customBackgroundDataUrl)
+    ) {
+      return;
+    }
+
+    if (backgroundId === "custom" && !selectedCustomBackgroundDataUrl) {
+      return;
+    }
+
+    setPosterGeneratingRouteId(currentPreview.route.id);
+
+    try {
+      const cards = await createRouteCompletionPosterCards(
+        currentPreview.route,
+        backgroundId,
+        backgroundId === "custom" ? selectedCustomBackgroundDataUrl : null
+      );
+
+      setPosterPreview((preview) => {
+        if (!preview || preview.route.id !== currentPreview.route.id) {
+          return preview;
+        }
+
+        return {
+          ...preview,
+          cards,
+          currentIndex: Math.max(
+            0,
+            Math.min(cards.length - 1, preview.currentIndex)
+          ),
+          backgroundId,
+          customBackgroundDataUrl:
+            customBackgroundDataUrl ?? preview.customBackgroundDataUrl,
+        };
+      });
+    } catch (error) {
+      console.error(error);
+      showToast(text.routeHistory.backgroundChangeErrorToast);
+    } finally {
+      setPosterGeneratingRouteId(null);
+    }
   };
 
   const selectedPosterCard = posterPreview
@@ -720,6 +937,12 @@ function MyRouteHistoryPage() {
           preview={posterPreview}
           onClose={() => setPosterPreview(null)}
           onSelectCard={handleSelectPosterCard}
+          onSelectBackground={(backgroundId) =>
+            void handleSelectPosterBackground(backgroundId)
+          }
+          onSelectCustomBackground={(dataUrl) =>
+            void handleSelectPosterBackground("custom", dataUrl)
+          }
           onDownload={handleDownloadPoster}
           onShare={handleSharePoster}
         />

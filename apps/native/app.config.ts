@@ -224,7 +224,7 @@ const plugins: unknown[] = [
       cameraPermission:
         "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
       photosPermission:
-        "RouteOne이 지난 방문 사진 인증을 위해 선택한 사진을 사용합니다."
+        "RouteOne이 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다."
     }
   ],
   "expo-apple-authentication",
@@ -281,7 +281,7 @@ export default {
         NSCameraUsageDescription:
           "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
         NSPhotoLibraryUsageDescription:
-          "RouteOne이 지난 방문 사진 인증을 위해 선택한 사진을 사용합니다.",
+          "RouteOne이 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다.",
         LSApplicationQueriesSchemes: ["nmap"],
         UIBackgroundModes: ["location"]
       }

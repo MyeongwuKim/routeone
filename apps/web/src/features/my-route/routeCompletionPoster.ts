@@ -12,6 +12,100 @@ import type { MyRoute, MyRouteStop } from "./types";
 export const ROUTE_COMPLETION_POSTER_WIDTH = 1080;
 export const ROUTE_COMPLETION_POSTER_HEIGHT = 1350;
 
+export const ROUTE_COMPLETION_POSTER_BACKGROUNDS = [
+  {
+    id: "paper",
+    preview: "linear-gradient(135deg, #fffaf0 0%, #f8edd8 54%, #e5f4df 100%)",
+  },
+  {
+    id: "sunset",
+    preview: "linear-gradient(135deg, #fff1e6 0%, #ffd9c2 54%, #fbcfe8 100%)",
+  },
+  {
+    id: "ocean",
+    preview: "linear-gradient(135deg, #ecfeff 0%, #cffafe 54%, #dbeafe 100%)",
+  },
+  {
+    id: "forest",
+    preview: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 54%, #fef3c7 100%)",
+  },
+  {
+    id: "lavender",
+    preview: "linear-gradient(135deg, #faf5ff 0%, #ede9fe 54%, #fce7f3 100%)",
+  },
+  {
+    id: "dawn",
+    preview: "linear-gradient(135deg, #eef2ff 0%, #dbeafe 54%, #e0e7ff 100%)",
+  },
+] as const;
+
+export type RouteCompletionPosterBackgroundId =
+  | (typeof ROUTE_COMPLETION_POSTER_BACKGROUNDS)[number]["id"]
+  | "custom";
+
+type PosterBackgroundColors = {
+  start: string;
+  middle: string;
+  end: string;
+  grainPrimary: string;
+  grainSecondary: string;
+  grainTertiary: string;
+};
+
+const POSTER_BACKGROUND_COLORS: Record<
+  Exclude<RouteCompletionPosterBackgroundId, "custom">,
+  PosterBackgroundColors
+> = {
+  paper: {
+    start: "#fffaf0",
+    middle: "#f8edd8",
+    end: "#e5f4df",
+    grainPrimary: "#7c5c2a",
+    grainSecondary: "#0f766e",
+    grainTertiary: "#b45309",
+  },
+  sunset: {
+    start: "#fff1e6",
+    middle: "#ffd9c2",
+    end: "#fbcfe8",
+    grainPrimary: "#c2410c",
+    grainSecondary: "#be123c",
+    grainTertiary: "#f59e0b",
+  },
+  ocean: {
+    start: "#ecfeff",
+    middle: "#cffafe",
+    end: "#dbeafe",
+    grainPrimary: "#0369a1",
+    grainSecondary: "#0f766e",
+    grainTertiary: "#2563eb",
+  },
+  forest: {
+    start: "#f0fdf4",
+    middle: "#dcfce7",
+    end: "#fef3c7",
+    grainPrimary: "#166534",
+    grainSecondary: "#0f766e",
+    grainTertiary: "#a16207",
+  },
+  lavender: {
+    start: "#faf5ff",
+    middle: "#ede9fe",
+    end: "#fce7f3",
+    grainPrimary: "#7e22ce",
+    grainSecondary: "#6d28d9",
+    grainTertiary: "#be185d",
+  },
+  dawn: {
+    start: "#eef2ff",
+    middle: "#dbeafe",
+    end: "#e0e7ff",
+    grainPrimary: "#3730a3",
+    grainSecondary: "#0369a1",
+    grainTertiary: "#6366f1",
+  },
+};
+
 type PosterStop = MyRouteStop & {
   dayIndex: number;
 };
@@ -1131,10 +1225,14 @@ function renderDayMemorySvg({
   route,
   day,
   imageData,
+  backgroundId,
+  backgroundImageDataUrl,
 }: {
   route: MyRoute;
   day: ReturnType<typeof getCompletedPosterDayGroups>[number];
   imageData: EmbeddedStopImage[];
+  backgroundId: RouteCompletionPosterBackgroundId;
+  backgroundImageDataUrl?: string | null;
 }) {
   const items = buildDayMemoryItems(day.stops);
   const layouts = getPolaroidLayouts(items.length);
@@ -1149,20 +1247,34 @@ function renderDayMemorySvg({
   const subtitle = day.dateLabel
     ? `${day.dateLabel} · ${day.stops.length}곳`
     : `${day.stops.length}곳`;
+  const backgroundColors =
+    POSTER_BACKGROUND_COLORS[
+      backgroundId === "custom" ? "paper" : backgroundId
+    ];
+  const customBackground =
+    backgroundId === "custom" && backgroundImageDataUrl
+      ? `<image href="${escapeXml(
+          backgroundImageDataUrl
+        )}" x="-24" y="-24" width="1128" height="1398" preserveAspectRatio="xMidYMid slice" filter="url(#memoryBackgroundBlur)" opacity="0.82"/>
+  <rect width="1080" height="1350" fill="#fffaf0" opacity="0.42"/>`
+      : "";
 
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${ROUTE_COMPLETION_POSTER_WIDTH}" height="${ROUTE_COMPLETION_POSTER_HEIGHT}" viewBox="0 0 ${ROUTE_COMPLETION_POSTER_WIDTH} ${ROUTE_COMPLETION_POSTER_HEIGHT}">
   <defs>
     <linearGradient id="memoryPaper" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#fffaf0"/>
-      <stop offset="54%" stop-color="#f8edd8"/>
-      <stop offset="100%" stop-color="#e5f4df"/>
+      <stop offset="0%" stop-color="${backgroundColors.start}"/>
+      <stop offset="54%" stop-color="${backgroundColors.middle}"/>
+      <stop offset="100%" stop-color="${backgroundColors.end}"/>
     </linearGradient>
     <pattern id="memoryGrain" width="36" height="36" patternUnits="userSpaceOnUse">
-      <circle cx="5" cy="8" r="1.4" fill="#7c5c2a" opacity="0.08"/>
-      <circle cx="26" cy="19" r="1.1" fill="#0f766e" opacity="0.06"/>
-      <circle cx="15" cy="31" r="1.2" fill="#b45309" opacity="0.05"/>
+      <circle cx="5" cy="8" r="1.4" fill="${backgroundColors.grainPrimary}" opacity="0.08"/>
+      <circle cx="26" cy="19" r="1.1" fill="${backgroundColors.grainSecondary}" opacity="0.06"/>
+      <circle cx="15" cy="31" r="1.2" fill="${backgroundColors.grainTertiary}" opacity="0.05"/>
     </pattern>
+    <filter id="memoryBackgroundBlur" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
     <style>
       text { font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
       .memoryKicker { font-size: 25px; font-weight: 950; fill: #0f766e; letter-spacing: 4px; }
@@ -1186,6 +1298,7 @@ function renderDayMemorySvg({
     </style>
   </defs>
   <rect width="1080" height="1350" fill="url(#memoryPaper)"/>
+  ${customBackground}
   <rect width="1080" height="1350" fill="url(#memoryGrain)"/>
   <rect x="36" y="36" width="1008" height="1278" rx="42" fill="none" stroke="#111827" stroke-width="7" opacity="0.9"/>
   <rect x="56" y="56" width="968" height="1238" rx="32" fill="none" stroke="#ffffff" stroke-width="5" opacity="0.8"/>
@@ -1521,6 +1634,63 @@ function svgToPngDataUrl(svg: string) {
   });
 }
 
+export function prepareRouteCompletionPosterBackgroundImage(dataUrl: string) {
+  return new Promise<string>((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = ROUTE_COMPLETION_POSTER_WIDTH;
+        canvas.height = ROUTE_COMPLETION_POSTER_HEIGHT;
+
+        const context = canvas.getContext("2d");
+
+        if (!context) {
+          reject(new Error("Canvas context is not available."));
+          return;
+        }
+
+        const sourceAspectRatio = image.naturalWidth / image.naturalHeight;
+        const posterAspectRatio =
+          ROUTE_COMPLETION_POSTER_WIDTH / ROUTE_COMPLETION_POSTER_HEIGHT;
+        let sourceX = 0;
+        let sourceY = 0;
+        let sourceWidth = image.naturalWidth;
+        let sourceHeight = image.naturalHeight;
+
+        if (sourceAspectRatio > posterAspectRatio) {
+          sourceWidth = image.naturalHeight * posterAspectRatio;
+          sourceX = (image.naturalWidth - sourceWidth) / 2;
+        } else {
+          sourceHeight = image.naturalWidth / posterAspectRatio;
+          sourceY = (image.naturalHeight - sourceHeight) / 2;
+        }
+
+        context.drawImage(
+          image,
+          sourceX,
+          sourceY,
+          sourceWidth,
+          sourceHeight,
+          0,
+          0,
+          ROUTE_COMPLETION_POSTER_WIDTH,
+          ROUTE_COMPLETION_POSTER_HEIGHT
+        );
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    image.onerror = () => {
+      reject(new Error("Background image could not be loaded."));
+    };
+    image.src = dataUrl;
+  });
+}
+
 export async function createRouteCompletionPosterDataUrl(route: MyRoute) {
   const [photoData, placeImageData] = await Promise.all([
     getEmbeddedPhotoData(route),
@@ -1535,7 +1705,11 @@ export async function createRouteCompletionPosterDataUrl(route: MyRoute) {
   return svgToPngDataUrl(svg);
 }
 
-export async function createRouteCompletionPosterCards(route: MyRoute) {
+export async function createRouteCompletionPosterCards(
+  route: MyRoute,
+  backgroundId: RouteCompletionPosterBackgroundId = "paper",
+  backgroundImageDataUrl?: string | null
+) {
   const [dayGroups, imageData] = await Promise.all([
     Promise.resolve(getCompletedPosterDayGroups(route)),
     getEmbeddedDayMemoryImageData(route),
@@ -1560,6 +1734,8 @@ export async function createRouteCompletionPosterCards(route: MyRoute) {
           route,
           day,
           imageData,
+          backgroundId,
+          backgroundImageDataUrl,
         })
       );
 
