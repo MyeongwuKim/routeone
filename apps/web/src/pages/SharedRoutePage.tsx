@@ -203,6 +203,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       localizeTourPlaces(routePlaceLocalizationCandidates, appLanguage, {
         retryUncached: true,
         retryAttempts: 3,
+        waitForFresh: true,
       }),
   });
   const displayRoutes = useMemo(
@@ -380,6 +381,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       localizeTourPlaces(selectedRoutePlaceLocalizationCandidates, appLanguage, {
         retryUncached: true,
         retryAttempts: 3,
+        waitForFresh: true,
       }),
   });
   const reusableRoutePlaceLocalizationIds = useMemo(

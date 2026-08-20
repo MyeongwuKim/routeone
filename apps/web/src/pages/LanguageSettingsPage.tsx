@@ -1,7 +1,7 @@
 import { MdArrowBack, MdCheck, MdLanguage } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useUiText } from "@/lib/uiText";
+import { getUiText, useUiText } from "@/lib/uiText";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import {
   useAppLanguageStore,
@@ -25,6 +25,8 @@ function LanguageSettingsPage() {
       return;
     }
 
+    const nextText = getUiText(nextLanguage);
+
     setLanguage(nextLanguage);
     resetSheet();
     void queryClient.invalidateQueries({ queryKey: ["gangwon-attractions"] });
@@ -36,8 +38,8 @@ function LanguageSettingsPage() {
     });
     showToast(
       nextLanguage === "ko"
-        ? text.language.changedToKoToast
-        : text.language.changedToEnToast
+        ? nextText.language.changedToKoToast
+        : nextText.language.changedToEnToast
     );
   };
 

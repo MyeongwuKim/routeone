@@ -18,15 +18,10 @@ function getRouteLocalizationCandidates(route: MyRoute) {
   const candidateById = new Map<string, RoutePlaceLocalizationCandidate>();
   const addStop = (stop: MyRouteStop) => {
     const localizationId = getPlaceLocalizationId(stop.place);
-    const contentTypeId = stop.place.contentTypeId?.trim();
+    const contentTypeId = stop.place.contentTypeId?.trim() ?? "";
     const title = stop.place.title.trim();
 
-    if (
-      !localizationId ||
-      !contentTypeId ||
-      !title ||
-      candidateById.has(localizationId)
-    ) {
+    if (!localizationId || !title || candidateById.has(localizationId)) {
       return;
     }
 
@@ -129,6 +124,7 @@ export function useLocalizedMyRoutes(routes: MyRoute[]) {
       localizeTourPlaces(candidates, appLanguage, {
         retryUncached: true,
         retryAttempts: 3,
+        waitForFresh: true,
       }),
     placeholderData: (previousData) => previousData,
   });

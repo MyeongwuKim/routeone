@@ -1,20 +1,19 @@
 # RouteOne API
 
-GraphQL API package for RouteOne.
+RouteOne의 계정, 여행 루트, 장소 현지화, 알림 기능을 제공하는 GraphQL API입니다.
 
-## Stack
+## 기술 스택
 
 - Apollo Server
 - Fastify
 - Prisma
 - MongoDB
-- Local default user for early development
 
-## Local Setup
+## 로컬 실행
 
-1. Copy `.env.example` to `.env`
-2. Set `DATABASE_URL`
-3. Install dependencies from the repo root
+1. `apps/api/.env`에 `DATABASE_URL`을 설정합니다.
+2. 저장소 루트에서 의존성을 설치하고 Prisma Client를 생성합니다.
+3. API 개발 서버를 실행합니다.
 
 ```bash
 pnpm install
@@ -22,17 +21,31 @@ pnpm --filter api prisma:generate
 pnpm dev:api
 ```
 
-The API server starts at `http://localhost:4000` by default.
+기본 서버 주소는 `http://localhost:4000`입니다.
 
-- GraphQL: `POST /graphql`
-- Health check: `GET /health`
+## 라우팅 구조
 
-## Auth Shape
+| 메서드 | 경로 | 설명 | 인증 |
+| --- | --- | --- | --- |
+| `GET` | `/health` | API 서버의 실행 상태를 확인합니다. | 없음 |
+| `POST` | `/graphql` | 모든 GraphQL Query와 Mutation을 처리합니다. | 작업별로 다름 |
+| `POST` | `/internal/notifications/run` | 예약 알림을 실행하거나 축제·루트 회고 테스트 알림을 발송합니다. | Scheduler 전용 Bearer 토큰 |
 
-Login and authorization are intentionally not wired yet.
+`/internal/notifications/run`은 `Authorization: Bearer <NOTIFICATION_SCHEDULER_SECRET>` 헤더가 필요합니다. 요청 본문의 `mode`에는 `scheduled`, `festival-test`, `route-review-test`를 사용할 수 있으며 테스트 모드에서는 `accountId`도 전달합니다.
 
-Every request uses a local default user, `local@routeone.dev`, so the web app
-can call GraphQL without an `Authorization` header during early development.
+## GraphQL 도메인 구조
 
-OAuth tables are still present in Prisma for later Google/Apple login support,
-but there is no login mutation exposed in the GraphQL schema right now.
+GraphQL 스키마는 `src/schema.ts`에서 도메인별 SDL과 Resolver를 합쳐 구성합니다.
+
+| 도메인 | 위치 | 역할 |
+| --- | --- | --- |
+| 사용자 | `src/modules/user` | 비밀번호 및 Google·Apple 로그인, 세션 갱신, 내 정보 조회, 회원 탈퇴 처리 |
+| 여행 루트 | `src/modules/routes` | 루트 생성·조회·수정, 일정 시작, 장소 방문 인증과 사진, 완료 루트 공유·좋아요·저장·복제 처리 |
+| 장소 현지화 | `src/modules/places` | 관광지 이름·카테고리·소개 정보의 다국어 변환과 캐시 처리 |
+| 알림 | `src/modules/notifications` | 알림함, 읽음 상태, 알림 설정, 푸시 기기, 축제·도착·루트 회고 알림 처리 |
+
+## 인증 방식
+
+`loginWithPassword` 또는 `loginWithNativeOAuth` Mutation이 발급한 토큰을 GraphQL 요청의 `Authorization: Bearer <token>` 헤더로 전달합니다. `refreshAuthSession` Mutation으로 로그인 세션을 갱신할 수 있습니다.
+
+인증 토큰이 없는 요청은 초기 개발 호환성을 위해 로컬 기본 사용자 `local@routeone.dev`를 사용합니다. 다만 알림, 세션 갱신, 회원 탈퇴처럼 인증 세션이 필요한 작업은 유효한 토큰이 없으면 거부됩니다.

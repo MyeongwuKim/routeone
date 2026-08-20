@@ -27,15 +27,10 @@ function addSharedRoutePlaceLocalizationCandidate(
   stop: RouteStopWithLocalizablePlace
 ) {
   const localizationId = getPlaceLocalizationId(stop.place);
-  const contentTypeId = stop.place.contentTypeId?.trim();
+  const contentTypeId = stop.place.contentTypeId?.trim() ?? "";
   const title = stop.place.title?.trim();
 
-  if (
-    !localizationId ||
-    !contentTypeId ||
-    !title ||
-    candidateById.has(localizationId)
-  ) {
+  if (!localizationId || !title || candidateById.has(localizationId)) {
     return;
   }
 

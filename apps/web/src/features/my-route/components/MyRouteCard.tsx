@@ -218,11 +218,11 @@ function MyRouteHistoryCard({
               {isRouteShared(route) ? <SharedRouteStatusBadge /> : null}
             </div>
             <p className="mt-2 truncate text-base font-black text-slate-900 dark:text-white">
-              {getRouteTitle(route)}
+              {getRouteTitle(route, text)}
             </p>
             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-200/80">
               <MdOutlineCalendarToday className="text-sm dark:text-brand-200" />
-              {getRouteSubtitle(route)}
+              {getRouteSubtitle(route, text)}
             </p>
           </div>
           <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-xl text-white shadow-sm dark:bg-brand-500 dark:shadow-[0_10px_24px_rgba(20,184,166,0.18)]">
@@ -405,18 +405,18 @@ function MyRouteUpcomingCard({
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-black text-slate-900">
-              {getRouteTitle(route)}
+              {getRouteTitle(route, text)}
             </p>
             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
               <MdEventAvailable className="text-sm text-brand-600" />
-              {getRouteTimelineLabel(route, todayKey)}
+              {getRouteTimelineLabel(route, todayKey, text)}
             </p>
           </div>
         </button>
         {onRequestDeleteRoute ? (
           <button
             type="button"
-            aria-label={`${getRouteTitle(route)} ${text.myRoute.delete}`}
+            aria-label={`${getRouteTitle(route, text)} ${text.myRoute.delete}`}
             onClick={() => onRequestDeleteRoute(route)}
             className="flex size-9 shrink-0 items-center justify-center rounded-full border border-rose-100 bg-white text-lg text-rose-500 transition hover:bg-rose-50 active:scale-95"
           >
@@ -427,7 +427,7 @@ function MyRouteUpcomingCard({
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-brand-50 bg-brand-50/60 px-4 py-2 text-[11px] font-bold text-slate-500">
         <div className="flex min-w-0 items-center gap-2">
-          <span>{getRouteSubtitle(route)}</span>
+          <span>{getRouteSubtitle(route, text)}</span>
           <span className="h-1 w-1 rounded-full bg-slate-300" />
           <span>DAY {route.tripDays}</span>
         </div>
@@ -490,7 +490,7 @@ function MyRouteCompactCard({
             <div className="flex flex-wrap items-center gap-1.5">
               {hideTimelineBadge ? null : (
                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-600">
-                  {getRouteTimelineLabel(route, todayKey)}
+                  {getRouteTimelineLabel(route, todayKey, text)}
                 </span>
               )}
               <span className="text-xs font-bold text-slate-400">
@@ -499,11 +499,11 @@ function MyRouteCompactCard({
               {isRouteShared(route) ? <SharedRouteStatusBadge /> : null}
             </div>
             <p className="mt-1.5 text-sm font-black text-slate-900">
-              {getRouteTitle(route)}
+              {getRouteTitle(route, text)}
             </p>
             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
               <MdOutlineCalendarToday className="text-sm" />
-              {getRouteSubtitle(route)}
+              {getRouteSubtitle(route, text)}
             </p>
           </div>
         </button>
@@ -520,7 +520,7 @@ function MyRouteCompactCard({
         {onRequestDeleteRoute ? (
           <button
             type="button"
-            aria-label={`${getRouteTitle(route)} ${text.myRoute.delete}`}
+            aria-label={`${getRouteTitle(route, text)} ${text.myRoute.delete}`}
             onClick={() => onRequestDeleteRoute(route)}
             className="flex size-9 shrink-0 items-center justify-center rounded-full border border-rose-100 bg-white text-lg text-rose-500 transition hover:bg-rose-50 active:scale-95"
           >
@@ -594,7 +594,7 @@ function MyRouteCard({
     : sortedDays.slice(0, 4);
   const visibleDayCount = visibleDays.length + (todayRouteDay ? 1 : 0);
   const extraDayCount = Math.max(0, route.tripDays - visibleDayCount);
-  const statusLabel = getRouteTimelineLabel(route, todayKey);
+  const statusLabel = getRouteTimelineLabel(route, todayKey, text);
   const shouldShowStartAction =
     onRequestStartRoute && canRequestRouteStart(route);
 
@@ -626,11 +626,11 @@ function MyRouteCard({
             {isRouteShared(route) ? <SharedRouteStatusBadge /> : null}
           </div>
           <h2 className="mt-2 truncate text-base font-bold text-slate-900">
-            {getRouteTitle(route)}
+            {getRouteTitle(route, text)}
           </h2>
           <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
             <MdOutlineCalendarToday className="text-sm" />
-            {getRouteSubtitle(route)}
+            {getRouteSubtitle(route, text)}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -647,7 +647,7 @@ function MyRouteCard({
           {onRequestDeleteRoute ? (
             <button
               type="button"
-              aria-label={`${getRouteTitle(route)} ${text.myRoute.delete}`}
+              aria-label={`${getRouteTitle(route, text)} ${text.myRoute.delete}`}
               onClick={() => onRequestDeleteRoute(route)}
               className="flex size-9 items-center justify-center rounded-full border border-rose-100 bg-white text-lg text-rose-500 transition hover:bg-rose-50 active:scale-95"
             >

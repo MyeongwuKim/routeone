@@ -6,6 +6,7 @@ import {
 } from "./placeLocalization.openai.js";
 import {
   ADDRESS_CONCURRENCY,
+  containsKoreanText,
   createSourceHash,
   DATABASE_CONCURRENCY,
   mapWithConcurrency,
@@ -50,9 +51,13 @@ async function storeTourPlaceLocalizations(
   await mapWithConcurrency(inputs, DATABASE_CONCURRENCY, (input, index) => {
     const translation = titleById.get(input.contentId);
     const officialAddress = officialAddresses[index];
-    const fallbackAddress = fallbackAddressById
+    const fallbackAddressCandidate = fallbackAddressById
       .get(input.contentId)
       ?.translatedAddress.trim();
+    const fallbackAddress =
+      fallbackAddressCandidate && !containsKoreanText(fallbackAddressCandidate)
+        ? fallbackAddressCandidate
+        : undefined;
     const localizedAddress =
       officialAddress || fallbackAddress || input.address || null;
     const addressSource = officialAddress
@@ -165,9 +170,11 @@ export async function localizeTourPlaces(
     return (
       !cached ||
       cached.sourceHash !== createSourceHash(input) ||
-      (cached.titleSource === "SOURCE" && /[가-힣]/u.test(input.title)) ||
+      containsKoreanText(cached.title) ||
+      containsKoreanText(cached.address ?? "") ||
+      (cached.titleSource === "SOURCE" && containsKoreanText(input.title)) ||
       (cached.addressSource === "SOURCE" &&
-        /[가-힣]/u.test(input.address ?? ""))
+        containsKoreanText(input.address ?? ""))
     );
   });
 
@@ -190,13 +197,20 @@ export async function localizeTourPlaces(
 
   return inputs.map((input) => {
     const row = localizedById.get(input.contentId);
+    const isFreshCachedLocalization = Boolean(
+      row &&
+        row.sourceHash === createSourceHash(input) &&
+        !containsKoreanText(row.title) &&
+        !containsKoreanText(row.address ?? "")
+    );
+
     return {
       contentId: input.contentId,
       title: row?.title || input.title,
       address: row?.address || input.address || "",
       titleSource: row?.titleSource || "SOURCE",
       addressSource: row?.addressSource || "SOURCE",
-      cached: Boolean(row),
+      cached: isFreshCachedLocalization,
     };
   });
 }

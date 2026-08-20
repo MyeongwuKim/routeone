@@ -212,7 +212,7 @@ function RoutePosterPreviewModal({
             {text.routeHistory.posterTitle}
           </p>
           <h2 className="truncate text-base font-black text-slate-900">
-            {getRouteTitle(preview.route)} · {currentCard.label}
+            {getRouteTitle(preview.route, text)} · {currentCard.label}
           </h2>
         </div>
         <button
@@ -594,7 +594,7 @@ function MyRouteHistoryPage() {
     openModal({
       title: text.routeHistory.notVisitedTitle,
       description: text.routeHistory.notVisitedDescription(
-        getRouteTitle(route)
+        getRouteTitle(route, text)
       ),
       detail: text.routeHistory.notVisitedDetail,
       actions: [
@@ -733,7 +733,7 @@ function MyRouteHistoryPage() {
       const saveResult = await downloadRouteCompletionPoster(
         selectedPosterCard.dataUrl,
         selectedPosterCard.fileName,
-        `${getRouteTitle(posterPreview.route)} ${selectedPosterCard.label}`
+        `${getRouteTitle(posterPreview.route, text)} ${selectedPosterCard.label}`
       );
 
       if (saveResult.mode === "native" && !saveResult.completed) {
@@ -760,14 +760,14 @@ function MyRouteHistoryPage() {
       const didShare = await shareRouteCompletionPoster(
         selectedPosterCard.dataUrl,
         selectedPosterCard.fileName,
-        `${getRouteTitle(posterPreview.route)} ${selectedPosterCard.label}`
+        `${getRouteTitle(posterPreview.route, text)} ${selectedPosterCard.label}`
       );
 
       if (!didShare) {
         const saveResult = await downloadRouteCompletionPoster(
           selectedPosterCard.dataUrl,
           selectedPosterCard.fileName,
-          `${getRouteTitle(posterPreview.route)} ${selectedPosterCard.label}`
+          `${getRouteTitle(posterPreview.route, text)} ${selectedPosterCard.label}`
         );
 
         if (saveResult.mode === "native" && !saveResult.completed) {
@@ -922,7 +922,8 @@ function MyRouteHistoryPage() {
                       ? text.routeHistory.making
                       : text.routeHistory.dayCard,
                   ariaLabel: `${getRouteTitle(
-                    selectedRouteDay.route
+                    selectedRouteDay.route,
+                    text
                   )} ${text.routeHistory.posterTitle}`,
                   disabled: posterGeneratingRouteId === selectedRouteDay.route.id,
                   onClick: () => handleCreatePoster(selectedRouteDay.route),

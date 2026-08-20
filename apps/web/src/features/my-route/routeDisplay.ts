@@ -1,4 +1,5 @@
 import type { MyRoute, MyRouteDay } from "./types";
+import { getUiText, type UiText } from "@/lib/uiText";
 
 export type RouteDayState = "past" | "today" | "upcoming" | "undated";
 export type RouteTimelineState =
@@ -107,43 +108,48 @@ export function getRouteTimelineState(
 
 export function getRouteTimelineLabel(
   route: MyRoute,
-  todayKey = getTodayDateKey()
+  todayKey = getTodayDateKey(),
+  text: UiText = getUiText("ko")
 ) {
   const state = getRouteTimelineState(route, todayKey);
 
   if (state === "current") {
     if (!route.startedAt) {
-      return getTodayRouteDay(route, todayKey) ? "오늘 시작" : "시작 필요";
+      return getTodayRouteDay(route, todayKey)
+        ? text.myRouteCard.startsToday
+        : text.myRouteCard.startRequired;
     }
 
-    return "여행 중";
+    return text.myRouteCard.inProgress;
   }
 
   if (state === "upcoming") {
     const startDateKey = getRouteStartDateKey(route);
 
     if (!startDateKey) {
-      return "예정";
+      return text.myRouteCard.scheduled;
     }
 
     const diffDays = getDateKeyDiffInDays(startDateKey, todayKey);
 
     if (diffDays === 1) {
-      return "내일 시작";
+      return text.myRouteCard.startsTomorrow;
     }
 
-    return diffDays > 1 ? `${diffDays}일 후 시작` : "예정";
+    return diffDays > 1
+      ? text.myRouteCard.startsInDays(diffDays)
+      : text.myRouteCard.scheduled;
   }
 
   if (state === "past") {
-    return "지난 루트";
+    return text.myRouteCard.pastRoute;
   }
 
   if (state === "needsReview") {
-    return "시작 확인 필요";
+    return text.myRouteCard.startReviewRequired;
   }
 
-  return "날짜 미정";
+  return text.dayRoute.dateUnknown;
 }
 
 export function formatRouteDate(value: string | null) {
@@ -162,28 +168,29 @@ export function formatRouteDate(value: string | null) {
   return `${Number(month)}.${Number(day)}`;
 }
 
-export function getRouteTitle(route: MyRoute) {
+export function getRouteTitle(route: MyRoute, text: UiText = getUiText("ko")) {
   const startDate = formatRouteDate(route.travelStartDate);
   const endDate = formatRouteDate(route.travelEndDate);
 
   if (!startDate) {
-    return "날짜 미정 일정";
+    return text.dayRoute.undatedRouteTitle;
   }
 
-  if (!endDate || startDate === endDate) {
-    return `${startDate} 일정`;
-  }
-
-  return `${startDate} ~ ${endDate} 일정`;
+  return text.dayRoute.routeTitle(startDate, endDate);
 }
 
-export function getRouteSubtitle(route: MyRoute) {
+export function getRouteSubtitle(
+  route: MyRoute,
+  text: UiText = getUiText("ko")
+) {
   const durationText =
     route.tripDays <= 1
-      ? "당일치기"
-      : `${route.tripDays - 1}박 ${route.tripDays}일`;
+      ? text.myRouteCard.dayTrip
+      : text.myRouteCard.nightTrip(route.tripDays - 1, route.tripDays);
 
-  return `${durationText} · ${route.totalStopCount}곳`;
+  return `${durationText} · ${text.myRouteCard.placeCount(
+    route.totalStopCount
+  )}`;
 }
 
 export function getVisibleDays(route: MyRoute) {
@@ -234,20 +241,28 @@ export function getSelectableRouteDay(
   );
 }
 
-export function getDaySummary(day: MyRouteDay) {
+export function getDaySummary(
+  day: MyRouteDay,
+  text: UiText = getUiText("ko")
+) {
   const firstPlace = day.stops[0]?.place.title;
   const stopCount = day.stops.length;
 
   if (!firstPlace || stopCount === 0) {
-    return "비어 있음";
+    return text.myRouteCard.emptyDay;
   }
 
-  return stopCount > 1 ? `${firstPlace} 외 ${stopCount - 1}곳` : firstPlace;
+  return stopCount > 1
+    ? `${firstPlace} ${text.myRouteCard.additionalPlaces(stopCount - 1)}`
+    : firstPlace;
 }
 
-export function getDayDateLabel(day: MyRouteDay) {
+export function getDayDateLabel(
+  day: MyRouteDay,
+  text: UiText = getUiText("ko")
+) {
   const date = formatRouteDate(day.date);
-  return date ? `${date}` : "날짜 미정";
+  return date ?? text.dayRoute.dateUnknown;
 }
 
 export function isVisitedStop(stop: MyRouteDay["stops"][number]) {

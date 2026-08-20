@@ -145,7 +145,8 @@ export function resolveLocalizedTitle(
 
   if (
     !normalizedTranslatedTitle ||
-    containsSuspiciousLocalization(normalizedTranslatedTitle)
+    containsSuspiciousLocalization(normalizedTranslatedTitle) ||
+    containsKoreanText(normalizedTranslatedTitle)
   ) {
     return {
       title: input.title,
@@ -161,6 +162,10 @@ export function resolveLocalizedTitle(
 
 export function containsSuspiciousLocalization(value: string) {
   return SUSPICIOUS_LOCALIZATION_PATTERN.test(value);
+}
+
+export function containsKoreanText(value: string) {
+  return /[가-힣]/u.test(value);
 }
 
 export function normalizeLocale(locale: string) {

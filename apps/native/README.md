@@ -2,7 +2,7 @@
 
 React Native WebView로 `apps/web` 빌드 산출물을 감싸는 하이브리드 앱입니다.
 
-## 명령어 빠른 선택
+## 명령어
 
 루트에서 실행하는 명령어를 우선 사용합니다.
 
@@ -93,28 +93,77 @@ pnpm native:sync:web
 pnpm native:start
 ```
 
-## dev TestFlight용 Xcode 프로젝트 생성
+## iOS 프로젝트 생성과 배포 과정
 
-시뮬레이터와 연결된 iPhone 테스트를 마친 뒤 dev TestFlight 빌드를 준비할 때 아래 명령어를 사용합니다.
+Xcode 프로젝트를 준비하는 `prebuild`와 TestFlight에 올릴 앱 바이너리를 만드는 EAS 빌드는 서로 다른 단계입니다. 프로젝트 설정의 진입점은 `app.config.ts`이고, 실제 `ios/` 프로젝트 생성은 Expo CLI의 `expo prebuild`가 담당합니다. 앱을 실행할 때 사용하는 `index.ts`와 `App.tsx`는 이 생성 과정에 참여하지 않습니다.
+
+### dev Xcode 프로젝트 생성
+
+시뮬레이터와 연결된 iPhone 테스트를 마친 뒤 아래 루트 명령어로 dev Xcode 프로젝트를 준비합니다.
 
 ```bash
 pnpm native:ios:dev
 ```
 
-이 명령어는 `APP_VARIANT=dev`로 `expo prebuild --platform ios`를 실행하고, `apps/native/ios/`에 Xcode용 `.xcodeproj`와 `.xcworkspace`를 생성 또는 갱신합니다. 생성된 Xcode 프로젝트는 dev 앱의 네이티브 설정과 빌드를 확인하고 TestFlight 업로드를 준비할 때 사용합니다.
+```text
+pnpm native:ios:dev
+→ APP_VARIANT=dev, ROUTEONE_BUILD_PLATFORM=ios 설정
+→ app-versions.json의 dev.ios 버전 확인
+→ apps/web 빌드 및 Native WebView 번들 생성
+→ app.config.ts에서 dev 앱 이름·Bundle ID·권한·플러그인 구성
+→ expo prebuild --platform ios로 ios/ 프로젝트 생성·갱신
+→ Info.plist, Google URL Scheme, Apple 로그인 entitlement 보정
+```
 
-`native:ios:dev`는 Xcode 프로젝트 생성까지만 수행하며 TestFlight에 직접 업로드하지 않습니다. 실제 dev TestFlight 빌드와 업로드는 아래 `TestFlight` 카테고리의 `eas:build:ios:dev`, `eas:submit:ios:dev` 명령어로 진행합니다.
+명령어를 실행하는 동안에만 dev 설정을 사용하며 `.env` 파일의 값은 변경하지 않습니다. 실행이 끝나면 `apps/native/ios/`에 Xcode에서 열 수 있는 `.xcodeproj`와 `.xcworkspace`가 생성됩니다. 이 단계만으로는 TestFlight에 앱이 올라가지 않습니다.
 
-필요하면 native 패키지 안에서 더 직접적인 명령어를 사용할 수 있습니다.
+각 단계의 담당 파일은 다음과 같습니다.
+
+| 단계 | 담당 파일 또는 도구 | 역할 |
+| --- | --- | --- |
+| 명령 연결 | 루트 및 `apps/native/package.json` | 환경값을 설정하고 확인·웹 번들·prebuild 명령을 순서대로 실행 |
+| 앱 설정 | `app.config.ts` | 앱 이름, Bundle ID, 버전, 권한과 Expo config plugin 구성 |
+| 웹 번들 | `scripts/sync-web-build.mjs` | `apps/web`을 빌드하고 WebView용 번들 생성 |
+| Xcode 프로젝트 | `expo prebuild` | Expo 설정과 플러그인을 바탕으로 `ios/` 생성·갱신 |
+| iOS 설정 보정 | `scripts/sync-ios-permissions.mjs` | 생성된 Info.plist와 entitlement의 권한·로그인 설정 보정 |
+
+TestFlight에 올리려면 생성된 `.xcworkspace`를 Xcode에서 열어 직접 Archive한 뒤 App Store Connect로 업로드하거나, 아래 명령으로 소스를 Expo/EAS에 올려 빌드와 제출을 진행해야 합니다.
 
 ```bash
 cd apps/native
-pnpm run prebuild:ios:local
-pnpm run prebuild:ios:dev
-pnpm run prebuild:ios:dev:clean
+pnpm eas:build:ios:dev
+pnpm eas:submit:ios:dev
 ```
 
-`--clean`이 붙은 명령어는 `ios/`를 다시 생성하는 흐름이라 Xcode에서 직접 수정한 네이티브 파일이 있으면 날아갈 수 있습니다.
+### prod Xcode 프로젝트와 운영 빌드
+
+루트에는 `pnpm native:ios:prod` 명령이 없습니다. prod 설정의 Xcode 프로젝트가 필요할 때는 Native 패키지에서 아래 prebuild 명령을 직접 실행합니다.
+
+```bash
+cd apps/native
+pnpm prebuild:ios:prod
+```
+
+이 명령은 `APP_VARIANT=prod`와 iOS 플랫폼을 설정하고, 운영 앱 이름·Bundle ID·버전을 `app.config.ts`에 반영해 `ios/` 프로젝트를 생성 또는 갱신합니다. 이 단계도 Xcode 프로젝트만 준비하며 배포 바이너리는 만들지 않습니다.
+
+운영 TestFlight와 App Store에 사용할 실제 빌드는 아래 명령으로 EAS 클라우드에서 생성합니다.
+
+```bash
+cd apps/native
+pnpm eas:build:ios
+```
+
+```text
+pnpm eas:build:ios
+→ APP_VARIANT=prod, ROUTEONE_BUILD_PLATFORM=ios 설정
+→ app-versions.json의 prod.ios 버전 확인
+→ eas.json의 production 프로필 선택
+→ EAS에 소스와 환경변수 전달
+→ app.config.ts와 Expo config plugin을 바탕으로 iOS 프로젝트 준비
+→ Xcode 빌드 후 App Store 제출용 빌드 생성
+```
+
+`--clean`이 붙은 `prebuild:ios:dev:clean` 또는 `prebuild:ios:prod:clean`은 `ios/`를 다시 생성하는 흐름이라 Xcode에서 직접 수정한 네이티브 파일이 있으면 사라질 수 있습니다.
 
 ## TestFlight
 
@@ -165,11 +214,104 @@ RouteOne Native는 `apps/web`을 실행하는 앱 컨테이너이면서, 웹만�
 
 웹은 화면과 서비스 흐름을 담당하고, Native는 WebView 실행 환경과 기기 기능을 제공합니다. 앱 버전, 빌드번호, 플랫폼, 현재 웹 번들 정보도 브릿지를 통해 웹에 전달합니다.
 
-## 구조
+## 앱 실행 구조
+
+```mermaid
+flowchart TD
+  Entry["index.ts<br/>Expo 진입점"] --> App["App.tsx<br/>최상위 화면 분기"]
+  App --> Update["useNativeUpdate<br/>최소 앱 버전 확인"]
+  Update -->|업데이트 필요| ForceUpdate["NativeForceUpdateScreen"]
+  Update -->|실행 가능| Boot["useNativeBoot<br/>언어·권한·세션 확인"]
+  Boot -->|첫 실행| Onboarding["언어 선택 → 위치 권한 → 알림 권한"]
+  Boot -->|세션 없음| Login["NativeLoginStep<br/>비밀번호·Google·Apple 로그인"]
+  Onboarding --> Login
+  Login -->|토큰 저장| WebViewScreen["NativeWebViewScreen"]
+  Boot -->|저장된 세션 있음| WebViewScreen
+  WebViewScreen --> Bundle["resolveWebBundle<br/>embedded · installed · remote 선택"]
+  Bundle --> Inject["인증·언어·브릿지 스크립트 구성"]
+  Inject --> WebView["React Native WebView<br/>웹 앱 실행"]
+  WebView -->|routeone:web-bundle-ready| Ready["로딩 종료<br/>설치 번들 확정"]
+```
+
+1. `index.ts`가 Expo의 `registerRootComponent`로 `src/App.tsx`를 등록합니다.
+2. `App.tsx`는 `useNativeUpdate`로 강제 업데이트 여부를 확인하고, `useNativeBoot`로 저장된 언어·권한·로그인 세션을 확인합니다. 업데이트 확인이 끝나기 전이거나 최소 버전보다 낮으면 WebView에 진입하지 않습니다.
+3. 첫 실행에서는 언어와 기기 권한을 확인한 뒤 네이티브 로그인 화면을 표시합니다. 로그인 토큰은 네이티브 저장소에 보관하며, 유효한 저장 세션이 있으면 다음 실행부터 로그인 화면을 건너뜁니다.
+4. `NativeWebViewScreen`은 `resolveWebBundle`로 앱 내장 번들, 설치된 R2 번들, 원격 fallback 중 실행할 웹 소스를 선택합니다.
+5. WebView가 웹 문서를 읽기 전에 `injectedJavaScriptBeforeContentLoaded`로 인증 토큰, 앱 언어, `window.RouteOneRuntimeConfig`, `window.RouteOneNative`를 주입합니다. 네이티브 환경의 웹 라우터는 이 설정에 따라 `HashRouter`를 사용합니다.
+6. 웹의 `NativeWebBundleReadySignal`이 `routeone:web-bundle-ready` 메시지를 보내면 로딩 화면을 닫고, 새로 설치한 번들을 정상 버전으로 확정합니다. 설치 번들이 로드되지 않으면 이전 번들이나 내장 번들로 롤백합니다.
+
+## WebView 브릿지 구조
+
+웹 기능에서는 네이티브 모듈을 직접 import하지 않습니다. `apps/web/src/native-bridge`의 어댑터를 통해 `window.RouteOneNative`를 호출하고, 주입 스크립트가 WebView 메시지와 Promise 응답을 연결합니다.
+
+```mermaid
+sequenceDiagram
+  participant Feature as Web 기능
+  participant Adapter as apps/web/src/native-bridge
+  participant Injected as window.RouteOneNative
+  participant WebView as React Native WebView
+  participant Dispatcher as handleNativeBridgeMessage
+  participant Handler as Native 브릿지 핸들러
+  participant Device as 기기 API 또는 외부 API
+
+  Feature->>Adapter: 네이티브 기능 호출
+  Adapter->>Injected: getCurrentPosition() 등 호출
+  Injected->>Injected: requestId 생성 및 Promise 보관
+  Injected->>WebView: postMessage(JSON 요청)
+  WebView->>Dispatcher: onMessage 이벤트 전달
+  Dispatcher->>Handler: type 검사 후 담당 핸들러 호출
+  Handler->>Device: 권한·위치·사진·알림·네트워크 작업
+  Device-->>Handler: 실행 결과
+  Handler-->>WebView: injectJavaScript(응답 ID, payload)
+  WebView-->>Injected: __ROUTEONE_NATIVE_*_RESPONSE__ 실행
+  Injected-->>Adapter: 같은 requestId의 Promise 완료
+  Adapter-->>Feature: 결과 반환
+```
+
+### 브릿지 요청이 처리되는 순서
+
+1. 웹의 `apps/web/src/native-bridge`가 `window.RouteOneNative` 메서드를 호출합니다.
+2. `src/webview/bridge/injectedScript.ts`가 고유한 `requestId`를 만들고 Promise의 `resolve`·`reject`를 대기 목록에 저장합니다.
+3. 주입된 API가 `window.ReactNativeWebView.postMessage()`로 `type`, `id`, 요청 데이터를 JSON 문자열로 보냅니다.
+4. `NativeWebViewScreen`의 `onMessage`가 요청을 받고 `handleNativeBridgeMessage`에 전달합니다.
+5. `src/webview/bridge/index.ts`가 message guard로 요청 형태를 검사한 뒤 위치, 사진, 알림, 앱 정보 등 담당 핸들러로 분기합니다.
+6. 핸들러가 기기 API나 외부 API 작업을 마치면 `responses.ts`가 WebView에 응답 함수를 `injectJavaScript`로 실행합니다.
+7. 주입 스크립트의 `window.__ROUTEONE_NATIVE_*_RESPONSE__` 함수가 같은 `requestId`의 Promise를 완료하고 결과를 웹 기능으로 돌려줍니다.
+
+인증 토큰·언어 변경과 웹 준비·오류 알림처럼 결과를 기다리지 않는 메시지도 같은 `postMessage → onMessage` 경로를 사용합니다. 반대로 앱 활성화와 알림 수신처럼 네이티브에서 먼저 발생한 이벤트는 `injectJavaScript`로 WebView의 `CustomEvent`를 발생시켜 웹에 전달합니다.
+
+### 네트워크 요청 전달
+
+WebView 안에서 웹이 평소처럼 `fetch`를 호출하면 주입 스크립트가 아래 경로만 가로채 `routeone:native-fetch` 메시지로 보냅니다. 그 외 요청은 원래 브라우저 `fetch`를 그대로 사용합니다.
+
+| 웹 요청 경로 | 네이티브 전달 대상 | 네이티브 처리 |
+| --- | --- | --- |
+| `/graphql` | `EXPO_PUBLIC_GRAPHQL_ENDPOINT` | 웹이 전달한 인증 헤더와 요청 본문으로 RouteOne GraphQL API 호출 |
+| `/tour-api/*` | 한국관광공사 API | 엔드포인트별 TTL 캐시, 중복 요청 병합, 네트워크 실패 시 만료 캐시 fallback 처리 |
+| `/map-direction/*` | 네이버 Directions API | 네이티브 환경변수의 API Key 헤더를 추가해 길찾기 요청 전달 |
+
+응답은 상태 코드, 헤더, 본문을 다시 WebView에 전달하고 주입 스크립트에서 브라우저 `Response` 객체로 복원합니다. 따라서 웹의 React Query와 GraphQL 호출부는 브라우저 실행과 네이티브 실행에서 같은 인터페이스를 사용합니다.
+
+### 브릿지 기능별 담당 파일
+
+| 기능 | 요청 또는 API | 네이티브 담당 파일 |
+| --- | --- | --- |
+| 앱·권한·번들 정보 | `getAppInfo()` | `appInfoBridge.ts` |
+| 현재 위치 | `getCurrentPosition()` | `locationBridge.ts` |
+| 방문 사진 촬영·선택·업로드 | `takeVisitPhoto()`, `uploadVisitPhoto()` | `visitPhotoBridge.ts` |
+| 도착 알림과 테스트 위치 | `syncRouteArrivalNotifications()`, `setRouteArrivalTestLocation()` | `routeArrivalNotificationBridge.ts` |
+| 푸시 토큰과 알림 동기화 | `getPushToken()`, 축제·루트 회고 알림 API | `pushTokenBridge.ts`, `festivalNotificationBridge.ts`, `routeReviewNotificationBridge.ts` |
+| 이미지 저장·공유 | `saveImage()` | `saveImageBridge.ts` |
+| 외부 링크와 앱 설정 | `openExternalUrl()` | `externalLinkBridge.ts` |
+| API 프록시 | WebView의 `fetch()` | `fetchBridge.ts` |
+| 로그인 세션 동기화 | `routeone:native-auth-token` | `authTokenBridge.ts` |
+
+## 주요 디렉터리
 
 - 앱 실행
-  - `src/App.tsx`: 부팅, 로그인과 WebView 화면을 연결합니다.
-  - `src/boot`: 인증 세션과 웹 번들 준비 상태를 확인합니다.
+  - `index.ts`: Expo 앱 진입점입니다.
+  - `src/App.tsx`: 강제 업데이트, 부팅, 로그인, WebView 화면을 연결합니다.
+  - `src/boot`: 저장된 인증 세션과 온보딩 진행 상태를 확인합니다.
   - `src/components/native-onboarding`: 네이티브 온보딩과 로그인 화면입니다.
   - `src/components/native-webview`: 실행 화면, 로딩 화면과 WebView 컨테이너입니다.
 - 인증과 웹 번들
@@ -180,54 +322,13 @@ RouteOne Native는 `apps/web`을 실행하는 앱 컨테이너이면서, 웹만�
   - `src/nativeUpdate`: R2 정책 조회, 캐시 fallback과 플랫폼별 최소 버전 비교를 처리합니다.
   - `src/components/native-update`: WebView 진입 전에 표시하는 강제 업데이트 화면입니다.
 - WebView 브릿지
-  - `src/webview/bridge/injectedScript.ts`: `window.RouteOneNative` API를 WebView에 주입합니다.
-  - `src/webview/bridge/fetchBridge.ts`, `authTokenBridge.ts`: API 요청과 인증 토큰을 연결합니다.
-  - `src/webview/bridge/locationBridge.ts`, `visitPhotoBridge.ts`, `saveImageBridge.ts`: 위치, 방문 사진과 이미지 저장·공유를 처리합니다.
-  - `src/webview/bridge/pushTokenBridge.ts`, `routeArrivalNotificationBridge.ts`, `festivalNotificationBridge.ts`, `routeReviewNotificationBridge.ts`: 푸시 토큰과 목적별 알림을 처리합니다.
-  - `src/webview/bridge/appInfoBridge.ts`, `externalLinkBridge.ts`: 앱 정보와 외부 링크를 처리합니다.
+  - `src/webview/bridge/injectedScript.ts`: `window.RouteOneNative` API와 fetch proxy를 WebView에 주입합니다.
+  - `src/webview/bridge/index.ts`: WebView 메시지를 검사하고 기능별 핸들러로 분기합니다.
+  - `src/webview/bridge/responses.ts`: 처리 결과를 WebView의 대기 중인 Promise로 반환합니다.
+  - `apps/web/src/native-bridge`: 웹 기능에서 주입된 브릿지를 사용하는 어댑터입니다.
 - 빌드
   - `src/config/webBundleUpdateConfig.ts`: variant별 웹 번들 채널과 업데이트 설정입니다.
   - `scripts/sync-web-build.mjs`: 웹 빌드 후 분리 모듈 import map을 포함한 Native 번들을 생성합니다.
-
-## 환경변수
-
-WebView 안의 `/graphql`, `/tour-api`, `/map-direction` 요청은 Vite dev proxy 대신 native bridge에서 직접 호출합니다.
-
-```bash
-APP_VARIANT=dev
-EXPO_PUBLIC_GRAPHQL_ENDPOINT=http://192.168.0.144:4000/graphql
-EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=...
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=...
-EXPO_PUBLIC_NCP_MAPS_KEY_ID=...
-EXPO_PUBLIC_NCP_MAPS_KEY=...
-```
-
-`EXPO_PUBLIC_GRAPHQL_ENDPOINT`는 현재 Mac의 LAN IP로 맞춰야 실기기에서도 로컬 API에 붙을 수 있습니다. iOS 시뮬레이터만 쓸 때는 `http://127.0.0.1:4000/graphql`도 사용할 수 있습니다.
-
-앱 variant는 아래처럼 나뉩니다.
-
-| 값 | 용도 | 원격 웹 번들 |
-| --- | --- | --- |
-| `none` 또는 빈 값 | 로컬 시뮬레이터 개발 | 사용 안 함 |
-| `dev` | dev/TestFlight 앱 | dev R2 manifest 사용 |
-| `prod` | 운영 앱 | prod R2 manifest 사용 |
-
-Google OAuth iOS 클라이언트의 번들 ID도 variant와 정확히 맞아야 합니다.
-
-## 테스트 플래그
-
-설치 앱에서 방문 인증과 도착 알림을 테스트할 때는 dev 계열 빌드에 아래 값을 켭니다.
-
-```bash
-EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS=1
-EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE=1
-```
-
-`EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS=1`이면 WebView가 현재 GPS를 요청하지 않고 장소 좌표로 방문 인증 위치를 만듭니다. API 서버도 같은 테스트를 허용하려면 서버에 `ROUTEONE_DEV_VERIFICATION_BYPASS=1`이 켜져 있어야 합니다. 도착 알림 테스트 모드가 함께 켜진 경우에는 장소별로 선택한 테스트 위치가 우선되어 다른 장소의 GPS 인증 실패 케이스도 확인할 수 있습니다.
-
-`EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE=1`이면 DAY 상세의 각 장소에 GPS 테스트 버튼이 표시됩니다. 버튼을 누르면 장소의 300m 도착 반경과 드래그 가능한 테스트 위치 마커가 있는 지도가 열립니다. 마커를 끌거나 지도를 눌러 좌표를 정한 뒤 적용하면 WebView에서 조회하는 현재 위치가 해당 좌표로 바뀝니다. 장소 반경 안이면 같은 도착 알림 생성 경로로 로컬 알림을 발송하고, 반경 밖이면 위치만 적용해 GPS 실패 케이스를 확인할 수 있습니다. `실제 GPS로 복귀`를 누르거나 앱 프로세스를 다시 시작하면 위치 덮어쓰기가 해제됩니다. 운영 빌드에는 이 플래그를 설정하지 않습니다.
-
-이 버튼으로 알림 내용, 포그라운드 표시, 알림함 동기화, 알림 탭 이동과 GPS 방문 인증을 확인할 수 있습니다. OS의 백그라운드 지오펜스 진입 이벤트 자체는 iOS 시뮬레이터의 위치 시뮬레이션이나 Android 모의 위치로 별도 확인해야 합니다.
 
 ## 앱 버전
 
@@ -334,22 +435,87 @@ R2 버킷과 API Token은 dev/prod용으로 각각 만들고, 각 Token의 `Obje
 
 `R2_PUBLIC_BASE_URL_DEV`, `R2_PUBLIC_BASE_URL_PROD`에는 각 버킷의 공개 URL을 넣습니다. 이 URL의 origin을 네이버 지도 Web 서비스 URL에도 등록합니다. R2 Access Key는 GitHub Actions에서만 사용하고 네이티브 앱에는 포함하지 않습니다.
 
-## 문제 해결 체크
+## 환경변수
 
-로컬 시뮬레이터에서 원격 웹 번들이 섞이는 것 같으면 `APP_VARIANT=none`으로 실행 중인지 먼저 확인합니다. 루트 명령어 `pnpm native:ios:local`은 이 값을 자동으로 넣고, R2 manifest와 저장된 원격 번들을 사용하지 않습니다.
+로컬 개발 값은 `apps/native/.env`에 저장하고, dev·prod TestFlight와 운영 빌드 값은 Expo/EAS 환경변수로 관리합니다. `EXPO_PUBLIC_`으로 시작하는 값은 앱 번들에 포함되므로 서버 비밀키나 R2 Access Key처럼 외부에 노출되면 안 되는 값은 넣지 않습니다.
 
-WebView에서 `VITE_VISITKOREA_SERVICE_KEY is empty` 같은 메시지가 보이면 `apps/web/.env` 값을 확인한 뒤 웹 번들을 다시 동기화합니다.
+### 네이티브 앱 설정
+
+| 환경변수 | 필요 조건 | 설명 |
+| --- | --- | --- |
+| `APP_VARIANT` | 선택 | 앱의 실행·배포 상태를 `none`, `dev`, `prod`로 구분합니다. 직접 실행할 때는 `.env` 값을 사용하고, 아래 빌드 명령을 사용하면 목적에 맞는 값으로 자동 설정됩니다. |
+| `EXPO_PUBLIC_GRAPHQL_ENDPOINT` | 필수 | RouteOne API의 `/graphql` 주소입니다. WebView의 `/graphql` 요청과 네이티브 로그인 요청이 이 주소로 전달됩니다. |
+| `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | Google 로그인 사용 시 | 현재 iOS 앱 variant의 번들 ID에 연결된 Google OAuth iOS Client ID입니다. |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Google 로그인 사용 시 | Google 로그인에서 identity token을 발급받을 때 사용하는 Web Client ID입니다. |
+| `EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME` | 선택 | Google OAuth iOS URL Scheme입니다. 생략하면 iOS Client ID가 `*.apps.googleusercontent.com` 형식일 때 자동으로 계산합니다. |
+| `EXPO_PUBLIC_NCP_MAPS_KEY_ID` | 네이버 길찾기 사용 시 | 네이버 Directions API 요청의 `x-ncp-apigw-api-key-id` 헤더에 사용합니다. |
+| `EXPO_PUBLIC_NCP_MAPS_KEY` | 네이버 길찾기 사용 시 | 네이버 Directions API 요청의 `x-ncp-apigw-api-key` 헤더에 사용합니다. |
+| `EXPO_PUBLIC_WEB_BUNDLE_BASE_URL` | dev·prod 원격 웹 번들 사용 시 | 공개 R2 기본 URL입니다. 웹 번들 origin으로 사용하며 manifest와 강제 업데이트 정책 URL의 기준이 됩니다. |
+| `EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV` | 선택 | dev 웹 번들의 manifest 주소를 직접 지정합니다. 생략하면 기본 URL의 `/latest/manifest.json`을 사용합니다. |
+| `EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD` | 선택 | prod 웹 번들의 manifest 주소를 직접 지정합니다. 생략하면 기본 URL의 `/latest/manifest.json`을 사용합니다. |
+| `EXPO_PUBLIC_NATIVE_UPDATE_POLICY_URL_DEV` | 선택 | dev 네이티브 강제 업데이트 정책 주소를 직접 지정합니다. 생략하면 기본 URL의 `/native/latest.json`을 사용합니다. |
+| `EXPO_PUBLIC_NATIVE_UPDATE_POLICY_URL_PROD` | 선택 | prod 네이티브 강제 업데이트 정책 주소를 직접 지정합니다. 생략하면 기본 URL의 `/native/latest.json`을 사용합니다. |
+| `EXPO_PUBLIC_EAS_PROJECT_ID` | 선택 | Expo Push Token을 발급할 EAS Project ID를 기본 설정과 다르게 사용할 때 지정합니다. |
+| `EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS` | dev 테스트 전용 | 실제 GPS 대신 방문 장소 좌표를 사용하는 방문 인증 테스트를 활성화합니다. |
+| `EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE` | dev 테스트 전용 | DAY 상세에 도착 알림 테스트 위치 버튼을 표시합니다. |
+
+`EXPO_PUBLIC_GRAPHQL_ENDPOINT`는 실행 기기에 따라 주소가 달라집니다.
+
+| 실행 환경 | 예시 |
+| --- | --- |
+| iOS 시뮬레이터 | `http://127.0.0.1:4000/graphql` |
+| iPhone·Android 실기기 | `http://<Mac의 LAN IP>:4000/graphql` |
+| dev·prod 배포 앱 | 배포된 API의 HTTPS GraphQL 주소 |
+
+로컬 개발에서 주로 사용하는 형태는 아래와 같습니다. Google 로그인이나 네이버 길찾기를 사용하지 않는다면 해당 값은 생략할 수 있습니다.
 
 ```bash
-pnpm native:build:webview
+APP_VARIANT=none
+EXPO_PUBLIC_GRAPHQL_ENDPOINT=http://127.0.0.1:4000/graphql
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=...
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=...
+EXPO_PUBLIC_NCP_MAPS_KEY_ID=...
+EXPO_PUBLIC_NCP_MAPS_KEY=...
 ```
 
-네이버 지도 인증 실패가 계속되면 네이버 콘솔 등록 URL뿐 아니라 WebView가 실제 원격 `entryUrl`로 실행 중인지 확인합니다. 네이버 지도 SDK는 `webBundlePublicOrigin`이나 `<base href>`가 아니라 `window.location.href`를 인증 URL로 사용하므로, 앱이 내장 HTML fallback으로 실행되면 R2 origin을 등록해도 인증이 실패할 수 있습니다. 앱 정보의 웹 번들 종류가 `remote` 또는 `installed`인지 확인하고, dev/prod 빌드 환경에 `EXPO_PUBLIC_WEB_BUNDLE_BASE_URL`이 들어간 상태로 다시 빌드합니다.
+### 명령어별 자동 설정값
 
-`app.config.ts`의 iOS 설정이 Xcode 프로젝트에 반영되지 않으면 prebuild를 다시 실행합니다.
+Native 빌드 명령은 실행 목적에 맞게 `APP_VARIANT`와 플랫폼을 자동 설정합니다. 명령어에 값이 명시된 경우 `apps/native/.env`의 `APP_VARIANT`보다 명령어의 값이 우선합니다.
+
+| 명령어 | 앱 상태 | 플랫폼 | 실행 결과 |
+| --- | --- | --- | --- |
+| `pnpm native:ios:local` | `none` | iOS | 내장 웹 번들을 사용하는 로컬 시뮬레이터 앱 빌드·실행 |
+| `pnpm native:ios:device` | `none` | iOS | 내장 웹 번들을 사용하는 iPhone 실기기 앱 빌드·실행 |
+| `pnpm native:android` | `none` | Android | 내장 웹 번들을 사용하는 로컬 Android 앱 빌드·실행 |
+| `pnpm native:ios:dev` | `dev` | iOS | dev R2 채널을 사용하는 Xcode 프로젝트 생성·갱신 |
+| `cd apps/native && pnpm eas:build:ios:dev` | `dev` | iOS | dev R2 채널을 사용하는 TestFlight 빌드 생성 |
+| `cd apps/native && pnpm eas:build:ios` | `prod` | iOS | prod R2 채널을 사용하는 운영 빌드 생성 |
+| `cd apps/native && pnpm eas:build:android` | `prod` | Android | prod R2 채널을 사용하는 운영 빌드 생성 |
+
+명령어는 내부적으로 `EXPO_PUBLIC_APP_VARIANT`도 `APP_VARIANT`와 같은 값으로 맞춰 실행 중인 JavaScript에 앱 상태를 전달합니다. `ROUTEONE_BUILD_PLATFORM`도 표의 플랫폼에 맞게 설정해 `app-versions.json`에서 적용할 버전을 선택합니다. 두 값은 직접 설정하지 않습니다.
+
+로컬 자동화에서 앱 버전 확인 질문만 생략해야 한다면 `ROUTEONE_SKIP_APP_VERSION_CONFIRM=1`을 사용합니다. CI에서는 `CI=1`일 때 같은 질문을 자동 통과합니다.
+
+### 웹 번들 빌드 설정
+
+`pnpm native:sync:web`과 `pnpm native:build:webview`는 먼저 `apps/web`을 빌드합니다. 아래 값은 Native의 `.env`가 아니라 `apps/web/.env`에서 읽어 웹 번들에 포함합니다.
+
+| 환경변수 | 필요 조건 | 설명 |
+| --- | --- | --- |
+| `VITE_NCP_MAPS_KEY_ID` | 지도 사용 시 | WebView에서 네이버 지도 JavaScript SDK를 로드할 Client ID입니다. |
+| `VITE_VISITKOREA_SERVICE_KEY` | 관광지 데이터 사용 시 | 한국관광공사 Tour API 요청에 사용하는 서비스 키입니다. |
+| `VITE_GRAPHQL_ENDPOINT` | 브라우저에서 Web 단독 실행 시 | Web이 직접 호출할 GraphQL 주소입니다. Native WebView에서는 런타임 설정의 `/graphql`과 네이티브 fetch bridge를 사용합니다. |
+| `VITE_NCP_MAPS_DARK_STYLE_ID` | 선택 | 네이버 지도의 다크 모드 스타일 ID입니다. |
+
+`apps/web/.env`를 수정한 뒤에는 `pnpm native:sync:web`을 실행해야 변경된 값이 `src/generated/webBundle.ts`에 반영됩니다.
+
+### 테스트 플래그
+
+설치 앱에서 방문 인증과 도착 알림을 테스트할 때는 dev 계열 빌드에서 아래 값을 사용합니다.
 
 ```bash
-pnpm native:ios:dev
+EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS=1
+EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE=1
 ```
 
-TestFlight에서 새 빌드가 내부 테스터에게 업데이트로 보이지 않으면 App Store Connect에서 빌드 Processing 완료, 수출 규정 상태, 내부 테스트 그룹 연결 여부를 확인합니다.
+방문 인증 우회를 사용하려면 API 서버에도 `ROUTEONE_DEV_VERIFICATION_BYPASS=1`을 설정해야 합니다. 도착 알림 테스트 모드는 DAY 상세에서 장소별 테스트 위치를 선택하고 도착 반경 안팎의 알림과 GPS 인증 결과를 확인할 때 사용합니다. 두 값 모두 운영 빌드에는 설정하지 않습니다.

@@ -311,6 +311,21 @@ export type UiText = {
   myRouteCard: {
     shared: string;
     pastRoute: string;
+    startsToday: string;
+    startRequired: string;
+    inProgress: string;
+    scheduled: string;
+    startsTomorrow: string;
+    startsInDays: (days: number) => string;
+    startReviewRequired: string;
+    emptyDay: string;
+    additionalPlaces: (count: number) => string;
+    pastSchedule: string;
+    noVisitsToday: string;
+    todayRouteCompleted: string;
+    todaySchedule: string;
+    todayProgress: string;
+    completedPlaceCount: (completed: number, total: number) => string;
     routeCompleted: string;
     recordReviewNeeded: string;
     recordIncomplete: string;
@@ -1162,8 +1177,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       enLabel: "English",
       enNativeLabel: "영어",
       enDescription: "Show maps and travel information in English",
-      changedToKoToast: "관광 정보 언어를 한국어로 변경했어요.",
-      changedToEnToast: "Travel information is now shown in English.",
+      changedToKoToast: "언어가 한국어로 변경됐어요.",
+      changedToEnToast: "언어가 영어로 변경됐어요.",
       selectLanguageAria: "표시 언어 선택",
       note:
         "선택한 언어는 지도, 장소 검색과 관광 정보에 적용돼요. 계정과 루트에 저장된 기존 내용은 바뀌지 않아요.",
@@ -1366,6 +1381,21 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     myRouteCard: {
       shared: "공유됨",
       pastRoute: "지난 루트",
+      startsToday: "오늘 시작",
+      startRequired: "시작 필요",
+      inProgress: "여행 중",
+      scheduled: "예정",
+      startsTomorrow: "내일 시작",
+      startsInDays: (days) => `${days}일 후 시작`,
+      startReviewRequired: "시작 확인 필요",
+      emptyDay: "비어 있음",
+      additionalPlaces: (count) => `외 ${count}곳`,
+      pastSchedule: "지난 일정",
+      noVisitsToday: "오늘 등록된 방문지가 없어요",
+      todayRouteCompleted: "오늘 루트 완료",
+      todaySchedule: "오늘 일정",
+      todayProgress: "오늘 진행률",
+      completedPlaceCount: (completed, total) => `${completed}/${total}곳 완료`,
       routeCompleted: "완료",
       recordReviewNeeded: "기록 확인 필요",
       recordIncomplete: "미완료",
@@ -1822,14 +1852,14 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       thumbnailAlt: (title) => `${title} 썸네일`,
       trendTitle: "예측 집중률 추이",
       trendLabel: "예측 집중률",
-      trendTooltip: (value) => `예측 집중률 ${value.toFixed(1)}`,
+      trendTooltip: (value) => `예측 집중률 ${value.toFixed(1)} / 100`,
       weekly: "주간",
       monthly: "월간",
       touristTrendEmpty:
         "선택한 관광지의 예측 집중률 데이터가 아직 없습니다.",
       nonTouristTrendEmpty: "예측 집중률 데이터는 관광지에 한해 제공됩니다.",
       trendDescription:
-        "이동통신 기반 방문자 집계 데이터를 바탕으로 산출한 관광지 예측 집중률 추이입니다.",
+        "이동통신 기반 방문자 데이터를 분석해 예측한 값이에요. 가장 붐비는 시기를 100으로 본 상대 지수이며, 실시간 혼잡도나 방문자 수와는 다를 수 있어요.",
       detailValueTranslations: {
         "체험 일정별 상이": "체험 일정별 상이",
         "일정별 상이": "일정별 상이",
@@ -2339,8 +2369,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       enLabel: "English",
       enNativeLabel: "영어",
       enDescription: "Show maps and travel information in English",
-      changedToKoToast: "Travel information is now shown in Korean.",
-      changedToEnToast: "Travel information is now shown in English.",
+      changedToKoToast: "Language changed to Korean.",
+      changedToEnToast: "Language changed to English.",
       selectLanguageAria: "Choose display language",
       note:
         "The selected language applies to maps, place search, and travel information. Existing account and route content stays unchanged.",
@@ -2562,6 +2592,22 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     myRouteCard: {
       shared: "Shared",
       pastRoute: "Past Route",
+      startsToday: "Starts today",
+      startRequired: "Start required",
+      inProgress: "In progress",
+      scheduled: "Scheduled",
+      startsTomorrow: "Starts tomorrow",
+      startsInDays: (days) => `Starts in ${days} days`,
+      startReviewRequired: "Review start",
+      emptyDay: "No places",
+      additionalPlaces: (count) => `and ${count} more`,
+      pastSchedule: "Past schedule",
+      noVisitsToday: "No places scheduled for today",
+      todayRouteCompleted: "Today's route completed",
+      todaySchedule: "Today's schedule",
+      todayProgress: "Today's progress",
+      completedPlaceCount: (completed, total) =>
+        `${completed}/${total} ${total === 1 ? "place" : "places"} completed`,
       routeCompleted: "Completed",
       recordReviewNeeded: "Review Records",
       recordIncomplete: "Incomplete",
@@ -2575,8 +2621,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       durationHours: (hours) => `${hours}h`,
       durationHoursMinutes: (hours, minutes) => `${hours}h ${minutes}m`,
       visitedCount: (visited, total) => `${visited}/${total} visited`,
-      placeCount: (count) => `${count} places`,
-      dayCount: (count) => `${count} days`,
+      placeCount: (count) => `${count} ${count === 1 ? "place" : "places"}`,
+      dayCount: (count) => `${count} ${count === 1 ? "day" : "days"}`,
       photoRecord: "Records",
       folded: "Fold",
       startTravel: "Start Trip",
@@ -2664,7 +2710,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       noPlaces: "No places to choose.",
       chooseRegion: "Choose region",
       regionPlaces: (region) => `${region} places`,
-      placeCount: (count) => `${count} places`,
+      placeCount: (count) => `${count} ${count === 1 ? "place" : "places"}`,
       noRegionPlaces: "No attractions found in this region.",
       selectedCount: (count) => `${count} selected`,
       apply: (count) => `Apply${count > 0 ? ` ${count}` : ""}`,
@@ -2944,7 +2990,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       emptyDayDescription: "Add places to see the travel order.",
       daySummaryEmpty: "Empty",
       daySummaryMore: (firstPlace, count) => `${firstPlace} +${count} more`,
-      placeCount: (count) => `${count} places`,
+      placeCount: (count) => `${count} ${count === 1 ? "place" : "places"}`,
     },
     placeSheet: {
       rankBadge: (rank) => `Predicted crowd rank #${rank}`,
@@ -3022,7 +3068,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       thumbnailAlt: (title) => `${title} thumbnail`,
       trendTitle: "Predicted Crowd Trend",
       trendLabel: "Predicted crowd",
-      trendTooltip: (value) => `Predicted crowd ${value.toFixed(1)}`,
+      trendTooltip: (value) => `Predicted crowd ${value.toFixed(1)} / 100`,
       weekly: "Weekly",
       monthly: "Monthly",
       touristTrendEmpty:
@@ -3030,7 +3076,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       nonTouristTrendEmpty:
         "Predicted crowd data is only available for attractions.",
       trendDescription:
-        "A predicted crowd trend for attractions based on mobile visitor statistics.",
+        "Predicted from mobile visitor data. This relative index sets the attraction's busiest period to 100 and may differ from real-time crowds or visitor counts.",
       detailValueTranslations: {
         "체험 일정별 상이": "Varies by experience schedule",
         "일정별 상이": "Varies by schedule",
@@ -3188,7 +3234,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       removeFromRoute: "Remove from this route",
       routeCompare: "Compare",
       routeView: "View route",
-      placeCount: (count) => `${count} places`,
+      placeCount: (count) => `${count} ${count === 1 ? "place" : "places"}`,
       moveToPreviousDayEnd: (day) => `Move to end of DAY ${day}`,
       moveToNextDayStart: (day) => `Move to start of DAY ${day}`,
       dropToEnd: "Drop here to move to the end",

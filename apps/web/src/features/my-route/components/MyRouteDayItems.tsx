@@ -15,29 +15,39 @@ import {
   getNextRouteStop,
   getRouteDayState,
 } from "../routeDisplay";
-import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
+import {
+  localizePlaceCategoryLabel,
+  useUiText,
+  type UiText,
+} from "@/lib/uiText";
 import type { MyRouteDay } from "../types";
 
 type RouteDayState = ReturnType<typeof getRouteDayState>;
 
-function getDayStateLabel(day: MyRouteDay, dayState: RouteDayState) {
+function getDayStateLabel(
+  day: MyRouteDay,
+  dayState: RouteDayState,
+  text: UiText
+) {
   const completedStopCount = getDayCompletedStopCount(day);
   const isCompleted =
     day.stops.length > 0 && completedStopCount === day.stops.length;
 
   if (dayState === "past") {
-    return isCompleted ? "완료" : "지난 일정";
+    return isCompleted
+      ? text.myRouteCard.completed
+      : text.myRouteCard.pastSchedule;
   }
 
   if (dayState === "today") {
-    return "오늘";
+    return text.home.today;
   }
 
   if (dayState === "upcoming") {
-    return "예정";
+    return text.myRouteCard.scheduled;
   }
 
-  return "날짜 미정";
+  return text.dayRoute.dateUnknown;
 }
 
 export function MyRouteDayItem({
@@ -49,10 +59,11 @@ export function MyRouteDayItem({
   dayState: RouteDayState;
   onSelect: () => void;
 }) {
+  const text = useUiText();
   const completedStopCount = getDayCompletedStopCount(day);
   const isCompleted =
     day.stops.length > 0 && completedStopCount === day.stops.length;
-  const stateLabel = getDayStateLabel(day, dayState);
+  const stateLabel = getDayStateLabel(day, dayState, text);
 
   return (
     <button
@@ -74,17 +85,23 @@ export function MyRouteDayItem({
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold text-slate-900">
-          DAY {day.dayIndex} · {getDaySummary(day)}
+          DAY {day.dayIndex} · {getDaySummary(day, text)}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-400">
-          <span>{getDayDateLabel(day)} · {day.stops.length}곳</span>
+          <span>
+            {getDayDateLabel(day, text)} ·{" "}
+            {text.myRouteCard.placeCount(day.stops.length)}
+          </span>
           <span className="h-1 w-1 rounded-full bg-slate-300" />
           <span>{stateLabel}</span>
           {day.stops.length > 0 ? (
             <>
               <span className="h-1 w-1 rounded-full bg-slate-300" />
               <span>
-                {completedStopCount}/{day.stops.length} 완료
+                {text.myRouteCard.completedPlaceCount(
+                  completedStopCount,
+                  day.stops.length
+                )}
               </span>
             </>
           ) : null}
@@ -106,10 +123,11 @@ export function MyRouteDayMiniItem({
   dayState: RouteDayState;
   onSelect: () => void;
 }) {
+  const text = useUiText();
   const completedStopCount = getDayCompletedStopCount(day);
   const isCompleted =
     day.stops.length > 0 && completedStopCount === day.stops.length;
-  const stateLabel = getDayStateLabel(day, dayState);
+  const stateLabel = getDayStateLabel(day, dayState, text);
 
   return (
     <button
@@ -138,10 +156,10 @@ export function MyRouteDayMiniItem({
         DAY {day.dayIndex}
       </p>
       <p className="mt-0.5 truncate text-xs font-bold text-slate-500">
-        {getDaySummary(day)}
+        {getDaySummary(day, text)}
       </p>
       <p className="mt-1 truncate text-[11px] font-bold text-slate-400">
-        {getDayDateLabel(day)} · {stateLabel} · {completedStopCount}/
+        {getDayDateLabel(day, text)} · {stateLabel} · {completedStopCount}/
         {day.stops.length}
       </p>
     </button>
@@ -149,13 +167,14 @@ export function MyRouteDayMiniItem({
 }
 
 function TodayRoutePreview({ day }: { day: MyRouteDay }) {
+  const text = useUiText();
   const previewStops = day.stops.slice(0, 4);
   const hiddenStopCount = Math.max(0, day.stops.length - previewStops.length);
 
   if (previewStops.length === 0) {
     return (
       <div className="mt-3 rounded-2xl bg-white/15 px-3 py-2 text-xs font-semibold text-white/80">
-        오늘 등록된 방문지가 없어요
+        {text.myRouteCard.noVisitsToday}
       </div>
     );
   }
@@ -175,7 +194,7 @@ function TodayRoutePreview({ day }: { day: MyRouteDay }) {
         ))}
         {hiddenStopCount > 0 ? (
           <span className="rounded-full bg-slate-900/20 px-2.5 py-1 text-[11px] font-bold text-white">
-            +{hiddenStopCount}곳
+            +{text.myRouteCard.placeCount(hiddenStopCount)}
           </span>
         ) : null}
       </div>
@@ -195,8 +214,12 @@ function TodayNextStopCard({ day }: { day: MyRouteDay }) {
           <MdCheckCircle />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold text-brand-100">완료</p>
-          <p className="truncate text-sm font-black">오늘 루트 완료</p>
+          <p className="text-[11px] font-bold text-brand-100">
+            {text.myRouteCard.completed}
+          </p>
+          <p className="truncate text-sm font-black">
+            {text.myRouteCard.todayRouteCompleted}
+          </p>
         </div>
       </div>
     );
@@ -251,6 +274,7 @@ export function TodayRouteDayCard({
   day: MyRouteDay;
   onSelect: () => void;
 }) {
+  const text = useUiText();
   const completedStopCount = getDayCompletedStopCount(day);
   const progressPercent = getDayProgressPercent(day);
 
@@ -271,27 +295,30 @@ export function TodayRouteDayCard({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="rounded-full bg-slate-950/45 px-2.5 py-1 text-[11px] font-black text-brand-100 shadow-sm ring-1 ring-white/10">
-                오늘
+                {text.home.today}
               </span>
               <span className="text-xs font-bold text-white/80">
-                {getDayDateLabel(day)}
+                {getDayDateLabel(day, text)}
               </span>
             </div>
             <h3 className="mt-1.5 truncate text-base font-black">
-              DAY {day.dayIndex} · {getDaySummary(day)}
+              DAY {day.dayIndex} · {getDaySummary(day, text)}
             </h3>
           </div>
         </div>
         <span className="shrink-0 whitespace-nowrap rounded-full bg-slate-950/20 px-2.5 py-1 text-[11px] font-black text-white">
-          오늘 일정
+          {text.myRouteCard.todaySchedule}
         </span>
       </div>
 
       <div className="mt-3">
         <div className="flex items-center justify-between text-xs font-bold text-white/85">
-          <span>오늘 진행률</span>
+          <span>{text.myRouteCard.todayProgress}</span>
           <span>
-            {completedStopCount}/{day.stops.length}곳 완료
+            {text.myRouteCard.completedPlaceCount(
+              completedStopCount,
+              day.stops.length
+            )}
           </span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/25">

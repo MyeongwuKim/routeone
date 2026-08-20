@@ -169,7 +169,9 @@ function StartRouteDatePickerModal({
             {text.myRoute.startDateModalTitle}
           </p>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            {text.myRoute.startDateModalDescription(getRouteTitle(target.route))}
+            {text.myRoute.startDateModalDescription(
+              getRouteTitle(target.route, text)
+            )}
           </p>
         </div>
 
@@ -618,11 +620,13 @@ function MyRoutePage() {
       openModal({
         title: text.myRoute.conflictTitle,
         description: text.myRoute.conflictDescription(
-          getRouteTitle(route),
+          getRouteTitle(route, text),
           route.tripDays + 1,
           formatRouteDate(nextDateKey) ?? text.myRoute.unknownDate
         ),
-        detail: text.myRoute.conflictDetail(getRouteTitle(conflictingRoute)),
+        detail: text.myRoute.conflictDetail(
+          getRouteTitle(conflictingRoute, text)
+        ),
         actions: conflictActions,
       });
       return;
@@ -630,7 +634,7 @@ function MyRoutePage() {
 
     startAppendTarget({
       routeId: route.id,
-      routeTitle: getRouteTitle(route),
+      routeTitle: getRouteTitle(route, text),
       nextDayIndex: route.tripDays + 1,
       suggestedStartDate: nextDateKey,
     });
@@ -790,7 +794,7 @@ function MyRoutePage() {
 
     openModal({
       title: text.myRoute.deleteTitle,
-      description: text.myRoute.deleteDescription(getRouteTitle(route)),
+      description: text.myRoute.deleteDescription(getRouteTitle(route, text)),
       detail: text.myRoute.deleteDetail,
       actions: [
         {
