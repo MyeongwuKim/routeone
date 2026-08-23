@@ -40,7 +40,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
 
       - name: Resolve publish target
         id: target
@@ -48,13 +47,10 @@ jobs:
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             CHANNEL="${{ inputs.channel }}"
-            SHOULD_PUBLISH="true"
           elif [[ "${GITHUB_REF_NAME}" == "develop" ]]; then
             CHANNEL="dev"
-            SHOULD_PUBLISH="true"
           else
             CHANNEL="prod"
-            SHOULD_PUBLISH="false"
           fi
 
           if [[ "${CHANNEL}" == "prod" && "${GITHUB_REF_NAME}" != "main" ]]; then
@@ -63,7 +59,6 @@ jobs:
           fi
 
           echo "channel=${CHANNEL}" >> "${GITHUB_OUTPUT}"
-          echo "should_publish=${SHOULD_PUBLISH}" >> "${GITHUB_OUTPUT}"
 
       - name: Validate policy
         env:
@@ -71,7 +66,7 @@ jobs:
         run: pnpm validate:native-update-policy
 
       - name: Load dev R2 config
-        if: ${{ steps.target.outputs.should_publish == 'true' && steps.target.outputs.channel == 'dev' }}
+        if: ${{ steps.target.outputs.channel == 'dev' }}
         env:
           SELECTED_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID_DEV }}
           SELECTED_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY_DEV }}
@@ -82,7 +77,7 @@ jobs:
           echo "R2_BUCKET_NAME=${SELECTED_R2_BUCKET_NAME}" >> "${GITHUB_ENV}"
 
       - name: Load prod R2 config
-        if: ${{ steps.target.outputs.should_publish == 'true' && steps.target.outputs.channel == 'prod' }}
+        if: ${{ steps.target.outputs.channel == 'prod' }}
         env:
           SELECTED_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID_PROD }}
           SELECTED_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY_PROD }}
@@ -93,12 +88,7 @@ jobs:
           echo "R2_BUCKET_NAME=${SELECTED_R2_BUCKET_NAME}" >> "${GITHUB_ENV}"
 
       - name: Publish policy to R2
-        if: ${{ steps.target.outputs.should_publish == 'true' }}
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ROUTEONE_NATIVE_UPDATE_CHANNEL: ${{ steps.target.outputs.channel }}
         run: pnpm publish:native-update-policy:r2
-
-      - name: Production publish notice
-        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-        run: echo "Production policy was validated only. Run this workflow manually with channel=prod after the store release is available."
