@@ -378,6 +378,7 @@ export function usePlaceSheetData({
         retryUncached: true,
         retryAttempts: LOCALIZATION_RETRY_ATTEMPTS,
         retryDelayMs: LOCALIZATION_RETRY_DELAY_MS,
+        waitForFresh: true,
       });
     },
     refetchInterval: (query) =>

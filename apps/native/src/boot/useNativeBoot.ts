@@ -8,6 +8,7 @@ import {
   readStoredNativeAuthSession,
   storeNativeAuthToken
 } from "@/auth/nativeAuthStorage";
+import { prepareNativeCurrentPosition } from "@/location/nativeCurrentPosition";
 
 export type NativeBootStep =
   | "checking"
@@ -40,6 +41,18 @@ export function useNativeBoot() {
     setIsRequestingNotificationPermission
   ] = useState(false);
 
+  const prepareLocationBeforeWebView = useCallback(async () => {
+    const permission = await Location.getForegroundPermissionsAsync();
+
+    if (permission.status !== "granted") {
+      return;
+    }
+
+    await prepareNativeCurrentPosition({
+      requestPermission: false
+    }).catch(() => undefined);
+  }, []);
+
   const goToNotificationOrLogin = useCallback(async () => {
     const permission = await Notifications.getPermissionsAsync();
 
@@ -59,8 +72,9 @@ export function useNativeBoot() {
       return;
     }
 
+    await prepareLocationBeforeWebView();
     await goToNotificationOrLogin();
-  }, [goToNotificationOrLogin]);
+  }, [goToNotificationOrLogin, prepareLocationBeforeWebView]);
 
   useEffect(() => {
     let isMounted = true;
@@ -85,6 +99,12 @@ export function useNativeBoot() {
       if (storedAuthSession.token) {
         setNativeAuthToken(storedAuthSession.token);
         setNativeAuthExpiresAt(storedAuthSession.expiresAt);
+        await prepareLocationBeforeWebView();
+
+        if (!isMounted) {
+          return;
+        }
+
         setBootStep("webview");
         return;
       }
@@ -137,7 +157,7 @@ export function useNativeBoot() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [prepareLocationBeforeWebView]);
 
   const selectAppLanguage = useCallback(
     async (language: AppLanguage) => {
@@ -157,12 +177,17 @@ export function useNativeBoot() {
     setIsRequestingLocationPermission(true);
 
     try {
-      await Location.requestForegroundPermissionsAsync();
+      const permission = await Location.requestForegroundPermissionsAsync();
+
+      if (permission.status === "granted") {
+        await prepareLocationBeforeWebView();
+      }
+
       await goToNotificationOrLogin();
     } finally {
       setIsRequestingLocationPermission(false);
     }
-  }, [goToNotificationOrLogin]);
+  }, [goToNotificationOrLogin, prepareLocationBeforeWebView]);
 
   const requestNotificationPermission = useCallback(async () => {
     setIsRequestingNotificationPermission(true);
@@ -181,16 +206,20 @@ export function useNativeBoot() {
     }
   }, []);
 
-  const completeNativeLogin = useCallback(async (payload: NativeAuthPayload) => {
-    const expiresAt = Date.now() + NATIVE_AUTH_SESSION_DURATION_MS;
+  const completeNativeLogin = useCallback(
+    async (payload: NativeAuthPayload) => {
+      const expiresAt = Date.now() + NATIVE_AUTH_SESSION_DURATION_MS;
 
-    setNativeAuthToken(payload.token);
-    setNativeAuthExpiresAt(expiresAt);
-    setIsAuthSessionExpired(false);
-    await storeNativeAuthToken(payload.token, expiresAt);
-    await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
-    setBootStep("webview");
-  }, []);
+      setNativeAuthToken(payload.token);
+      setNativeAuthExpiresAt(expiresAt);
+      setIsAuthSessionExpired(false);
+      await storeNativeAuthToken(payload.token, expiresAt);
+      await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
+      await prepareLocationBeforeWebView();
+      setBootStep("webview");
+    },
+    [prepareLocationBeforeWebView]
+  );
 
   const handleNativeAuthSessionChange = useCallback(
     (session: {

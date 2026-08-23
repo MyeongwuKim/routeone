@@ -38,6 +38,7 @@ type PlaceDirectionsSectionProps = {
   appLanguage: AppLanguage;
   currentLocation: PlaceSheetCoordinates;
   directionOrigin: MapSheetDirectionOrigin;
+  isCurrentLocationLookupPending: boolean;
   isDarkMode: boolean;
   isRouteLoading: boolean;
   routeDistanceText: string | null;
@@ -71,6 +72,7 @@ function PlaceDirectionsSection({
   appLanguage,
   currentLocation,
   directionOrigin,
+  isCurrentLocationLookupPending,
   isDarkMode,
   isRouteLoading,
   routeDistanceText,
@@ -304,15 +306,27 @@ function PlaceDirectionsSection({
         <p className="font-trip text-sm text-brand-700">PLACE DIRECTIONS</p>
       </div>
 
-      {!directionOrigin.isCurrentLocation ? (
+      {isCurrentLocationLookupPending ? (
+        <div className="mb-3 flex gap-2 rounded-2xl border border-brand-200 bg-brand-50 px-3 py-2.5 text-xs leading-5 text-brand-900">
+          <span className="mt-1 size-3 shrink-0 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+          <div>
+            <p className="font-bold">
+              {text.placeSheet.currentLocationCheckingTitle}
+            </p>
+            <p className="mt-0.5 font-semibold text-brand-800/80">
+              {text.placeSheet.currentLocationCheckingDescription}
+            </p>
+          </div>
+        </div>
+      ) : !directionOrigin.isCurrentLocation ? (
         <div className="mb-3 flex gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
           <IoInformationCircleOutline className="mt-0.5 shrink-0 text-base text-amber-600" />
           <div>
             <p className="font-bold">
-              {text.placeSheet.locationPermissionMissingTitle}
+              {text.placeSheet.currentLocationUnavailableTitle}
             </p>
             <p className="mt-0.5 font-semibold text-amber-800/80">
-              {text.placeSheet.locationPermissionMissingDescription(
+              {text.placeSheet.currentLocationUnavailableDescription(
                 originLabel
               )}
             </p>

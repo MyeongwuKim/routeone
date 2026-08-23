@@ -446,7 +446,6 @@ R2 버킷과 API Token은 dev/prod용으로 각각 만들고, 각 Token의 `Obje
 | `APP_VARIANT` | 선택 | 앱의 실행·배포 상태를 `none`, `dev`, `prod`로 구분합니다. 직접 실행할 때는 `.env` 값을 사용하고, 아래 빌드 명령을 사용하면 목적에 맞는 값으로 자동 설정됩니다. |
 | `EXPO_PUBLIC_GRAPHQL_ENDPOINT` | 필수 | RouteOne API의 `/graphql` 주소입니다. WebView의 `/graphql` 요청과 네이티브 로그인 요청이 이 주소로 전달됩니다. |
 | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | Google 로그인 사용 시 | 현재 iOS 앱 variant의 번들 ID에 연결된 Google OAuth iOS Client ID입니다. |
-| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Google 로그인 사용 시 | Google 로그인에서 identity token을 발급받을 때 사용하는 Web Client ID입니다. |
 | `EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME` | 선택 | Google OAuth iOS URL Scheme입니다. 생략하면 iOS Client ID가 `*.apps.googleusercontent.com` 형식일 때 자동으로 계산합니다. |
 | `EXPO_PUBLIC_NCP_MAPS_KEY_ID` | 네이버 길찾기 사용 시 | 네이버 Directions API 요청의 `x-ncp-apigw-api-key-id` 헤더에 사용합니다. |
 | `EXPO_PUBLIC_NCP_MAPS_KEY` | 네이버 길찾기 사용 시 | 네이버 Directions API 요청의 `x-ncp-apigw-api-key` 헤더에 사용합니다. |
@@ -473,7 +472,6 @@ R2 버킷과 API Token은 dev/prod용으로 각각 만들고, 각 Token의 `Obje
 APP_VARIANT=none
 EXPO_PUBLIC_GRAPHQL_ENDPOINT=http://127.0.0.1:4000/graphql
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=...
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=...
 EXPO_PUBLIC_NCP_MAPS_KEY_ID=...
 EXPO_PUBLIC_NCP_MAPS_KEY=...
 ```

@@ -189,6 +189,7 @@ function PlaceCartRouteInsertSheet({
       localizeTourPlaces(localizationSources, appLanguage, {
         retryUncached: true,
         retryAttempts: 3,
+        waitForFresh: true,
       }),
   });
   const displayCandidatePlaces = useMemo(

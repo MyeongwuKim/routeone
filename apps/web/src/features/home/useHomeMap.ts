@@ -27,10 +27,6 @@ import {
   type OpenPlaceSheetFromAttractionOptions,
   type SearchFilter,
 } from "@/lib/gangwonAttractionMap";
-import {
-  getCurrentPosition,
-  type RouteOnePosition,
-} from "@/lib/currentPosition";
 import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
 import {
   getNaverMapAuthHref,
@@ -45,6 +41,7 @@ import { useUiText } from "@/lib/uiText";
 import type { GangwonAttraction } from "@/lib/visitKoreaTourApi";
 import { NCP_KEY_ID } from "@/pages/HomePage.constants";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import { useCurrentPositionStore } from "@/stores/currentPositionStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 import type { HomeAttractionQueryData } from "./useHomeAttractionData";
@@ -140,6 +137,13 @@ export function useHomeMap({
   const appLanguage = useAppLanguageStore((state) => state.language);
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const closeSheet = useMapSheetStore((state) => state.closeSheet);
+  const currentLocation = useCurrentPositionStore((state) => state.position);
+  const currentLocationStatus = useCurrentPositionStore(
+    (state) => state.status
+  );
+  const requestCurrentPosition = useCurrentPositionStore(
+    (state) => state.requestCurrentPosition
+  );
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<HomeMapInstance | null>(null);
   const naverMapsRef = useRef<
@@ -152,10 +156,8 @@ export function useHomeMap({
   const mapBoundsMoveRequestRef = useRef(0);
   const hasRenderedAttractionMarkersRef = useRef(false);
   const onSelectAttractionRef = useRef(onSelectAttraction);
-  const [currentLocation, setCurrentLocation] =
-    useState<RouteOnePosition | null>(null);
-  const [isCurrentLocationLookupPending, setIsCurrentLocationLookupPending] =
-    useState(true);
+  const isCurrentLocationLookupPending =
+    currentLocationStatus === "idle" || currentLocationStatus === "loading";
   const [mapStatus, setMapStatus] = useState<HomeMapStatus>({
     language: appLanguage,
     isReady: false,
@@ -216,14 +218,10 @@ export function useHomeMap({
     let nextLocation = currentLocation;
 
     if (!nextLocation) {
-      setIsCurrentLocationLookupPending(true);
       try {
-        nextLocation = await getCurrentPosition();
-        setCurrentLocation(nextLocation);
+        nextLocation = await requestCurrentPosition();
       } catch {
         return false;
-      } finally {
-        setIsCurrentLocationLookupPending(false);
       }
     }
 
@@ -247,7 +245,7 @@ export function useHomeMap({
     }
 
     return true;
-  }, [currentLocation]);
+  }, [currentLocation, requestCurrentPosition]);
 
   const drawSelectedRegionBoundary = useCallback(() => {
     const mapInstance = mapInstanceRef.current;
@@ -460,29 +458,8 @@ export function useHomeMap({
   );
 
   useEffect(() => {
-    let isMounted = true;
-
-    getCurrentPosition()
-      .then((position) => {
-        if (isMounted) {
-          setCurrentLocation(position);
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setCurrentLocation(null);
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsCurrentLocationLookupPending(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    void requestCurrentPosition().catch(() => undefined);
+  }, [requestCurrentPosition]);
 
   useEffect(() => {
     const container = mapRef.current;

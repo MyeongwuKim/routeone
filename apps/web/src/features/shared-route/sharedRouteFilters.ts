@@ -274,7 +274,8 @@ export async function fetchRegionFilterPlaceCategories(
   );
   const displayAttractions = await localizeTourPlaces(
     filteredAttractions,
-    language
+    language,
+    { waitForFresh: true }
   );
 
   return groupPlaceOptionsByCategory(

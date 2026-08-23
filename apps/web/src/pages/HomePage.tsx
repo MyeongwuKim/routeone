@@ -143,6 +143,7 @@ function HomePage() {
   );
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const currentLocationRef = useRef<CurrentLocation | null>(null);
+  const isCurrentLocationLookupPendingRef = useRef(true);
   const notificationInboxQuery = useQuery({
     queryKey: NOTIFICATION_INBOX_FIRST_PAGE_QUERY_KEY,
     queryFn: () =>
@@ -271,13 +272,15 @@ function HomePage() {
                 label: text.placeSheet.currentLocation,
                 isCurrentLocation: true,
               }
-            : {
-                coordinates: selectedRegionForOrigin.center,
-                label: text.placeSheet.referenceLocation(
-                  selectedRegionOriginLabel
-                ),
-                isCurrentLocation: false,
-              },
+            : isCurrentLocationLookupPendingRef.current
+              ? undefined
+              : {
+                  coordinates: selectedRegionForOrigin.center,
+                  label: text.placeSheet.referenceLocation(
+                    selectedRegionOriginLabel
+                  ),
+                  isCurrentLocation: false,
+                },
           mode,
         }
       );
@@ -310,6 +313,11 @@ function HomePage() {
   useEffect(() => {
     currentLocationRef.current = currentLocation;
   }, [currentLocation]);
+
+  useEffect(() => {
+    isCurrentLocationLookupPendingRef.current =
+      isCurrentLocationLookupPending;
+  }, [isCurrentLocationLookupPending]);
 
   useEffect(() => {
     if (
@@ -836,7 +844,9 @@ function HomePage() {
         onClose={closeSavedList}
         onSelectPlace={(place) => {
           openSheet(place, {
-            directionOrigin: selectedRegionDirectionOrigin,
+            directionOrigin: isCurrentLocationLookupPending
+              ? undefined
+              : selectedRegionDirectionOrigin,
             mode: "full-popup",
           });
         }}

@@ -27,6 +27,7 @@ import { formatFestivalPeriod } from "@/lib/festivalDate";
 import type { NearbyTouristPlace } from "@/lib/visitKoreaTourApi";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import { useCurrentPositionStore } from "@/stores/currentPositionStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -49,6 +50,15 @@ function PlaceBottomSheet() {
     updateSelectedPlace,
     resetSheet,
   } = useMapSheetStore();
+  const storedCurrentPosition = useCurrentPositionStore(
+    (state) => state.position
+  );
+  const currentPositionStatus = useCurrentPositionStore(
+    (state) => state.status
+  );
+  const requestCurrentPosition = useCurrentPositionStore(
+    (state) => state.requestCurrentPosition
+  );
   const { savedPlaceIds, toggleSavedPlace } = usePlaceCartStore();
   const showToast = useUiToastStore((state) => state.showToast);
   const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
@@ -58,6 +68,8 @@ function PlaceBottomSheet() {
   const cartAddAnimationTimeoutRef = useRef<number | null>(null);
   const [imageViewerTarget, setImageViewerTarget] =
     useState<PlaceImageViewerTarget | null>(null);
+  const [completedLocationLookupVersion, setCompletedLocationLookupVersion] =
+    useState<number | null>(null);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
   const festivalPeriod = selectedPlace
     ? formatFestivalPeriod(
@@ -93,15 +105,29 @@ function PlaceBottomSheet() {
             fallbackDirectionArea.label
         )
       : text.placeSheet.gangwonReferenceLocation;
-  const resolvedDirectionOrigin = directionOrigin ?? {
-    coordinates:
-      fallbackDirectionRegion?.center ??
-      fallbackDirectionArea?.center ??
-      GANGWON_CENTER,
-    label: fallbackDirectionLabel,
-    isCurrentLocation: false,
-  };
+  const resolvedDirectionOrigin =
+    directionOrigin ??
+    (storedCurrentPosition
+      ? {
+          coordinates: storedCurrentPosition,
+          label: text.placeSheet.currentLocation,
+          isCurrentLocation: true,
+        }
+      : {
+          coordinates:
+            fallbackDirectionRegion?.center ??
+            fallbackDirectionArea?.center ??
+            GANGWON_CENTER,
+          label: fallbackDirectionLabel,
+          isCurrentLocation: false,
+        });
   const currentLocation = resolvedDirectionOrigin.coordinates;
+  const isCurrentLocationLookupPending =
+    isOpen &&
+    !directionOrigin &&
+    !storedCurrentPosition &&
+    (currentPositionStatus === "loading" ||
+      completedLocationLookupVersion !== sheetResetVersion);
 
   const isFullPopupMode = sheetMode === "full-popup";
   const isDirectionsPopupMode = sheetMode === "directions-popup";
@@ -119,6 +145,32 @@ function PlaceBottomSheet() {
     },
     []
   );
+
+  useEffect(() => {
+    if (!isOpen || directionOrigin || storedCurrentPosition) {
+      return;
+    }
+
+    let isActive = true;
+
+    void requestCurrentPosition()
+      .catch(() => undefined)
+      .finally(() => {
+        if (isActive) {
+          setCompletedLocationLookupVersion(sheetResetVersion);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    directionOrigin,
+    isOpen,
+    requestCurrentPosition,
+    sheetResetVersion,
+    storedCurrentPosition,
+  ]);
 
   const {
     isSheetExpanded,
@@ -144,7 +196,8 @@ function PlaceBottomSheet() {
     isOpen,
     selectedPlace,
     shouldLoadOverviewData: shouldShowOverviewPanel,
-    shouldLoadRouteData: shouldShowExpandedSection,
+    shouldLoadRouteData:
+      shouldShowExpandedSection && !isCurrentLocationLookupPending,
     text,
     updateSelectedPlace,
   });
@@ -310,6 +363,7 @@ function PlaceBottomSheet() {
               appLanguage={appLanguage}
               currentLocation={currentLocation}
               directionOrigin={resolvedDirectionOrigin}
+              isCurrentLocationLookupPending={isCurrentLocationLookupPending}
               isDarkMode={isDarkMode}
               isRouteLoading={placeSheetData.isRouteLoading}
               routeDistanceText={placeSheetData.routeDistanceText}
@@ -521,6 +575,7 @@ function PlaceBottomSheet() {
               currentLocation={currentLocation}
               data={placeSheetData}
               directionOrigin={resolvedDirectionOrigin}
+              isCurrentLocationLookupPending={isCurrentLocationLookupPending}
               isDarkMode={isDarkMode}
               isVisible={shouldShowOverviewPanel}
               onSelectNearbyPlace={handleSelectNearbyPlace}

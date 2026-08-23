@@ -33,7 +33,11 @@ function BottomTabLayout() {
     <div className="relative h-dvh overflow-hidden bg-brand-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <main className={`absolute inset-x-0 top-0 ${bottomTabOffsetClass}`}>
         <div
-          className={isHome ? "h-full" : "h-full overflow-x-hidden overflow-y-auto"}
+          className={
+            isHome
+              ? "h-full"
+              : "scrollbar-hide h-full overflow-x-hidden overflow-y-auto"
+          }
         >
           <div
             key={pathname}

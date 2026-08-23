@@ -130,7 +130,9 @@ export function useHomeAttractionData(
       } satisfies GangwonAttraction;
     });
 
-    return localizeTourPlaces(festivals, appLanguage);
+    return localizeTourPlaces(festivals, appLanguage, {
+      waitForFresh: true,
+    });
   }, [appLanguage, festivalDateWindow]);
 
   const loadLclsNameByCode = useCallback(async () => {
@@ -345,7 +347,9 @@ export function useHomeAttractionData(
     const sourceAttractions =
       attractionData.sourceAttractions ?? attractionData.allAttractions;
 
-    void localizeTourPlaces(sourceAttractions, appLanguage)
+    void localizeTourPlaces(sourceAttractions, appLanguage, {
+      waitForFresh: true,
+    })
       .then((localizedAttractions) => {
         if (isCancelled) {
           return;

@@ -18,14 +18,11 @@ type UseNativeLoginOptions = {
   onComplete: (payload: NativeAuthPayload) => Promise<void>;
 };
 
-const GOOGLE_WEB_CLIENT_ID =
-  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim() ?? "";
 const GOOGLE_IOS_CLIENT_ID =
   process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim() ?? "";
 
 function configureGoogleSignIn() {
   GoogleSignin.configure({
-    ...(GOOGLE_WEB_CLIENT_ID ? { webClientId: GOOGLE_WEB_CLIENT_ID } : {}),
     ...(GOOGLE_IOS_CLIENT_ID ? { iosClientId: GOOGLE_IOS_CLIENT_ID } : {}),
     offlineAccess: false,
     profileImageSize: 120

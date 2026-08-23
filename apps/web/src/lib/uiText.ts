@@ -18,6 +18,7 @@ export type UiText = {
     unknown: string;
     back: string;
     backToMyInfo: string;
+    placeLocalizationLoading: string;
     selectedCount: (count: number) => string;
   };
   inputs: {
@@ -685,8 +686,10 @@ export type UiText = {
     currentLocation: string;
     referenceLocation: (label: string) => string;
     gangwonReferenceLocation: string;
-    locationPermissionMissingTitle: string;
-    locationPermissionMissingDescription: (label: string) => string;
+    currentLocationCheckingTitle: string;
+    currentLocationCheckingDescription: string;
+    currentLocationUnavailableTitle: string;
+    currentLocationUnavailableDescription: (label: string) => string;
     destination: string;
     mapLoadError: string;
     bottomSheetCloseAria: string;
@@ -894,6 +897,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       unknown: "미정",
       back: "이전 화면으로 돌아가기",
       backToMyInfo: "내 정보로 돌아가기",
+      placeLocalizationLoading: "장소 정보를 영어로 번역하고 있어요",
       selectedCount: (count) => `${count}개 선택`,
     },
     inputs: {
@@ -1120,14 +1124,14 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       fallbackName: "RouteOne 사용자",
       accountSection: "현재 계정",
       email: "이메일",
-      accountId: "테스트 아이디",
+      accountId: "아이디",
       loginMethods: "연결된 로그인",
       joinedAt: "가입일",
       providers: {
-        PASSWORD: "테스트 계정",
+        PASSWORD: "테스트용",
         GOOGLE: "Google",
         APPLE: "Apple",
-        UNKNOWN: "로그인 계정",
+        UNKNOWN: "테스트용",
       },
       managementSection: "계정 관리",
       logout: "로그아웃",
@@ -1158,7 +1162,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       routeReviewDescription:
         "루트 종료 후 7일 안에 방문 기록을 확인·정리하도록 보내는 리마인더",
       routeArrivalTitle: "장소 도착 알림",
-      routeArrivalDescription: "루트 장소 근처에서 인증 사진 알림",
+      routeArrivalDescription:
+        "앱이 닫혀 있어도 다음 장소 300m 근처에서 인증 사진 알림",
       regionSectionTitle: "축제 알림 지역",
       regionSectionDescription:
         "최대 2곳까지 선택할 수 있어요. 선택하지 않으면 알림이 꺼져요.",
@@ -1796,9 +1801,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "현재 위치",
       referenceLocation: (label) => `${label} 중심`,
       gangwonReferenceLocation: "강원 중심",
-      locationPermissionMissingTitle:
-        "위치 권한이 없어 실제 내 위치 기준으로 표시할 수 없어요.",
-      locationPermissionMissingDescription: (label) =>
+      currentLocationCheckingTitle: "현재 위치를 확인하고 있어요.",
+      currentLocationCheckingDescription:
+        "확인이 끝나면 내 위치 기준 경로를 보여드려요.",
+      currentLocationUnavailableTitle: "현재 위치를 확인하지 못했어요.",
+      currentLocationUnavailableDescription: (label) =>
         `지금은 ${label} 기준의 참고 경로를 보여드려요.`,
       destination: "목적지",
       mapLoadError: "지도를 불러오지 못했습니다.",
@@ -2060,6 +2067,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       unknown: "TBD",
       back: "Go back",
       backToMyInfo: "Back to My Info",
+      placeLocalizationLoading: "Translating place information…",
       selectedCount: (count) => `${count} selected`,
     },
     inputs: {
@@ -2307,14 +2315,14 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       fallbackName: "RouteOne user",
       accountSection: "Current Account",
       email: "Email",
-      accountId: "Test ID",
+      accountId: "Account ID",
       loginMethods: "Connected Sign-ins",
       joinedAt: "Joined",
       providers: {
-        PASSWORD: "Test account",
+        PASSWORD: "Test-only",
         GOOGLE: "Google",
         APPLE: "Apple",
-        UNKNOWN: "Sign-in account",
+        UNKNOWN: "Test-only",
       },
       managementSection: "Account Management",
       logout: "Log Out",
@@ -2349,7 +2357,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "A reminder to review and organize visit records within 7 days after a route ends",
       routeArrivalTitle: "Place Arrival Alerts",
       routeArrivalDescription:
-        "Photo verification reminders near route stops",
+        "Photo reminders within 300m of the next stop, even when the app is closed",
       regionSectionTitle: "Festival Alert Areas",
       regionSectionDescription:
         "Choose up to two areas. Leave all unselected to turn alerts off.",
@@ -3010,9 +3018,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "Current location",
       referenceLocation: (label) => `${label} center`,
       gangwonReferenceLocation: "Gangwon center",
-      locationPermissionMissingTitle:
-        "Location access is off, so this cannot use your exact position.",
-      locationPermissionMissingDescription: (label) =>
+      currentLocationCheckingTitle: "Checking your current location.",
+      currentLocationCheckingDescription:
+        "Your route will update as soon as your location is ready.",
+      currentLocationUnavailableTitle:
+        "Could not confirm your current location.",
+      currentLocationUnavailableDescription: (label) =>
         `Showing a reference route from ${label} for now.`,
       destination: "Destination",
       mapLoadError: "Could not load the map.",

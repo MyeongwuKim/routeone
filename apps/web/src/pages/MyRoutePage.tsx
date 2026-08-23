@@ -466,6 +466,12 @@ function MyRoutePage() {
         );
       } catch (error) {
         console.error("Failed to sync route arrival notifications.", error);
+        showToast(
+          error instanceof Error
+            ? error.message
+            : text.home.currentLocationUnavailable,
+          3200
+        );
       }
     };
 
@@ -480,6 +486,8 @@ function MyRoutePage() {
     localizedMyRoutes,
     myRoutesQuery.isError,
     myRoutesQuery.isLoading,
+    showToast,
+    text.home.currentLocationUnavailable,
   ]);
   const deepLinkedRouteDay = useMemo(() => {
     if (

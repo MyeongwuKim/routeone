@@ -149,6 +149,7 @@ function FestivalNotificationItem({
     queryFn: () =>
       localizeTourPlaces(festivalLocalizationCandidates, appLanguage, {
         retryUncached: true,
+        waitForFresh: true,
       }),
     staleTime: 1000 * 60 * 60 * 24,
   });

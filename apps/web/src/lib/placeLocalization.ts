@@ -1,5 +1,9 @@
 import { placeLocalizationApi } from "@/api/placeLocalizationApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
+import {
+  beginPlaceLocalizationRequest,
+  finishPlaceLocalizationRequest,
+} from "@/stores/placeLocalizationLoadingStore";
 
 type LocalizableTourPlace = {
   id: string;
@@ -76,6 +80,8 @@ export async function localizeTourPlaces<T extends LocalizableTourPlace>(
     }
   });
 
+  beginPlaceLocalizationRequest();
+
   try {
     const uniquePlaces = [...uniqueById.values()];
     const requestLocalizations = async () =>
@@ -143,6 +149,8 @@ export async function localizeTourPlaces<T extends LocalizableTourPlace>(
   } catch (error) {
     console.warn("장소 영문 현지화에 실패해 한국어 원문을 사용합니다.", error);
     return places;
+  } finally {
+    finishPlaceLocalizationRequest();
   }
 }
 

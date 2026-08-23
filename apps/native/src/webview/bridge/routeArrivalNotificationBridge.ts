@@ -30,6 +30,10 @@ type RouteArrivalGeofenceTaskData = {
   } | null;
 };
 
+type RouteArrivalLocationTaskData = {
+  locations?: Location.LocationObject[];
+};
+
 type RouteArrivalTaskBody = {
   data?: unknown;
   error?: unknown;
@@ -43,6 +47,7 @@ type StoredRouteArrivalPlace = NativeRouteArrivalNotificationPlace & {
 };
 
 const ROUTE_ARRIVAL_GEOFENCE_TASK = "routeone-route-arrival-geofence";
+const ROUTE_ARRIVAL_LOCATION_TASK = "routeone-route-arrival-location";
 const ROUTE_ARRIVAL_NOTIFICATION_CHANNEL_ID = "route-arrivals";
 const ROUTE_ARRIVAL_PLACES_STORAGE_KEY =
   "routeone:native-route-arrival-places:v1";
@@ -559,13 +564,6 @@ async function ensureRouteArrivalPermissions(language: NativeAppLanguage) {
     );
   }
 
-  if (Platform.OS === "ios") {
-    return {
-      backgroundLocationStatus: "system-managed",
-      notificationStatus: notificationPermission.status,
-    };
-  }
-
   const backgroundLocationPermission =
     await Location.getBackgroundPermissionsAsync();
   const nextBackgroundLocationPermission =
@@ -595,6 +593,56 @@ async function stopRouteArrivalGeofencingIfStarted() {
   if (hasStarted) {
     await Location.stopGeofencingAsync(ROUTE_ARRIVAL_GEOFENCE_TASK);
   }
+}
+
+async function stopRouteArrivalLocationTrackingIfStarted() {
+  const hasStarted = await Location.hasStartedLocationUpdatesAsync(
+    ROUTE_ARRIVAL_LOCATION_TASK
+  );
+
+  if (hasStarted) {
+    await Location.stopLocationUpdatesAsync(ROUTE_ARRIVAL_LOCATION_TASK);
+  }
+}
+
+async function startRouteArrivalLocationTracking(
+  language: NativeAppLanguage
+) {
+  const hasStarted = await Location.hasStartedLocationUpdatesAsync(
+    ROUTE_ARRIVAL_LOCATION_TASK
+  );
+
+  if (hasStarted) {
+    return;
+  }
+
+  await Location.startLocationUpdatesAsync(ROUTE_ARRIVAL_LOCATION_TASK, {
+    accuracy: Location.Accuracy.High,
+    distanceInterval: 50,
+    timeInterval: 60_000,
+    deferredUpdatesDistance: 50,
+    deferredUpdatesInterval: 60_000,
+    pausesUpdatesAutomatically: false,
+    activityType: Location.ActivityType.OtherNavigation,
+    ...(Platform.OS === "ios"
+      ? {
+          showsBackgroundLocationIndicator: true,
+        }
+      : {
+          foregroundService: {
+            notificationTitle:
+              language === "en"
+                ? "RouteOne arrival alerts are active"
+                : "RouteOne 장소 도착 알림 사용 중",
+            notificationBody:
+              language === "en"
+                ? "Checking your location near the next destination."
+                : "다음 장소 근처인지 위치를 확인하고 있어요.",
+            notificationColor: "#0f766e",
+            killServiceOnDestroy: false,
+          },
+        }),
+  });
 }
 
 async function scheduleRouteArrivalNotification(regionId: string) {
@@ -637,9 +685,8 @@ async function getCurrentRouteArrivalPosition(radiusMeters: number) {
   }
 }
 
-async function reconcileCurrentRouteArrival(
-  places: StoredRouteArrivalPlace[],
-  radiusMeters: number
+async function reconcilePresentedRouteArrivalNotifications(
+  places: StoredRouteArrivalPlace[]
 ) {
   const todayKey = getTodayDateKey();
   const notifiedRegionDates = await readNotifiedRegionDates();
@@ -665,12 +712,14 @@ async function reconcileCurrentRouteArrival(
   if (didUpdateNotifiedDates) {
     await writeNotifiedRegionDates(notifiedRegionDates);
   }
+}
 
-  const currentPosition = await getCurrentRouteArrivalPosition(radiusMeters);
-
-  if (!currentPosition) {
-    return;
-  }
+async function reconcileRouteArrivalAtPosition(
+  places: StoredRouteArrivalPlace[],
+  radiusMeters: number,
+  currentPosition: Location.LocationObject
+) {
+  const todayKey = getTodayDateKey();
 
   const accuracyMeters = currentPosition.coords.accuracy;
 
@@ -713,19 +762,46 @@ async function reconcileCurrentRouteArrival(
   }
 }
 
+async function reconcileCurrentRouteArrival(
+  places: StoredRouteArrivalPlace[],
+  radiusMeters: number
+) {
+  await reconcilePresentedRouteArrivalNotifications(places);
+
+  const currentPosition = await getCurrentRouteArrivalPosition(radiusMeters);
+
+  if (!currentPosition) {
+    return;
+  }
+
+  await reconcileRouteArrivalAtPosition(
+    places,
+    radiusMeters,
+    currentPosition
+  );
+}
+
 export async function reconcileStoredRouteArrivalNotifications() {
-  const [locationPermission, notificationPermission, placeByRegionId] =
+  const [
+    locationPermission,
+    backgroundLocationPermission,
+    notificationPermission,
+    placeByRegionId,
+  ] =
     await Promise.all([
       Location.getForegroundPermissionsAsync(),
+      Location.getBackgroundPermissionsAsync(),
       Notifications.getPermissionsAsync(),
       readStoredRouteArrivalPlaces(),
     ]);
 
   if (
     locationPermission.status !== "granted" ||
+    backgroundLocationPermission.status !== "granted" ||
     !notificationPermission.granted ||
     placeByRegionId.size === 0
   ) {
+    await stopRouteArrivalLocationTrackingIfStarted().catch(() => undefined);
     return;
   }
 
@@ -755,6 +831,8 @@ export async function reconcileStoredRouteArrivalNotifications() {
       DEFAULT_GEOFENCE_RADIUS_METERS
     );
   }
+
+  await startRouteArrivalLocationTracking(places[0]?.language ?? "ko");
 
   await reconcileCurrentRouteArrival(
     places,
@@ -858,6 +936,45 @@ if (
   );
 }
 
+if (!TaskManager.isTaskDefined(ROUTE_ARRIVAL_LOCATION_TASK)) {
+  TaskManager.defineTask(
+    ROUTE_ARRIVAL_LOCATION_TASK,
+    async ({ data, error }: RouteArrivalTaskBody) => {
+      if (error || !data) {
+        return;
+      }
+
+      const payload = data as RouteArrivalLocationTaskData;
+      const currentPosition = payload.locations?.at(-1);
+      const placeByRegionId = await readStoredRouteArrivalPlaces();
+      const places = [...placeByRegionId.values()].slice(
+        0,
+        MAX_GEOFENCE_REGION_COUNT
+      );
+
+      if (places.length === 0) {
+        await stopRouteArrivalLocationTrackingIfStarted().catch(
+          () => undefined
+        );
+        return;
+      }
+
+      if (!currentPosition) {
+        return;
+      }
+
+      await reconcilePresentedRouteArrivalNotifications(places).catch(
+        () => undefined
+      );
+      await reconcileRouteArrivalAtPosition(
+        places,
+        DEFAULT_GEOFENCE_RADIUS_METERS,
+        currentPosition
+      ).catch(() => undefined);
+    }
+  );
+}
+
 async function syncNativeRouteArrivalNotifications(
   message: NativeRouteArrivalNotificationSyncRequest,
   webViewRef: WebViewRef
@@ -866,6 +983,8 @@ async function syncNativeRouteArrivalNotifications(
     const places = getUniqueStoredPlaces(message.places, message.language);
 
     if (places.length === 0) {
+      await stopRouteArrivalLocationTrackingIfStarted().catch(() => undefined);
+
       if (Platform.OS === "ios") {
         await stopRouteArrivalGeofencingIfStarted().catch(() => undefined);
         await syncIosRouteArrivalNotifications([], DEFAULT_GEOFENCE_RADIUS_METERS);
@@ -935,6 +1054,8 @@ async function syncNativeRouteArrivalNotifications(
         }))
       );
     }
+
+    await startRouteArrivalLocationTracking(message.language);
 
     await reconcileCurrentRouteArrival(places, radius).catch(() => undefined);
 

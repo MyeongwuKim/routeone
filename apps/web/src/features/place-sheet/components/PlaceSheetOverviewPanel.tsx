@@ -28,6 +28,7 @@ type PlaceSheetOverviewPanelProps = {
   currentLocation: PlaceSheetCoordinates;
   data: PlaceSheetData;
   directionOrigin: MapSheetDirectionOrigin;
+  isCurrentLocationLookupPending: boolean;
   isDarkMode: boolean;
   isVisible: boolean;
   onSelectNearbyPlace: (place: NearbyTouristPlace) => void;
@@ -56,6 +57,7 @@ function PlaceSheetOverviewPanel({
   currentLocation,
   data,
   directionOrigin,
+  isCurrentLocationLookupPending,
   isDarkMode,
   isVisible,
   onSelectNearbyPlace,
@@ -145,6 +147,7 @@ function PlaceSheetOverviewPanel({
             appLanguage={appLanguage}
             currentLocation={currentLocation}
             directionOrigin={directionOrigin}
+            isCurrentLocationLookupPending={isCurrentLocationLookupPending}
             isDarkMode={isDarkMode}
             isRouteLoading={isRouteLoading}
             routeDistanceText={routeDistanceText}

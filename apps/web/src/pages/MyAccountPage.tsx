@@ -168,9 +168,11 @@ function MyAccountPage() {
     staleTime: ME_QUERY_STALE_TIME_MS,
   });
   const user = authUser ?? meQuery.data?.me ?? null;
-  const storedAuthProviders = user?.authProviders ?? [];
+  const socialAuthProviders = (user?.authProviders ?? []).filter(
+    (provider) => provider === "GOOGLE" || provider === "APPLE"
+  );
   const authProviders: AuthProvider[] =
-    storedAuthProviders.length > 0 ? storedAuthProviders : ["UNKNOWN"];
+    socialAuthProviders.length > 0 ? socialAuthProviders : ["UNKNOWN"];
   const displayNameLabel = getAccountDisplayName(
     user,
     text.account.fallbackName
