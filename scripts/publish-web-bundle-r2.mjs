@@ -31,13 +31,7 @@ if (!accessKeyId || !secretAccessKey) {
 const retention = readPositiveInteger("ROUTEONE_WEB_BUNDLE_RETENTION", 5);
 const channel = readWebBundleChannel();
 const distDir = resolve(env.ROUTEONE_WEB_DIST_DIR || "apps/web/dist");
-const buildNumber = readPositiveInteger(
-  "ROUTEONE_WEB_BUNDLE_BUILD_NUMBER",
-  Number.parseInt(env.GITHUB_RUN_NUMBER || "", 10) || Date.now()
-);
-const version =
-  env.ROUTEONE_WEB_BUNDLE_VERSION?.trim() ||
-  `1.0.${buildNumber}`;
+const version = required("ROUTEONE_WEB_BUNDLE_VERSION");
 
 if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(version)) {
   fail("ROUTEONE_WEB_BUNDLE_VERSION contains unsupported characters.");

@@ -8,14 +8,17 @@ on:
     paths:
       - "apps/web/**"
       - "apps/native/app.config.ts"
+      - "apps/native/app-versions.json"
       - ".github/workflows/publish-web-bundle-r2.yml"
       - "scripts/publish-web-bundle-r2.mjs"
+      - "scripts/resolve-web-bundle-version.mjs"
       - "package.json"
   workflow_dispatch:
     inputs:
       channel:
         description: "Bundle channel"
-        required: false
+        required: true
+        default: dev
         type: choice
         options:
           - dev
@@ -24,6 +27,10 @@ on:
         description: "Web bundle version (optional)"
         required: false
         type: string
+
+concurrency:
+  group: publish-web-bundle-r2-${{ (github.event_name == 'workflow_dispatch' && inputs.channel) || (github.ref_name == 'main' && 'prod') || 'dev' }}
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -52,9 +59,6 @@ jobs:
 
       - name: Resolve channel
         shell: bash
-        env:
-          REQUESTED_WEB_VERSION: ${{ inputs.version }}
-          WEB_VERSION_PREFIX: ${{ vars.ROUTEONE_WEB_VERSION_PREFIX }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${{ inputs.channel }}" ]]; then
             CHANNEL="${{ inputs.channel }}"
@@ -70,17 +74,8 @@ jobs:
             APP_VARIANT="dev"
           fi
 
-          if [[ -n "${REQUESTED_WEB_VERSION}" ]]; then
-            WEB_VERSION="${REQUESTED_WEB_VERSION}"
-          else
-            WEB_VERSION_PREFIX="${WEB_VERSION_PREFIX:-1.0}"
-            WEB_VERSION="${WEB_VERSION_PREFIX}.${GITHUB_RUN_NUMBER}"
-          fi
-
           echo "APP_VARIANT=${APP_VARIANT}" >> "${GITHUB_ENV}"
           echo "ROUTEONE_WEB_BUNDLE_CHANNEL=${CHANNEL}" >> "${GITHUB_ENV}"
-          echo "ROUTEONE_WEB_BUNDLE_BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "${GITHUB_ENV}"
-          echo "ROUTEONE_WEB_BUNDLE_VERSION=${WEB_VERSION}" >> "${GITHUB_ENV}"
 
       - name: Load dev R2 config
         if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.channel == 'prod') || (github.event_name != 'workflow_dispatch' && github.ref_name == 'main')) }}
@@ -107,6 +102,11 @@ jobs:
           echo "R2_SECRET_ACCESS_KEY=${SELECTED_R2_SECRET_ACCESS_KEY}" >> "${GITHUB_ENV}"
           echo "R2_BUCKET_NAME=${SELECTED_R2_BUCKET_NAME}" >> "${GITHUB_ENV}"
           echo "R2_PUBLIC_BASE_URL=${SELECTED_R2_PUBLIC_BASE_URL}" >> "${GITHUB_ENV}"
+
+      - name: Resolve web bundle version
+        env:
+          REQUESTED_WEB_VERSION: ${{ inputs.version }}
+        run: node scripts/resolve-web-bundle-version.mjs
 
       - name: Load web build env
         shell: bash

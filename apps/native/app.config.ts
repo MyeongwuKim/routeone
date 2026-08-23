@@ -1,4 +1,4 @@
-import appVersions from "./app-versions.json";
+import appVersions from "./app-versions.json" with { type: "json" };
 
 type AppVariant = "dev" | "prod";
 type AppPlatform = "ios" | "android";
@@ -28,7 +28,7 @@ const APP_VARIANT_CONFIG: Record<AppVariant, AppVariantConfig> = {
     displayName: "RouteOne",
     slug: "routeone",
     scheme: "routeone",
-    bundleIdentifier: "com.routeone.app"
+    bundleIdentifier: "com.myeongwukim.routeone"
   }
 };
 

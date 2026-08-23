@@ -26,6 +26,7 @@ type NativeLoginStepProps = {
   appleAvailable: boolean;
   activeProvider: NativeLoginProvider | null;
   errorMessage: string | null;
+  showTestAccountLogin: boolean;
   toastMessage?: string | null;
   onChangeAccountId: (value: string) => void;
   onChangePassword: (value: string) => void;
@@ -100,6 +101,7 @@ export default function NativeLoginStep({
   appleAvailable,
   activeProvider,
   errorMessage,
+  showTestAccountLogin,
   toastMessage,
   onChangeAccountId,
   onChangePassword,
@@ -229,97 +231,111 @@ export default function NativeLoginStep({
             </View>
           </Pressable>
 
-          <View style={styles.dividerRow}>
-            <View
-              style={[styles.dividerLine, { backgroundColor: colors.divider }]}
-            />
-            <Text style={[styles.dividerText, { color: colors.mutedText }]}>
-              {text.testAccount}
-            </Text>
-            <View
-              style={[styles.dividerLine, { backgroundColor: colors.divider }]}
-            />
-          </View>
+          {showTestAccountLogin ? (
+            <>
+              <View style={styles.dividerRow}>
+                <View
+                  style={[
+                    styles.dividerLine,
+                    { backgroundColor: colors.divider }
+                  ]}
+                />
+                <Text
+                  style={[styles.dividerText, { color: colors.mutedText }]}
+                >
+                  {text.testAccount}
+                </Text>
+                <View
+                  style={[
+                    styles.dividerLine,
+                    { backgroundColor: colors.divider }
+                  ]}
+                />
+              </View>
 
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!isBusy}
-            onChangeText={onChangeAccountId}
-            placeholder={text.accountIdPlaceholder}
-            placeholderTextColor={colors.placeholder}
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.inputBorder,
-                color: colors.inputText
-              }
-            ]}
-            value={accountId}
-          />
-          <TextInput
-            editable={!isBusy}
-            onChangeText={onChangePassword}
-            placeholder={text.passwordPlaceholder}
-            placeholderTextColor={colors.placeholder}
-            secureTextEntry
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.inputBorder,
-                color: colors.inputText
-              }
-            ]}
-            value={password}
-          />
-          <TextInput
-            editable={!isBusy}
-            onChangeText={onChangeDisplayName}
-            placeholder={text.displayNamePlaceholder}
-            placeholderTextColor={colors.placeholder}
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.inputBorder,
-                color: colors.inputText
-              }
-            ]}
-            value={displayName}
-          />
-          <Pressable
-            accessibilityRole="button"
-            disabled={isBusy}
-            onPress={onPasswordLogin}
-            style={({ pressed }) => [
-              styles.authButton,
-              {
-                backgroundColor: colors.passwordBackground,
-                borderColor: colors.buttonBorder
-              },
-              isBusy && styles.disabledButton,
-              pressed && { backgroundColor: colors.passwordPressed }
-            ]}
-          >
-            <View style={styles.loginButtonContent}>
-              <Text style={[styles.buttonText, { color: colors.passwordText }]}>
-                {getButtonLabel({
-                  provider: "password",
-                  activeProvider,
-                  label: text.testAccountContinue,
-                  loadingLabel: text.checking
-                })}
-              </Text>
-            </View>
-            {activeProvider === "password" ? (
-              <ActivityIndicator
-                color={colors.passwordText}
-                style={styles.buttonSpinner}
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isBusy}
+                onChangeText={onChangeAccountId}
+                placeholder={text.accountIdPlaceholder}
+                placeholderTextColor={colors.placeholder}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.inputText
+                  }
+                ]}
+                value={accountId}
               />
-            ) : null}
-          </Pressable>
+              <TextInput
+                editable={!isBusy}
+                onChangeText={onChangePassword}
+                placeholder={text.passwordPlaceholder}
+                placeholderTextColor={colors.placeholder}
+                secureTextEntry
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.inputText
+                  }
+                ]}
+                value={password}
+              />
+              <TextInput
+                editable={!isBusy}
+                onChangeText={onChangeDisplayName}
+                placeholder={text.displayNamePlaceholder}
+                placeholderTextColor={colors.placeholder}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.inputText
+                  }
+                ]}
+                value={displayName}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={isBusy}
+                onPress={onPasswordLogin}
+                style={({ pressed }) => [
+                  styles.authButton,
+                  {
+                    backgroundColor: colors.passwordBackground,
+                    borderColor: colors.buttonBorder
+                  },
+                  isBusy && styles.disabledButton,
+                  pressed && { backgroundColor: colors.passwordPressed }
+                ]}
+              >
+                <View style={styles.loginButtonContent}>
+                  <Text
+                    style={[styles.buttonText, { color: colors.passwordText }]}
+                  >
+                    {getButtonLabel({
+                      provider: "password",
+                      activeProvider,
+                      label: text.testAccountContinue,
+                      loadingLabel: text.checking
+                    })}
+                  </Text>
+                </View>
+                {activeProvider === "password" ? (
+                  <ActivityIndicator
+                    color={colors.passwordText}
+                    style={styles.buttonSpinner}
+                  />
+                ) : null}
+              </Pressable>
+            </>
+          ) : null}
         </View>
 
         {friendlyErrorMessage ? (

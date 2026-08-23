@@ -16,6 +16,7 @@ import { useNativeBoot } from "./boot/useNativeBoot";
 import { useNativeLogin } from "./auth/useNativeLogin";
 import { useNativeUpdate } from "./nativeUpdate/useNativeUpdate";
 import { ONBOARDING_TEXT } from "@/constants/nativeOnboarding";
+import { WEB_BUNDLE_UPDATE_CONFIG } from "@/config/webBundleUpdateConfig";
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -218,6 +219,9 @@ export default function App() {
             void nativeLogin.handlePasswordLogin();
           }}
           password={nativeLogin.password}
+          showTestAccountLogin={
+            WEB_BUNDLE_UPDATE_CONFIG.appVariant !== "prod"
+          }
           toastMessage={isAuthSessionExpired ? text.sessionExpired : null}
         />
       </SafeAreaView>

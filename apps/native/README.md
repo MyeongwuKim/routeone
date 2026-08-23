@@ -137,7 +137,7 @@ pnpm eas:submit:ios:dev
 
 ### prod Xcode 프로젝트와 운영 빌드
 
-루트에는 `pnpm native:ios:prod` 명령이 없습니다. prod 설정의 Xcode 프로젝트가 필요할 때는 Native 패키지에서 아래 prebuild 명령을 직접 실행합니다.
+prod 설정의 Xcode 프로젝트만 필요할 때는 Native 패키지에서 아래 prebuild 명령을 직접 실행합니다.
 
 ```bash
 cd apps/native
@@ -146,21 +146,22 @@ pnpm prebuild:ios:prod
 
 이 명령은 `APP_VARIANT=prod`와 iOS 플랫폼을 설정하고, 운영 앱 이름·Bundle ID·버전을 `app.config.ts`에 반영해 `ios/` 프로젝트를 생성 또는 갱신합니다. 이 단계도 Xcode 프로젝트만 준비하며 배포 바이너리는 만들지 않습니다.
 
-운영 TestFlight와 App Store에 사용할 실제 빌드는 아래 명령으로 EAS 클라우드에서 생성합니다.
+운영 TestFlight와 App Store에 사용할 실제 빌드와 App Store Connect 제출은 루트에서 아래 명령으로 연속 실행합니다.
 
 ```bash
-cd apps/native
-pnpm eas:build:ios
+pnpm native:ios:prod
 ```
 
 ```text
-pnpm eas:build:ios
+pnpm native:ios:prod
 → APP_VARIANT=prod, ROUTEONE_BUILD_PLATFORM=ios 설정
 → app-versions.json의 prod.ios 버전 확인
+→ 웹뷰 번들 생성과 iOS JavaScript 번들 사전 검증
 → eas.json의 production 프로필 선택
 → EAS에 소스와 환경변수 전달
 → app.config.ts와 Expo config plugin을 바탕으로 iOS 프로젝트 준비
 → Xcode 빌드 후 App Store 제출용 빌드 생성
+→ 빌드 성공 후 production 제출 프로필로 App Store Connect 업로드
 ```
 
 `--clean`이 붙은 `prebuild:ios:dev:clean` 또는 `prebuild:ios:prod:clean`은 `ios/`를 다시 생성하는 흐름이라 Xcode에서 직접 수정한 네이티브 파일이 있으면 사라질 수 있습니다.
@@ -177,13 +178,13 @@ pnpm run eas:build:ios:dev
 pnpm run eas:submit:ios:dev
 ```
 
-운영 앱은 `APP_VARIANT=prod`와 `production` 프로필을 사용합니다. iOS 번들 ID는 `com.routeone.app`, 앱 이름은 `RouteOne`입니다. 운영 빌드는 Expo/EAS 클라우드에 소스를 올려 생성하고, 완성된 빌드를 App Store Connect에 업로드하는 방식입니다.
+운영 앱은 `APP_VARIANT=prod`와 `production` 프로필을 사용합니다. iOS 번들 ID는 `com.myeongwukim.routeone`, 앱 이름은 `RouteOne`입니다. 루트 명령은 Expo/EAS 클라우드 빌드가 성공하면 같은 production 제출 프로필로 App Store Connect 업로드까지 이어서 실행합니다.
 
 ```bash
-cd apps/native
-pnpm run eas:build:ios
-pnpm run eas:submit:ios
+pnpm native:ios:prod
 ```
+
+빌드와 제출을 따로 실행해야 할 때는 Native 패키지의 `eas:build:ios`와 `eas:submit:ios` 명령을 각각 사용합니다.
 
 EAS 빌드는 Expo/EAS 프로젝트에 등록된 환경변수를 사용합니다. `prod` 빌드에서는 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`를 명령어 앞에 붙이거나 로컬 `.env`에 별도로 설정할 필요가 없습니다. API 주소를 변경해야 할 때는 로컬 명령어가 아니라 Expo/EAS에 등록된 운영 환경변수를 수정합니다.
 
@@ -203,7 +204,7 @@ RouteOne Native는 `apps/web`을 실행하는 앱 컨테이너이면서, 웹만�
 | 카테고리 | 네이티브에서 담당하는 일 | 제공 기능 |
 | --- | --- | --- |
 | 앱 실행과 WebView | 웹 빌드 결과를 네이티브 앱 안에서 실행하고 웹·네이티브 메시지를 연결 | 내장 웹 번들 로드, 실행 준비 상태 확인, 앱 언어 동기화, 런타임 오류 처리 |
-| 로그인과 세션 | 앱 진입 전 인증과 로그인 세션을 네이티브 저장소에서 관리 | 아이디·비밀번호, Google, Apple 로그인, 로그인 토큰 저장과 WebView 전달, 로그아웃·만료 처리 |
+| 로그인과 세션 | 앱 진입 전 인증과 로그인 세션을 네이티브 저장소에서 관리 | dev 테스트 계정, Google, Apple 로그인, 로그인 토큰 저장과 WebView 전달, 로그아웃·만료 처리 |
 | 네트워크 브릿지 | WebView 요청을 실제 외부 API로 전달 | `/graphql`, `/tour-api`, `/map-direction` 요청 프록시, 인증 헤더 전달, 요청 타임아웃과 일부 응답 캐시 |
 | 위치와 방문 인증 | 위치 권한과 방문 인증에 필요한 기기 기능 관리 | 현재 GPS 조회, 도착 반경 판정용 위치 전달, 카메라·사진 보관함 선택, 방문 사진 업로드, GPS 테스트 위치 적용 |
 | 알림 | 웹의 일정 데이터를 네이티브 로컬·푸시 알림과 동기화 | Expo Push Token 발급, 루트 도착 알림, 축제 알림, 루트 후기 알림, 전달된 알림 기록 조회 |
@@ -223,7 +224,7 @@ flowchart TD
   Update -->|업데이트 필요| ForceUpdate["NativeForceUpdateScreen"]
   Update -->|실행 가능| Boot["useNativeBoot<br/>언어·권한·세션 확인"]
   Boot -->|첫 실행| Onboarding["언어 선택 → 위치 권한 → 알림 권한"]
-  Boot -->|세션 없음| Login["NativeLoginStep<br/>비밀번호·Google·Apple 로그인"]
+  Boot -->|세션 없음| Login["NativeLoginStep<br/>Google·Apple 로그인<br/>dev 테스트 계정 로그인"]
   Onboarding --> Login
   Login -->|토큰 저장| WebViewScreen["NativeWebViewScreen"]
   Boot -->|저장된 세션 있음| WebViewScreen
@@ -235,7 +236,7 @@ flowchart TD
 
 1. `index.ts`가 Expo의 `registerRootComponent`로 `src/App.tsx`를 등록합니다.
 2. `App.tsx`는 `useNativeUpdate`로 강제 업데이트 여부를 확인하고, `useNativeBoot`로 저장된 언어·권한·로그인 세션을 확인합니다. 업데이트 확인이 끝나기 전이거나 최소 버전보다 낮으면 WebView에 진입하지 않습니다.
-3. 첫 실행에서는 언어와 기기 권한을 확인한 뒤 네이티브 로그인 화면을 표시합니다. 로그인 토큰은 네이티브 저장소에 보관하며, 유효한 저장 세션이 있으면 다음 실행부터 로그인 화면을 건너뜁니다.
+3. 첫 실행에서는 언어와 기기 권한을 확인한 뒤 네이티브 로그인 화면을 표시합니다. prod 앱은 Google·Apple 로그인만 제공하고, dev와 로컬 앱에서만 테스트 계정 로그인을 함께 표시합니다. 로그인 토큰은 네이티브 저장소에 보관하며, 유효한 저장 세션이 있으면 다음 실행부터 로그인 화면을 건너뜁니다.
 4. `NativeWebViewScreen`은 `resolveWebBundle`로 앱 내장 번들, 설치된 R2 번들, 원격 fallback 중 실행할 웹 소스를 선택합니다.
 5. WebView가 웹 문서를 읽기 전에 `injectedJavaScriptBeforeContentLoaded`로 인증 토큰, 앱 언어, `window.RouteOneRuntimeConfig`, `window.RouteOneNative`를 주입합니다. 네이티브 환경의 웹 라우터는 이 설정에 따라 `HashRouter`를 사용합니다.
 6. 웹의 `NativeWebBundleReadySignal`이 `routeone:web-bundle-ready` 메시지를 보내면 로딩 화면을 닫고, 새로 설치한 번들을 정상 버전으로 확정합니다. 설치 번들이 로드되지 않으면 이전 번들이나 내장 번들로 롤백합니다.
@@ -315,7 +316,7 @@ WebView 안에서 웹이 평소처럼 `fetch`를 호출하면 주입 스크립�
   - `src/components/native-onboarding`: 네이티브 온보딩과 로그인 화면입니다.
   - `src/components/native-webview`: 실행 화면, 로딩 화면과 WebView 컨테이너입니다.
 - 인증과 웹 번들
-  - `src/auth`: 아이디·비밀번호, Google, Apple 로그인과 네이티브 세션 저장을 처리합니다.
+  - `src/auth`: dev 테스트 계정, Google, Apple 로그인과 네이티브 세션 저장을 처리합니다.
   - `src/webBundle`: R2 manifest 조회, 웹 번들 다운로드·검증·설치·롤백을 처리합니다.
   - `src/generated/webBundle.ts`: `apps/web/dist`를 WebView용 HTML 문자열로 변환한 결과입니다.
 - 네이티브 앱 업데이트
@@ -419,7 +420,9 @@ releases/
 
 앱은 manifest의 `channel`이 현재 앱의 `dev` 또는 `prod` 채널과 맞는지 먼저 확인합니다. 채널이 다르면 설치를 건너뛰고, 채널이 맞으며 manifest 버전이 현재 설치된 웹 번들보다 높을 때 새 번들을 설치합니다. 새 ZIP은 다운로드, SHA-256 검증, 압축 해제 단계를 각각 최대 3회 시도한 뒤 앱 문서 디렉터리에 적용합니다. 설치 준비가 3회 모두 실패하면 종료 안내 팝업을 띄우고, 새 번들이 설치된 뒤 처음 로드되지 않으면 직전 로컬 번들로 되돌아갑니다.
 
-버전 폴더명은 기본적으로 `1.0.{GitHub Actions 실행번호}` 형식입니다. Repository variable `ROUTEONE_WEB_VERSION_PREFIX`를 바꾸면 `1.1.{실행번호}`처럼 앞자리를 변경할 수 있고, Actions에서 수동 실행할 때는 `version` 입력값으로 정확한 버전을 지정할 수 있습니다.
+웹 번들 버전의 major/minor는 `app-versions.json`에 있는 해당 채널 네이티브 버전을 따르고, patch는 dev·prod R2 버킷의 `latest/manifest.json`을 기준으로 각각 증가합니다. 예를 들어 dev가 `1.0.43`이어도 prod 버킷에 manifest가 없으면 prod는 `1.0.0`부터 시작합니다. 같은 버전 계열에서는 `1.0.1`, `1.0.2`처럼 증가하고, 해당 채널 네이티브 버전이 `1.1.x`로 바뀌면 웹 번들도 `1.1.0`부터 다시 시작합니다.
+
+iOS와 Android가 채널별 웹 번들 하나를 공유하므로 같은 채널의 두 플랫폼은 major/minor를 맞춰야 합니다. 서로 다르면 어떤 네이티브 버전을 웹 기준선으로 사용할지 모호해지므로 배포를 실패 처리합니다. Actions에서 수동 실행할 때 `version`을 입력할 수 있지만, 네이티브 major/minor와 같고 현재 해당 채널 웹 버전보다 높은 값만 허용합니다.
 
 `releases`에는 최신 버전 폴더 5개만 유지하고, 오래된 버전은 폴더 안의 `manifest.json`과 `web-ui.zip`을 함께 삭제합니다.
 
@@ -429,7 +432,7 @@ GitHub 저장소의 `Settings > Secrets and variables > Actions`에서 아래 Re
 - dev: `CLOUDFLARE_R2_ACCESS_KEY_ID_DEV`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY_DEV`, `R2_BUCKET_NAME_DEV`, `R2_PUBLIC_BASE_URL_DEV`
 - prod: `CLOUDFLARE_R2_ACCESS_KEY_ID_PROD`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY_PROD`, `R2_BUCKET_NAME_PROD`, `R2_PUBLIC_BASE_URL_PROD`
 
-Repository variable `ROUTEONE_WEB_VERSION_PREFIX`는 선택값이며 기본값은 `1.0`입니다. 웹 번들은 네이티브 앱 버전과 관계없이 최신본을 설치하며, 네이티브 기능 지원 여부는 앱 정보 브릿지의 `capabilities`로 확인합니다.
+웹 번들의 patch 번호는 네이티브 patch와 별도로 증가하지만 major/minor는 해당 채널 네이티브 버전을 기준으로 맞춥니다. 네이티브 기능 지원 여부는 앱 정보 브릿지의 `capabilities`로 확인합니다.
 
 R2 버킷과 API Token은 dev/prod용으로 각각 만들고, 각 Token의 `Object Read & Write` 권한을 해당 버킷 하나로 제한합니다. 워크플로는 `develop`에서 `_DEV`, `main`에서 `_PROD` 시크릿을 선택합니다.
 
@@ -486,6 +489,7 @@ Native 빌드 명령은 실행 목적에 맞게 `APP_VARIANT`와 플랫폼을 �
 | `pnpm native:ios:device` | `none` | iOS | 내장 웹 번들을 사용하는 iPhone 실기기 앱 빌드·실행 |
 | `pnpm native:android` | `none` | Android | 내장 웹 번들을 사용하는 로컬 Android 앱 빌드·실행 |
 | `pnpm native:ios:dev` | `dev` | iOS | dev R2 채널을 사용하는 Xcode 프로젝트 생성·갱신 |
+| `pnpm native:ios:prod` | `prod` | iOS | production 빌드 생성 후 App Store Connect 자동 제출 |
 | `cd apps/native && pnpm eas:build:ios:dev` | `dev` | iOS | dev R2 채널을 사용하는 TestFlight 빌드 생성 |
 | `cd apps/native && pnpm eas:build:ios` | `prod` | iOS | prod R2 채널을 사용하는 운영 빌드 생성 |
 | `cd apps/native && pnpm eas:build:android` | `prod` | Android | prod R2 채널을 사용하는 운영 빌드 생성 |
