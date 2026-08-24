@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   IoCalendarClearOutline,
   IoCallOutline,
@@ -146,14 +146,19 @@ export function NearbyPlacesSkeleton() {
 export function CompactHoursBadge({ value }: { value: string }) {
   const [expandedValue, setExpandedValue] = useState<string | null>(null);
   const [canExpand, setCanExpand] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<{
+    left: number;
+    maxHeight: number;
+    top: number;
+    width: number;
+  } | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
   const valueRef = useRef<HTMLSpanElement | null>(null);
+  const tooltipId = useId();
   const isExpanded = expandedValue === value;
 
   useLayoutEffect(() => {
-    if (isExpanded) {
-      return;
-    }
-
     const valueElement = valueRef.current;
 
     if (!valueElement) {
@@ -170,48 +175,132 @@ export function CompactHoursBadge({ value }: { value: string }) {
     resizeObserver.observe(valueElement);
 
     return () => resizeObserver.disconnect();
+  }, [value]);
+
+  useLayoutEffect(() => {
+    if (!isExpanded) {
+      return;
+    }
+
+    const updateTooltipPosition = () => {
+      const buttonElement = buttonRef.current;
+
+      if (!buttonElement) {
+        return;
+      }
+
+      const viewportMargin = 16;
+      const preferredWidth = 288;
+      const buttonRect = buttonElement.getBoundingClientRect();
+      const width = Math.min(
+        preferredWidth,
+        window.innerWidth - viewportMargin * 2
+      );
+      const centeredLeft =
+        buttonRect.left + buttonRect.width / 2 - width / 2;
+      const left = Math.max(
+        viewportMargin,
+        Math.min(
+          centeredLeft,
+          window.innerWidth - viewportMargin - width
+        )
+      );
+      const top = buttonRect.bottom + 8;
+
+      setTooltipPosition({
+        left,
+        maxHeight: Math.max(96, window.innerHeight - top - viewportMargin),
+        top,
+        width,
+      });
+    };
+
+    updateTooltipPosition();
+    window.addEventListener("resize", updateTooltipPosition);
+    window.addEventListener("scroll", updateTooltipPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateTooltipPosition);
+      window.removeEventListener("scroll", updateTooltipPosition, true);
+    };
   }, [isExpanded, value]);
+
+  useEffect(() => {
+    if (!isExpanded) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !containerRef.current?.contains(event.target)
+      ) {
+        setExpandedValue(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setExpandedValue(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isExpanded]);
 
   if (!value) {
     return null;
   }
 
   return (
-    <button
-      type="button"
-      aria-expanded={canExpand ? isExpanded : undefined}
-      disabled={!canExpand}
-      title={!isExpanded && canExpand ? value : undefined}
-      onClick={() =>
-        setExpandedValue((currentValue) =>
-          currentValue === value ? null : value
-        )
-      }
-      className={`inline-flex items-center gap-1 bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100 transition-[max-width,width,border-radius] dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25 ${
-        isExpanded
-          ? "w-full max-w-full justify-start rounded-2xl"
-          : "max-w-[10rem] rounded-full"
-      } ${canExpand ? "cursor-pointer active:scale-[0.98]" : "cursor-default"}`}
-    >
-      <IoTimeOutline className="shrink-0 text-sm" />
-      <span
-        ref={valueRef}
-        className={`min-w-0 ${
-          isExpanded
-            ? "whitespace-pre-line break-words text-left leading-5"
-            : "truncate"
+    <div ref={containerRef} className="relative inline-flex min-w-0">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-expanded={canExpand ? isExpanded : undefined}
+        aria-describedby={isExpanded ? tooltipId : undefined}
+        disabled={!canExpand}
+        title={!isExpanded && canExpand ? value : undefined}
+        onClick={() =>
+          setExpandedValue((currentValue) =>
+            currentValue === value ? null : value
+          )
+        }
+        className={`inline-flex max-w-[10rem] items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100 transition active:scale-[0.98] dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25 ${
+          canExpand ? "cursor-pointer" : "cursor-default"
         }`}
       >
-        {value}
-      </span>
-      {canExpand ? (
-        <IoChevronDown
-          aria-hidden="true"
-          className={`shrink-0 text-xs transition-transform ${
-            isExpanded ? "rotate-180" : ""
-          }`}
-        />
+        <IoTimeOutline className="shrink-0 text-sm" />
+        <span ref={valueRef} className="min-w-0 truncate">
+          {value}
+        </span>
+        {canExpand ? (
+          <IoChevronDown
+            aria-hidden="true"
+            className={`shrink-0 text-xs transition-transform ${
+              isExpanded ? "rotate-180" : ""
+            }`}
+          />
+        ) : null}
+      </button>
+      {isExpanded && tooltipPosition ? (
+        <div
+          id={tooltipId}
+          role="tooltip"
+          style={tooltipPosition}
+          className="fixed z-[3450] flex items-start gap-2 overflow-y-auto rounded-2xl border border-brand-200 bg-white px-3 py-2.5 text-left text-xs font-semibold leading-5 text-slate-700 shadow-xl dark:border-brand-400/35 dark:bg-[#0b211f] dark:text-slate-100"
+        >
+          <IoTimeOutline className="mt-0.5 shrink-0 text-base text-brand-600 dark:text-brand-200" />
+          <span className="min-w-0 whitespace-pre-line break-words">
+            {value}
+          </span>
+        </div>
       ) : null}
-    </button>
+    </div>
   );
 }

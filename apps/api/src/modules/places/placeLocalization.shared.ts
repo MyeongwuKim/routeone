@@ -20,7 +20,7 @@ export const JUSO_REQUEST_TIMEOUT_MS = getPositiveIntegerEnv(
 );
 
 const LOCALIZATION_VERSION = "2026-07-13-v2";
-const OVERVIEW_LOCALIZATION_VERSION = "2026-07-13-v3";
+const OVERVIEW_LOCALIZATION_VERSION = "2026-08-24-v4";
 const TITLE_LOCALIZATION_OVERRIDES: Record<string, string> = {
   도직해변: "Dojik Beach",
 };

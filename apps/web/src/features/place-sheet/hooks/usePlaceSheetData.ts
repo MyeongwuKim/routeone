@@ -161,7 +161,12 @@ export function usePlaceSheetData({
   ]);
 
   const detailQuery = useQuery({
-    queryKey: ["place-detail", "localized-detail-v3", selectedPlaceKey, appLanguage],
+    queryKey: [
+      "place-detail",
+      "localized-detail-v4",
+      selectedPlaceKey,
+      appLanguage,
+    ],
     enabled: isOpen && Boolean(selectedPlace) && hasTourApiServiceKey,
     queryFn: async () => {
       if (!selectedPlace) {

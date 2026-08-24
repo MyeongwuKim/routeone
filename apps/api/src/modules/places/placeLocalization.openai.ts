@@ -89,6 +89,21 @@ const OVERVIEW_RESPONSE_SCHEMA = {
   },
 } as const;
 
+const OVERVIEW_PROPER_NOUN_GLOSSARY = [
+  {
+    source: "댄싱카페인",
+    translation: "Dancing Caffeine",
+  },
+] as const;
+
+function applyOverviewProperNounGlossary(value: string) {
+  return OVERVIEW_PROPER_NOUN_GLOSSARY.reduce(
+    (localizedValue, { source, translation }) =>
+      localizedValue.replaceAll(source, translation),
+    value
+  );
+}
+
 function getOpenAiConfig() {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
@@ -280,6 +295,7 @@ export async function translatePlaceOverview(
           "Translate overview, operating hours, closed days, and contact information independently.",
           "Preserve all facts, proper nouns, dates, seasons, weekdays, times, phone numbers, and paragraph meaning.",
           "Keep time ranges compact and preserve summer/winter distinctions.",
+          "Some source fields may already contain verified English proper names. Preserve those English names exactly.",
           "Return an empty string when the corresponding source field is empty.",
           "For Korean place names ending in facility nouns, transliterate the name stem and translate only the facility noun, such as 도직해변 -> Dojik Beach.",
           "Do not add recommendations, claims, or facts that are absent from the source.",
@@ -291,10 +307,12 @@ export async function translatePlaceOverview(
       {
         role: "user",
         content: JSON.stringify({
-          overview: input.overview,
-          operatingHours: input.operatingHours,
-          restDate: input.restDate,
-          infoCenter: input.infoCenter,
+          overview: applyOverviewProperNounGlossary(input.overview),
+          operatingHours: applyOverviewProperNounGlossary(
+            input.operatingHours
+          ),
+          restDate: applyOverviewProperNounGlossary(input.restDate),
+          infoCenter: applyOverviewProperNounGlossary(input.infoCenter),
         }),
       },
     ],
