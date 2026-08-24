@@ -45,6 +45,7 @@ import {
 export { ROUTEONE_WEBVIEW_BRIDGE_SCRIPT };
 
 type NativeBridgeHandlers = {
+  locationTestModeEnabled?: boolean;
   onAppLanguageChange?: (language: NativeAppLanguage) => Promise<void> | void;
   onAuthSessionChange?: (session: {
     token: string | null;
@@ -91,7 +92,11 @@ export async function handleNativeBridgeMessage(
   }
 
   if (isNativeLocationRequest(message)) {
-    await handleNativeLocationRequest(message, webViewRef);
+    await handleNativeLocationRequest(
+      message,
+      webViewRef,
+      handlers.locationTestModeEnabled === true
+    );
     return;
   }
 
@@ -111,7 +116,11 @@ export async function handleNativeBridgeMessage(
   }
 
   if (isNativeRouteArrivalTestLocationRequest(message)) {
-    await handleNativeRouteArrivalTestLocationRequest(message, webViewRef);
+    await handleNativeRouteArrivalTestLocationRequest(
+      message,
+      webViewRef,
+      handlers.locationTestModeEnabled === true
+    );
     return;
   }
 

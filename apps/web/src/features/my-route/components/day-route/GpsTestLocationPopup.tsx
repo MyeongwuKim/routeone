@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IoClose, IoLocationSharp } from "react-icons/io5";
 import { MdGpsFixed, MdPlace } from "react-icons/md";
 import NaverMapView, {
@@ -29,7 +29,33 @@ type GpsTestLocationPopupProps = {
 };
 
 const ARRIVAL_RADIUS_METERS = 300;
-const INITIAL_TEST_POSITION_OFFSET_METERS = 180;
+const VISIT_RADIUS_METERS = 100;
+const OUTSIDE_ARRIVAL_PRESET_METERS = 450;
+const ARRIVAL_PRESET_METERS = 180;
+const VISIT_PRESET_METERS = 30;
+const AUTO_WALK_DISTANCES_METERS = [450, 350, 290, 180, 30] as const;
+const AUTO_WALK_STEP_DELAY_MS = 900;
+
+function waitForAutoWalkStep() {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, AUTO_WALK_STEP_DELAY_MS);
+  });
+}
+
+function getOffsetTestLocation(
+  place: TestLocation,
+  distanceMeters: number
+) {
+  const latitudeRadians = (place.lat * Math.PI) / 180;
+  const longitudeOffset =
+    distanceMeters /
+    (111_320 * Math.max(0.2, Math.cos(latitudeRadians)));
+
+  return {
+    lat: place.lat,
+    lng: place.lng + longitudeOffset,
+  };
+}
 
 function getInitialTestLocation(
   target: VisitCompletionTarget,
@@ -39,15 +65,10 @@ function getInitialTestLocation(
     return activeLocation;
   }
 
-  const latitudeRadians = (target.stop.place.lat * Math.PI) / 180;
-  const longitudeOffset =
-    INITIAL_TEST_POSITION_OFFSET_METERS /
-    (111_320 * Math.max(0.2, Math.cos(latitudeRadians)));
-
-  return {
-    lat: target.stop.place.lat,
-    lng: target.stop.place.lng + longitudeOffset,
-  };
+  return getOffsetTestLocation(
+    target.stop.place,
+    OUTSIDE_ARRIVAL_PRESET_METERS
+  );
 }
 
 function formatDistance(meters: number) {
@@ -138,13 +159,27 @@ function GpsTestLocationPopup({
     useState<TestLocation>(initialLocation);
   const [lastResult, setLastResult] =
     useState<NativeArrivalTestLocationResult | null>(null);
+  const [isAutoWalking, setIsAutoWalking] = useState(false);
+  const [autoWalkStepIndex, setAutoWalkStepIndex] = useState<number | null>(
+    null
+  );
+  const autoWalkRunIdRef = useRef(0);
   const placeLocation = target.stop.place;
   const distanceMeters = calculateDistanceMeters(
     draftLocation,
     placeLocation
   );
-  const isInsideRadius = distanceMeters <= ARRIVAL_RADIUS_METERS;
+  const isInsideArrivalRadius = distanceMeters <= ARRIVAL_RADIUS_METERS;
+  const isInsideVisitRadius = distanceMeters <= VISIT_RADIUS_METERS;
   const mapResetKey = `${target.stop.id}:${initialLocation.lat}:${initialLocation.lng}`;
+  const isBusy = isApplying || isAutoWalking;
+
+  useEffect(
+    () => () => {
+      autoWalkRunIdRef.current += 1;
+    },
+    []
+  );
 
   const updateDraftLocation = useCallback(
     (nextLocation: TestLocation, options: { pan?: boolean } = {}) => {
@@ -279,6 +314,53 @@ function GpsTestLocationPopup({
     }, [initialLocation, placeLocation, updateDraftLocation]
   );
 
+  const handleAutoWalk = async () => {
+    if (isBusy) {
+      return;
+    }
+
+    const runId = autoWalkRunIdRef.current + 1;
+    autoWalkRunIdRef.current = runId;
+    setIsAutoWalking(true);
+    setAutoWalkStepIndex(0);
+    setLastResult(null);
+
+    try {
+      for (
+        let index = 0;
+        index < AUTO_WALK_DISTANCES_METERS.length;
+        index += 1
+      ) {
+        if (autoWalkRunIdRef.current !== runId) {
+          return;
+        }
+
+        const position = getOffsetTestLocation(
+          placeLocation,
+          AUTO_WALK_DISTANCES_METERS[index]
+        );
+        setAutoWalkStepIndex(index);
+        updateDraftLocation(position, { pan: true });
+
+        const result = await onApply(target, position);
+
+        if (!result || autoWalkRunIdRef.current !== runId) {
+          return;
+        }
+
+        setLastResult(result);
+
+        if (index < AUTO_WALK_DISTANCES_METERS.length - 1) {
+          await waitForAutoWalkStep();
+        }
+      }
+    } finally {
+      if (autoWalkRunIdRef.current === runId) {
+        setIsAutoWalking(false);
+      }
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[3200] bg-white dark:bg-slate-950">
       <div className="flex h-full flex-col">
@@ -296,7 +378,8 @@ function GpsTestLocationPopup({
             type="button"
             aria-label={text.dayRoute.gpsTestCloseAria}
             onClick={onClose}
-            className="inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-violet-200 bg-violet-50 text-xl text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-100"
+            disabled={isBusy}
+            className="inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-violet-200 bg-violet-50 text-xl text-violet-700 disabled:opacity-45 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-100"
           >
             <IoClose />
           </button>
@@ -324,21 +407,80 @@ function GpsTestLocationPopup({
         </NaverMapView>
 
         <footer className="app-safe-area-footer shrink-0 border-t border-violet-100 bg-white px-4 py-3 dark:border-violet-400/20 dark:bg-slate-950">
+          <button
+            type="button"
+            onClick={() => {
+              void handleAutoWalk();
+            }}
+            disabled={isBusy}
+            className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-3 py-3 text-sm font-black text-white disabled:opacity-45"
+          >
+            <MdGpsFixed className="text-base" />
+            {isAutoWalking && autoWalkStepIndex != null
+              ? text.dayRoute.gpsTestWalkingStep(
+                  autoWalkStepIndex + 1,
+                  AUTO_WALK_DISTANCES_METERS.length,
+                  formatDistance(
+                    AUTO_WALK_DISTANCES_METERS[autoWalkStepIndex]
+                  )
+                )
+              : text.dayRoute.gpsTestAutoWalk}
+          </button>
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            {[
+              {
+                label: text.dayRoute.gpsTestOutsidePreset,
+                distanceMeters: OUTSIDE_ARRIVAL_PRESET_METERS,
+              },
+              {
+                label: text.dayRoute.gpsTestArrivalPreset,
+                distanceMeters: ARRIVAL_PRESET_METERS,
+              },
+              {
+                label: text.dayRoute.gpsTestVisitPreset,
+                distanceMeters: VISIT_PRESET_METERS,
+              },
+            ].map((preset) => (
+              <button
+                key={preset.distanceMeters}
+                type="button"
+                onClick={() =>
+                  updateDraftLocation(
+                    getOffsetTestLocation(
+                      placeLocation,
+                      preset.distanceMeters
+                    ),
+                    { pan: true }
+                  )
+                }
+                disabled={isBusy}
+                className="rounded-xl border border-violet-200 bg-violet-50 px-2 py-2 text-[11px] font-black text-violet-700 disabled:opacity-45 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-100"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
           <div
             className={`rounded-2xl border px-3 py-2.5 ${
-              isInsideRadius
+              isInsideVisitRadius
                 ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100"
-                : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100"
+                : isInsideArrivalRadius
+                  ? "border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-100"
+                  : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100"
             }`}
           >
             <p className="text-xs font-black">
-              {isInsideRadius
-                ? text.dayRoute.gpsTestInsideRadius(
+              {isInsideVisitRadius
+                ? text.dayRoute.gpsTestInsideVisitRadius(
                     formatDistance(distanceMeters)
                   )
-                : text.dayRoute.gpsTestOutsideRadius(
-                    formatDistance(distanceMeters)
-                  )}
+                : isInsideArrivalRadius
+                  ? text.dayRoute.gpsTestInsideArrivalRadius(
+                      formatDistance(distanceMeters)
+                    )
+                  : text.dayRoute.gpsTestOutsideArrivalRadius(
+                      formatDistance(distanceMeters)
+                    )}
             </p>
             <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold opacity-80">
               <IoLocationSharp />
@@ -357,6 +499,8 @@ function GpsTestLocationPopup({
               >
                 {lastResult.notificationScheduled
                   ? text.dayRoute.gpsTestAppliedWithNotification
+                  : lastResult.withinRadius
+                    ? text.dayRoute.gpsTestAppliedInsideWithoutNotification
                   : text.dayRoute.gpsTestAppliedWithoutNotification}
               </p>
               {lastResult.backgroundNotificationStatus ? (
@@ -395,7 +539,7 @@ function GpsTestLocationPopup({
                   }
                 });
               }}
-              disabled={isApplying}
+              disabled={isBusy}
               className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-600 disabled:opacity-45 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
               {text.dayRoute.gpsTestUseRealLocation}
@@ -409,7 +553,7 @@ function GpsTestLocationPopup({
                   }
                 });
               }}
-              disabled={isApplying}
+              disabled={isBusy}
               className="rounded-2xl bg-violet-600 px-3 py-3 text-sm font-bold text-white disabled:opacity-45"
             >
               {isApplying
@@ -417,6 +561,18 @@ function GpsTestLocationPopup({
                 : text.dayRoute.gpsTestApplyLocation}
             </button>
           </div>
+          {lastResult?.active &&
+          lastResult.distanceMeters != null &&
+          lastResult.distanceMeters <= VISIT_RADIUS_METERS ? (
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isBusy}
+              className="mt-2 w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-black text-emerald-700 disabled:opacity-45 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100"
+            >
+              {text.dayRoute.gpsTestContinueVisit}
+            </button>
+          ) : null}
         </footer>
       </div>
     </div>

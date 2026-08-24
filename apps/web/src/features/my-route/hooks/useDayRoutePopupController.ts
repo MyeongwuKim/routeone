@@ -44,6 +44,10 @@ import { useRouteStopVisitMutation } from "./useRouteStopVisitMutation";
 import { useRouteDayStartMutation } from "./useRouteDayStartMutation";
 import { useRouteStartLocationMutation } from "./useRouteStartLocationMutation";
 import { isSameStopOrder, restoreStopOrder } from "../utils/dayRouteStops";
+import {
+  isTestAccountModeEnabled,
+  isVisitVerificationBypassEnabled,
+} from "../services/visitPhotoService";
 
 export function useDayRoutePopupController({
   route,
@@ -192,6 +196,7 @@ export function useDayRoutePopupController({
   const { isUpdatingRouteStartDate, updateRouteStartDate } =
     useRouteStartDateMutation(route.id);
   const isRetrospectiveCompletion = visitCompletionMode === "retrospective";
+  const isVerificationBypassEnabled = isVisitVerificationBypassEnabled();
   const {
     cancelStopCheckIn: handleCancelStopCheckIn,
     completeStopVisitWithGps: handleCompleteStopVisitWithGps,
@@ -226,6 +231,7 @@ export function useDayRoutePopupController({
       .filter(
         (routeDay) =>
           isRetrospectiveCompletion ||
+          isVerificationBypassEnabled ||
           (Boolean(route.startedAt) &&
             getRouteDateKey(routeDay.date) === todayKey)
       )
@@ -632,15 +638,22 @@ export function useDayRoutePopupController({
       startLocation,
     });
 
-  const runtimeAppVariant =
-    window.RouteOneRuntimeConfig?.nativeAppVariant?.trim().toLowerCase() ||
-    window.RouteOneRuntimeConfig?.webBundleChannel?.trim().toLowerCase();
   const isGpsTestEnabled =
     !isReadOnly &&
     !isRetrospectiveCompletion &&
     route.isMine &&
-    runtimeAppVariant === "dev" &&
+    Boolean(route.startedAt) &&
+    isTestAccountModeEnabled() &&
     nativeBridge.runtime.isAvailable();
+  const indoorTestTarget = isGpsTestEnabled
+    ? sortedDays
+        .flatMap((routeDay) =>
+          [...routeDay.stops]
+            .sort((left, right) => left.order - right.order)
+            .map((stop) => ({ routeDay, stop }))
+        )
+        .find(({ stop }) => !isVisitedStop(stop)) ?? null
+    : null;
 
   const handleApplyGpsTestLocation = async (
     target: VisitCompletionTarget,
@@ -765,12 +778,14 @@ export function useDayRoutePopupController({
       canEditStartLocation:
         route.isMine && !isReadOnly && Boolean(route.startLocation),
       isRetrospectiveCompletion,
+      isVerificationBypassEnabled,
       canEditVerificationPhoto:
         route.isMine && isRetrospectiveCompletion && allowVisitCompletion,
       canToggleVisitStatus,
       visitEnabledDayIds,
       enableVerificationPhotoPreview,
       isGpsTestEnabled,
+      indoorTestTarget,
       gpsTestLocationStopId,
       directionsOpeningStopId,
       travelSegmentByKey,
@@ -785,6 +800,11 @@ export function useDayRoutePopupController({
       handleOpenPlaceDetail,
       handleOpenStopDirections,
       handleReplaceVerificationPhoto,
+      openIndoorTest: () => {
+        if (indoorTestTarget) {
+          setGpsTestTarget(indoorTestTarget);
+        }
+      },
       setGpsTestTarget,
       setVerificationPhotoPreviewTarget,
     },

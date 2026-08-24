@@ -203,9 +203,6 @@ const plugins: unknown[] = [
     {
       isAndroidBackgroundLocationEnabled: true,
       isAndroidForegroundServiceEnabled: true,
-      isIosBackgroundLocationEnabled: true,
-      locationAlwaysAndWhenInUsePermission:
-        "RouteOne이 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
       locationWhenInUsePermission:
         "RouteOne이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다."
     }
@@ -274,16 +271,11 @@ export default {
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
           "RouteOne이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
-        NSLocationAlwaysAndWhenInUseUsageDescription:
-          "RouteOne이 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
-        NSLocationAlwaysUsageDescription:
-          "RouteOne이 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
         NSCameraUsageDescription:
           "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
         NSPhotoLibraryUsageDescription:
           "RouteOne이 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다.",
-        LSApplicationQueriesSchemes: ["nmap"],
-        UIBackgroundModes: ["location"]
+        LSApplicationQueriesSchemes: ["nmap"]
       }
     },
     android: {

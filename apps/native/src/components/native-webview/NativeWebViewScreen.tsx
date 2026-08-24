@@ -32,6 +32,7 @@ import {
   handleNativeBridgeMessage,
   ROUTEONE_WEBVIEW_BRIDGE_SCRIPT
 } from "@/webview/bridge";
+import type { NativeAuthRole } from "@/auth/nativeAuthStorage";
 import {
   openNativeExternalUrl,
   shouldKeepUrlInWebView
@@ -46,6 +47,7 @@ import RouteOneLaunchScreen from "./RouteOneLaunchScreen";
 type NativeWebViewScreenProps = {
   appLanguage: AppLanguage;
   nativeAuthExpiresAt: number | null;
+  nativeAuthRole: NativeAuthRole | null;
   nativeAuthToken: string | null;
   onAppLanguageChange: (language: AppLanguage) => Promise<void> | void;
   onAuthSessionChange: (session: {
@@ -280,11 +282,14 @@ function readWebBundleAllowedOrigins(bundle: ResolvedWebBundle | null) {
 export default function NativeWebViewScreen({
   appLanguage,
   nativeAuthExpiresAt,
+  nativeAuthRole,
   nativeAuthToken,
   onAppLanguageChange,
   onAuthSessionChange
 }: NativeWebViewScreenProps) {
   const text = WEB_VIEW_TEXT[appLanguage];
+  const testAccountMode =
+    nativeAuthRole === "OWNER" || nativeAuthRole === "REVIEWER";
   const webViewRef = useRef<WebView>(null);
   const pendingNavigationPathRef = useRef<string | null>("/home");
   const fatalExitAlertShownRef = useRef(false);
@@ -324,9 +329,26 @@ export default function NativeWebViewScreen({
         }
       } catch (error) {}
     `;
+    const runtimeConfigScript = `
+      window.RouteOneRuntimeConfig = Object.assign(
+        {},
+        window.RouteOneRuntimeConfig || {},
+        {
+          testAccountMode: ${JSON.stringify(testAccountMode)},
+          reviewerVerificationBypass: ${JSON.stringify(
+            testAccountMode
+          )}
+        }
+      );
+    `;
 
-    return `${authScript}\n${languageScript}\n${ROUTEONE_WEBVIEW_BRIDGE_SCRIPT}`;
-  }, [appLanguage, nativeAuthExpiresAt, nativeAuthToken]);
+    return `${authScript}\n${languageScript}\n${runtimeConfigScript}\n${ROUTEONE_WEBVIEW_BRIDGE_SCRIPT}`;
+  }, [
+    appLanguage,
+    nativeAuthExpiresAt,
+    nativeAuthToken,
+    testAccountMode
+  ]);
 
   const requestFatalAppExit = useCallback(
     (message: string) => {
@@ -402,6 +424,7 @@ export default function NativeWebViewScreen({
           webBundleKind: currentBundle?.kind ?? "embedded"
         },
         {
+          locationTestModeEnabled: testAccountMode,
           onAppLanguageChange,
           onAuthSessionChange
         }
@@ -411,6 +434,7 @@ export default function NativeWebViewScreen({
       completeWebBundleLoad,
       onAppLanguageChange,
       onAuthSessionChange,
+      testAccountMode,
       text
     ]
   );

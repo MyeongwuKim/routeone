@@ -376,14 +376,43 @@ function MyRoutePage() {
   });
   const startRouteMutation = useMutation({
     mutationFn: (input: StartRouteInput) => routeApi.startRoute(input),
-    onSuccess: (data) => {
-      queryClient.setQueryData<MyRoutesQuery>(
+    onSuccess: async (data) => {
+      const nextRoutesData = queryClient.setQueryData<MyRoutesQuery>(
         MY_ROUTES_QUERY_KEY,
         (currentData) => upsertMyRouteCache(currentData, data.startRoute)
       );
       setStartDatePickerTarget(null);
       setStartTimePickerTarget(null);
-      showToast(text.myRoute.startSuccess);
+
+      try {
+        const result = await syncTodayRouteArrivalNotifications(
+          nextRoutesData?.myRoutes ?? [data.startRoute],
+          appLanguage
+        );
+        const didRegisterArrivalNotification =
+          result?.registrationStatus === "registered" ||
+          result?.registrationStatus === "delivered";
+
+        showToast(
+          didRegisterArrivalNotification
+            ? text.myRoute.startSuccessWithArrivalNotification
+            : text.myRoute.startSuccess
+        );
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : text.myRoute.arrivalNotificationRegistrationError;
+
+        console.error(
+          "Failed to register route arrival notification after starting route.",
+          error
+        );
+        showToast(
+          text.myRoute.startSuccessWithoutArrivalNotification(errorMessage),
+          4200
+        );
+      }
     },
     onError: (error) => {
       showToast(

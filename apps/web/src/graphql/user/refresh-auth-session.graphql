@@ -9,6 +9,7 @@ mutation RefreshAuthSession {
       avatarUrl
       authProviders
       locale
+      role
       createdAt
       updatedAt
     }

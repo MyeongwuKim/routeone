@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { GraphQLContext } from "../context.js";
+import { UserFacingError } from "../graphql/userFacingError.js";
 
 export type AuthTokenPayload = {
   userId: string;
@@ -132,5 +133,23 @@ export function readBearerToken(authorization?: string | string[]) {
 }
 
 export function requireUser(context: GraphQLContext) {
+  if (
+    !context.authenticatedUserId ||
+    !context.user ||
+    context.authenticatedUserId !== context.user.id
+  ) {
+    throw new UserFacingError("로그인이 필요합니다.");
+  }
+
   return context.user;
+}
+
+export function requireOwner(context: GraphQLContext) {
+  const user = requireUser(context);
+
+  if (user.role !== "OWNER") {
+    throw new UserFacingError("운영자 권한이 필요합니다.");
+  }
+
+  return user;
 }

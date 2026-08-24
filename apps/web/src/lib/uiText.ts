@@ -118,6 +118,8 @@ export type UiText = {
     accountId: string;
     loginMethods: string;
     joinedAt: string;
+    masterAccount: string;
+    reviewerAccount: string;
     providers: Record<AuthProvider, string>;
     managementSection: string;
     logout: string;
@@ -261,6 +263,9 @@ export type UiText = {
     deleteSuccess: string;
     deleteError: string;
     startSuccess: string;
+    startSuccessWithArrivalNotification: string;
+    startSuccessWithoutArrivalNotification: (error: string) => string;
+    arrivalNotificationRegistrationError: string;
     startError: string;
     futureStartError: string;
     viewConflictingRoute: string;
@@ -586,6 +591,9 @@ export type UiText = {
     cancelPhotoDelete: string;
     addVisitPhoto: string;
     replaceVisitPhoto: string;
+    indoorTestTitle: string;
+    indoorTestDescription: (title: string) => string;
+    indoorTestAction: string;
     gpsTestTitle: (title: string) => string;
     gpsTestDescription: string;
     gpsTestButton: string;
@@ -594,17 +602,29 @@ export type UiText = {
     gpsTestCloseAria: string;
     gpsTestPlaceLegend: string;
     gpsTestLocationLegend: string;
-    gpsTestInsideRadius: (distance: string) => string;
-    gpsTestOutsideRadius: (distance: string) => string;
+    gpsTestOutsidePreset: string;
+    gpsTestArrivalPreset: string;
+    gpsTestVisitPreset: string;
+    gpsTestInsideVisitRadius: (distance: string) => string;
+    gpsTestInsideArrivalRadius: (distance: string) => string;
+    gpsTestOutsideArrivalRadius: (distance: string) => string;
+    gpsTestAutoWalk: string;
+    gpsTestWalkingStep: (
+      current: number,
+      total: number,
+      distance: string
+    ) => string;
     gpsTestApplying: string;
     gpsTestApplyLocation: string;
     gpsTestAppliedWithNotification: string;
+    gpsTestAppliedInsideWithoutNotification: string;
     gpsTestAppliedWithoutNotification: string;
     gpsTestBackgroundRegistered: string;
     gpsTestBackgroundDelivered: string;
     gpsTestBackgroundNotRegistered: string;
     gpsTestBackgroundUnsupported: string;
     gpsTestUseRealLocation: string;
+    gpsTestContinueVisit: string;
     gpsTestCleared: string;
     gpsTestMoveFailed: string;
     gpsTestUnavailable: string;
@@ -1127,6 +1147,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       accountId: "아이디",
       loginMethods: "연결된 로그인",
       joinedAt: "가입일",
+      masterAccount: "마스터 계정",
+      reviewerAccount: "심사 계정",
       providers: {
         PASSWORD: "테스트용",
         GOOGLE: "Google",
@@ -1333,6 +1355,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       deleteSuccess: "일정을 삭제했어요.",
       deleteError: "일정을 삭제하지 못했어요.",
       startSuccess: "여행을 시작했어요.",
+      startSuccessWithArrivalNotification:
+        "여행을 시작했고 다음 장소 도착 알림도 등록했어요.",
+      startSuccessWithoutArrivalNotification: (error) =>
+        `여행은 시작했지만 도착 알림은 등록하지 못했어요. ${error}`,
+      arrivalNotificationRegistrationError:
+        "기기가 장소 도착 알림을 등록하지 못했어요.",
       startError: "여행을 시작하지 못했어요.",
       futureStartError: "미래 날짜의 여행은 아직 시작할 수 없어요.",
       viewConflictingRoute: "해당 일정 보기",
@@ -1685,6 +1713,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       cancelPhotoDelete: "취소",
       addVisitPhoto: "사진 추가",
       replaceVisitPhoto: "사진 변경",
+      indoorTestTitle: "실내 이동 테스트",
+      indoorTestDescription: (title) =>
+        `${title}까지 가상으로 이동해 도착 알림과 방문 인증을 확인해요.`,
+      indoorTestAction: "다음 장소로 가상 이동",
       gpsTestTitle: (title) => `${title} GPS 테스트`,
       gpsTestDescription:
         "보라색 마커로 앱 실행 중 위치를 테스트해요. 초록색 원은 300m 도착 반경이며, 종료 상태 알림 등록 여부는 아래에 따로 표시돼요.",
@@ -1694,14 +1726,24 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestCloseAria: "GPS 테스트 지도 닫기",
       gpsTestPlaceLegend: "장소",
       gpsTestLocationLegend: "테스트 위치",
-      gpsTestInsideRadius: (distance) =>
-        `장소까지 ${distance} · GPS 성공 예상`,
-      gpsTestOutsideRadius: (distance) =>
-        `장소까지 ${distance} · GPS 실패 예상`,
+      gpsTestOutsidePreset: "반경 밖 450m",
+      gpsTestArrivalPreset: "도착 알림 180m",
+      gpsTestVisitPreset: "방문 인증 30m",
+      gpsTestInsideVisitRadius: (distance) =>
+        `장소까지 ${distance} · 도착 알림과 방문 인증 성공 예상`,
+      gpsTestInsideArrivalRadius: (distance) =>
+        `장소까지 ${distance} · 도착 알림 성공, 방문 인증 실패 예상`,
+      gpsTestOutsideArrivalRadius: (distance) =>
+        `장소까지 ${distance} · 도착 알림과 방문 인증 실패 예상`,
+      gpsTestAutoWalk: "450m부터 가상으로 걷기",
+      gpsTestWalkingStep: (current, total, distance) =>
+        `가상 이동 ${current}/${total} · ${distance}`,
       gpsTestApplying: "적용 중",
       gpsTestApplyLocation: "이 위치 적용",
       gpsTestAppliedWithNotification:
         "테스트 위치를 적용했고 앱 실행 중 즉시 알림을 보냈어요.",
+      gpsTestAppliedInsideWithoutNotification:
+        "도착 반경 안에서 이동 중이에요. 같은 진입에서는 알림을 한 번만 보내요.",
       gpsTestAppliedWithoutNotification:
         "테스트 위치를 적용했어요. 도착 반경 밖이라 알림은 보내지 않았어요.",
       gpsTestBackgroundRegistered: "종료 상태 알림 · 등록됨",
@@ -1709,6 +1751,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestBackgroundNotRegistered: "종료 상태 알림 · 등록 안 됨",
       gpsTestBackgroundUnsupported: "종료 상태 알림 · 확인 불가",
       gpsTestUseRealLocation: "실제 GPS로 복귀",
+      gpsTestContinueVisit: "이 위치로 방문 인증 계속하기",
       gpsTestCleared: "테스트 위치를 해제하고 실제 GPS로 돌아왔어요.",
       gpsTestMoveFailed: "테스트 위치를 바꾸지 못했어요.",
       gpsTestUnavailable: "이 앱에서는 GPS 테스트를 사용할 수 없어요.",
@@ -2318,6 +2361,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       accountId: "Account ID",
       loginMethods: "Connected Sign-ins",
       joinedAt: "Joined",
+      masterAccount: "Master account",
+      reviewerAccount: "Reviewer account",
       providers: {
         PASSWORD: "Test-only",
         GOOGLE: "Google",
@@ -2547,6 +2592,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       deleteSuccess: "Schedule deleted.",
       deleteError: "Could not delete the schedule.",
       startSuccess: "Trip started.",
+      startSuccessWithArrivalNotification:
+        "Trip started and the next-place arrival alert is registered.",
+      startSuccessWithoutArrivalNotification: (error) =>
+        `The trip started, but the arrival alert was not registered. ${error}`,
+      arrivalNotificationRegistrationError:
+        "The device did not register the place arrival alert.",
       startError: "Could not start the trip.",
       futureStartError: "A trip with a future start date cannot be started yet.",
       viewConflictingRoute: "View schedule",
@@ -2901,6 +2952,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       cancelPhotoDelete: "Cancel",
       addVisitPhoto: "Add photo",
       replaceVisitPhoto: "Change photo",
+      indoorTestTitle: "Indoor movement test",
+      indoorTestDescription: (title) =>
+        `Move virtually toward ${title} to test the arrival alert and visit verification.`,
+      indoorTestAction: "Move toward next place",
       gpsTestTitle: (title) => `${title} GPS test`,
       gpsTestDescription:
         "Use the purple marker to test location while the app is open. The green circle is the 300 m arrival radius; closed-app registration appears below.",
@@ -2910,14 +2965,24 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestCloseAria: "Close GPS test map",
       gpsTestPlaceLegend: "Place",
       gpsTestLocationLegend: "Test location",
-      gpsTestInsideRadius: (distance) =>
-        `${distance} from place · GPS should pass`,
-      gpsTestOutsideRadius: (distance) =>
-        `${distance} from place · GPS should fail`,
+      gpsTestOutsidePreset: "Outside · 450 m",
+      gpsTestArrivalPreset: "Arrival · 180 m",
+      gpsTestVisitPreset: "Visit · 30 m",
+      gpsTestInsideVisitRadius: (distance) =>
+        `${distance} from place · Arrival and visit should pass`,
+      gpsTestInsideArrivalRadius: (distance) =>
+        `${distance} from place · Arrival should pass; visit should fail`,
+      gpsTestOutsideArrivalRadius: (distance) =>
+        `${distance} from place · Arrival and visit should fail`,
+      gpsTestAutoWalk: "Walk virtually from 450 m",
+      gpsTestWalkingStep: (current, total, distance) =>
+        `Virtual movement ${current}/${total} · ${distance}`,
       gpsTestApplying: "Applying",
       gpsTestApplyLocation: "Apply location",
       gpsTestAppliedWithNotification:
         "The test location was applied and an immediate in-app test alert was sent.",
+      gpsTestAppliedInsideWithoutNotification:
+        "Moving inside the arrival radius. Only one alert is sent for the same entry.",
       gpsTestAppliedWithoutNotification:
         "The test location was applied. No alert was sent outside the arrival radius.",
       gpsTestBackgroundRegistered: "Closed-app alert · Registered",
@@ -2925,6 +2990,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestBackgroundNotRegistered: "Closed-app alert · Not registered",
       gpsTestBackgroundUnsupported: "Closed-app alert · Unable to verify",
       gpsTestUseRealLocation: "Use real GPS",
+      gpsTestContinueVisit: "Continue to visit verification",
       gpsTestCleared: "The test location was cleared. Using real GPS.",
       gpsTestMoveFailed: "Could not change the test location.",
       gpsTestUnavailable: "GPS testing is unavailable in this app.",

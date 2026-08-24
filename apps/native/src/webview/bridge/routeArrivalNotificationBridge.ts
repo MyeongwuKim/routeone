@@ -74,6 +74,14 @@ const ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE = TRUTHY_ENV_VALUES.has(
 
 let routeArrivalDeliveryQueue: Promise<void> = Promise.resolve();
 let routeArrivalSyncQueue: Promise<void> = Promise.resolve();
+let routeArrivalTestState: {
+  stopId: string;
+  withinRadius: boolean;
+} | null = null;
+
+export function resetNativeRouteArrivalTestState() {
+  routeArrivalTestState = null;
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
@@ -564,6 +572,16 @@ async function ensureRouteArrivalPermissions(language: NativeAppLanguage) {
     );
   }
 
+  if (Platform.OS === "ios") {
+    // UNLocationNotificationTrigger is monitored by iOS after registration and
+    // only requires When In Use authorization. Requiring Always here prevents
+    // the system-managed alert from being registered for otherwise valid users.
+    return {
+      backgroundLocationStatus: "system-managed",
+      notificationStatus: notificationPermission.status,
+    };
+  }
+
   const backgroundLocationPermission =
     await Location.getBackgroundPermissionsAsync();
   const nextBackgroundLocationPermission =
@@ -608,6 +626,10 @@ async function stopRouteArrivalLocationTrackingIfStarted() {
 async function startRouteArrivalLocationTracking(
   language: NativeAppLanguage
 ) {
+  if (Platform.OS !== "android") {
+    return;
+  }
+
   const hasStarted = await Location.hasStartedLocationUpdatesAsync(
     ROUTE_ARRIVAL_LOCATION_TASK
   );
@@ -624,24 +646,18 @@ async function startRouteArrivalLocationTracking(
     deferredUpdatesInterval: 60_000,
     pausesUpdatesAutomatically: false,
     activityType: Location.ActivityType.OtherNavigation,
-    ...(Platform.OS === "ios"
-      ? {
-          showsBackgroundLocationIndicator: true,
-        }
-      : {
-          foregroundService: {
-            notificationTitle:
-              language === "en"
-                ? "RouteOne arrival alerts are active"
-                : "RouteOne 장소 도착 알림 사용 중",
-            notificationBody:
-              language === "en"
-                ? "Checking your location near the next destination."
-                : "다음 장소 근처인지 위치를 확인하고 있어요.",
-            notificationColor: "#0f766e",
-            killServiceOnDestroy: false,
-          },
-        }),
+    foregroundService: {
+      notificationTitle:
+        language === "en"
+          ? "RouteOne arrival alerts are active"
+          : "RouteOne 장소 도착 알림 사용 중",
+      notificationBody:
+        language === "en"
+          ? "Checking your location near the next destination."
+          : "다음 장소 근처인지 위치를 확인하고 있어요.",
+      notificationColor: "#0f766e",
+      killServiceOnDestroy: false,
+    },
   });
 }
 
@@ -797,7 +813,8 @@ export async function reconcileStoredRouteArrivalNotifications() {
 
   if (
     locationPermission.status !== "granted" ||
-    backgroundLocationPermission.status !== "granted" ||
+    (Platform.OS === "android" &&
+      backgroundLocationPermission.status !== "granted") ||
     !notificationPermission.granted ||
     placeByRegionId.size === 0
   ) {
@@ -830,9 +847,10 @@ export async function reconcileStoredRouteArrivalNotifications() {
       })),
       DEFAULT_GEOFENCE_RADIUS_METERS
     );
+    await stopRouteArrivalLocationTrackingIfStarted().catch(() => undefined);
+  } else {
+    await startRouteArrivalLocationTracking(places[0]?.language ?? "ko");
   }
-
-  await startRouteArrivalLocationTracking(places[0]?.language ?? "ko");
 
   await reconcileCurrentRouteArrival(
     places,
@@ -1053,9 +1071,25 @@ async function syncNativeRouteArrivalNotifications(
           radius,
         }))
       );
+
+      const hasStarted = await Location.hasStartedGeofencingAsync(
+        ROUTE_ARRIVAL_GEOFENCE_TASK
+      );
+
+      if (!hasStarted) {
+        throw new Error(
+          message.language === "en"
+            ? "The device did not register the place arrival alert. Keep the app open and try again."
+            : "기기가 장소 도착 알림을 등록하지 못했어요. 앱을 연 상태에서 다시 시도해 주세요."
+        );
+      }
     }
 
-    await startRouteArrivalLocationTracking(message.language);
+    if (Platform.OS === "ios") {
+      await stopRouteArrivalLocationTrackingIfStarted().catch(() => undefined);
+    } else {
+      await startRouteArrivalLocationTracking(message.language);
+    }
 
     await reconcileCurrentRouteArrival(places, radius).catch(() => undefined);
 
@@ -1097,10 +1131,14 @@ export function handleNativeRouteArrivalNotificationSyncRequest(
 
 export async function handleNativeRouteArrivalTestLocationRequest(
   message: NativeRouteArrivalTestLocationRequest,
-  webViewRef: WebViewRef
+  webViewRef: WebViewRef,
+  locationTestModeEnabled = false
 ) {
   try {
-    if (!ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE) {
+    if (
+      !ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE &&
+      !locationTestModeEnabled
+    ) {
       throw new Error(
         message.language === "en"
           ? "Arrival location testing is disabled in this build."
@@ -1110,6 +1148,7 @@ export async function handleNativeRouteArrivalTestLocationRequest(
 
     if (!message.place) {
       setNativeRouteArrivalTestPosition(null);
+      resetNativeRouteArrivalTestState();
       postNativeRouteArrivalTestLocationResponse(webViewRef, message.id, {
         ok: true,
         active: false,
@@ -1135,10 +1174,14 @@ export async function handleNativeRouteArrivalTestLocationRequest(
     const distanceMeters = calculateDistanceMeters(testPosition, place);
     const withinRadius =
       distanceMeters <= DEFAULT_GEOFENCE_RADIUS_METERS;
+    const didEnterArrivalRadius =
+      withinRadius &&
+      (routeArrivalTestState?.stopId !== place.stopId ||
+        routeArrivalTestState.withinRadius === false);
     const backgroundNotificationStatus =
       await getBackgroundNotificationStatus(place);
 
-    if (withinRadius) {
+    if (didEnterArrivalRadius) {
       await ensureRouteArrivalNotificationPermission(message.language);
       await deliverRouteArrivalNotification(place, getTodayDateKey(), {
         notificationId: `arrival-test:${place.routeId}:${place.stopId}:${Date.now()}`,
@@ -1147,6 +1190,10 @@ export async function handleNativeRouteArrivalTestLocationRequest(
       });
     }
 
+    routeArrivalTestState = {
+      stopId: place.stopId,
+      withinRadius,
+    };
     setNativeRouteArrivalTestPosition(testPosition);
     postNativeRouteArrivalTestLocationResponse(webViewRef, message.id, {
       ok: true,
@@ -1156,7 +1203,7 @@ export async function handleNativeRouteArrivalTestLocationRequest(
       lng: testPosition.lng,
       distanceMeters,
       withinRadius,
-      notificationScheduled: withinRadius,
+      notificationScheduled: didEnterArrivalRadius,
       backgroundNotificationStatus,
     });
   } catch (error) {

@@ -10,6 +10,8 @@
     "start": "node dist/server.js",
     "notifications:cleanup": "node dist/jobs/cleanupNotifications.js",
     "notifications:cleanup:dev": "tsx src/jobs/cleanupNotifications.ts",
+    "users:backfill-roles": "tsx src/scripts/backfillUserRoles.ts",
+    "contest:accounts": "tsx src/scripts/provisionContestAccounts.ts",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },

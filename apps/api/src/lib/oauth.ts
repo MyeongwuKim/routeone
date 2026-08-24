@@ -290,7 +290,9 @@ async function verifyGoogleIdentityToken(input: NativeOAuthLoginInput) {
     provider: "GOOGLE" as const,
     providerAccountId,
     email: tokenEmail ?? readStringClaim(input.email),
-    emailVerified: readBooleanClaim(parsedToken.payload.email_verified),
+    emailVerified:
+      Boolean(tokenEmail) &&
+      readBooleanClaim(parsedToken.payload.email_verified),
     displayName: getDisplayName(input, parsedToken.payload),
     avatarUrl:
       readStringClaim(input.avatarUrl) ?? readStringClaim(parsedToken.payload.picture),

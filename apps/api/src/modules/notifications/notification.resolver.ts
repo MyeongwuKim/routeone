@@ -288,6 +288,7 @@ type SendRouteReviewTestNotificationArgs = {
 function requireAuthenticatedNotificationUser(context: GraphQLContext) {
   if (
     !context.authenticatedUserId ||
+    !context.user ||
     context.authenticatedUserId !== context.user.id
   ) {
     throw new UserFacingError("로그인이 필요합니다.");

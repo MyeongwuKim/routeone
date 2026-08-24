@@ -5,6 +5,7 @@ import {
   createAuthToken,
   hashPassword,
   normalizeAccountId,
+  requireUser,
   verifyPassword,
 } from "../../lib/auth.js";
 import {
@@ -22,6 +23,12 @@ export const userTypeDefs = gql`
     UNKNOWN
   }
 
+  enum UserRole {
+    USER
+    REVIEWER
+    OWNER
+  }
+
   type User {
     id: ID!
     accountId: String
@@ -30,6 +37,7 @@ export const userTypeDefs = gql`
     avatarUrl: String
     authProviders: [AuthProvider!]!
     locale: String
+    role: UserRole!
     createdAt: DateTime!
     updatedAt: DateTime!
   }
@@ -86,9 +94,47 @@ type LoginWithNativeOAuthArgs = {
   input: NativeOAuthLoginInput;
 };
 
+const DEFAULT_OWNER_GOOGLE_EMAIL = "routeonekim@gmail.com";
+
+function getOwnerGoogleEmails() {
+  const configuredEmails = (
+    process.env.ROUTEONE_OWNER_GOOGLE_EMAILS ??
+    process.env.ROUTEONE_OWNER_GOOGLE_EMAIL ??
+    ""
+  )
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+  return new Set([DEFAULT_OWNER_GOOGLE_EMAIL, ...configuredEmails]);
+}
+
+function isOwnerGoogleIdentity(identity: VerifiedOAuthIdentity) {
+  return (
+    identity.provider === "GOOGLE" &&
+    identity.emailVerified &&
+    Boolean(
+      identity.email &&
+        getOwnerGoogleEmails().has(identity.email.trim().toLowerCase())
+    )
+  );
+}
+
 function normalizeDisplayName(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed || null;
+}
+
+function isPasswordAccountCreationEnabled() {
+  if (process.env.NODE_ENV !== "production") {
+    return true;
+  }
+
+  return ["1", "true", "yes", "on"].includes(
+    process.env.ROUTEONE_PASSWORD_ACCOUNT_SIGNUP_ENABLED
+      ?.trim()
+      .toLowerCase() ?? ""
+  );
 }
 
 function getOAuthFallbackDisplayName(identity: VerifiedOAuthIdentity) {
@@ -107,6 +153,7 @@ async function findOrCreateOAuthUser(
   context: GraphQLContext,
   identity: VerifiedOAuthIdentity
 ) {
+  const shouldBeOwner = isOwnerGoogleIdentity(identity);
   const existingAccount = await context.prisma.authAccount.findFirst({
     where: {
       provider: identity.provider,
@@ -119,14 +166,18 @@ async function findOrCreateOAuthUser(
 
   if (existingAccount) {
     const user = existingAccount.user;
+    const shouldUpdateAvatar =
+      Boolean(identity.avatarUrl) && user.avatarUrl !== identity.avatarUrl;
+    const shouldUpdateRole = shouldBeOwner && user.role !== "OWNER";
 
-    if (identity.avatarUrl && user.avatarUrl !== identity.avatarUrl) {
+    if (shouldUpdateAvatar || shouldUpdateRole) {
       return context.prisma.user.update({
         where: {
           id: user.id,
         },
         data: {
-          avatarUrl: identity.avatarUrl,
+          ...(shouldUpdateAvatar ? { avatarUrl: identity.avatarUrl } : {}),
+          ...(shouldUpdateRole ? { role: "OWNER" as const } : {}),
         },
       });
     }
@@ -149,6 +200,7 @@ async function findOrCreateOAuthUser(
         displayName: getOAuthFallbackDisplayName(identity),
         avatarUrl: identity.avatarUrl,
         locale: "ko",
+        role: shouldBeOwner ? "OWNER" : "USER",
       },
     }));
 
@@ -164,7 +216,8 @@ async function findOrCreateOAuthUser(
   if (
     existingUser &&
     ((identity.displayName && !existingUser.displayName) ||
-      (identity.avatarUrl && existingUser.avatarUrl !== identity.avatarUrl))
+      (identity.avatarUrl && existingUser.avatarUrl !== identity.avatarUrl) ||
+      (shouldBeOwner && existingUser.role !== "OWNER"))
   ) {
     return context.prisma.user.update({
       where: {
@@ -173,6 +226,7 @@ async function findOrCreateOAuthUser(
       data: {
         displayName: existingUser.displayName ?? identity.displayName,
         avatarUrl: identity.avatarUrl ?? existingUser.avatarUrl,
+        ...(shouldBeOwner ? { role: "OWNER" as const } : {}),
       },
     });
   }
@@ -256,6 +310,10 @@ export const userResolvers = {
         };
       }
 
+      if (!isPasswordAccountCreationEnabled()) {
+        throw new UserFacingError("등록된 테스트 계정 정보를 확인해 주세요.");
+      }
+
       const user = await context.prisma.user.create({
         data: {
           accountId,
@@ -288,7 +346,7 @@ export const userResolvers = {
       _args: unknown,
       context: GraphQLContext
     ) {
-      if (!context.authenticatedUserId) {
+      if (!context.authenticatedUserId || !context.user) {
         throw new UserFacingError(
           "로그인 세션이 만료되었어요. 다시 로그인해 주세요."
         );
@@ -306,6 +364,12 @@ export const userResolvers = {
     ) {
       if (!context.authenticatedUserId) {
         throw new UserFacingError("로그인한 계정만 탈퇴할 수 있습니다.");
+      }
+
+      const user = requireUser(context);
+
+      if (user.role !== "USER") {
+        throw new UserFacingError("운영 및 심사 계정은 앱에서 탈퇴할 수 없습니다.");
       }
 
       return deleteUserAccount(context.prisma, context.authenticatedUserId);

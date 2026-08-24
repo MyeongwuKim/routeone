@@ -7,30 +7,8 @@ export type GraphQLContext = {
   authenticatedUserId: string | null;
   authenticatedSessionExpiresAt: Date | null;
   prisma: PrismaClient;
-  user: User;
+  user: User | null;
 };
-
-const LOCAL_DEV_USER_EMAIL = "local@routeone.dev";
-
-async function getLocalDevUser() {
-  const existingUser = await prisma.user.findFirst({
-    where: {
-      email: LOCAL_DEV_USER_EMAIL,
-    },
-  });
-
-  if (existingUser) {
-    return existingUser;
-  }
-
-  return prisma.user.create({
-    data: {
-      email: LOCAL_DEV_USER_EMAIL,
-      displayName: "RouteOne Local User",
-      locale: "ko",
-    },
-  });
-}
 
 async function getAuthenticatedUserFromRequest(request?: FastifyRequest) {
   const token = readBearerToken(request?.headers.authorization);
@@ -58,12 +36,11 @@ export async function createContext(
   request?: FastifyRequest
 ): Promise<GraphQLContext> {
   const authenticatedSession = await getAuthenticatedUserFromRequest(request);
-  const user = authenticatedSession?.user ?? (await getLocalDevUser());
 
   return {
     authenticatedUserId: authenticatedSession?.user.id ?? null,
     authenticatedSessionExpiresAt: authenticatedSession?.expiresAt ?? null,
     prisma,
-    user,
+    user: authenticatedSession?.user ?? null,
   };
 }

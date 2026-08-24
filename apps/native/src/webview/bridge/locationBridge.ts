@@ -18,8 +18,10 @@ export function setNativeRouteArrivalTestPosition(
     : null;
 }
 
-async function getNativeCurrentPosition(): Promise<NativeLocationResponse> {
-  if (routeArrivalTestPosition?.ok) {
+async function getNativeCurrentPosition(
+  locationTestModeEnabled: boolean
+): Promise<NativeLocationResponse> {
+  if (locationTestModeEnabled && routeArrivalTestPosition?.ok) {
     return {
       ...routeArrivalTestPosition,
       timestamp: Date.now(),
@@ -34,13 +36,14 @@ async function getNativeCurrentPosition(): Promise<NativeLocationResponse> {
 
 export async function handleNativeLocationRequest(
   message: NativeLocationRequest,
-  webViewRef: WebViewRef
+  webViewRef: WebViewRef,
+  locationTestModeEnabled = false
 ) {
   try {
     postNativeLocationResponse(
       webViewRef,
       message.id,
-      await getNativeCurrentPosition()
+      await getNativeCurrentPosition(locationTestModeEnabled)
     );
   } catch (error) {
     postNativeLocationResponse(webViewRef, message.id, {

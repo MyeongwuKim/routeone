@@ -57,6 +57,10 @@ const DEFAULT_PLACE_PHOTO_LIMIT = 30;
 
 const MAX_PLACE_PHOTO_LIMIT = 60;
 const ROUTE_CORRECTION_GRACE_DAYS = 7;
+
+function canBypassVisitVerification(user: Pick<User, "role">) {
+  return user.role === "REVIEWER" || user.role === "OWNER";
+}
 const ROUTE_CORRECTION_TIME_ZONE = "Asia/Seoul";
 
 const PUBLISHABLE_PLACE_PHOTO_STATUSES = new Set<RouteStopVerificationStatus>([
@@ -130,9 +134,9 @@ async function assertRouteStopVisitDate(
   prisma: RouteServicePrisma,
   route: Route,
   stop: RouteStop,
-  options: { allowPast: boolean }
+  options: { allowPast: boolean; bypassVerification?: boolean }
 ) {
-  if (isDevVerificationBypassEnabled()) {
+  if (isDevVerificationBypassEnabled() || options.bypassVerification) {
     return;
   }
 
@@ -245,13 +249,14 @@ function getVisitVerificationStatus(
 function assertRouteStopGpsVerification(
   stop: RouteStop,
   verification: RouteStopVisitVerificationInput | null | undefined,
-  verificationStatus: RouteStopVerificationStatus
+  verificationStatus: RouteStopVerificationStatus,
+  bypassVerification = false
 ) {
   if (verificationStatus !== "GPS" && verificationStatus !== "GPS_PHOTO") {
     return;
   }
 
-  if (isDevVerificationBypassEnabled()) {
+  if (isDevVerificationBypassEnabled() || bypassVerification) {
     return;
   }
 
@@ -425,7 +430,8 @@ function buildRouteStopVisitData(
   stop: RouteStop,
   visited: boolean,
   verification?: RouteStopVisitVerificationInput | null,
-  actualStayMinutes?: number | null
+  actualStayMinutes?: number | null,
+  bypassVerification = false
 ) {
   if (!visited) {
     return {
@@ -455,7 +461,12 @@ function buildRouteStopVisitData(
     Boolean(photoUrl) &&
     (verificationStatus === "GPS_PHOTO" || verificationStatus === "MANUAL");
 
-  assertRouteStopGpsVerification(stop, verification, verificationStatus);
+  assertRouteStopGpsVerification(
+    stop,
+    verification,
+    verificationStatus,
+    bypassVerification
+  );
 
   const checkedInAt = stop.checkedInAt ?? (isGpsVerified ? visitedAt : null);
   const checkedOutAt = stop.checkedInAt ? visitedAt : null;
@@ -491,7 +502,8 @@ function buildRouteStopVisitData(
 
 function buildRouteStopCheckInData(
   stop: RouteStop,
-  verification: RouteStopVisitVerificationInput
+  verification: RouteStopVisitVerificationInput,
+  bypassVerification = false
 ): RouteStopVisitData {
   const checkedInAt = new Date();
   const verificationStatus = getVisitVerificationStatus(verification);
@@ -500,7 +512,12 @@ function buildRouteStopCheckInData(
     throw new UserFacingError("도착 인증은 GPS 확인이 필요해요.");
   }
 
-  assertRouteStopGpsVerification(stop, verification, verificationStatus);
+  assertRouteStopGpsVerification(
+    stop,
+    verification,
+    verificationStatus,
+    bypassVerification
+  );
 
   return {
     visitStatus: "PENDING",
@@ -834,7 +851,11 @@ export async function checkInRouteStop(
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
   assertRouteCorrectionWindow(route);
-  await assertRouteStopVisitDate(prisma, route, stop, { allowPast: false });
+  const bypassVerification = canBypassVisitVerification(user);
+  await assertRouteStopVisitDate(prisma, route, stop, {
+    allowPast: false,
+    bypassVerification,
+  });
 
   if (stop.visitStatus === "VISITED") {
     throw new UserFacingError("이미 방문 완료한 장소예요.");
@@ -844,7 +865,11 @@ export async function checkInRouteStop(
     return refreshRouteProgress(prisma, route.id);
   }
 
-  const checkInData = buildRouteStopCheckInData(stop, verification);
+  const checkInData = buildRouteStopCheckInData(
+    stop,
+    verification,
+    bypassVerification
+  );
 
   await prisma.routeStop.update({
     where: {
@@ -1052,7 +1077,10 @@ export async function completeRouteStopVisit(
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
   assertRouteCorrectionWindow(route);
-  await assertRouteStopVisitDate(prisma, route, stop, { allowPast: false });
+  await assertRouteStopVisitDate(prisma, route, stop, {
+    allowPast: false,
+    bypassVerification: canBypassVisitVerification(user),
+  });
 
   if (stop.visitStatus === "VISITED") {
     return refreshRouteAfterVisitChange(prisma, route);
@@ -1350,6 +1378,7 @@ export async function markRouteStopVisited(
 
     await assertRouteStopVisitDate(prisma, route, stop, {
       allowPast: !VERIFIED_ROUTE_STOP_STATUSES.has(verificationStatus),
+      bypassVerification: canBypassVisitVerification(user),
     });
   }
 
@@ -1357,7 +1386,8 @@ export async function markRouteStopVisited(
     stop,
     visited,
     verification,
-    actualStayMinutes
+    actualStayMinutes,
+    canBypassVisitVerification(user)
   );
   const nextStop: RouteStopStayContributionSource = {
     place: stop.place,

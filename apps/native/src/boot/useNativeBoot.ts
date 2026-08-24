@@ -6,7 +6,8 @@ import type { NativeAuthPayload } from "@/auth/nativeAuth";
 import {
   NATIVE_AUTH_SESSION_DURATION_MS,
   readStoredNativeAuthSession,
-  storeNativeAuthToken
+  storeNativeAuthToken,
+  type NativeAuthRole
 } from "@/auth/nativeAuthStorage";
 import { prepareNativeCurrentPosition } from "@/location/nativeCurrentPosition";
 
@@ -30,6 +31,8 @@ export function useNativeBoot() {
   const [bootStep, setBootStep] = useState<NativeBootStep>("checking");
   const [appLanguage, setAppLanguage] = useState<AppLanguage>("ko");
   const [nativeAuthToken, setNativeAuthToken] = useState<string | null>(null);
+  const [nativeAuthRole, setNativeAuthRole] =
+    useState<NativeAuthRole | null>(null);
   const [nativeAuthExpiresAt, setNativeAuthExpiresAt] = useState<number | null>(
     null
   );
@@ -98,6 +101,7 @@ export function useNativeBoot() {
 
       if (storedAuthSession.token) {
         setNativeAuthToken(storedAuthSession.token);
+        setNativeAuthRole(storedAuthSession.role);
         setNativeAuthExpiresAt(storedAuthSession.expiresAt);
         await prepareLocationBeforeWebView();
 
@@ -211,9 +215,10 @@ export function useNativeBoot() {
       const expiresAt = Date.now() + NATIVE_AUTH_SESSION_DURATION_MS;
 
       setNativeAuthToken(payload.token);
+      setNativeAuthRole(payload.user.role);
       setNativeAuthExpiresAt(expiresAt);
       setIsAuthSessionExpired(false);
-      await storeNativeAuthToken(payload.token, expiresAt);
+      await storeNativeAuthToken(payload.token, expiresAt, payload.user.role);
       await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
       await prepareLocationBeforeWebView();
       setBootStep("webview");
@@ -228,6 +233,9 @@ export function useNativeBoot() {
       reason: "logout" | "expired" | null;
     }) => {
       setNativeAuthToken(session.token);
+      if (!session.token) {
+        setNativeAuthRole(null);
+      }
       setNativeAuthExpiresAt(session.expiresAt);
       setIsAuthSessionExpired(session.reason === "expired");
       setBootStep(session.token ? "webview" : "login");
@@ -244,6 +252,7 @@ export function useNativeBoot() {
     isRequestingLocationPermission,
     isRequestingNotificationPermission,
     nativeAuthExpiresAt,
+    nativeAuthRole,
     nativeAuthToken,
     requestLocationPermission,
     requestNotificationPermission,

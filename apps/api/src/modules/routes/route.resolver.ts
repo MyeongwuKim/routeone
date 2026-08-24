@@ -514,7 +514,7 @@ type UpdateRouteStopVisitTimesArgs = {
 function sanitizeRouteStopPhotoForViewer(
   stop: RouteStop,
   route: Pick<Route, "ownerId" | "visibility">,
-  viewerId: string
+  viewerId: string | null
 ) {
   const isOwner = route.ownerId === viewerId;
   const isPhotoPublic =
@@ -875,7 +875,7 @@ export const routeResolvers = {
   },
   Route: {
     isMine(parent: Route, _args: unknown, context: GraphQLContext) {
-      return parent.ownerId === context.user.id;
+      return Boolean(context.user && parent.ownerId === context.user.id);
     },
     async likedByMe(parent: Route, _args: unknown, context: GraphQLContext) {
       if (!context.user) {
@@ -924,7 +924,7 @@ export const routeResolvers = {
       });
 
       return stops.map((stop) =>
-        sanitizeRouteStopPhotoForViewer(stop, parent, context.user.id)
+        sanitizeRouteStopPhotoForViewer(stop, parent, context.user?.id ?? null)
       );
     },
   },
@@ -951,7 +951,7 @@ export const routeResolvers = {
       }
 
       return stops.map((stop) =>
-        sanitizeRouteStopPhotoForViewer(stop, route, context.user.id)
+        sanitizeRouteStopPhotoForViewer(stop, route, context.user?.id ?? null)
       );
     },
   },

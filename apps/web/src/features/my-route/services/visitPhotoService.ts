@@ -38,15 +38,21 @@ function isTruthyEnv(value: unknown) {
 
 export function isVisitVerificationBypassEnabled() {
   return (
+    window.RouteOneRuntimeConfig?.reviewerVerificationBypass === true ||
     window.RouteOneRuntimeConfig?.devVerificationBypass === true ||
     isTruthyEnv(import.meta.env.VITE_ROUTEONE_DEV_VERIFICATION_BYPASS) ||
     isTruthyEnv(import.meta.env.VITE_DEV_VERIFICATION_BYPASS)
   );
 }
 
+export function isTestAccountModeEnabled() {
+  return window.RouteOneRuntimeConfig?.testAccountMode === true;
+}
+
 function isArrivalLocationTestEnabled() {
   return (
-    window.RouteOneRuntimeConfig?.arrivalNotificationTestMode === true &&
+    (isTestAccountModeEnabled() ||
+      window.RouteOneRuntimeConfig?.arrivalNotificationTestMode === true) &&
     nativeBridge.runtime.isAvailable()
   );
 }

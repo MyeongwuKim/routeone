@@ -179,6 +179,12 @@ function MyAccountPage() {
   );
   const identifier =
     getAccountIdentifier(user) ?? text.myInfo.localTestAccount;
+  const accountRoleLabel =
+    user?.role === "OWNER"
+      ? text.account.masterAccount
+      : user?.role === "REVIEWER"
+        ? text.account.reviewerAccount
+        : null;
   const isBusy = isLoggingOut || isDeleting;
 
   useEffect(() => {
@@ -319,6 +325,11 @@ function MyAccountPage() {
               {identifier}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
+              {accountRoleLabel ? (
+                <span className="inline-flex items-center rounded-full bg-violet-600 px-2.5 py-1 text-[11px] font-black text-white">
+                  {accountRoleLabel}
+                </span>
+              ) : null}
               {authProviders.map((provider) => (
                 <span
                   key={provider}
@@ -400,18 +411,22 @@ function MyAccountPage() {
           }}
         />
 
-        <div className="border-b border-brand-50" />
+        {user?.role === "USER" ? (
+          <>
+            <div className="border-b border-brand-50" />
 
-        <AccountActionRow
-          icon={<MdDeleteOutline />}
-          title={
-            isDeleting ? text.account.deleting : text.account.deleteAccount
-          }
-          description={text.account.deleteAccountDescription}
-          tone="danger"
-          disabled={isBusy}
-          onClick={handleRequestDeleteAccount}
-        />
+            <AccountActionRow
+              icon={<MdDeleteOutline />}
+              title={
+                isDeleting ? text.account.deleting : text.account.deleteAccount
+              }
+              description={text.account.deleteAccountDescription}
+              tone="danger"
+              disabled={isBusy}
+              onClick={handleRequestDeleteAccount}
+            />
+          </>
+        ) : null}
       </section>
     </section>
   );

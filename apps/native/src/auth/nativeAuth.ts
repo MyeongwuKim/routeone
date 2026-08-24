@@ -6,6 +6,7 @@ export type NativeAuthUser = {
   email: string | null;
   displayName: string | null;
   locale: string | null;
+  role: "USER" | "REVIEWER" | "OWNER";
 };
 
 export type NativeAuthPayload = {
@@ -26,6 +27,7 @@ const AUTH_USER_FIELDS = `
   email
   displayName
   locale
+  role
 `;
 
 const LOGIN_WITH_PASSWORD_MUTATION = `

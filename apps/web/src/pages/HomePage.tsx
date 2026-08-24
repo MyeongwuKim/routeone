@@ -81,7 +81,8 @@ function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasAuthToken = Boolean(getAuthToken());
   const serviceArea = useEffectiveServiceArea();
-  const canSelectServiceArea = isDevelopmentServiceAreaEnabled();
+  const isDevelopmentRuntime = isDevelopmentServiceAreaEnabled();
+  const canSelectServiceArea = isDevelopmentRuntime;
   const developmentFixedRegion = canSelectServiceArea
     ? serviceArea.developmentFixedRegion
     : undefined;
@@ -199,6 +200,10 @@ function HomePage() {
   ]);
   const testNotificationMutation = useMutation({
     mutationFn: async () => {
+      if (!isDevelopmentRuntime) {
+        throw new Error("Festival test notifications are disabled in prod.");
+      }
+
       await registerNativePushDevice();
 
       const result = await notificationApi.sendFestivalTest();
@@ -893,7 +898,8 @@ function HomePage() {
         />
       ) : null}
 
-      {shouldShowInteractiveMapUi &&
+      {isDevelopmentRuntime &&
+      shouldShowInteractiveMapUi &&
       hasAuthToken &&
       serviceArea.hasFestivalSource ? (
         <div className="pointer-events-none absolute bottom-20 right-4 z-30 flex flex-col items-end gap-2">

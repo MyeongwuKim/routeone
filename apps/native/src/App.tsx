@@ -32,6 +32,7 @@ export default function App() {
     isRequestingLocationPermission,
     isRequestingNotificationPermission,
     nativeAuthExpiresAt,
+    nativeAuthRole,
     nativeAuthToken,
     requestLocationPermission,
     requestNotificationPermission,
@@ -219,8 +220,10 @@ export default function App() {
             void nativeLogin.handlePasswordLogin();
           }}
           password={nativeLogin.password}
-          showTestAccountLogin={
-            WEB_BUNDLE_UPDATE_CONFIG.appVariant !== "prod"
+          passwordLoginMode={
+            WEB_BUNDLE_UPDATE_CONFIG.appVariant === "prod"
+              ? "reviewer"
+              : "test"
           }
           toastMessage={isAuthSessionExpired ? text.sessionExpired : null}
         />
@@ -232,6 +235,7 @@ export default function App() {
     <NativeWebViewScreen
       appLanguage={appLanguage}
       nativeAuthExpiresAt={nativeAuthExpiresAt}
+      nativeAuthRole={nativeAuthRole}
       nativeAuthToken={nativeAuthToken}
       onAppLanguageChange={updateAppLanguage}
       onAuthSessionChange={handleNativeAuthSessionChange}
