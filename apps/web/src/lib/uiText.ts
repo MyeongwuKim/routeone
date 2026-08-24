@@ -609,6 +609,9 @@ export type UiText = {
     gpsTestInsideArrivalRadius: (distance: string) => string;
     gpsTestOutsideArrivalRadius: (distance: string) => string;
     gpsTestAutoWalk: string;
+    gpsTestResolvingRealLocation: string;
+    gpsTestRealLocationUnavailable: string;
+    gpsTestRealLocationStart: (distance: string) => string;
     gpsTestWalkingStep: (
       current: number,
       total: number,
@@ -1719,7 +1722,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       indoorTestAction: "다음 장소로 가상 이동",
       gpsTestTitle: (title) => `${title} GPS 테스트`,
       gpsTestDescription:
-        "보라색 마커로 앱 실행 중 위치를 테스트해요. 초록색 원은 300m 도착 반경이며, 종료 상태 알림 등록 여부는 아래에 따로 표시돼요.",
+        "실제 현재 위치에서 출발해 목적지까지 가상으로 이동해요. 초록색 원은 300m 도착 반경이며, 종료 상태 알림 등록 여부는 아래에 따로 표시돼요.",
       gpsTestButton: "테스트",
       gpsTestActiveButton: "테스트 중",
       gpsTestOpenAria: (title) => `${title} GPS 테스트 지도 열기`,
@@ -1735,7 +1738,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `장소까지 ${distance} · 도착 알림 성공, 방문 인증 실패 예상`,
       gpsTestOutsideArrivalRadius: (distance) =>
         `장소까지 ${distance} · 도착 알림과 방문 인증 실패 예상`,
-      gpsTestAutoWalk: "450m부터 가상으로 걷기",
+      gpsTestAutoWalk: "현재 위치에서 가상으로 출발",
+      gpsTestResolvingRealLocation: "실제 현재 위치 확인 중",
+      gpsTestRealLocationUnavailable:
+        "실제 현재 위치를 확인하지 못했어요. 위치 권한을 확인한 뒤 다시 열어 주세요.",
+      gpsTestRealLocationStart: (distance) =>
+        `현재 위치에서 출발 · 목적지까지 ${distance}`,
       gpsTestWalkingStep: (current, total, distance) =>
         `가상 이동 ${current}/${total} · ${distance}`,
       gpsTestApplying: "적용 중",
@@ -2958,7 +2966,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       indoorTestAction: "Move toward next place",
       gpsTestTitle: (title) => `${title} GPS test`,
       gpsTestDescription:
-        "Use the purple marker to test location while the app is open. The green circle is the 300 m arrival radius; closed-app registration appears below.",
+        "Start from your real current location and move virtually toward the destination. The green circle is the 300 m arrival radius; closed-app registration appears below.",
       gpsTestButton: "Test",
       gpsTestActiveButton: "Testing",
       gpsTestOpenAria: (title) => `Open the GPS test map for ${title}`,
@@ -2974,7 +2982,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `${distance} from place · Arrival should pass; visit should fail`,
       gpsTestOutsideArrivalRadius: (distance) =>
         `${distance} from place · Arrival and visit should fail`,
-      gpsTestAutoWalk: "Walk virtually from 450 m",
+      gpsTestAutoWalk: "Start virtually from current location",
+      gpsTestResolvingRealLocation: "Finding your real current location",
+      gpsTestRealLocationUnavailable:
+        "Could not find your real current location. Check location permission and reopen this screen.",
+      gpsTestRealLocationStart: (distance) =>
+        `Starting at your current location · ${distance} to destination`,
       gpsTestWalkingStep: (current, total, distance) =>
         `Virtual movement ${current}/${total} · ${distance}`,
       gpsTestApplying: "Applying",

@@ -60,6 +60,7 @@ export type NativePermissionStatus =
 export type NativeLocationRequest = {
   type: "routeone:native-location-current";
   id: string;
+  useRealPosition?: boolean;
 };
 
 export type NativePhotoRequest = {

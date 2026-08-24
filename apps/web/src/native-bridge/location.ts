@@ -1,7 +1,9 @@
 import { getNativeBridgeApi } from "./runtime";
 
-export function getNativeCurrentPosition() {
+export function getNativeCurrentPosition(options?: {
+  useRealPosition?: boolean;
+}) {
   const getCurrentPosition = getNativeBridgeApi()?.getCurrentPosition;
 
-  return getCurrentPosition ? getCurrentPosition() : null;
+  return getCurrentPosition ? getCurrentPosition(options) : null;
 }

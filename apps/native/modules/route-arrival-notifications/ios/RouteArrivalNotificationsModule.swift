@@ -3,6 +3,8 @@ import ExpoModulesCore
 import UserNotifications
 
 private let routeArrivalNotificationType = "route-arrival"
+private let minimumRouteArrivalMonitoringRadiusMeters = 300.0
+private let maximumRouteArrivalMonitoringRadiusMeters = 700.0
 
 private struct RouteArrivalNotificationRecord: Record {
   @Field
@@ -75,7 +77,10 @@ public final class RouteArrivalNotificationsModule: Module {
           .filter { self.isRouteArrivalNotification($0.request.content) }
           .map { $0.request.identifier }
       )
-      let radius = max(300, min(500, radiusMeters.rounded()))
+      let monitoredRadius = max(
+        minimumRouteArrivalMonitoringRadiusMeters,
+        min(maximumRouteArrivalMonitoringRadiusMeters, radiusMeters.rounded())
+      )
       var requestsByIdentifier: [String: UNNotificationRequest] = [:]
 
       for notification in notifications where !deliveredIdentifiers.contains(notification.identifier) {
@@ -101,7 +106,7 @@ public final class RouteArrivalNotificationsModule: Module {
         )
         let region = CLCircularRegion(
           center: coordinate,
-          radius: radius,
+          radius: monitoredRadius,
           identifier: notification.regionIdentifier
         )
         region.notifyOnEntry = true

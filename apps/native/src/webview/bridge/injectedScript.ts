@@ -621,7 +621,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
         );
       });
     },
-    getCurrentPosition: function getCurrentPosition() {
+    getCurrentPosition: function getCurrentPosition(options) {
       if (!window.ReactNativeWebView) {
         return Promise.reject(new Error("Native bridge is not available"));
       }
@@ -634,7 +634,8 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
         window.ReactNativeWebView.postMessage(
           JSON.stringify({
             type: "routeone:native-location-current",
-            id: requestId
+            id: requestId,
+            useRealPosition: Boolean(options && options.useRealPosition)
           })
         );
       });

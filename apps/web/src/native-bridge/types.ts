@@ -177,7 +177,9 @@ export type NativeAuthSessionEndReason = "logout" | "expired";
 
 export type NativeBridgeApi = {
   getAppInfo?: () => Promise<NativeAppInfo>;
-  getCurrentPosition?: () => Promise<NativePosition>;
+  getCurrentPosition?: (options?: {
+    useRealPosition?: boolean;
+  }) => Promise<NativePosition>;
   takeVisitPhoto?: (options?: {
     source?: NativeVisitPhotoSource;
     uploadTarget?: NativePhotoUploadTarget;

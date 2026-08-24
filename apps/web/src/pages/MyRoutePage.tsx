@@ -387,7 +387,8 @@ function MyRoutePage() {
       try {
         const result = await syncTodayRouteArrivalNotifications(
           nextRoutesData?.myRoutes ?? [data.startRoute],
-          appLanguage
+          appLanguage,
+          data.startRoute.id
         );
         const didRegisterArrivalNotification =
           result?.registrationStatus === "registered" ||

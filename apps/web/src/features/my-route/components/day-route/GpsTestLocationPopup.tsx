@@ -8,7 +8,10 @@ import NaverMapView, {
 } from "@/components/map/NaverMapView";
 import { calculateDistanceMeters } from "@/lib/gangwonBoundaryUtils";
 import { useUiText } from "@/lib/uiText";
-import type { NativeArrivalTestLocationResult } from "@/native-bridge";
+import {
+  nativeBridge,
+  type NativeArrivalTestLocationResult,
+} from "@/native-bridge";
 import type { VisitCompletionTarget } from "../../models/dayRouteDialogTypes";
 
 type TestLocation = {
@@ -33,8 +36,15 @@ const VISIT_RADIUS_METERS = 100;
 const OUTSIDE_ARRIVAL_PRESET_METERS = 450;
 const ARRIVAL_PRESET_METERS = 180;
 const VISIT_PRESET_METERS = 30;
-const AUTO_WALK_DISTANCES_METERS = [450, 350, 290, 180, 30] as const;
-const AUTO_WALK_STEP_DELAY_MS = 900;
+const NEARBY_AUTO_WALK_DISTANCES_METERS = [
+  1000,
+  450,
+  350,
+  290,
+  180,
+  30,
+] as const;
+const AUTO_WALK_STEP_DELAY_MS = 700;
 
 function waitForAutoWalkStep() {
   return new Promise<void>((resolve) => {
@@ -55,6 +65,57 @@ function getOffsetTestLocation(
     lat: place.lat,
     lng: place.lng + longitudeOffset,
   };
+}
+
+function interpolateLocation(
+  start: TestLocation,
+  target: TestLocation,
+  progress: number
+) {
+  const normalizedProgress = Math.max(0, Math.min(1, progress));
+
+  return {
+    lat: start.lat + (target.lat - start.lat) * normalizedProgress,
+    lng: start.lng + (target.lng - start.lng) * normalizedProgress,
+  };
+}
+
+function createAutoWalkSteps(
+  start: TestLocation,
+  target: TestLocation
+) {
+  const totalDistanceMeters = calculateDistanceMeters(start, target);
+  const acceleratedDistances =
+    totalDistanceMeters > 2000
+      ? [totalDistanceMeters * 0.65, totalDistanceMeters * 0.3]
+      : [];
+  const remainingDistances = [
+    totalDistanceMeters,
+    ...acceleratedDistances,
+    ...NEARBY_AUTO_WALK_DISTANCES_METERS,
+  ]
+    .filter(
+      (distance) =>
+        distance <= totalDistanceMeters &&
+        (distance === totalDistanceMeters || distance >= VISIT_PRESET_METERS)
+    )
+    .sort((left, right) => right - left)
+    .filter(
+      (distance, index, distances) =>
+        index === 0 || Math.abs(distances[index - 1] - distance) >= 10
+    );
+
+  return remainingDistances.map((remainingDistanceMeters) => ({
+    distanceMeters: remainingDistanceMeters,
+    position:
+      totalDistanceMeters <= 0
+        ? target
+        : interpolateLocation(
+            start,
+            target,
+            1 - remainingDistanceMeters / totalDistanceMeters
+          ),
+  }));
 }
 
 function getInitialTestLocation(
@@ -151,18 +212,27 @@ function GpsTestLocationPopup({
   const text = useUiText();
   const mapInstanceRef = useRef<NaverMapInstance | null>(null);
   const testMarkerRef = useRef<NaverMarkerInstance | null>(null);
-  const initialLocation = useMemo(
+  const fallbackInitialLocation = useMemo(
     () => getInitialTestLocation(target, activeLocation),
     [activeLocation, target]
   );
+  const [realStartLocation, setRealStartLocation] =
+    useState<TestLocation | null>(null);
+  const [isResolvingRealStart, setIsResolvingRealStart] = useState(true);
+  const [realStartError, setRealStartError] = useState<string | null>(null);
+  const initialLocation = realStartLocation ?? fallbackInitialLocation;
   const [draftLocation, setDraftLocation] =
-    useState<TestLocation>(initialLocation);
+    useState<TestLocation>(fallbackInitialLocation);
   const [lastResult, setLastResult] =
     useState<NativeArrivalTestLocationResult | null>(null);
   const [isAutoWalking, setIsAutoWalking] = useState(false);
   const [autoWalkStepIndex, setAutoWalkStepIndex] = useState<number | null>(
     null
   );
+  const [autoWalkStepCount, setAutoWalkStepCount] = useState(0);
+  const [autoWalkDistanceMeters, setAutoWalkDistanceMeters] = useState<
+    number | null
+  >(null);
   const autoWalkRunIdRef = useRef(0);
   const placeLocation = target.stop.place;
   const distanceMeters = calculateDistanceMeters(
@@ -172,14 +242,53 @@ function GpsTestLocationPopup({
   const isInsideArrivalRadius = distanceMeters <= ARRIVAL_RADIUS_METERS;
   const isInsideVisitRadius = distanceMeters <= VISIT_RADIUS_METERS;
   const mapResetKey = `${target.stop.id}:${initialLocation.lat}:${initialLocation.lng}`;
-  const isBusy = isApplying || isAutoWalking;
+  const isBusy = isApplying || isAutoWalking || isResolvingRealStart;
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    let isActive = true;
+    const positionRequest = nativeBridge.location.getCurrentPosition({
+      useRealPosition: true,
+    });
+    const realPositionRequest =
+      positionRequest ??
+      Promise.reject(
+        new Error(text.dayRoute.gpsTestRealLocationUnavailable)
+      );
+
+    void realPositionRequest
+      .then((position) => {
+        if (!isActive) {
+          return;
+        }
+
+        const nextLocation = {
+          lat: position.lat,
+          lng: position.lng,
+        };
+        setRealStartLocation(nextLocation);
+        setDraftLocation(nextLocation);
+        setLastResult(null);
+      })
+      .catch((error) => {
+        if (isActive) {
+          setRealStartError(
+            error instanceof Error
+              ? error.message
+              : text.dayRoute.gpsTestRealLocationUnavailable
+          );
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsResolvingRealStart(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
       autoWalkRunIdRef.current += 1;
-    },
-    []
-  );
+    };
+  }, [target.stop.id, text.dayRoute.gpsTestRealLocationUnavailable]);
 
   const updateDraftLocation = useCallback(
     (nextLocation: TestLocation, options: { pan?: boolean } = {}) => {
@@ -315,34 +424,31 @@ function GpsTestLocationPopup({
   );
 
   const handleAutoWalk = async () => {
-    if (isBusy) {
+    if (isBusy || !realStartLocation) {
       return;
     }
 
+    const steps = createAutoWalkSteps(realStartLocation, placeLocation);
     const runId = autoWalkRunIdRef.current + 1;
     autoWalkRunIdRef.current = runId;
     setIsAutoWalking(true);
     setAutoWalkStepIndex(0);
+    setAutoWalkStepCount(steps.length);
+    setAutoWalkDistanceMeters(steps[0]?.distanceMeters ?? null);
     setLastResult(null);
 
     try {
-      for (
-        let index = 0;
-        index < AUTO_WALK_DISTANCES_METERS.length;
-        index += 1
-      ) {
+      for (let index = 0; index < steps.length; index += 1) {
         if (autoWalkRunIdRef.current !== runId) {
           return;
         }
 
-        const position = getOffsetTestLocation(
-          placeLocation,
-          AUTO_WALK_DISTANCES_METERS[index]
-        );
+        const step = steps[index];
         setAutoWalkStepIndex(index);
-        updateDraftLocation(position, { pan: true });
+        setAutoWalkDistanceMeters(step.distanceMeters);
+        updateDraftLocation(step.position, { pan: true });
 
-        const result = await onApply(target, position);
+        const result = await onApply(target, step.position);
 
         if (!result || autoWalkRunIdRef.current !== runId) {
           return;
@@ -350,7 +456,7 @@ function GpsTestLocationPopup({
 
         setLastResult(result);
 
-        if (index < AUTO_WALK_DISTANCES_METERS.length - 1) {
+        if (index < steps.length - 1) {
           await waitForAutoWalkStep();
         }
       }
@@ -378,7 +484,7 @@ function GpsTestLocationPopup({
             type="button"
             aria-label={text.dayRoute.gpsTestCloseAria}
             onClick={onClose}
-            disabled={isBusy}
+            disabled={isBusy || !realStartLocation}
             className="inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-violet-200 bg-violet-50 text-xl text-violet-700 disabled:opacity-45 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-100"
           >
             <IoClose />
@@ -416,16 +522,31 @@ function GpsTestLocationPopup({
             className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 px-3 py-3 text-sm font-black text-white disabled:opacity-45"
           >
             <MdGpsFixed className="text-base" />
-            {isAutoWalking && autoWalkStepIndex != null
+            {isResolvingRealStart
+              ? text.dayRoute.gpsTestResolvingRealLocation
+              : isAutoWalking &&
+                  autoWalkStepIndex != null &&
+                  autoWalkDistanceMeters != null
               ? text.dayRoute.gpsTestWalkingStep(
                   autoWalkStepIndex + 1,
-                  AUTO_WALK_DISTANCES_METERS.length,
-                  formatDistance(
-                    AUTO_WALK_DISTANCES_METERS[autoWalkStepIndex]
-                  )
+                  autoWalkStepCount,
+                  formatDistance(autoWalkDistanceMeters)
                 )
               : text.dayRoute.gpsTestAutoWalk}
           </button>
+          {realStartError ? (
+            <p className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 dark:bg-rose-400/10 dark:text-rose-100">
+              {realStartError}
+            </p>
+          ) : realStartLocation ? (
+            <p className="mb-3 rounded-xl bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 dark:bg-sky-400/10 dark:text-sky-100">
+              {text.dayRoute.gpsTestRealLocationStart(
+                formatDistance(
+                  calculateDistanceMeters(realStartLocation, placeLocation)
+                )
+              )}
+            </p>
+          ) : null}
           <div className="mb-3 grid grid-cols-3 gap-2">
             {[
               {

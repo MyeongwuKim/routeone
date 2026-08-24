@@ -20,9 +20,26 @@ function isStartedActiveRoute(route: MyRoute) {
 
 function getNativeRouteArrivalNotificationPlaces(
   routes: MyRoute[],
-  todayKey = getTodayDateKey()
+  todayKey = getTodayDateKey(),
+  preferredRouteId?: string
 ): NativeArrivalNotificationPlace[] {
-  return routes.flatMap((route) => {
+  const prioritizedRoutes = [...routes].sort((left, right) => {
+    if (left.id === preferredRouteId && right.id === preferredRouteId) {
+      return 0;
+    }
+
+    if (left.id === preferredRouteId) {
+      return -1;
+    }
+
+    if (right.id === preferredRouteId) {
+      return 1;
+    }
+
+    return (right.startedAt ?? "").localeCompare(left.startedAt ?? "");
+  });
+
+  return prioritizedRoutes.flatMap((route) => {
     if (!isStartedActiveRoute(route)) {
       return [];
     }
@@ -57,12 +74,17 @@ function getNativeRouteArrivalNotificationPlaces(
 
 export async function syncTodayRouteArrivalNotifications(
   routes: MyRoute[],
-  language: AppLanguage
+  language: AppLanguage,
+  preferredRouteId?: string
 ) {
   try {
     const settings = await notificationApi.settings();
     const places = settings.notificationSettings.routeArrivalEnabled
-      ? getNativeRouteArrivalNotificationPlaces(routes)
+      ? getNativeRouteArrivalNotificationPlaces(
+          routes,
+          getTodayDateKey(),
+          preferredRouteId
+        )
       : [];
 
     return await nativeBridge.notifications.syncRouteArrivals({

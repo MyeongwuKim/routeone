@@ -62,6 +62,10 @@ const DELIVERED_NOTIFICATION_HISTORY_TTL_MS =
 const DEFAULT_GEOFENCE_RADIUS_METERS = 300;
 const MIN_GEOFENCE_RADIUS_METERS = 300;
 const MAX_GEOFENCE_RADIUS_METERS = 500;
+const IOS_REGION_DETECTION_BUFFER_METERS = 200;
+const IOS_REGION_REGISTRATION_MARGIN_METERS = 50;
+const MAX_IOS_MONITORING_RADIUS_METERS =
+  MAX_GEOFENCE_RADIUS_METERS + IOS_REGION_DETECTION_BUFFER_METERS;
 const CURRENT_POSITION_MAX_AGE_MS = 1000 * 60;
 const CURRENT_POSITION_TIMEOUT_MS = 6000;
 const EARTH_RADIUS_METERS = 6_371_000;
@@ -532,7 +536,11 @@ async function ensureRouteArrivalNotificationPermission(
 
   const currentNotificationPermission =
     await Notifications.getPermissionsAsync();
-  const notificationPermission = currentNotificationPermission.granted
+  const hasCurrentAlertPermission =
+    currentNotificationPermission.granted &&
+    (Platform.OS !== "ios" ||
+      currentNotificationPermission.ios?.allowsAlert !== false);
+  const notificationPermission = hasCurrentAlertPermission
     ? currentNotificationPermission
     : await Notifications.requestPermissionsAsync({
         ios: {
@@ -541,12 +549,16 @@ async function ensureRouteArrivalNotificationPermission(
           allowSound: true,
         },
       });
+  const hasAlertPermission =
+    notificationPermission.granted &&
+    (Platform.OS !== "ios" ||
+      notificationPermission.ios?.allowsAlert !== false);
 
-  if (!notificationPermission.granted) {
+  if (!hasAlertPermission) {
     throw new Error(
       language === "en"
-        ? "Allow notifications to receive alerts near your destinations."
-        : "알림 권한을 허용해야 장소 근처 알림을 받을 수 있어요."
+        ? "Enable notification alerts in iPhone Settings to receive destination alerts."
+        : "iPhone 설정에서 알림 배너를 켜야 장소 근처 알림을 받을 수 있어요."
     );
   }
 
@@ -569,6 +581,17 @@ async function ensureRouteArrivalPermissions(language: NativeAppLanguage) {
       language === "en"
         ? "Allow location access to receive alerts near your destinations."
         : "위치 권한을 허용해야 장소 근처 알림을 받을 수 있어요."
+    );
+  }
+
+  if (
+    Platform.OS === "ios" &&
+    nextForegroundLocationPermission.ios?.accuracy === "reduced"
+  ) {
+    throw new Error(
+      language === "en"
+        ? "Enable Precise Location in iPhone Settings for 300 m arrival alerts."
+        : "300m 도착 알림을 받으려면 iPhone 설정에서 정확한 위치를 켜 주세요."
     );
   }
 
@@ -780,11 +803,15 @@ async function reconcileRouteArrivalAtPosition(
 
 async function reconcileCurrentRouteArrival(
   places: StoredRouteArrivalPlace[],
-  radiusMeters: number
+  radiusMeters: number,
+  knownCurrentPosition?: Location.LocationObject | null
 ) {
   await reconcilePresentedRouteArrivalNotifications(places);
 
-  const currentPosition = await getCurrentRouteArrivalPosition(radiusMeters);
+  const currentPosition =
+    knownCurrentPosition === undefined
+      ? await getCurrentRouteArrivalPosition(radiusMeters)
+      : knownCurrentPosition;
 
   if (!currentPosition) {
     return;
@@ -794,6 +821,52 @@ async function reconcileCurrentRouteArrival(
     places,
     radiusMeters,
     currentPosition
+  );
+}
+
+function getIosMonitoringRadiusMeters(
+  places: StoredRouteArrivalPlace[],
+  arrivalRadiusMeters: number,
+  currentPosition: Location.LocationObject | null
+) {
+  const preferredMonitoringRadius = Math.min(
+    MAX_IOS_MONITORING_RADIUS_METERS,
+    arrivalRadiusMeters + IOS_REGION_DETECTION_BUFFER_METERS
+  );
+
+  if (!currentPosition) {
+    return preferredMonitoringRadius;
+  }
+
+  const currentCoordinates = {
+    lat: currentPosition.coords.latitude,
+    lng: currentPosition.coords.longitude,
+  };
+  const nearestDistanceMeters = Math.min(
+    ...places.map((place) =>
+      calculateDistanceMeters(currentCoordinates, place)
+    )
+  );
+
+  if (nearestDistanceMeters <= arrivalRadiusMeters) {
+    return preferredMonitoringRadius;
+  }
+
+  const currentAccuracyMeters = currentPosition.coords.accuracy;
+  const accuracyMarginMeters = Math.max(
+    IOS_REGION_REGISTRATION_MARGIN_METERS,
+    typeof currentAccuracyMeters === "number" &&
+      Number.isFinite(currentAccuracyMeters)
+      ? currentAccuracyMeters
+      : 0
+  );
+
+  return Math.max(
+    MIN_GEOFENCE_RADIUS_METERS,
+    Math.min(
+      preferredMonitoringRadius,
+      Math.floor(nearestDistanceMeters - accuracyMarginMeters)
+    )
   );
 }
 
@@ -829,6 +902,9 @@ export async function reconcileStoredRouteArrivalNotifications() {
 
   if (Platform.OS === "ios") {
     const dateKey = getTodayDateKey();
+    const currentPosition = await getCurrentRouteArrivalPosition(
+      DEFAULT_GEOFENCE_RADIUS_METERS
+    ).catch(() => null);
 
     await syncIosRouteArrivalNotifications(
       places.map((place) => ({
@@ -845,17 +921,25 @@ export async function reconcileStoredRouteArrivalNotifications() {
         latitude: place.lat,
         longitude: place.lng,
       })),
-      DEFAULT_GEOFENCE_RADIUS_METERS
+      getIosMonitoringRadiusMeters(
+        places,
+        DEFAULT_GEOFENCE_RADIUS_METERS,
+        currentPosition
+      )
     );
     await stopRouteArrivalLocationTrackingIfStarted().catch(() => undefined);
+    await reconcileCurrentRouteArrival(
+      places,
+      DEFAULT_GEOFENCE_RADIUS_METERS,
+      currentPosition
+    );
   } else {
     await startRouteArrivalLocationTracking(places[0]?.language ?? "ko");
+    await reconcileCurrentRouteArrival(
+      places,
+      DEFAULT_GEOFENCE_RADIUS_METERS
+    );
   }
-
-  await reconcileCurrentRouteArrival(
-    places,
-    DEFAULT_GEOFENCE_RADIUS_METERS
-  );
 }
 
 async function deliverRouteArrivalNotification(
@@ -1042,6 +1126,9 @@ async function syncNativeRouteArrivalNotifications(
     if (Platform.OS === "ios") {
       await stopRouteArrivalGeofencingIfStarted().catch(() => undefined);
       const dateKey = getTodayDateKey();
+      const currentPosition = await getCurrentRouteArrivalPosition(
+        radius
+      ).catch(() => null);
       activeCount = await syncIosRouteArrivalNotifications(
         places.map((place) => ({
           identifier: getRouteArrivalNotificationId(place, dateKey),
@@ -1057,8 +1144,13 @@ async function syncNativeRouteArrivalNotifications(
           latitude: place.lat,
           longitude: place.lng,
         })),
-        radius
+        getIosMonitoringRadiusMeters(places, radius, currentPosition)
       );
+      await reconcileCurrentRouteArrival(
+        places,
+        radius,
+        currentPosition
+      ).catch(() => undefined);
     } else {
       await Location.startGeofencingAsync(
         ROUTE_ARRIVAL_GEOFENCE_TASK,
@@ -1089,9 +1181,8 @@ async function syncNativeRouteArrivalNotifications(
       await stopRouteArrivalLocationTrackingIfStarted().catch(() => undefined);
     } else {
       await startRouteArrivalLocationTracking(message.language);
+      await reconcileCurrentRouteArrival(places, radius).catch(() => undefined);
     }
-
-    await reconcileCurrentRouteArrival(places, radius).catch(() => undefined);
 
     if (Platform.OS === "ios") {
       const registrationSummary = await getIosRegistrationSummary(places);

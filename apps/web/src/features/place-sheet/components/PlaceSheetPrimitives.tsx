@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   IoCalendarClearOutline,
   IoCallOutline,
+  IoChevronDown,
   IoTimeOutline,
 } from "react-icons/io5";
 
@@ -143,14 +144,74 @@ export function NearbyPlacesSkeleton() {
 }
 
 export function CompactHoursBadge({ value }: { value: string }) {
+  const [expandedValue, setExpandedValue] = useState<string | null>(null);
+  const [canExpand, setCanExpand] = useState(false);
+  const valueRef = useRef<HTMLSpanElement | null>(null);
+  const isExpanded = expandedValue === value;
+
+  useLayoutEffect(() => {
+    if (isExpanded) {
+      return;
+    }
+
+    const valueElement = valueRef.current;
+
+    if (!valueElement) {
+      return;
+    }
+
+    const updateCanExpand = () => {
+      setCanExpand(valueElement.scrollWidth > valueElement.clientWidth + 1);
+    };
+
+    updateCanExpand();
+
+    const resizeObserver = new ResizeObserver(updateCanExpand);
+    resizeObserver.observe(valueElement);
+
+    return () => resizeObserver.disconnect();
+  }, [isExpanded, value]);
+
   if (!value) {
     return null;
   }
 
   return (
-    <span className="inline-flex max-w-[10rem] items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100 dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25">
+    <button
+      type="button"
+      aria-expanded={canExpand ? isExpanded : undefined}
+      disabled={!canExpand}
+      title={!isExpanded && canExpand ? value : undefined}
+      onClick={() =>
+        setExpandedValue((currentValue) =>
+          currentValue === value ? null : value
+        )
+      }
+      className={`inline-flex items-center gap-1 bg-brand-50 px-2.5 py-1 text-[11px] font-black text-brand-700 ring-1 ring-brand-100 transition-[max-width,width,border-radius] dark:bg-brand-400/15 dark:text-brand-100 dark:ring-brand-400/25 ${
+        isExpanded
+          ? "w-full max-w-full justify-start rounded-2xl"
+          : "max-w-[10rem] rounded-full"
+      } ${canExpand ? "cursor-pointer active:scale-[0.98]" : "cursor-default"}`}
+    >
       <IoTimeOutline className="shrink-0 text-sm" />
-      <span className="truncate">{value}</span>
-    </span>
+      <span
+        ref={valueRef}
+        className={`min-w-0 ${
+          isExpanded
+            ? "whitespace-pre-line break-words text-left leading-5"
+            : "truncate"
+        }`}
+      >
+        {value}
+      </span>
+      {canExpand ? (
+        <IoChevronDown
+          aria-hidden="true"
+          className={`shrink-0 text-xs transition-transform ${
+            isExpanded ? "rotate-180" : ""
+          }`}
+        />
+      ) : null}
+    </button>
   );
 }
