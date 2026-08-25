@@ -105,7 +105,8 @@ const configuredUpdatesEnabled = readBoolean(
   routeOneExtra.webBundleUpdatesEnabled
 );
 const updatesEnabled =
-  configuredUpdatesEnabled ?? Boolean(explicitRuntimeAppVariant);
+  !__DEV__ &&
+  (configuredUpdatesEnabled ?? Boolean(explicitRuntimeAppVariant));
 const publicBaseUrl = readPublicBaseUrl();
 const publicOrigin = readHttpOrigin(publicBaseUrl);
 const manifestUrl = readManifestUrl(appVariant, updatesEnabled, publicBaseUrl);

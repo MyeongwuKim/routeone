@@ -70,6 +70,7 @@ export type NativeArrivalNotificationPlace = {
   routeTitle?: string | null;
   dayId: string;
   dayIndex: number;
+  dayDateKey: string;
   stopId: string;
   title: string;
   lat: number;

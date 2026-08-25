@@ -670,6 +670,8 @@ export function useDayRoutePopupController({
         routeTitle: getLocalizedRouteTitle(route, text),
         dayId: target.routeDay.id,
         dayIndex: target.routeDay.dayIndex,
+        dayDateKey:
+          getRouteDateKey(target.routeDay.date) ?? getTodayDateKey(),
         stopId: target.stop.id,
         title: target.stop.place.title,
         lat: target.stop.place.lat,

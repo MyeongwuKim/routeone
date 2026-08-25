@@ -1,10 +1,9 @@
 import {
-  getNextRouteStop,
   getRouteTitle,
   getTodayDateKey,
-  getTodayRouteDay,
 } from "../routeDisplay";
 import type { MyRoute } from "../types";
+import { getRouteArrivalMonitoringTarget } from "./routeArrivalNotificationTarget";
 import {
   nativeBridge,
   type NativeArrivalNotificationPlace,
@@ -44,25 +43,22 @@ function getNativeRouteArrivalNotificationPlaces(
       return [];
     }
 
-    const todayRouteDay = getTodayRouteDay(route, todayKey);
+    const monitoringTarget = getRouteArrivalMonitoringTarget(route, todayKey);
 
-    if (!todayRouteDay) {
+    if (!monitoringTarget) {
       return [];
     }
 
-    const activeDestination = getNextRouteStop(todayRouteDay);
-
-    if (!activeDestination) {
-      return [];
-    }
+    const { activeDestination, dayDateKey, routeDay } = monitoringTarget;
 
     return [
       {
         id: `${route.id}:${activeDestination.id}`,
         routeId: route.id,
         routeTitle: getRouteTitle(route),
-        dayId: todayRouteDay.id,
-        dayIndex: todayRouteDay.dayIndex,
+        dayId: routeDay.id,
+        dayIndex: routeDay.dayIndex,
+        dayDateKey,
         stopId: activeDestination.id,
         title: activeDestination.place.title,
         lat: activeDestination.place.lat,

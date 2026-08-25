@@ -59,11 +59,27 @@ public final class RouteArrivalNotificationsModule: Module {
     AsyncFunction("syncAsync") {
       (notifications: [RouteArrivalNotificationRecord], radiusMeters: Double) async throws -> Int in
       let center = UNUserNotificationCenter.current()
-      let managedPendingIdentifiers = await self.pendingIdentifiers(center)
+      let pendingRequests = await center.pendingNotificationRequests()
+      let managedLocationPendingIdentifiers = Set(
+        pendingRequests
+          .filter {
+            self.isRouteArrivalNotification($0.content) &&
+              $0.trigger is UNLocationNotificationTrigger
+          }
+          .map(\.identifier)
+      )
+      let managedImmediatePendingIdentifiers = Set(
+        pendingRequests
+          .filter {
+            self.isRouteArrivalNotification($0.content) &&
+              !($0.trigger is UNLocationNotificationTrigger)
+          }
+          .map(\.identifier)
+      )
 
-      if !managedPendingIdentifiers.isEmpty {
+      if !managedLocationPendingIdentifiers.isEmpty {
         center.removePendingNotificationRequests(
-          withIdentifiers: Array(managedPendingIdentifiers)
+          withIdentifiers: Array(managedLocationPendingIdentifiers)
         )
       }
 
@@ -83,7 +99,9 @@ public final class RouteArrivalNotificationsModule: Module {
       )
       var requestsByIdentifier: [String: UNNotificationRequest] = [:]
 
-      for notification in notifications where !deliveredIdentifiers.contains(notification.identifier) {
+      for notification in notifications
+      where !deliveredIdentifiers.contains(notification.identifier) &&
+        !managedImmediatePendingIdentifiers.contains(notification.identifier) {
         let content = UNMutableNotificationContent()
         content.title = notification.title
         content.body = notification.body
@@ -126,8 +144,9 @@ public final class RouteArrivalNotificationsModule: Module {
         try await center.add(request)
       }
 
-      let expectedIdentifiers = Set(requestsByIdentifier.keys)
+      let expectedIdentifiers = Set(notifications.map(\.identifier))
       var registeredIdentifiers = await self.pendingIdentifiers(center)
+      registeredIdentifiers.formUnion(await self.deliveredIdentifiers(center))
       var missingIdentifiers = expectedIdentifiers.subtracting(registeredIdentifiers)
 
       if !missingIdentifiers.isEmpty {
@@ -138,6 +157,7 @@ public final class RouteArrivalNotificationsModule: Module {
         }
 
         registeredIdentifiers = await self.pendingIdentifiers(center)
+        registeredIdentifiers.formUnion(await self.deliveredIdentifiers(center))
         missingIdentifiers = expectedIdentifiers.subtracting(registeredIdentifiers)
       }
 

@@ -263,7 +263,6 @@ export type UiText = {
     deleteSuccess: string;
     deleteError: string;
     startSuccess: string;
-    startSuccessWithArrivalNotification: string;
     startSuccessWithoutArrivalNotification: (error: string) => string;
     arrivalNotificationRegistrationError: string;
     startError: string;
@@ -1358,8 +1357,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       deleteSuccess: "일정을 삭제했어요.",
       deleteError: "일정을 삭제하지 못했어요.",
       startSuccess: "여행을 시작했어요.",
-      startSuccessWithArrivalNotification:
-        "여행을 시작했고 다음 장소 도착 알림도 등록했어요.",
       startSuccessWithoutArrivalNotification: (error) =>
         `여행은 시작했지만 도착 알림은 등록하지 못했어요. ${error}`,
       arrivalNotificationRegistrationError:
@@ -2600,8 +2597,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       deleteSuccess: "Schedule deleted.",
       deleteError: "Could not delete the schedule.",
       startSuccess: "Trip started.",
-      startSuccessWithArrivalNotification:
-        "Trip started and the next-place arrival alert is registered.",
       startSuccessWithoutArrivalNotification: (error) =>
         `The trip started, but the arrival alert was not registered. ${error}`,
       arrivalNotificationRegistrationError:

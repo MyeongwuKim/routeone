@@ -385,20 +385,12 @@ function MyRoutePage() {
       setStartTimePickerTarget(null);
 
       try {
-        const result = await syncTodayRouteArrivalNotifications(
+        await syncTodayRouteArrivalNotifications(
           nextRoutesData?.myRoutes ?? [data.startRoute],
           appLanguage,
           data.startRoute.id
         );
-        const didRegisterArrivalNotification =
-          result?.registrationStatus === "registered" ||
-          result?.registrationStatus === "delivered";
-
-        showToast(
-          didRegisterArrivalNotification
-            ? text.myRoute.startSuccessWithArrivalNotification
-            : text.myRoute.startSuccess
-        );
+        showToast(text.myRoute.startSuccess);
       } catch (error) {
         const errorMessage =
           error instanceof Error
