@@ -3,6 +3,7 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { Platform } from "react-native";
+import { prepareNativeCurrentPosition } from "@/location/nativeCurrentPosition";
 import {
   getIosRouteArrivalNotificationStatus,
   syncIosRouteArrivalNotifications,
@@ -62,12 +63,6 @@ const DELIVERED_NOTIFICATION_HISTORY_TTL_MS =
 const DEFAULT_GEOFENCE_RADIUS_METERS = 300;
 const MIN_GEOFENCE_RADIUS_METERS = 300;
 const MAX_GEOFENCE_RADIUS_METERS = 500;
-const IOS_REGION_DETECTION_BUFFER_METERS = 200;
-const IOS_REGION_REGISTRATION_MARGIN_METERS = 50;
-const MAX_IOS_MONITORING_RADIUS_METERS =
-  MAX_GEOFENCE_RADIUS_METERS + IOS_REGION_DETECTION_BUFFER_METERS;
-const CURRENT_POSITION_MAX_AGE_MS = 1000 * 60;
-const CURRENT_POSITION_TIMEOUT_MS = 6000;
 const EARTH_RADIUS_METERS = 6_371_000;
 const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 const ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE = TRUTHY_ENV_VALUES.has(
@@ -82,6 +77,14 @@ let routeArrivalTestState: {
   stopId: string;
   withinRadius: boolean;
 } | null = null;
+
+type RouteArrivalPosition = {
+  coords: {
+    latitude: number;
+    longitude: number;
+    accuracy: number | null;
+  };
+};
 
 export function resetNativeRouteArrivalTestState() {
   routeArrivalTestState = null;
@@ -715,32 +718,19 @@ async function scheduleRouteArrivalNotification(regionId: string) {
   );
 }
 
-async function getCurrentRouteArrivalPosition(radiusMeters: number) {
-  const lastKnownPosition = await Location.getLastKnownPositionAsync({
-    maxAge: CURRENT_POSITION_MAX_AGE_MS,
-    requiredAccuracy: radiusMeters,
+async function getCurrentRouteArrivalPosition() {
+  const currentPosition = await prepareNativeCurrentPosition({
+    requestPermission: false,
+    forceRefresh: true,
   });
 
-  if (lastKnownPosition) {
-    return lastKnownPosition;
-  }
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  try {
-    return await Promise.race([
-      Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      }),
-      new Promise<null>((resolve) => {
-        timeoutId = setTimeout(() => resolve(null), CURRENT_POSITION_TIMEOUT_MS);
-      }),
-    ]);
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  }
+  return {
+    coords: {
+      latitude: currentPosition.lat,
+      longitude: currentPosition.lng,
+      accuracy: currentPosition.accuracyMeters,
+    },
+  } satisfies RouteArrivalPosition;
 }
 
 async function reconcilePresentedRouteArrivalNotifications(
@@ -775,7 +765,7 @@ async function reconcilePresentedRouteArrivalNotifications(
 async function reconcileRouteArrivalAtPosition(
   places: StoredRouteArrivalPlace[],
   radiusMeters: number,
-  currentPosition: Location.LocationObject
+  currentPosition: RouteArrivalPosition
 ) {
   const todayKey = getTodayDateKey();
 
@@ -816,13 +806,13 @@ async function reconcileRouteArrivalAtPosition(
 async function reconcileCurrentRouteArrival(
   places: StoredRouteArrivalPlace[],
   radiusMeters: number,
-  knownCurrentPosition?: Location.LocationObject | null
+  knownCurrentPosition?: RouteArrivalPosition | null
 ) {
   await reconcilePresentedRouteArrivalNotifications(places);
 
   const currentPosition =
     knownCurrentPosition === undefined
-      ? await getCurrentRouteArrivalPosition(radiusMeters)
+      ? await getCurrentRouteArrivalPosition()
       : knownCurrentPosition;
 
   if (!currentPosition) {
@@ -833,52 +823,6 @@ async function reconcileCurrentRouteArrival(
     places,
     radiusMeters,
     currentPosition
-  );
-}
-
-function getIosMonitoringRadiusMeters(
-  places: StoredRouteArrivalPlace[],
-  arrivalRadiusMeters: number,
-  currentPosition: Location.LocationObject | null
-) {
-  const preferredMonitoringRadius = Math.min(
-    MAX_IOS_MONITORING_RADIUS_METERS,
-    arrivalRadiusMeters + IOS_REGION_DETECTION_BUFFER_METERS
-  );
-
-  if (!currentPosition) {
-    return preferredMonitoringRadius;
-  }
-
-  const currentCoordinates = {
-    lat: currentPosition.coords.latitude,
-    lng: currentPosition.coords.longitude,
-  };
-  const nearestDistanceMeters = Math.min(
-    ...places.map((place) =>
-      calculateDistanceMeters(currentCoordinates, place)
-    )
-  );
-
-  if (nearestDistanceMeters <= arrivalRadiusMeters) {
-    return preferredMonitoringRadius;
-  }
-
-  const currentAccuracyMeters = currentPosition.coords.accuracy;
-  const accuracyMarginMeters = Math.max(
-    IOS_REGION_REGISTRATION_MARGIN_METERS,
-    typeof currentAccuracyMeters === "number" &&
-      Number.isFinite(currentAccuracyMeters)
-      ? currentAccuracyMeters
-      : 0
-  );
-
-  return Math.max(
-    MIN_GEOFENCE_RADIUS_METERS,
-    Math.min(
-      preferredMonitoringRadius,
-      Math.floor(nearestDistanceMeters - accuracyMarginMeters)
-    )
   );
 }
 
@@ -913,10 +857,6 @@ async function reconcileStoredRouteArrivalNotificationsInternal() {
   );
 
   if (Platform.OS === "ios") {
-    const currentPosition = await getCurrentRouteArrivalPosition(
-      DEFAULT_GEOFENCE_RADIUS_METERS
-    ).catch(() => null);
-
     await syncIosRouteArrivalNotifications(
       places.map((place) => ({
         identifier: getRouteArrivalNotificationId(
@@ -935,18 +875,10 @@ async function reconcileStoredRouteArrivalNotificationsInternal() {
         latitude: place.lat,
         longitude: place.lng,
       })),
-      getIosMonitoringRadiusMeters(
-        places,
-        DEFAULT_GEOFENCE_RADIUS_METERS,
-        currentPosition
-      )
+      DEFAULT_GEOFENCE_RADIUS_METERS
     );
     await stopRouteArrivalLocationTrackingIfStarted().catch(() => undefined);
-    await reconcileCurrentRouteArrival(
-      places,
-      DEFAULT_GEOFENCE_RADIUS_METERS,
-      currentPosition
-    );
+    await reconcileCurrentRouteArrival(places, DEFAULT_GEOFENCE_RADIUS_METERS);
   } else {
     await startRouteArrivalLocationTracking(places[0]?.language ?? "ko");
     await reconcileCurrentRouteArrival(
@@ -1156,9 +1088,6 @@ async function syncNativeRouteArrivalNotifications(
 
     if (Platform.OS === "ios") {
       await stopRouteArrivalGeofencingIfStarted().catch(() => undefined);
-      const currentPosition = await getCurrentRouteArrivalPosition(
-        radius
-      ).catch(() => null);
       activeCount = await syncIosRouteArrivalNotifications(
         places.map((place) => ({
           identifier: getRouteArrivalNotificationId(
@@ -1177,13 +1106,9 @@ async function syncNativeRouteArrivalNotifications(
           latitude: place.lat,
           longitude: place.lng,
         })),
-        getIosMonitoringRadiusMeters(places, radius, currentPosition)
+        radius
       );
-      await reconcileCurrentRouteArrival(
-        places,
-        radius,
-        currentPosition
-      ).catch(() => undefined);
+      await reconcileCurrentRouteArrival(places, radius).catch(() => undefined);
     } else {
       await Location.startGeofencingAsync(
         ROUTE_ARRIVAL_GEOFENCE_TASK,

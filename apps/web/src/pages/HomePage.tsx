@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { MdCelebration } from "react-icons/md";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   notificationApi,
@@ -35,7 +34,6 @@ import {
   resolveMarkerType,
   type OpenPlaceSheetFromAttractionOptions,
 } from "@/lib/gangwonAttractionMap";
-import { nativeBridge } from "@/native-bridge";
 import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
@@ -158,76 +156,6 @@ function HomePage() {
   });
   const unreadNotificationCount =
     notificationInboxQuery.data?.unreadNotificationCount ?? 0;
-  const registerNativePushDevice = useCallback(async () => {
-    if (!nativeBridge.runtime.isAvailable()) {
-      return;
-    }
-
-    const pushToken =
-      await nativeBridge.notifications.getPushToken(true);
-
-    if (!pushToken?.expoPushToken) {
-      if (pushToken?.permissionStatus === "denied") {
-        nativeBridge.permissions.openSettings();
-        throw new Error(text.home.festivalTestPermissionDenied);
-      }
-
-      if (pushToken?.reason === "missing-project-id") {
-        throw new Error(text.home.festivalTestProjectUnavailable);
-      }
-
-      throw new Error(text.home.festivalTestDeviceUnavailable);
-    }
-
-    if (
-      pushToken.platform !== "ios" &&
-      pushToken.platform !== "android"
-    ) {
-      throw new Error(text.home.festivalTestDeviceUnavailable);
-    }
-
-    const result = await notificationApi.registerPushDevice({
-      expoPushToken: pushToken.expoPushToken,
-      platform: pushToken.platform === "ios" ? "IOS" : "ANDROID",
-      appVariant: pushToken.appVariant,
-    });
-
-    return result.registerPushDevice.id;
-  }, [
-    text.home.festivalTestDeviceUnavailable,
-    text.home.festivalTestPermissionDenied,
-    text.home.festivalTestProjectUnavailable,
-  ]);
-  const testNotificationMutation = useMutation({
-    mutationFn: async () => {
-      if (!isDevelopmentRuntime) {
-        throw new Error("Festival test notifications are disabled in prod.");
-      }
-
-      await registerNativePushDevice();
-
-      const result = await notificationApi.sendFestivalTest();
-
-      return result.sendFestivalTestNotification;
-    },
-    onSuccess: (delivery) => {
-      if (delivery.pushStatus === "SENT") {
-        showToast(text.home.festivalTestSent);
-      } else {
-        const pushError = delivery.pushError ?? "";
-
-        showToast(text.home.festivalTestFailed(pushError), 3200);
-      }
-
-      void notificationInboxQuery.refetch();
-    },
-    onError: (error) => {
-      const reason = error instanceof Error ? error.message : "";
-
-      showToast(text.home.festivalTestFailed(reason), 3200);
-    },
-  });
-
   const {
     attractionData,
     attractionError,
@@ -896,28 +824,6 @@ function HomePage() {
           onRecentSearchDelete={removeRecentSearch}
           onRecentSearchClear={clearRecentSearches}
         />
-      ) : null}
-
-      {isDevelopmentRuntime &&
-      shouldShowInteractiveMapUi &&
-      hasAuthToken &&
-      serviceArea.hasFestivalSource ? (
-        <div className="pointer-events-none absolute bottom-20 right-4 z-30 flex flex-col items-end gap-2">
-          <button
-            type="button"
-            aria-label={text.home.festivalTestSendAria}
-            disabled={testNotificationMutation.isPending}
-            onClick={() => testNotificationMutation.mutate()}
-            className="pointer-events-auto inline-flex h-12 items-center gap-2 rounded-full border border-white/80 bg-rose-500 px-4 text-sm font-black text-white shadow-[0_12px_28px_rgba(244,63,94,0.35)] transition hover:bg-rose-600 active:scale-[0.98] disabled:cursor-wait disabled:bg-rose-300"
-          >
-            <MdCelebration aria-hidden="true" className="text-lg" />
-            <span>
-              {testNotificationMutation.isPending
-                ? text.home.festivalTestSending
-                : text.home.festivalTestSend}
-            </span>
-          </button>
-        </div>
       ) : null}
 
       {mapError ? (

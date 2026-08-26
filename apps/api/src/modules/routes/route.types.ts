@@ -86,6 +86,22 @@ export type ReorderRouteStopsInput = {
   stopIds: string[];
 };
 
+export type RouteLayoutStopInput = {
+  stopId: string;
+  stayMinutes?: number | null;
+};
+
+export type RouteDayLayoutInput = {
+  dayId: string;
+  stops: RouteLayoutStopInput[];
+};
+
+export type UpdateRouteLayoutInput = {
+  routeId: string;
+  days: RouteDayLayoutInput[];
+  deletedDayIds?: string[] | null;
+};
+
 export type UpdateRouteStopStayMinutesInput = {
   stopId: string;
   stayMinutes: number;

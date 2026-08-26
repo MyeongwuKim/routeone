@@ -546,14 +546,14 @@ body {
   animation: placeSearchResultEnter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.route-order-drag-node {
-  touch-action: pan-y;
+.route-order-drag-handle {
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   cursor: grab;
 }
 
-.route-order-drag-node:active {
+.route-order-drag-handle:active {
   cursor: grabbing;
 }
 

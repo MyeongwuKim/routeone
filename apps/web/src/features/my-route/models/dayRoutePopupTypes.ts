@@ -19,6 +19,8 @@ export type DayRoutePopupProps = {
   enableVerificationPhotoPreview?: boolean;
   onRequestPlaceRouteFilter?: (place: MapSheetPlace) => void;
   onRequestCheckout?: (routePlan: PlannedRouteDay[]) => void;
+  onRequestStartRoute?: (route: MyRoute) => void;
+  isRouteStartPending?: boolean;
   readOnlyFooterAction?: {
     label: string;
     ariaLabel?: string;

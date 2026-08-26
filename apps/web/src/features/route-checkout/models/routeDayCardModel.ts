@@ -81,16 +81,6 @@ export function routeDragReducer(
   }
 }
 
-export type LongPressPointer = {
-  startX: number;
-  startY: number;
-  currentX: number;
-  currentY: number;
-  button: number;
-  captureTarget: HTMLElement;
-  pointerId?: number;
-};
-
 export type RouteStation =
   | {
       id: "current-location";

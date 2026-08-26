@@ -18,10 +18,12 @@ export type NativeBootStep =
   | "notification"
   | "login"
   | "webview";
+export type NativeBootProgressStage = "storage" | "location";
 export type AppLanguage = "ko" | "en";
 
 const APP_LANGUAGE_STORAGE_KEY = "routeone-app-language";
 const ONBOARDING_STORAGE_KEY = "routeone:native-onboarding-completed:v1";
+const STARTUP_LOCATION_WAIT_TIMEOUT_MS = 3_000;
 
 function normalizeAppLanguage(value: string | null): AppLanguage | null {
   return value === "ko" || value === "en" ? value : null;
@@ -29,6 +31,8 @@ function normalizeAppLanguage(value: string | null): AppLanguage | null {
 
 export function useNativeBoot() {
   const [bootStep, setBootStep] = useState<NativeBootStep>("checking");
+  const [bootProgressStage, setBootProgressStage] =
+    useState<NativeBootProgressStage>("storage");
   const [appLanguage, setAppLanguage] = useState<AppLanguage>("ko");
   const [nativeAuthToken, setNativeAuthToken] = useState<string | null>(null);
   const [nativeAuthRole, setNativeAuthRole] =
@@ -51,9 +55,32 @@ export function useNativeBoot() {
       return;
     }
 
-    await prepareNativeCurrentPosition({
+    const locationServicesEnabled = await Location.hasServicesEnabledAsync()
+      .catch(() => true);
+
+    if (!locationServicesEnabled) {
+      return;
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const positionRequest = prepareNativeCurrentPosition({
       requestPermission: false
-    }).catch(() => undefined);
+    })
+      .then(() => undefined)
+      .catch(() => undefined);
+
+    try {
+      await Promise.race([
+        positionRequest,
+        new Promise<void>((resolve) => {
+          timeoutId = setTimeout(resolve, STARTUP_LOCATION_WAIT_TIMEOUT_MS);
+        })
+      ]);
+    } finally {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    }
   }, []);
 
   const goToNotificationOrLogin = useCallback(async () => {
@@ -103,6 +130,7 @@ export function useNativeBoot() {
         setNativeAuthToken(storedAuthSession.token);
         setNativeAuthRole(storedAuthSession.role);
         setNativeAuthExpiresAt(storedAuthSession.expiresAt);
+        setBootProgressStage("location");
         await prepareLocationBeforeWebView();
 
         if (!isMounted) {
@@ -245,6 +273,7 @@ export function useNativeBoot() {
 
   return {
     bootStep,
+    bootProgressStage,
     completeNativeLogin,
     handleNativeAuthSessionChange,
     appLanguage,

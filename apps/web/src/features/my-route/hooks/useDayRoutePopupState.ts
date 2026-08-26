@@ -27,6 +27,7 @@ type DayRoutePopupState = {
 };
 
 type DayRoutePopupAction =
+  | { type: "set-active-day-id"; value: string }
   | { type: "set-expanded-day-ids"; value: SetStateAction<Set<string>> }
   | { type: "set-map-target-day"; value: string | null }
   | { type: "set-order-editing"; value: boolean }
@@ -79,6 +80,8 @@ function dayRoutePopupReducer(
   action: DayRoutePopupAction
 ): DayRoutePopupState {
   switch (action.type) {
+    case "set-active-day-id":
+      return { ...state, activeDayId: action.value };
     case "set-expanded-day-ids":
       return {
         ...state,
@@ -145,6 +148,8 @@ export function useDayRoutePopupState(day: MyRouteDay) {
   );
   const actions = useMemo(
     () => ({
+      setActiveDayId: (value: string) =>
+        dispatch({ type: "set-active-day-id", value }),
       setExpandedDayIds: (value: SetStateAction<Set<string>>) =>
         dispatch({ type: "set-expanded-day-ids", value }),
       setMapTargetDayId: (value: string | null) =>

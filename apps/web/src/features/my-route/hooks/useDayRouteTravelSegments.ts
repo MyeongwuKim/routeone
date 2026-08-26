@@ -112,6 +112,7 @@ type UseDayRouteTravelSegmentsOptions = {
   days: MyRouteDay[];
   activeDayId: string;
   orderedStops: MyRouteStop[];
+  stopsByDayId?: Record<string, MyRouteStop[]>;
   startLocation: MyRoute["startLocation"];
 };
 
@@ -120,6 +121,7 @@ export function useDayRouteTravelSegments({
   days,
   activeDayId,
   orderedStops,
+  stopsByDayId,
   startLocation,
 }: UseDayRouteTravelSegmentsOptions) {
   const [travelSegmentByKey, setTravelSegmentByKey] = useState<
@@ -144,7 +146,8 @@ export function useDayRouteTravelSegments({
 
     days.forEach((routeDay) => {
       const routeDayStops =
-        routeDay.id === activeDayId ? orderedStops : routeDay.stops;
+        stopsByDayId?.[routeDay.id] ??
+        (routeDay.id === activeDayId ? orderedStops : routeDay.stops);
       const firstStop = routeDayStops[0] ?? null;
 
       if (firstStop && startLocation) {
@@ -161,7 +164,7 @@ export function useDayRouteTravelSegments({
     });
 
     return [...requestByKey.values()];
-  }, [activeDayId, days, orderedStops, startLocation]);
+  }, [activeDayId, days, orderedStops, startLocation, stopsByDayId]);
 
   useEffect(() => {
     const queueSegmentUpdate = (

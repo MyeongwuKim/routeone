@@ -218,14 +218,6 @@ export type UiText = {
     currentLocation: string;
     focusCurrentLocationAria: string;
     currentLocationUnavailable: string;
-    festivalTestSend: string;
-    festivalTestSending: string;
-    festivalTestSendAria: string;
-    festivalTestSent: string;
-    festivalTestFailed: (reason: string) => string;
-    festivalTestPermissionDenied: string;
-    festivalTestDeviceUnavailable: string;
-    festivalTestProjectUnavailable: string;
   };
   notifications: {
     title: string;
@@ -669,6 +661,10 @@ export type UiText = {
     totalDuration: string;
     actualStart: string;
     startDay: string;
+    startDayAction: (dayIndex: number) => string;
+    startingDayAction: (dayIndex: number) => string;
+    dayInProgressAction: (dayIndex: number) => string;
+    dayCompletedAction: (dayIndex: number) => string;
     recordActualStart: string;
     editPlannedStartAria: (dayIndex: number) => string;
     editActualStartAria: (dayIndex: number) => string;
@@ -851,7 +847,9 @@ export type UiText = {
     firstPlaceTravelWarning: (duration: string) => string;
     startLocationRecalculateDescription: string;
     changeOnMap: string;
+    editOrder: string;
     finishOrderEditing: string;
+    dragHandleAria: (title: string) => string;
     cancelChanges: string;
     applyChanges: string;
     saving: string;
@@ -1273,18 +1271,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "현재 위치",
       focusCurrentLocationAria: "현재 위치로 이동",
       currentLocationUnavailable: "현재 위치를 확인하지 못했어요.",
-      festivalTestSend: "축제 알림 바로 보내기",
-      festivalTestSending: "보내는 중",
-      festivalTestSendAria: "알림 설정 지역의 실제 축제 알림 보내기",
-      festivalTestSent: "실제 축제 알림을 보냈어요.",
-      festivalTestFailed: (reason) =>
-        reason || "축제 테스트 알림을 보내지 못했어요.",
-      festivalTestPermissionDenied:
-        "알림 권한이 꺼져 있어요. 기기 설정에서 알림을 허용해 주세요.",
-      festivalTestDeviceUnavailable:
-        "이 앱에서 푸시 토큰을 가져오지 못했어요. 앱을 다시 실행한 뒤 시도해 주세요.",
-      festivalTestProjectUnavailable:
-        "앱의 Expo 프로젝트 설정을 확인해 주세요.",
     },
     notifications: {
       title: "알림함",
@@ -1802,6 +1788,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       totalDuration: "총 소요",
       actualStart: "시작 시각",
       startDay: "DAY 시작하기",
+      startDayAction: (dayIndex) => `DAY ${dayIndex} 시작하기`,
+      startingDayAction: (dayIndex) => `DAY ${dayIndex} 시작 중`,
+      dayInProgressAction: (dayIndex) => `DAY ${dayIndex} 진행 중`,
+      dayCompletedAction: (dayIndex) => `DAY ${dayIndex} 완료`,
       recordActualStart: "시작 시각 기록",
       editPlannedStartAria: (dayIndex) =>
         `DAY ${dayIndex} 계획 시작 시각 수정`,
@@ -2046,7 +2036,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startLocationRecalculateDescription:
         "현재 위치와 여행 지역이 다르면 지도에서 출발 위치를 바꿔 다시 계산해요.",
       changeOnMap: "지도에서 변경",
-      finishOrderEditing: "순서 변경을 완료해 주세요",
+      editOrder: "순서 편집",
+      finishOrderEditing: "순서 편집 완료",
+      dragHandleAria: (title) => `${title} 순서 이동`,
       cancelChanges: "변경 취소",
       applyChanges: "변경 적용",
       saving: "루트 저장 중...",
@@ -2495,19 +2487,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "Current location",
       focusCurrentLocationAria: "Move to current location",
       currentLocationUnavailable: "Could not find your current location.",
-      festivalTestSend: "Send Festival Alert",
-      festivalTestSending: "Sending",
-      festivalTestSendAria:
-        "Send real festival alerts for configured notification areas",
-      festivalTestSent: "Real festival alert sent.",
-      festivalTestFailed: (reason) =>
-        reason || "Could not send the festival test alert.",
-      festivalTestPermissionDenied:
-        "Notifications are disabled. Allow them in device settings.",
-      festivalTestDeviceUnavailable:
-        "Could not get a push token from this app. Restart the app and try again.",
-      festivalTestProjectUnavailable:
-        "Check the app's Expo project configuration.",
     },
     notifications: {
       title: "Notifications",
@@ -3044,6 +3023,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       totalDuration: "Total Time",
       actualStart: "Start time",
       startDay: "Start DAY",
+      startDayAction: (dayIndex) => `Start DAY ${dayIndex}`,
+      startingDayAction: (dayIndex) => `Starting DAY ${dayIndex}`,
+      dayInProgressAction: (dayIndex) => `DAY ${dayIndex} in progress`,
+      dayCompletedAction: (dayIndex) => `DAY ${dayIndex} completed`,
       recordActualStart: "Record start time",
       editPlannedStartAria: (dayIndex) =>
         `Edit planned start time for DAY ${dayIndex}`,
@@ -3292,7 +3275,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startLocationRecalculateDescription:
         "If your current location is away from the trip area, change the start point on the map and recalculate.",
       changeOnMap: "Change on map",
-      finishOrderEditing: "Finish changing the order",
+      editOrder: "Edit order",
+      finishOrderEditing: "Finish editing order",
+      dragHandleAria: (title) => `Move ${title}`,
       cancelChanges: "Cancel changes",
       applyChanges: "Apply changes",
       saving: "Saving route...",

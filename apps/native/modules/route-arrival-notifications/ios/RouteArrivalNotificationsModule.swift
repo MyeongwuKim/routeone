@@ -59,15 +59,15 @@ public final class RouteArrivalNotificationsModule: Module {
     AsyncFunction("syncAsync") {
       (notifications: [RouteArrivalNotificationRecord], radiusMeters: Double) async throws -> Int in
       let center = UNUserNotificationCenter.current()
-      let pendingRequests = await center.pendingNotificationRequests()
-      let managedLocationPendingIdentifiers = Set(
-        pendingRequests
-          .filter {
-            self.isRouteArrivalNotification($0.content) &&
-              $0.trigger is UNLocationNotificationTrigger
-          }
-          .map(\.identifier)
+      let monitoredRadius = max(
+        minimumRouteArrivalMonitoringRadiusMeters,
+        min(maximumRouteArrivalMonitoringRadiusMeters, radiusMeters.rounded())
       )
+      let pendingRequests = await center.pendingNotificationRequests()
+      let managedLocationPendingRequests = pendingRequests.filter {
+        self.isRouteArrivalNotification($0.content) &&
+          $0.trigger is UNLocationNotificationTrigger
+      }
       let managedImmediatePendingIdentifiers = Set(
         pendingRequests
           .filter {
@@ -76,10 +76,33 @@ public final class RouteArrivalNotificationsModule: Module {
           }
           .map(\.identifier)
       )
+      var notificationsByIdentifier: [String: RouteArrivalNotificationRecord] = [:]
+      for notification in notifications {
+        notificationsByIdentifier[notification.identifier] = notification
+      }
+      let preservedLocationPendingIdentifiers = Set<String>(
+        managedLocationPendingRequests.compactMap { request in
+          guard
+            let notification = notificationsByIdentifier[request.identifier],
+            self.matches(
+              request,
+              notification: notification,
+              monitoredRadius: monitoredRadius
+            )
+          else {
+            return nil
+          }
 
-      if !managedLocationPendingIdentifiers.isEmpty {
+          return request.identifier
+        }
+      )
+      let staleLocationPendingIdentifiers = Set(
+        managedLocationPendingRequests.map(\.identifier)
+      ).subtracting(preservedLocationPendingIdentifiers)
+
+      if !staleLocationPendingIdentifiers.isEmpty {
         center.removePendingNotificationRequests(
-          withIdentifiers: Array(managedLocationPendingIdentifiers)
+          withIdentifiers: Array(staleLocationPendingIdentifiers)
         )
       }
 
@@ -93,15 +116,12 @@ public final class RouteArrivalNotificationsModule: Module {
           .filter { self.isRouteArrivalNotification($0.request.content) }
           .map { $0.request.identifier }
       )
-      let monitoredRadius = max(
-        minimumRouteArrivalMonitoringRadiusMeters,
-        min(maximumRouteArrivalMonitoringRadiusMeters, radiusMeters.rounded())
-      )
       var requestsByIdentifier: [String: UNNotificationRequest] = [:]
 
       for notification in notifications
       where !deliveredIdentifiers.contains(notification.identifier) &&
-        !managedImmediatePendingIdentifiers.contains(notification.identifier) {
+        !managedImmediatePendingIdentifiers.contains(notification.identifier) &&
+        !preservedLocationPendingIdentifiers.contains(notification.identifier) {
         let content = UNMutableNotificationContent()
         content.title = notification.title
         content.body = notification.body
@@ -210,5 +230,41 @@ public final class RouteArrivalNotificationsModule: Module {
     _ content: UNNotificationContent
   ) -> Bool {
     content.userInfo["type"] as? String == routeArrivalNotificationType
+  }
+
+  private func matches(
+    _ request: UNNotificationRequest,
+    notification: RouteArrivalNotificationRecord,
+    monitoredRadius: Double
+  ) -> Bool {
+    guard
+      let trigger = request.trigger as? UNLocationNotificationTrigger,
+      let region = trigger.region as? CLCircularRegion
+    else {
+      return false
+    }
+
+    let coordinateMatches =
+      abs(region.center.latitude - notification.latitude) < 0.000_001 &&
+      abs(region.center.longitude - notification.longitude) < 0.000_001
+    let contentMatches =
+      request.content.title == notification.title &&
+      request.content.body == notification.body &&
+      (request.content.userInfo["notificationId"] as? String) == notification.identifier &&
+      (request.content.userInfo["type"] as? String) == routeArrivalNotificationType &&
+      (request.content.userInfo["routeId"] as? String) == notification.routeId &&
+      (request.content.userInfo["routeTitle"] as? String) == (notification.routeTitle ?? "") &&
+      (request.content.userInfo["dayId"] as? String) == notification.dayId &&
+      (request.content.userInfo["stopId"] as? String) == notification.stopId &&
+      (request.content.userInfo["placeTitle"] as? String) == notification.placeTitle &&
+      (request.content.userInfo["dateKey"] as? String) == notification.dateKey
+
+    return
+      region.identifier == notification.regionIdentifier &&
+      coordinateMatches &&
+      abs(region.radius - monitoredRadius) < 0.5 &&
+      region.notifyOnEntry &&
+      !region.notifyOnExit &&
+      contentMatches
   }
 }

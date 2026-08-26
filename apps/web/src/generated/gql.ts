@@ -63,6 +63,7 @@ type Documents = {
     "mutation UnlikeRoute($routeId: ID!) {\n  unlikeRoute(routeId: $routeId) {\n    liked\n    saved\n    route {\n      ...RouteSummaryFields\n      owner {\n        ...SharedRouteOwnerFields\n      }\n    }\n  }\n}": typeof types.UnlikeRouteDocument,
     "mutation UnsaveRoute($routeId: ID!) {\n  unsaveRoute(routeId: $routeId) {\n    saved\n    liked\n    route {\n      ...RouteSummaryFields\n    }\n  }\n}": typeof types.UnsaveRouteDocument,
     "mutation UpdateRouteDayStart($input: UpdateRouteDayStartInput!) {\n  updateRouteDayStart(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.UpdateRouteDayStartDocument,
+    "mutation UpdateRouteLayout($input: UpdateRouteLayoutInput!) {\n  updateRouteLayout(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.UpdateRouteLayoutDocument,
     "mutation UpdateRouteStartLocation($input: UpdateRouteStartLocationInput!) {\n  updateRouteStartLocation(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.UpdateRouteStartLocationDocument,
     "mutation UpdateRouteStopStayMinutes($input: UpdateRouteStopStayMinutesInput!) {\n  updateRouteStopStayMinutes(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.UpdateRouteStopStayMinutesDocument,
     "mutation UpdateRouteStopVisitTimes($input: UpdateRouteStopVisitTimesInput!) {\n  updateRouteStopVisitTimes(input: $input) {\n    ...RouteDetailFields\n  }\n}": typeof types.UpdateRouteStopVisitTimesDocument,
@@ -121,6 +122,7 @@ const documents: Documents = {
     "mutation UnlikeRoute($routeId: ID!) {\n  unlikeRoute(routeId: $routeId) {\n    liked\n    saved\n    route {\n      ...RouteSummaryFields\n      owner {\n        ...SharedRouteOwnerFields\n      }\n    }\n  }\n}": types.UnlikeRouteDocument,
     "mutation UnsaveRoute($routeId: ID!) {\n  unsaveRoute(routeId: $routeId) {\n    saved\n    liked\n    route {\n      ...RouteSummaryFields\n    }\n  }\n}": types.UnsaveRouteDocument,
     "mutation UpdateRouteDayStart($input: UpdateRouteDayStartInput!) {\n  updateRouteDayStart(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.UpdateRouteDayStartDocument,
+    "mutation UpdateRouteLayout($input: UpdateRouteLayoutInput!) {\n  updateRouteLayout(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.UpdateRouteLayoutDocument,
     "mutation UpdateRouteStartLocation($input: UpdateRouteStartLocationInput!) {\n  updateRouteStartLocation(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.UpdateRouteStartLocationDocument,
     "mutation UpdateRouteStopStayMinutes($input: UpdateRouteStopStayMinutesInput!) {\n  updateRouteStopStayMinutes(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.UpdateRouteStopStayMinutesDocument,
     "mutation UpdateRouteStopVisitTimes($input: UpdateRouteStopVisitTimesInput!) {\n  updateRouteStopVisitTimes(input: $input) {\n    ...RouteDetailFields\n  }\n}": types.UpdateRouteStopVisitTimesDocument,
@@ -340,6 +342,10 @@ export function graphql(source: "mutation UnsaveRoute($routeId: ID!) {\n  unsave
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "mutation UpdateRouteDayStart($input: UpdateRouteDayStartInput!) {\n  updateRouteDayStart(input: $input) {\n    ...RouteDetailFields\n  }\n}"): (typeof documents)["mutation UpdateRouteDayStart($input: UpdateRouteDayStartInput!) {\n  updateRouteDayStart(input: $input) {\n    ...RouteDetailFields\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "mutation UpdateRouteLayout($input: UpdateRouteLayoutInput!) {\n  updateRouteLayout(input: $input) {\n    ...RouteDetailFields\n  }\n}"): (typeof documents)["mutation UpdateRouteLayout($input: UpdateRouteLayoutInput!) {\n  updateRouteLayout(input: $input) {\n    ...RouteDetailFields\n  }\n}"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

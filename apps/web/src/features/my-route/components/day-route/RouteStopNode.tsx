@@ -1,11 +1,14 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
   MdAccessTime,
+  MdArrowBack,
+  MdArrowForward,
   MdCheck,
   MdCheckCircle,
   MdClose,
   MdDirectionsCar,
   MdDragIndicator,
+  MdDeleteOutline,
   MdEdit,
   MdFlag,
   MdGpsFixed,
@@ -92,7 +95,12 @@ type RouteStopNodeProps = {
   scheduleLabel: string | null;
   canEditVisitTimes: boolean;
   canEditVerificationPhoto: boolean;
+  previousDayIndex: number | null;
+  nextDayIndex: number | null;
   onStartDrag: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onMoveToPreviousDay?: () => void;
+  onMoveToNextDay?: () => void;
+  onRemoveFromRoute: () => void;
   onRequestStayMinutesEdit: (stop: MyRouteStop) => void;
   onRequestVisitTimesEdit: (stop: MyRouteStop) => void;
   onToggleVisited: (stop: MyRouteStop) => void;
@@ -122,7 +130,12 @@ function RouteStopNode({
   scheduleLabel,
   canEditVisitTimes,
   canEditVerificationPhoto,
+  previousDayIndex,
+  nextDayIndex,
   onStartDrag,
+  onMoveToPreviousDay,
+  onMoveToNextDay,
+  onRemoveFromRoute,
   onRequestStayMinutesEdit,
   onRequestVisitTimesEdit,
   onToggleVisited,
@@ -265,7 +278,11 @@ function RouteStopNode({
                   {text.dayRoute.currentDestination}
                 </span>
               ) : null}
-              <p className="truncate pr-10 text-sm font-black text-slate-900 dark:text-white">
+              <p
+                className={`truncate text-sm font-black text-slate-900 dark:text-white ${
+                  isOrderEditing ? "pr-20" : "pr-10"
+                }`}
+              >
                 {stop.place.title}
               </p>
               <div className="mt-1 flex items-center">
@@ -433,7 +450,7 @@ function RouteStopNode({
                       event.stopPropagation();
                       onRequestStayMinutesEdit(stop);
                     }}
-                    disabled={isOrderEditing || isStaySaving}
+                    disabled={isStaySaving}
                     className={stayTimeClass}
                   >
                     {isStaySaving ? (
@@ -458,7 +475,34 @@ function RouteStopNode({
                   {stop.place.address}
                 </p>
               ) : null}
-              {!isOrderEditing ? (
+              {isOrderEditing ? (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMoveToPreviousDay?.();
+                    }}
+                    disabled={!onMoveToPreviousDay}
+                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-brand-200 bg-brand-50 px-2 py-2 text-[11px] font-black text-brand-700 disabled:opacity-35"
+                  >
+                    <MdArrowBack />
+                    {previousDayIndex ? `DAY ${previousDayIndex}` : "이전 DAY"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMoveToNextDay?.();
+                    }}
+                    disabled={!onMoveToNextDay}
+                    className="inline-flex items-center justify-center gap-1 rounded-xl border border-brand-200 bg-brand-50 px-2 py-2 text-[11px] font-black text-brand-700 disabled:opacity-35"
+                  >
+                    {nextDayIndex ? `DAY ${nextDayIndex}` : "다음 DAY"}
+                    <MdArrowForward />
+                  </button>
+                </div>
+              ) : (
                 <button
                   type="button"
                   aria-label={text.dayRoute.openPlaceDirectionsAria(
@@ -482,21 +526,34 @@ function RouteStopNode({
                   )}
                   {text.dayRoute.placeDirections}
                 </button>
-              ) : null}
+              )}
             </div>
             {isOrderEditing ? (
-              <button
-                type="button"
-                aria-label={text.dayRoute.moveOrderAria(stop.place.title)}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                  onStartDrag(event);
-                }}
-                onClick={(event) => event.stopPropagation()}
-                className="absolute right-0 top-0 flex size-9 shrink-0 touch-none items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 active:cursor-grabbing"
-              >
-                <MdDragIndicator />
-              </button>
+              <div className="absolute right-0 top-0 flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label={`${stop.place.title} 삭제`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRemoveFromRoute();
+                  }}
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600"
+                >
+                  <MdDeleteOutline />
+                </button>
+                <button
+                  type="button"
+                  aria-label={text.dayRoute.moveOrderAria(stop.place.title)}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    onStartDrag(event);
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                  className="flex size-9 shrink-0 touch-none items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 active:cursor-grabbing"
+                >
+                  <MdDragIndicator />
+                </button>
+              </div>
             ) : (
               <div className="absolute right-0 top-0 flex shrink-0 flex-col items-end gap-2">
                 {isGpsTestEnabled ? (

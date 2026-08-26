@@ -173,6 +173,9 @@ export function useRouteDayDrag({
       return;
     }
 
+    dragCleanupRef.current?.();
+    dragCleanupRef.current = null;
+
     let pointerCaptureTarget: HTMLElement | null = null;
     if (pointerId != null && captureTarget.setPointerCapture) {
       try {
@@ -182,7 +185,6 @@ export function useRouteDayDrag({
         pointerCaptureTarget = null;
       }
     }
-    dragCleanupRef.current?.();
 
     const initialDraggedItem: DraggedDayItem = {
       itemIndex,
@@ -271,23 +273,25 @@ export function useRouteDayDrag({
       stopCurrentDrag();
     };
 
-    const handleLostPointerCapture = (event: PointerEvent) => {
-      if (isCurrentDragPointer(event)) {
-        stopCurrentDrag();
+    const handleDragCancel = (cancelEvent: PointerEvent) => {
+      if (!isCurrentDragPointer(cancelEvent)) {
+        return;
       }
+
+      stopCurrentDrag();
     };
 
     window.addEventListener("pointermove", handleDragMove, {
       passive: false,
     });
     window.addEventListener("pointerup", handleDragEnd, { once: true });
-    window.addEventListener("pointercancel", handleDragEnd, { once: true });
-    pointerCaptureTarget?.addEventListener(
-      "lostpointercapture",
-      handleLostPointerCapture
-    );
+    window.addEventListener("pointercancel", handleDragCancel, { once: true });
 
     dragCleanupRef.current = () => {
+      window.removeEventListener("pointermove", handleDragMove);
+      window.removeEventListener("pointerup", handleDragEnd);
+      window.removeEventListener("pointercancel", handleDragCancel);
+
       if (
         pointerId != null &&
         pointerCaptureTarget?.hasPointerCapture?.(pointerId)
@@ -298,13 +302,6 @@ export function useRouteDayDrag({
           // Pointer capture can already be released by the browser.
         }
       }
-      window.removeEventListener("pointermove", handleDragMove);
-      window.removeEventListener("pointerup", handleDragEnd);
-      window.removeEventListener("pointercancel", handleDragEnd);
-      pointerCaptureTarget?.removeEventListener(
-        "lostpointercapture",
-        handleLostPointerCapture
-      );
     };
   };
 

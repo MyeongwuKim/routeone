@@ -1,4 +1,4 @@
-import { MdClose } from "react-icons/md";
+import { MdClose, MdEdit } from "react-icons/md";
 import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupController";
 import { getLocalizedDayDateLabel } from "../../utils/dayRouteFormatting";
 
@@ -20,6 +20,10 @@ function DayRoutePopupHeader({ controller }: DayRoutePopupHeaderProps) {
     routeCompletedStopCount,
     routeStopCount,
     routeTitle,
+    isReadOnly,
+    isOrderEditing,
+    isSavingOrder,
+    handleStartOrderEditing,
     onClose,
   } = controller;
 
@@ -54,7 +58,7 @@ function DayRoutePopupHeader({ controller }: DayRoutePopupHeaderProps) {
             routeStopCount
           )}
         </p>
-        <p className="mt-0.5 text-[11px] font-bold text-brand-700">
+        <p className="mt-1 text-[11px] font-bold text-brand-700">
           {text.dayRoute.selectedDay(
             activeDay.dayIndex,
             getLocalizedDayDateLabel(activeDay, text)
@@ -62,14 +66,33 @@ function DayRoutePopupHeader({ controller }: DayRoutePopupHeaderProps) {
         </p>
         {headerMeta ? <div className="mt-2">{headerMeta}</div> : null}
       </div>
-      <button
-        type="button"
-        aria-label={text.dayRoute.closeAria}
-        onClick={onClose}
-        className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
-      >
-        <MdClose />
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        {!isReadOnly ? (
+          <button
+            type="button"
+            aria-label={isOrderEditing ? "루트 편집 중" : "루트 수정"}
+            title={isOrderEditing ? "루트 편집 중" : "루트 수정"}
+            aria-pressed={isOrderEditing}
+            onClick={handleStartOrderEditing}
+            disabled={isOrderEditing || isSavingOrder}
+            className={`inline-flex size-10 items-center justify-center rounded-full border text-lg shadow-sm transition disabled:cursor-default ${
+              isOrderEditing
+                ? "border-brand-600 bg-brand-600 text-white disabled:opacity-100"
+                : "border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:opacity-40"
+            }`}
+          >
+            <MdEdit />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          aria-label={text.dayRoute.closeAria}
+          onClick={onClose}
+          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
+        >
+          <MdClose />
+        </button>
+      </div>
     </header>
   );
 }

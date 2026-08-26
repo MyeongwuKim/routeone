@@ -1,11 +1,10 @@
 import {
   MdCheck,
+  MdCheckCircle,
   MdClose,
-  MdCompareArrows,
-  MdDeleteOutline,
-  MdEdit,
   MdImage,
   MdMap,
+  MdPlayArrow,
   MdShare,
 } from "react-icons/md";
 import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupController";
@@ -28,15 +27,17 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
     isOrderEditing,
     isSavingOrder,
     isOrderDirty,
-    orderedStopCount,
-    isDeletingDay,
     routeStopCount,
+    routeStatus,
+    routeActionDay,
+    isRouteActionDayCompleted,
+    isStartingRouteDay,
+    canStartRouteActionDay,
     handleRequestShareRoute,
     handleCancelOrderEditing,
     handleSaveOrder,
-    handleRequestDeleteDay,
+    handleRequestRouteActionDayStart,
     handleOpenMapForDay,
-    setIsOrderEditing,
   } = controller;
   const readOnlyActionIcon = readOnlyFooterAction?.icon ?? (
     <MdShare className="text-lg" />
@@ -97,7 +98,7 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
           </button>
         </div>
       ) : isOrderEditing ? (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={handleCancelOrderEditing}
@@ -106,15 +107,6 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
           >
             <MdClose />
             취소
-          </button>
-          <button
-            type="button"
-            onClick={() => handleOpenMapForDay(activeDay)}
-            disabled={!isOrderDirty || orderedStopCount < 2}
-            className="flex items-center justify-center gap-1.5 rounded-2xl border border-brand-200 bg-brand-50 px-2 py-3 text-xs font-bold text-brand-700 disabled:opacity-40"
-          >
-            <MdCompareArrows />
-            동선 비교
           </button>
           <button
             type="button"
@@ -127,24 +119,33 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={handleRequestDeleteDay}
-            disabled={isDeletingDay}
-            className="flex items-center justify-center gap-1.5 rounded-2xl border border-rose-100 bg-rose-50 px-2 py-3 text-xs font-bold text-rose-600 disabled:opacity-40"
+            onClick={handleRequestRouteActionDayStart}
+            disabled={!canStartRouteActionDay}
+            className={`flex items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 text-sm font-bold disabled:cursor-default ${
+              routeActionDay.startedAt || routeStatus === "COMPLETED"
+                ? "border-brand-200 bg-brand-50 text-brand-700 disabled:opacity-100"
+                : "border-brand-500 bg-brand-600 text-white disabled:opacity-40"
+            }`}
           >
-            <MdDeleteOutline />
-            {isDeletingDay ? "삭제 중" : "DAY 삭제"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsOrderEditing(true)}
-            disabled={orderedStopCount < 2}
-            className="flex items-center justify-center gap-1.5 rounded-2xl border border-brand-200 bg-brand-50 px-2 py-3 text-xs font-bold text-brand-700 disabled:opacity-40"
-          >
-            <MdEdit />
-            순서 편집
+            {routeStatus === "COMPLETED" ? (
+              <MdCheckCircle />
+            ) : (
+              <MdPlayArrow />
+            )}
+            {isStartingRouteDay
+              ? text.dayRoute.startingDayAction(routeActionDay.dayIndex)
+              : routeStatus === "COMPLETED"
+                ? text.myRouteCard.completed
+                : isRouteActionDayCompleted
+                  ? text.dayRoute.dayCompletedAction(routeActionDay.dayIndex)
+                  : routeActionDay.startedAt
+                    ? text.dayRoute.dayInProgressAction(
+                        routeActionDay.dayIndex
+                      )
+                    : text.dayRoute.startDayAction(routeActionDay.dayIndex)}
           </button>
           <button
             type="button"

@@ -1,0 +1,5 @@
+mutation UpdateRouteLayout($input: UpdateRouteLayoutInput!) {
+  updateRouteLayout(input: $input) {
+    ...RouteDetailFields
+  }
+}

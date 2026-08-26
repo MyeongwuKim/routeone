@@ -8,8 +8,11 @@ import {
 } from "react";
 import type { MyRouteStop } from "../types";
 
+export type RouteStopsByDayId = Record<string, MyRouteStop[]>;
+
 export type DraggedStop = {
   stop: MyRouteStop;
+  fromDayId: string;
   fromIndex: number;
   startX: number;
   startY: number;
@@ -18,39 +21,84 @@ export type DraggedStop = {
   isActive: boolean;
 };
 
-function moveStop(stops: MyRouteStop[], fromIndex: number, toIndex: number) {
-  const nextStops = [...stops];
-  const [movedStop] = nextStops.splice(fromIndex, 1);
+export type RouteStopDropTarget = {
+  dayId: string;
+  index: number;
+};
 
-  if (!movedStop) {
-    return stops;
-  }
-
-  const adjustedIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
-  const safeIndex = Math.max(0, Math.min(adjustedIndex, nextStops.length));
-  nextStops.splice(safeIndex, 0, movedStop);
-
-  return nextStops;
-}
+type DropZone = RouteStopDropTarget & {
+  node: HTMLDivElement;
+};
 
 type UseRouteStopDragOptions = {
   isOrderEditing: boolean;
-  orderedStops: MyRouteStop[];
-  setOrderedStops: Dispatch<SetStateAction<MyRouteStop[]>>;
+  stopsByDayId: RouteStopsByDayId;
+  setStopsByDayId: Dispatch<SetStateAction<RouteStopsByDayId>>;
 };
+
+function moveStop(
+  stopsByDayId: RouteStopsByDayId,
+  draggedStop: DraggedStop,
+  target: RouteStopDropTarget
+) {
+  const sourceStops = stopsByDayId[draggedStop.fromDayId] ?? [];
+  const sourceIndex = sourceStops.findIndex(
+    (stop) => stop.id === draggedStop.stop.id
+  );
+
+  if (sourceIndex < 0) {
+    return stopsByDayId;
+  }
+
+  const nextSourceStops = [...sourceStops];
+  const [movedStop] = nextSourceStops.splice(sourceIndex, 1);
+
+  if (!movedStop) {
+    return stopsByDayId;
+  }
+
+  if (draggedStop.fromDayId === target.dayId) {
+    const adjustedIndex =
+      target.index > sourceIndex ? target.index - 1 : target.index;
+    const safeIndex = Math.max(
+      0,
+      Math.min(adjustedIndex, nextSourceStops.length)
+    );
+    nextSourceStops.splice(safeIndex, 0, movedStop);
+
+    return {
+      ...stopsByDayId,
+      [target.dayId]: nextSourceStops,
+    };
+  }
+
+  const targetStops = [...(stopsByDayId[target.dayId] ?? [])];
+  const safeTargetIndex = Math.max(
+    0,
+    Math.min(target.index, targetStops.length)
+  );
+  targetStops.splice(safeTargetIndex, 0, movedStop);
+
+  return {
+    ...stopsByDayId,
+    [draggedStop.fromDayId]: nextSourceStops,
+    [target.dayId]: targetStops,
+  };
+}
 
 export function useRouteStopDrag({
   isOrderEditing,
-  orderedStops,
-  setOrderedStops,
+  stopsByDayId,
+  setStopsByDayId,
 }: UseRouteStopDragOptions) {
-  const dropZoneRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const dropZoneRefs = useRef(new Map<string, DropZone>());
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const draggedStopRef = useRef<DraggedStop | null>(null);
   const pendingDragRenderRef = useRef<DraggedStop | null>(null);
   const dragFrameRef = useRef<number | null>(null);
   const [draggedStop, setDraggedStop] = useState<DraggedStop | null>(null);
-  const [activeDropIndex, setActiveDropIndex] = useState<number | null>(null);
+  const [activeDropTarget, setActiveDropTarget] =
+    useState<RouteStopDropTarget | null>(null);
 
   const stopCurrentDrag = () => {
     dragCleanupRef.current?.();
@@ -62,39 +110,69 @@ export function useRouteStopDrag({
     pendingDragRenderRef.current = null;
     draggedStopRef.current = null;
     setDraggedStop(null);
-    setActiveDropIndex(null);
+    setActiveDropTarget(null);
   };
 
   const resetDropZones = () => {
-    dropZoneRefs.current = [];
+    dropZoneRefs.current.clear();
   };
 
-  const registerDropZone = (index: number, node: HTMLDivElement | null) => {
-    dropZoneRefs.current[index] = node;
-  };
+  const registerDropZone = (
+    dayId: string,
+    index: number,
+    node: HTMLDivElement | null
+  ) => {
+    const key = `${dayId}:${index}`;
 
-  const getDropIndexAtPoint = (clientY: number) => {
-    for (let index = 0; index < orderedStops.length; index += 1) {
-      const node = dropZoneRefs.current[index];
-
-      if (!node) {
-        continue;
-      }
-
-      const rect = node.getBoundingClientRect();
-      if (clientY < rect.top + rect.height / 2) {
-        return index;
-      }
+    if (node) {
+      dropZoneRefs.current.set(key, { dayId, index, node });
+    } else {
+      dropZoneRefs.current.delete(key);
     }
+  };
 
-    return orderedStops.length;
+  const getDropTargetAtPoint = (clientX: number, clientY: number) => {
+    let matchedTarget: RouteStopDropTarget | null = null;
+    let matchedDistance = Number.POSITIVE_INFINITY;
+
+    dropZoneRefs.current.forEach(({ dayId, index, node }) => {
+      const rect = node.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const isInside =
+        clientX >= rect.left - 20 &&
+        clientX <= rect.right + 20 &&
+        clientY >= rect.top - 12 &&
+        clientY <= rect.bottom + 12;
+
+      if (!isInside) {
+        return;
+      }
+
+      const distance = Math.hypot(centerX - clientX, centerY - clientY);
+      if (distance >= matchedDistance) {
+        return;
+      }
+
+      const dayStopCount = stopsByDayId[dayId]?.length ?? 0;
+      const targetIndex = Math.min(
+        clientY > centerY ? index + 1 : index,
+        dayStopCount
+      );
+      matchedTarget = { dayId, index: targetIndex };
+      matchedDistance = distance;
+    });
+
+    return matchedTarget;
   };
 
   const startDragStop = ({
+    dayId,
     stop,
     fromIndex,
     event,
   }: {
+    dayId: string;
     stop: MyRouteStop;
     fromIndex: number;
     event: ReactPointerEvent<HTMLButtonElement>;
@@ -113,6 +191,7 @@ export function useRouteStopDrag({
     dragCleanupRef.current?.();
     const initialDraggedStop: DraggedStop = {
       stop,
+      fromDayId: dayId,
       fromIndex,
       startX: event.clientX,
       startY: event.clientY,
@@ -122,7 +201,7 @@ export function useRouteStopDrag({
     };
     draggedStopRef.current = initialDraggedStop;
     setDraggedStop(initialDraggedStop);
-    setActiveDropIndex(null);
+    setActiveDropTarget(null);
 
     const isCurrentPointer = (pointerEvent: PointerEvent) =>
       pointerEvent.pointerId === event.pointerId;
@@ -133,7 +212,6 @@ export function useRouteStopDrag({
       }
 
       const currentDraggedStop = draggedStopRef.current;
-
       if (!currentDraggedStop) {
         return;
       }
@@ -168,35 +246,40 @@ export function useRouteStopDrag({
 
           pendingDragRenderRef.current = null;
           setDraggedStop(pendingDraggedStop);
-          setActiveDropIndex(getDropIndexAtPoint(pendingDraggedStop.y));
+          setActiveDropTarget(
+            getDropTargetAtPoint(
+              pendingDraggedStop.x,
+              pendingDraggedStop.y
+            )
+          );
         });
       }
     };
 
-    const handlePointerEnd = (pointerEvent: PointerEvent) => {
+    const handlePointerUp = (pointerEvent: PointerEvent) => {
       if (!isCurrentPointer(pointerEvent)) {
         return;
       }
 
       const currentDraggedStop = draggedStopRef.current;
-
-      if (!currentDraggedStop) {
-        stopCurrentDrag();
-        return;
-      }
-
-      if (currentDraggedStop.isActive) {
+      if (currentDraggedStop?.isActive) {
         pointerEvent.preventDefault();
-        const dropIndex = getDropIndexAtPoint(pointerEvent.clientY);
-        setOrderedStops((currentStops) =>
-          moveStop(currentStops, currentDraggedStop.fromIndex, dropIndex)
+        const dropTarget = getDropTargetAtPoint(
+          pointerEvent.clientX,
+          pointerEvent.clientY
         );
+
+        if (dropTarget) {
+          setStopsByDayId((currentStops) =>
+            moveStop(currentStops, currentDraggedStop, dropTarget)
+          );
+        }
       }
 
       stopCurrentDrag();
     };
 
-    const handleLostPointerCapture = (pointerEvent: PointerEvent) => {
+    const handlePointerCancel = (pointerEvent: PointerEvent) => {
       if (isCurrentPointer(pointerEvent)) {
         stopCurrentDrag();
       }
@@ -205,14 +288,16 @@ export function useRouteStopDrag({
     window.addEventListener("pointermove", handlePointerMove, {
       passive: false,
     });
-    window.addEventListener("pointerup", handlePointerEnd, { once: true });
-    window.addEventListener("pointercancel", handlePointerEnd, { once: true });
-    pointerCaptureTarget?.addEventListener(
-      "lostpointercapture",
-      handleLostPointerCapture
-    );
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+    window.addEventListener("pointercancel", handlePointerCancel, {
+      once: true,
+    });
 
     dragCleanupRef.current = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerCancel);
+
       if (pointerCaptureTarget?.hasPointerCapture?.(event.pointerId)) {
         try {
           pointerCaptureTarget.releasePointerCapture(event.pointerId);
@@ -220,13 +305,6 @@ export function useRouteStopDrag({
           // Pointer capture can already be released.
         }
       }
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerEnd);
-      window.removeEventListener("pointercancel", handlePointerEnd);
-      pointerCaptureTarget?.removeEventListener(
-        "lostpointercapture",
-        handleLostPointerCapture
-      );
     };
   };
 
@@ -240,7 +318,7 @@ export function useRouteStopDrag({
   }, []);
 
   return {
-    activeDropIndex,
+    activeDropTarget,
     draggedStop,
     registerDropZone,
     resetDropZones,

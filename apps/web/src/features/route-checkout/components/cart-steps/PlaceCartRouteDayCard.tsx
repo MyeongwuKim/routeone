@@ -38,8 +38,6 @@ type PlaceCartRouteDayCardProps = {
     targetDayNumber: number,
     position: "first" | "last"
   ) => void;
-  onRequestOrderEditing: () => void;
-  onFinishOrderEditing: () => void;
   onRequestSearchPlace: () => void;
 };
 
@@ -57,8 +55,6 @@ function PlaceCartRouteDayCard({
   onRemovePlace,
   onReorderDayItems,
   onMovePlaceToDay,
-  onRequestOrderEditing,
-  onFinishOrderEditing,
   onRequestSearchPlace,
 }: PlaceCartRouteDayCardProps) {
   const text = useUiText();
@@ -91,7 +87,6 @@ function PlaceCartRouteDayCard({
     previousDayDropZoneRef,
     registerDropZone,
     startDragItem: handleStartDragItem,
-    stopCurrentDrag,
   } = useRouteDayDrag({
     day,
     previousDay,
@@ -117,19 +112,6 @@ function PlaceCartRouteDayCard({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {isOrderEditing ? (
-            <button
-              type="button"
-              onPointerDown={stopCurrentDrag}
-              onClick={() => {
-                stopCurrentDrag();
-                onFinishOrderEditing();
-              }}
-                className="rounded-full border border-brand-600 bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm"
-              >
-              {text.cart.done}
-            </button>
-          ) : null}
           {day.items.length > 0 ? (
             <button
               type="button"
@@ -179,7 +161,6 @@ function PlaceCartRouteDayCard({
             onRequestStayMinutesEdit={setStayMinutesItem}
             onSelectItem={setSelectedItem}
             onStartDragItem={handleStartDragItem}
-            onRequestOrderEditing={onRequestOrderEditing}
             onRequestInsertPlace={setInsertRequest}
             onDropRouteItem={handleDropRouteItem}
             activeDropIndex={activeDropIndex}

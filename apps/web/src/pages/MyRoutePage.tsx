@@ -955,6 +955,8 @@ function MyRoutePage() {
           route={selectedRouteDay.route}
           day={selectedRouteDay.day}
           onClose={handleCloseSelectedDayRoute}
+          onRequestStartRoute={handleRequestStartRoute}
+          isRouteStartPending={startRouteMutation.isPending}
           enableVerificationPhotoPreview
         />
       ) : null}

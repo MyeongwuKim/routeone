@@ -13,13 +13,12 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
   const todayKey = getTodayDateKey();
   const {
     sortedDays,
-    activeDay,
     expandedDayIds,
-    orderedStops,
+    stopsByDayId,
     startLocation,
     dailyStartMinutes,
     isOrderEditing,
-    activeDropIndex,
+    activeDropTarget,
     draggedStopId,
     visitSavingStopId,
     staySavingStopId,
@@ -40,7 +39,10 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
     travelSegmentByKey,
     registerDropZone,
     startDragStop,
+    handleMoveStopToDay,
+    handleRemoveStopFromLayout,
     handleSelectDay,
+    handleRequestDeleteDay,
     setDayStartTimeTarget,
     openStartLocationPicker,
     setStayMinutesEditTarget,
@@ -83,11 +85,10 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
             </button>
           </section>
         ) : null}
-        {sortedDays.map((routeDay) => {
-          const isRouteDayActive = routeDay.id === activeDay.id;
-          const routeDayStops = isRouteDayActive
-            ? orderedStops
-            : routeDay.stops;
+        {sortedDays.map((routeDay, dayPosition) => {
+          const routeDayStops = stopsByDayId[routeDay.id] ?? [];
+          const previousDay = sortedDays[dayPosition - 1] ?? null;
+          const nextDay = sortedDays[dayPosition + 1] ?? null;
 
           return (
             <DayRouteAccordionItem
@@ -97,21 +98,19 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               orderedStops={routeDayStops}
               startLocation={startLocation}
               dailyStartMinutes={dailyStartMinutes}
-              isOrderEditing={isRouteDayActive && isOrderEditing}
-              activeDropIndex={isRouteDayActive ? activeDropIndex : null}
-              draggedStopId={isRouteDayActive ? draggedStopId : null}
+              isOrderEditing={isOrderEditing}
+              activeDropIndex={
+                activeDropTarget?.dayId === routeDay.id
+                  ? activeDropTarget.index
+                  : null
+              }
+              draggedStopId={draggedStopId}
               visitSavingStopId={visitSavingStopId}
               staySavingStopId={staySavingStopId}
               isReadOnly={isReadOnly}
               canEditVisitTimes={canEditVisitTimes}
               canEditDayStartTime={canEditDayStartTime}
               canEditStartLocation={canEditStartLocation}
-              canStartDay={
-                canEditDayStartTime &&
-                !isRetrospectiveCompletion &&
-                !routeDay.startedAt &&
-                visitEnabledDayIds.has(routeDay.id)
-              }
               canRecordDayStart={
                 canEditDayStartTime &&
                 !routeDay.startedAt &&
@@ -139,13 +138,11 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               gpsTestLocationStopId={gpsTestLocationStopId}
               directionsOpeningStopId={directionsOpeningStopId}
               travelSegmentByKey={travelSegmentByKey}
+              canDeleteDay={isOrderEditing && sortedDays.length > 1}
+              previousDay={previousDay}
+              nextDay={nextDay}
               onSelect={handleSelectDay}
-              onRequestDayStart={(selectedDay) =>
-                setDayStartTimeTarget({
-                  routeDay: selectedDay,
-                  mode: "start",
-                })
-              }
+              onRequestDeleteDay={handleRequestDeleteDay}
               onRequestPlannedStartEdit={(selectedDay) =>
                 setDayStartTimeTarget({
                   routeDay: selectedDay,
@@ -159,14 +156,23 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
                 })
               }
               onRequestStartLocationEdit={openStartLocationPicker}
-              onRegisterDropZone={
-                isRouteDayActive ? registerDropZone : () => undefined
+              onRegisterDropZone={(index, node) =>
+                registerDropZone(routeDay.id, index, node)
               }
               onStartDrag={(stop, fromIndex, event) => {
-                if (isRouteDayActive) {
-                  startDragStop({ stop, fromIndex, event });
-                }
+                startDragStop({
+                  dayId: routeDay.id,
+                  stop,
+                  fromIndex,
+                  event,
+                });
               }}
+              onMoveStopToDay={(stopId, targetDayId) =>
+                handleMoveStopToDay(stopId, routeDay.id, targetDayId)
+              }
+              onRemoveStop={(stopId) =>
+                handleRemoveStopFromLayout(routeDay.id, stopId)
+              }
               onRequestStayMinutesEdit={(stop) => {
                 if (!isReadOnly) {
                   setStayMinutesEditTarget({ routeDay, stop });

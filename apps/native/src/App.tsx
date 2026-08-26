@@ -25,6 +25,7 @@ export default function App() {
   const onboardingTheme = useNativeOnboardingTheme();
   const {
     appLanguage,
+    bootProgressStage,
     bootStep,
     completeNativeLogin,
     handleNativeAuthSessionChange,
@@ -58,9 +59,8 @@ export default function App() {
           backgroundColor={brandBackgroundColor}
         />
         <RouteOneLaunchScreen
-          message={text.launchPreparing}
-          progress={0.06}
-          showProgress={false}
+          message={text.launchCheckingUpdate}
+          progress={0.08}
           tagline={text.launchTagline}
         />
       </View>
@@ -91,8 +91,12 @@ export default function App() {
           backgroundColor={brandBackgroundColor}
         />
         <RouteOneLaunchScreen
-          message={text.launchPreparing}
-          progress={0.06}
+          message={
+            bootProgressStage === "location"
+              ? text.launchPreparingLocation
+              : text.launchCheckingStorage
+          }
+          progress={bootProgressStage === "location" ? 0.28 : 0.16}
           tagline={text.launchTagline}
         />
       </View>

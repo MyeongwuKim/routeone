@@ -37,6 +37,7 @@ import {
   shareRoute,
   startRoute,
   updateRouteDayStart,
+  updateRouteLayout,
   updateRouteStartLocation,
   updateRouteStopStayMinutes,
   updateRouteStopVisitTimes,
@@ -48,6 +49,7 @@ import {
   type RouteStopVisitVerificationInput,
   type StartRouteInput,
   type UpdateRouteDayStartInput,
+  type UpdateRouteLayoutInput,
   type UpdateRouteStartLocationInput,
   type UpdateRouteStopStayMinutesInput,
   type UpdateRouteStopVisitTimesInput,
@@ -325,6 +327,22 @@ export const routeTypeDefs = gql`
     stopIds: [ID!]!
   }
 
+  input RouteLayoutStopInput {
+    stopId: ID!
+    stayMinutes: Int
+  }
+
+  input RouteDayLayoutInput {
+    dayId: ID!
+    stops: [RouteLayoutStopInput!]!
+  }
+
+  input UpdateRouteLayoutInput {
+    routeId: ID!
+    days: [RouteDayLayoutInput!]!
+    deletedDayIds: [ID!]
+  }
+
   input UpdateRouteStopStayMinutesInput {
     stopId: ID!
     stayMinutes: Int!
@@ -404,6 +422,7 @@ export const routeTypeDefs = gql`
     ): Route!
     deleteRouteStopVisitPhoto(stopId: ID!): Route!
     reorderRouteStops(input: ReorderRouteStopsInput!): Route!
+    updateRouteLayout(input: UpdateRouteLayoutInput!): Route!
     updateRouteStopStayMinutes(input: UpdateRouteStopStayMinutesInput!): Route!
     updateRouteStopVisitTimes(input: UpdateRouteStopVisitTimesInput!): Route!
     clearRoute(routeId: ID!): Route!
@@ -553,6 +572,10 @@ type CloneRouteArgs = {
 
 type ReorderRouteStopsArgs = {
   input: ReorderRouteStopsInput;
+};
+
+type UpdateRouteLayoutArgs = {
+  input: UpdateRouteLayoutInput;
 };
 
 type UpdateRouteStopStayMinutesArgs = {
@@ -831,6 +854,14 @@ export const routeResolvers = {
     ) {
       const user = requireUser(context);
       return reorderRouteStops(context.prisma, user, args.input);
+    },
+    updateRouteLayout(
+      _parent: unknown,
+      args: UpdateRouteLayoutArgs,
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return updateRouteLayout(context.prisma, user, args.input);
     },
     updateRouteStopStayMinutes(
       _parent: unknown,

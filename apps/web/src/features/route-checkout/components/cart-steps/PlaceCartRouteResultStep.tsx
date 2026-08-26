@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { IoLocationSharp } from "react-icons/io5";
+import { IoLocationSharp, IoReorderThreeOutline } from "react-icons/io5";
 import {
   getEffectiveRoutePlanTripDays,
   routeCheckoutApi,
@@ -229,7 +229,7 @@ function PlaceCartRouteResultStep({
   const getBaselineDay = (dayNumber: number) =>
     appliedRoutePlan.find((day) => day.day === dayNumber) ?? null;
   const startOrderEditing = () => {
-    if (!hasEditableRoute || isOrderEditing) {
+    if (!hasEditableRoute || isRouteTravelLoading || isOrderEditing) {
       return;
     }
 
@@ -363,6 +363,7 @@ function PlaceCartRouteResultStep({
               label: text.cart.chooseDateAgain,
               variant: "primary",
               onClick: () => {
+                setIsOrderEditing(false);
                 setStep("schedule");
               },
             },
@@ -426,15 +427,13 @@ function PlaceCartRouteResultStep({
       <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="route-checkout-step-enter space-y-4">
           <div>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-trip text-sm text-brand-700">ROUTE RESULT</p>
-                {isRouteEditDirty ? (
-                  <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
-                    {text.cart.editingBadge}
-                  </span>
-                ) : null}
-              </div>
+            <div className="min-w-0">
+              <p className="font-trip text-sm text-brand-700">ROUTE RESULT</p>
+              {isRouteEditDirty ? (
+                <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+                  {text.cart.editingBadge}
+                </span>
+              ) : null}
             </div>
             <p className="mt-1 text-xl font-semibold text-slate-900">
               {appendTarget ? text.cart.appendResultTitle : text.cart.resultTitle}
@@ -519,8 +518,6 @@ function PlaceCartRouteResultStep({
                   onRemovePlace={handleRemoveRoutePlace}
                   onReorderDayItems={handleReorderDayItems}
                   onMovePlaceToDay={handleMovePlaceToDay}
-                  onRequestOrderEditing={startOrderEditing}
-                  onFinishOrderEditing={finishOrderEditing}
                   onRequestSearchPlace={onRequestSearchPlace}
                 />
               ))
@@ -533,45 +530,65 @@ function PlaceCartRouteResultStep({
         {isRouteOrderEditing ? (
           <button
             type="button"
-            disabled
-            className="w-full rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-700 opacity-80"
+            onClick={finishOrderEditing}
+            className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
           >
             {text.cart.finishOrderEditing}
           </button>
         ) : isRouteEditDirty ? (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={startOrderEditing}
+              disabled={isRouteTravelLoading || !hasEditableRoute}
+              className="inline-flex items-center justify-center gap-1 rounded-2xl border border-brand-200 bg-brand-50 px-2 py-3 text-xs font-bold text-brand-700 disabled:opacity-40"
+            >
+              <IoReorderThreeOutline className="text-base" />
+              {text.cart.editOrder}
+            </button>
             <button
               type="button"
               onClick={handleCancelResultEdits}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600"
+              className="rounded-2xl border border-slate-200 bg-white px-2 py-3 text-xs font-bold text-slate-600"
             >
               {text.cart.cancelChanges}
             </button>
             <button
               type="button"
               onClick={handleApplyResultEdits}
-              className="rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white"
+              className="rounded-2xl bg-brand-600 px-2 py-3 text-xs font-bold text-white"
             >
               {text.cart.applyChanges}
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={handleSaveRoute}
-            disabled={
-              isSavingRoute || isRouteTravelLoading || !hasEditableRoute
-            }
-            className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
-          >
-            {isSavingRoute
-              ? text.cart.saving
-              : isRouteTravelLoading
-                ? text.dayRoute.routeCalculating
-              : appendTarget
-                ? text.cart.addDay
-                : text.cart.done}
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={startOrderEditing}
+              disabled={isRouteTravelLoading || !hasEditableRoute}
+              className="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-brand-200 bg-brand-50 px-3 py-3 text-sm font-bold text-brand-700 disabled:opacity-40"
+            >
+              <IoReorderThreeOutline className="text-lg" />
+              {text.cart.editOrder}
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveRoute}
+              disabled={
+                isSavingRoute || isRouteTravelLoading || !hasEditableRoute
+              }
+              className="rounded-2xl bg-brand-600 px-3 py-3 text-sm font-bold text-white disabled:opacity-40"
+            >
+              {isSavingRoute
+                ? text.cart.saving
+                : isRouteTravelLoading
+                  ? text.dayRoute.routeCalculating
+                  : appendTarget
+                    ? text.cart.addDay
+                    : text.cart.done}
+            </button>
+          </div>
         )}
       </footer>
 

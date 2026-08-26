@@ -64,6 +64,8 @@ type WebViewNavigationRequest = {
   isTopFrame?: boolean;
 };
 
+const WEB_BUNDLE_DISPLAY_PROGRESS_START = 0.32;
+
 function createNotificationReceivedEventScript(
   notification: Notifications.Notification
 ) {
@@ -114,6 +116,9 @@ function readDisplayBundleProgress(
   text: (typeof WEB_VIEW_TEXT)[AppLanguage]
 ): WebBundleProgress {
   const normalizedProgress = readBundleProgress(progress);
+  const displayProgress =
+    WEB_BUNDLE_DISPLAY_PROGRESS_START +
+    normalizedProgress.progress * (1 - WEB_BUNDLE_DISPLAY_PROGRESS_START);
   const loadingMessages: readonly string[] = [
     text.loadingRouteOne,
     text.reloadingRouteOne,
@@ -124,11 +129,15 @@ function readDisplayBundleProgress(
     normalizedProgress.stage === "loading" &&
     loadingMessages.includes(normalizedProgress.message)
   ) {
-    return normalizedProgress;
+    return {
+      ...normalizedProgress,
+      progress: displayProgress
+    };
   }
 
   return {
     ...normalizedProgress,
+    progress: displayProgress,
     message:
       text.progressMessages[normalizedProgress.stage] ??
       normalizedProgress.message

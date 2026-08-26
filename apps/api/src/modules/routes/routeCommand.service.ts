@@ -18,6 +18,7 @@ import type {
   ReorderRouteStopsInput,
   RouteStartLocationInput,
   StartRouteInput,
+  UpdateRouteLayoutInput,
   UpdateRouteStartLocationInput,
   UpdateRouteStopStayMinutesInput,
 } from "./route.types.js";
@@ -807,6 +808,150 @@ export async function reorderRouteStops(
       })
     )
   );
+
+  return refreshRouteProgress(prisma, route.id);
+}
+
+export async function updateRouteLayout(
+  prisma: PrismaClient,
+  user: User,
+  input: UpdateRouteLayoutInput
+) {
+  const route = await assertRouteOwner(prisma, input.routeId, user.id);
+  const routeDays = await prisma.routeDay.findMany({
+    where: { routeId: route.id },
+    orderBy: { dayIndex: "asc" },
+  });
+  const routeStops = await prisma.routeStop.findMany({
+    where: { routeId: route.id },
+    orderBy: { order: "asc" },
+  });
+  const routeDayIdSet = new Set(routeDays.map((day) => day.id));
+  const routeStopById = new Map(routeStops.map((stop) => [stop.id, stop]));
+  const deletedDayIds = [...new Set(input.deletedDayIds ?? [])];
+  const deletedDayIdSet = new Set(deletedDayIds);
+  const layoutDayIds = input.days.map((day) => day.dayId);
+  const layoutDayIdSet = new Set(layoutDayIds);
+
+  if (layoutDayIds.length !== layoutDayIdSet.size) {
+    throw new UserFacingError("같은 DAY가 중복되어 있습니다.");
+  }
+
+  if (
+    deletedDayIds.some((dayId) => !routeDayIdSet.has(dayId)) ||
+    layoutDayIds.some((dayId) => !routeDayIdSet.has(dayId))
+  ) {
+    throw new UserFacingError("일정에 없는 DAY가 포함되어 있습니다.");
+  }
+
+  if (deletedDayIds.some((dayId) => layoutDayIdSet.has(dayId))) {
+    throw new UserFacingError("삭제할 DAY에는 장소를 배치할 수 없습니다.");
+  }
+
+  const remainingDays = routeDays.filter(
+    (day) => !deletedDayIdSet.has(day.id)
+  );
+
+  if (remainingDays.length === 0) {
+    throw new UserFacingError("마지막 DAY는 전체 일정 삭제로 지워 주세요.");
+  }
+
+  if (
+    remainingDays.some((day) => !layoutDayIdSet.has(day.id)) ||
+    input.days.length !== remainingDays.length
+  ) {
+    throw new UserFacingError("남아 있는 모든 DAY의 장소를 포함해 주세요.");
+  }
+
+  const layoutByDayId = new Map(input.days.map((day) => [day.dayId, day]));
+  const keptStopIds: string[] = [];
+
+  for (const day of remainingDays) {
+    const layout = layoutByDayId.get(day.id);
+
+    for (const stopInput of layout?.stops ?? []) {
+      if (!routeStopById.has(stopInput.stopId)) {
+        throw new UserFacingError("일정에 없는 장소가 포함되어 있습니다.");
+      }
+
+      keptStopIds.push(stopInput.stopId);
+    }
+  }
+
+  if (keptStopIds.length !== new Set(keptStopIds).size) {
+    throw new UserFacingError("같은 장소가 중복되어 있습니다.");
+  }
+
+  const keptStopIdSet = new Set(keptStopIds);
+  const removedStops = routeStops.filter(
+    (stop) => !keptStopIdSet.has(stop.id)
+  );
+
+  await prisma.$transaction(async (transaction) => {
+    for (const stop of removedStops) {
+      await syncPlaceStayStatForRouteStopChange(transaction, stop, null);
+    }
+
+    if (removedStops.length > 0) {
+      const removedStopIds = removedStops.map((stop) => stop.id);
+      await transaction.placePhoto.deleteMany({
+        where: { routeStopId: { in: removedStopIds } },
+      });
+      await transaction.routeStop.deleteMany({
+        where: { id: { in: removedStopIds } },
+      });
+    }
+
+    if (deletedDayIds.length > 0) {
+      await transaction.routeDay.deleteMany({
+        where: { id: { in: deletedDayIds } },
+      });
+      await deletePendingRouteStartNotifications(transaction, route.id);
+    }
+
+    let nextOrder = 1;
+    for (const [dayIndex, day] of remainingDays.entries()) {
+      await transaction.routeDay.update({
+        where: { id: day.id },
+        data: {
+          dayIndex: dayIndex + 1,
+          date: route.travelStartDate
+            ? addDays(route.travelStartDate, dayIndex)
+            : day.date,
+        },
+      });
+
+      const layout = layoutByDayId.get(day.id);
+      for (const stopInput of layout?.stops ?? []) {
+        const stayMinutes =
+          stopInput.stayMinutes == null
+            ? null
+            : Math.max(10, Math.min(480, Math.round(stopInput.stayMinutes)));
+
+        await transaction.routeStop.update({
+          where: { id: stopInput.stopId },
+          data: {
+            dayId: day.id,
+            order: nextOrder,
+            stayMinutes,
+            travelMinutesFromPrevious: null,
+          },
+        });
+        nextOrder += 1;
+      }
+    }
+
+    await transaction.route.update({
+      where: { id: route.id },
+      data: {
+        tripDays: remainingDays.length,
+        travelEndDate: route.travelStartDate
+          ? addDays(route.travelStartDate, remainingDays.length - 1)
+          : (remainingDays.at(-1)?.date ?? route.travelEndDate),
+        status: route.status === "COMPLETED" ? "ACTIVE" : route.status,
+      },
+    });
+  });
 
   return refreshRouteProgress(prisma, route.id);
 }

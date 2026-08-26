@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
 import { IoAdd, IoCarSportOutline } from "react-icons/io5";
+import { MdDragIndicator } from "react-icons/md";
 import type { UiText } from "@/lib/uiText";
 import {
   ROUTE_COLUMNS,
@@ -15,7 +15,6 @@ import {
   getRouteDurationText,
   getRoutePointX,
   type DragStartPayload,
-  type LongPressPointer,
   type PlaceStaySummaryPreview,
   type RouteRowEntry,
   type RouteStation,
@@ -251,7 +250,6 @@ function StationNode({
   onRequestStayMinutesEdit,
   onSelectItem,
   onStartDragItem,
-  onRequestOrderEditing,
 }: {
   station: RouteStation;
   isOrderEditing: boolean;
@@ -260,11 +258,7 @@ function StationNode({
   onRequestStayMinutesEdit: (item: PlannedRouteItem) => void;
   onSelectItem: (item: PlannedRouteItem) => void;
   onStartDragItem: (payload: DragStartPayload) => void;
-  onRequestOrderEditing: () => void;
 }) {
-  const longPressTimerRef = useRef<number | null>(null);
-  const longPressPointerRef = useRef<LongPressPointer | null>(null);
-  const didLongPressRef = useRef(false);
   const isOverSchedule = station.item?.isOverSchedule ?? false;
   const thumbnailUrl =
     station.item?.place.images.find((imageUrl) => imageUrl.trim()) ?? "";
@@ -272,15 +266,6 @@ function StationNode({
     getAverageStaySummaryLabel(averageStaySummary, text);
   const orderLabel =
     station.type === "place" ? String(station.itemIndex + 1) : "S";
-  const clearLongPressTimer = () => {
-    if (longPressTimerRef.current) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    longPressPointerRef.current = null;
-  };
-
-  useEffect(() => clearLongPressTimer, []);
 
   const nodeContent = (
     <>
@@ -289,7 +274,7 @@ function StationNode({
           station.type === "start"
             ? "border-slate-300 text-brand-700"
             : isOrderEditing
-              ? "cursor-grab border-brand-600 ring-4 ring-brand-100 active:cursor-grabbing"
+              ? "border-brand-600 ring-4 ring-brand-100"
               : isOverSchedule
                 ? "border-amber-300"
                 : "border-brand-500"
@@ -331,109 +316,62 @@ function StationNode({
         <p className="mt-0.5 text-[10px] font-semibold text-brand-700">
           {formatRouteClock(station.item.startMinutes)}
         </p>
-      ) : !isOrderEditing || station.type === "start" ? (
+      ) : station.type === "start" ? (
         <p className="mt-0.5 text-[10px] font-semibold text-brand-700">
           START
         </p>
-      ) : (
-        <p className="mt-0.5 text-[10px] font-semibold text-brand-700">
-          {text.cart.drag}
-        </p>
-      )}
+      ) : null}
     </>
   );
 
   return (
     <div className="relative z-20 flex min-w-0 flex-col items-center px-1">
-      {station.item ? (
+      {station.item && !isOrderEditing ? (
         <button
           type="button"
           data-route-drag-index={station.itemIndex}
           draggable={false}
-          onPointerDown={(event) => {
-            if (isOrderEditing) {
-              onStartDragItem({
-                itemIndex: station.itemIndex,
-                item: station.item as PlannedRouteItem,
-                clientX: event.clientX,
-                clientY: event.clientY,
-                button: event.button,
-                captureTarget: event.currentTarget,
-                pointerId: event.pointerId,
-              });
-              return;
-            }
-            if (event.button !== 0) {
-              return;
-            }
-
-            didLongPressRef.current = false;
-            longPressPointerRef.current = {
-              startX: event.clientX,
-              startY: event.clientY,
-              currentX: event.clientX,
-              currentY: event.clientY,
-              button: event.button,
-              captureTarget: event.currentTarget,
-              pointerId: event.pointerId,
-            };
-            longPressTimerRef.current = window.setTimeout(() => {
-              const pointer = longPressPointerRef.current;
-              if (!pointer) {
-                return;
-              }
-
-              didLongPressRef.current = true;
-              clearLongPressTimer();
-              onRequestOrderEditing();
-              onStartDragItem({
-                itemIndex: station.itemIndex,
-                item: station.item as PlannedRouteItem,
-                clientX: pointer.currentX,
-                clientY: pointer.currentY,
-                button: pointer.button,
-                captureTarget: pointer.captureTarget,
-                pointerId: pointer.pointerId,
-              });
-            }, 420);
-          }}
-          onPointerMove={(event) => {
-            const pointer = longPressPointerRef.current;
-            if (!pointer) {
-              return;
-            }
-
-            pointer.currentX = event.clientX;
-            pointer.currentY = event.clientY;
-            if (
-              Math.hypot(
-                event.clientX - pointer.startX,
-                event.clientY - pointer.startY
-              ) > 8
-            ) {
-              clearLongPressTimer();
-            }
-          }}
-          onPointerUp={clearLongPressTimer}
-          onPointerCancel={clearLongPressTimer}
-          onClick={() => {
-            if (didLongPressRef.current) {
-              didLongPressRef.current = false;
-              return;
-            }
-            if (!isOrderEditing) {
-              onSelectItem(station.item as PlannedRouteItem);
-            }
-          }}
-          className={`flex min-w-0 flex-col items-center ${
-            isOrderEditing ? "route-order-drag-node" : ""
-          }`}
+          onClick={() => onSelectItem(station.item as PlannedRouteItem)}
+          className="flex min-w-0 flex-col items-center"
         >
           {nodeContent}
         </button>
       ) : (
         nodeContent
       )}
+
+      {station.item && isOrderEditing ? (
+        <button
+          type="button"
+          aria-label={text.cart.dragHandleAria(station.title)}
+          onPointerDown={(event) => {
+            if (event.button !== 0) {
+              return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            onStartDragItem({
+              itemIndex: station.itemIndex,
+              item: station.item as PlannedRouteItem,
+              clientX: event.clientX,
+              clientY: event.clientY,
+              button: event.button,
+              captureTarget: event.currentTarget,
+              pointerId: event.pointerId,
+            });
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onContextMenu={(event) => event.preventDefault()}
+          className="route-order-drag-handle mt-1 inline-flex h-8 min-w-[68px] items-center justify-center gap-1 rounded-full border border-brand-300 bg-brand-50 px-2 text-[10px] font-black text-brand-700 shadow-sm dark:border-brand-400/50 dark:bg-slate-900 dark:text-brand-100"
+        >
+          <MdDragIndicator className="text-base" />
+          {text.cart.drag}
+        </button>
+      ) : null}
 
       {station.item && !isOrderEditing ? (
         <>
@@ -470,7 +408,6 @@ function RouteRowGroup({
   onRequestStayMinutesEdit,
   onSelectItem,
   onStartDragItem,
-  onRequestOrderEditing,
   onRequestInsertPlace,
   onDropRouteItem,
   activeDropIndex,
@@ -485,7 +422,6 @@ function RouteRowGroup({
   onRequestStayMinutesEdit: (item: PlannedRouteItem) => void;
   onSelectItem: (item: PlannedRouteItem) => void;
   onStartDragItem: (payload: DragStartPayload) => void;
-  onRequestOrderEditing: () => void;
   onRequestInsertPlace: (request: RouteInsertRequest) => void;
   onDropRouteItem: (targetIndex: number) => void;
   activeDropIndex: number | null;
@@ -541,7 +477,6 @@ function RouteRowGroup({
                 onRequestStayMinutesEdit={onRequestStayMinutesEdit}
                 onSelectItem={onSelectItem}
                 onStartDragItem={onStartDragItem}
-                onRequestOrderEditing={onRequestOrderEditing}
               />
             </div>
           ) : (
@@ -601,7 +536,6 @@ export function RouteDayTimeline({
   onRequestStayMinutesEdit,
   onSelectItem,
   onStartDragItem,
-  onRequestOrderEditing,
   onRequestInsertPlace,
   onDropRouteItem,
   activeDropIndex,
@@ -615,7 +549,6 @@ export function RouteDayTimeline({
   onRequestStayMinutesEdit: (item: PlannedRouteItem) => void;
   onSelectItem: (item: PlannedRouteItem) => void;
   onStartDragItem: (payload: DragStartPayload) => void;
-  onRequestOrderEditing: () => void;
   onRequestInsertPlace: (request: RouteInsertRequest) => void;
   onDropRouteItem: (targetIndex: number) => void;
   activeDropIndex: number | null;
@@ -649,7 +582,6 @@ export function RouteDayTimeline({
             onRequestStayMinutesEdit={onRequestStayMinutesEdit}
             onSelectItem={onSelectItem}
             onStartDragItem={onStartDragItem}
-            onRequestOrderEditing={onRequestOrderEditing}
             onRequestInsertPlace={onRequestInsertPlace}
             onDropRouteItem={onDropRouteItem}
             activeDropIndex={activeDropIndex}

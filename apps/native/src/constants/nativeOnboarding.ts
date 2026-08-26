@@ -102,7 +102,9 @@ export const ONBOARDING_TEXT = {
     requestPermission: "권한 요청하기",
     checking: "확인 중",
     sessionExpired: "7일 동안 접속하지 않아 로그아웃되었어요.",
-    launchPreparing: "앱을 준비하고 있어요.",
+    launchCheckingUpdate: "앱 버전을 확인하고 있어요.",
+    launchCheckingStorage: "저장된 정보를 확인하고 있어요.",
+    launchPreparingLocation: "위치 정보를 가져오고 있어요.",
     launchTagline: "여행의 시작부터 도착까지"
   },
   en: {
@@ -115,7 +117,9 @@ export const ONBOARDING_TEXT = {
     requestPermission: "Request Permission",
     checking: "Checking",
     sessionExpired: "You were signed out after 7 days of inactivity.",
-    launchPreparing: "Preparing the app.",
+    launchCheckingUpdate: "Checking the app version.",
+    launchCheckingStorage: "Checking saved information.",
+    launchPreparingLocation: "Getting your location.",
     launchTagline: "From first plan to final stop"
   }
 } as const;
