@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import {
   MdAdd,
   MdAccessTime,
@@ -1182,6 +1182,119 @@ function formatDateKeyLabel(dateKey: string | null) {
   return `${year}.${Number(month)}.${Number(day)}`;
 }
 
+function VerificationPhotoDeleteDialog({
+  isSaving,
+  triggerRef,
+  onCancel,
+  onDelete,
+}: {
+  isSaving: boolean;
+  triggerRef: RefObject<HTMLButtonElement | null>;
+  onCancel: () => void;
+  onDelete: () => void;
+}) {
+  const text = useUiText();
+  const titleId = useId();
+  const descriptionId = useId();
+  const dialogRef = useRef<HTMLElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const trigger = triggerRef.current;
+    cancelButtonRef.current?.focus();
+
+    return () => {
+      trigger?.focus();
+    };
+  }, [triggerRef]);
+
+  useEffect(() => {
+    if (isSaving) {
+      dialogRef.current?.focus();
+    }
+  }, [isSaving]);
+
+  return (
+    <div className="center-modal-backdrop-enter fixed inset-0 z-[3400] flex items-center justify-center bg-slate-950/60 px-4 py-6">
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={text.dayRoute.cancelPhotoDelete}
+        disabled={isSaving}
+        onClick={onCancel}
+        className="absolute inset-0 cursor-default"
+      />
+      <section
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        aria-busy={isSaving}
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!isSaving) onCancel();
+          }
+
+          if (event.key === "Tab") {
+            event.preventDefault();
+            const buttons = Array.from(
+              event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                "button:not(:disabled)"
+              )
+            );
+            const activeIndex = buttons.findIndex(
+              (button) => button === document.activeElement
+            );
+            const nextIndex = event.shiftKey
+              ? (activeIndex <= 0 ? buttons.length : activeIndex) - 1
+              : (activeIndex + 1) % buttons.length;
+            (buttons[nextIndex] ?? dialogRef.current)?.focus();
+          }
+        }}
+        className="center-modal-panel-enter relative w-full max-w-[350px] rounded-[1.4rem] border border-slate-200 bg-white p-5 shadow-2xl outline-none dark:border-slate-700 dark:bg-slate-950"
+      >
+        <span className="flex size-10 items-center justify-center rounded-full bg-rose-50 text-xl text-rose-600 dark:bg-rose-400/10 dark:text-rose-300">
+          <MdDeleteOutline />
+        </span>
+        <h3 id={titleId} className="mt-3 text-lg font-black text-slate-900 dark:text-white">
+          {text.dayRoute.deletePhotoQuestion}
+        </h3>
+        <p id={descriptionId} className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-300">
+          {text.dayRoute.deletePhotoDescription}
+        </p>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <button
+            ref={cancelButtonRef}
+            type="button"
+            disabled={isSaving}
+            onClick={onCancel}
+            className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-600 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            {text.dayRoute.cancelPhotoDelete}
+          </button>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onDelete}
+            className="flex items-center justify-center gap-1.5 rounded-2xl bg-rose-600 px-3 py-3 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {isSaving ? (
+              <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              <MdDeleteOutline className="text-base" />
+            )}
+            {text.dayRoute.deletePhoto}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function VerificationPhotoPreviewPopup({
   target,
   canManage,
@@ -1206,6 +1319,8 @@ export function VerificationPhotoPreviewPopup({
 }) {
   const text = useUiText();
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const isDeleteDialogOpen = canManage && isDeleteConfirming;
   const photoUrl = target.stop.verificationPhotoUrl;
   const isPublished =
     target.stop.verificationPhotoPublicationConsent === true ||
@@ -1232,10 +1347,13 @@ export function VerificationPhotoPreviewPopup({
         type="button"
         aria-label={text.dayRoute.closeImageAria(previewLabel)}
         className="absolute inset-0 cursor-default"
-        disabled={isSaving}
+        disabled={isSaving || isDeleteDialogOpen}
         onClick={onClose}
       />
-      <section className="center-modal-panel-enter relative flex max-h-full w-full max-w-[430px] flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-2xl dark:bg-slate-950">
+      <section
+        inert={isDeleteDialogOpen}
+        className="center-modal-panel-enter relative flex max-h-full w-full max-w-[430px] flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-2xl dark:bg-slate-950"
+      >
         <div className="relative min-h-0 bg-slate-950">
           <img
             src={photoUrl}
@@ -1305,7 +1423,7 @@ export function VerificationPhotoPreviewPopup({
               </span>
             </div>
           ) : null}
-          {canReplace && !isDeleteConfirming ? (
+          {canReplace ? (
             <button
               type="button"
               disabled={isSaving}
@@ -1320,41 +1438,10 @@ export function VerificationPhotoPreviewPopup({
               {text.dayRoute.replaceVisitPhoto}
             </button>
           ) : null}
-          {canManage && isDeleteConfirming ? (
-            <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 p-3 dark:border-rose-400/20 dark:bg-rose-400/10">
-              <p className="text-sm font-black text-rose-700 dark:text-rose-200">
-                {text.dayRoute.deletePhotoQuestion}
-              </p>
-              <p className="mt-1 text-xs font-semibold leading-5 text-rose-600/80 dark:text-rose-200/75">
-                {text.dayRoute.deletePhotoDescription}
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  disabled={isSaving}
-                  onClick={() => setIsDeleteConfirming(false)}
-                  className="rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-bold text-rose-700 disabled:opacity-50 dark:bg-slate-950"
-                >
-                  {text.dayRoute.cancelPhotoDelete}
-                </button>
-                <button
-                  type="button"
-                  disabled={isSaving}
-                  onClick={() => onDelete(target)}
-                  className="flex items-center justify-center gap-1.5 rounded-xl bg-rose-600 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-                >
-                  {isSaving ? (
-                    <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : (
-                    <MdDeleteOutline className="text-base" />
-                  )}
-                  {text.dayRoute.deletePhoto}
-                </button>
-              </div>
-            </div>
-          ) : canManage ? (
+          {canManage ? (
             <div className={`${canReplace ? "mt-2" : "mt-4"} grid grid-cols-2 gap-2`}>
               <button
+                ref={deleteButtonRef}
                 type="button"
                 disabled={isSaving}
                 onClick={() => setIsDeleteConfirming(true)}
@@ -1388,6 +1475,14 @@ export function VerificationPhotoPreviewPopup({
           ) : null}
         </div>
       </section>
+      {isDeleteDialogOpen ? (
+        <VerificationPhotoDeleteDialog
+          isSaving={isSaving}
+          triggerRef={deleteButtonRef}
+          onCancel={() => setIsDeleteConfirming(false)}
+          onDelete={() => onDelete(target)}
+        />
+      ) : null}
     </div>
   );
 }
