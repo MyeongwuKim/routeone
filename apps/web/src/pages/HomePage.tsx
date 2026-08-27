@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import MapLoadingSkeleton from "@/components/map/MapLoadingSkeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -688,6 +689,9 @@ function HomePage() {
         style={{ background: "#dbeafe" }}
       />
 
+      {!mapReady && !mapError ? (
+        <MapLoadingSkeleton label={text.dayRoute.mapPreparing} />
+      ) : null}
       {shouldShowMapSetupSkeleton ? <HomeMapControlsSkeleton /> : null}
 
       {shouldShowInteractiveMapUi ? (

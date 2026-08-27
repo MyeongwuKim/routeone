@@ -25,7 +25,6 @@ type SharedRouteFilterDialogProps = {
   filters: SharedRouteFilters;
   tagOptions: string[];
   placeRegions: SharedRouteFilterOptions["placeRegions"];
-  defaultRegion: string;
   onToggle: (filter: SharedRouteFilterCandidate) => void;
   onClear: () => void;
   onClose: () => void;
@@ -36,7 +35,6 @@ function SharedRouteFilterDialog({
   filters,
   tagOptions,
   placeRegions,
-  defaultRegion,
   onToggle,
   onClear,
   onClose,
@@ -45,17 +43,13 @@ function SharedRouteFilterDialog({
   const text = useUiText();
   const appLanguage = useAppLanguageStore((state) => state.language);
   const activeFilterCount = getActiveFilterCount(filters);
-  const getInitialFocusedRegion = () =>
-    filters.places[0]?.region ??
-    (placeRegions.some((placeRegion) => placeRegion.region === defaultRegion)
-      ? defaultRegion
-      : (placeRegions[0]?.region ?? defaultRegion));
-  const [focusedRegion, setFocusedRegion] = useState(getInitialFocusedRegion);
-  const resolvedFocusedRegion = placeRegions.some(
-    (placeRegion) => placeRegion.region === focusedRegion
-  )
-    ? focusedRegion
-    : getInitialFocusedRegion();
+  const [focusedRegion, setFocusedRegion] = useState<string | null>(
+    filters.places[0]?.region ?? filters.regions[0] ?? null
+  );
+  const resolvedFocusedRegion =
+    focusedRegion && filters.regions.includes(focusedRegion)
+      ? focusedRegion
+      : (filters.regions[0] ?? null);
   const focusedRegionOption = placeRegions.find(
     (placeRegion) => placeRegion.region === resolvedFocusedRegion
   );
@@ -69,7 +63,7 @@ function SharedRouteFilterDialog({
       resolvedFocusedRegion && SHARED_ROUTE_FILTER_PLACE_SOURCE_ENABLED
     ),
     queryFn: () =>
-      fetchRegionFilterPlaceCategories(resolvedFocusedRegion, appLanguage),
+      fetchRegionFilterPlaceCategories(resolvedFocusedRegion ?? "", appLanguage),
     staleTime: 1000 * 60 * 60 * 12,
     gcTime: 1000 * 60 * 60 * 24,
   });
@@ -197,26 +191,29 @@ function SharedRouteFilterDialog({
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-sm font-black text-slate-800 dark:text-white">
-                {text.sharedRoute.placeFilter}
+                {text.sharedRoute.regionFilter}
               </p>
               <p className="text-xs font-bold text-slate-400">
-                {text.myRoute.count(filters.places.length)}
+                {text.myRoute.count(filters.regions.length)}
               </p>
             </div>
             {placeRegions.length > 0 ? (
               <div className="space-y-3">
                 <div className="flex flex-wrap gap-2">
                   {placeRegions.map(({ region }) => {
-                    const isFocused = region === resolvedFocusedRegion;
+                    const isSelected = filters.regions.includes(region);
 
                     return (
                       <button
                         key={region}
                         type="button"
-                        aria-pressed={isFocused}
-                        onClick={() => setFocusedRegion(region)}
+                        aria-pressed={isSelected}
+                        onClick={() => {
+                          onToggle({ type: "region", value: region });
+                          setFocusedRegion(isSelected ? null : region);
+                        }}
                         className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-black transition ${
-                          isFocused
+                          isSelected
                             ? "border-brand-500 bg-brand-600 text-white"
                             : "border-slate-200 bg-white text-slate-600 hover:border-brand-300 dark:border-brand-400/25 dark:bg-[#0b211f] dark:text-slate-200"
                         }`}
@@ -230,56 +227,64 @@ function SharedRouteFilterDialog({
                   })}
                 </div>
 
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 dark:border-brand-400/20 dark:bg-[#0b211f]">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="min-w-0 truncate text-xs font-black text-slate-700 dark:text-slate-100">
-                      {resolvedFocusedRegion
-                        ? text.sharedRoute.regionPlaces(
-                            getLocalizedRegionName(resolvedFocusedRegion, text)
-                          )
-                        : text.sharedRoute.chooseRegion}
-                    </p>
-                    <p className="text-[11px] font-bold text-slate-400">
-                      {text.sharedRoute.selectedCount(
-                        focusedRegionSelectedCount
-                      )}
-                    </p>
-                  </div>
-                  {resolvedFocusedRegion &&
-                  focusedRegionCategories.length > 0 ? (
-                    <div className="space-y-4">
-                      {focusedRegionCategories.map(({ category, places }) => (
-                        <div
-                          key={`${resolvedFocusedRegion}:${category}`}
-                          className="space-y-2"
-                        >
-                          <div className="flex items-center gap-2">
-                            <p className="shrink-0 text-xs font-black text-slate-700 dark:text-slate-100">
-                              {getLocalizedPlaceCategory(category, text)}
-                            </p>
-                            <span className="h-px flex-1 bg-slate-200 dark:bg-brand-400/20" />
-                            <p className="shrink-0 text-[11px] font-bold text-slate-400">
-                              {text.sharedRoute.placeCount(places.length)}
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {places.map((placeName) =>
-                              renderFilterButton({
-                                type: "place",
-                                value: placeName,
-                                region: resolvedFocusedRegion,
-                              })
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                {resolvedFocusedRegion ? (
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 dark:border-brand-400/20 dark:bg-[#0b211f]">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="min-w-0 text-xs font-black text-slate-700 dark:text-slate-100">
+                        {text.sharedRoute.regionPlaces(
+                          getLocalizedRegionName(resolvedFocusedRegion, text)
+                        )}
+                      </p>
+                      <p className="shrink-0 text-[11px] font-bold text-slate-400">
+                        {text.sharedRoute.selectedCount(focusedRegionSelectedCount)}
+                      </p>
                     </div>
-                  ) : shouldShowFocusedRegionLoading ? null : (
-                    <p className="px-1 py-2 text-xs font-semibold text-slate-500 dark:text-slate-300">
-                      {text.sharedRoute.noRegionPlaces}
-                    </p>
-                  )}
-                </div>
+                    {focusedRegionCategories.length > 0 ? (
+                      <div className="space-y-4">
+                        {focusedRegionCategories.map(({ category, places }) => (
+                          <div
+                            key={`${resolvedFocusedRegion}:${category}`}
+                            className="space-y-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <p className="shrink-0 text-xs font-black text-slate-700 dark:text-slate-100">
+                                {getLocalizedPlaceCategory(category, text)}
+                              </p>
+                              <span className="h-px flex-1 bg-slate-200 dark:bg-brand-400/20" />
+                              <p className="shrink-0 text-[11px] font-bold text-slate-400">
+                                {text.sharedRoute.placeCount(places.length)}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {places.map((placeName) =>
+                                renderFilterButton({
+                                  type: "place",
+                                  value: placeName,
+                                  region: resolvedFocusedRegion,
+                                })
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : shouldShowFocusedRegionLoading ? (
+                      <div
+                        role="status"
+                        className="flex items-center gap-2 py-2 text-xs text-slate-500 dark:text-slate-300"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+                        />
+                        {text.sharedRoute.loadingRegionPlaces}
+                      </div>
+                    ) : (
+                      <p className="px-1 py-2 text-xs font-semibold text-slate-500 dark:text-slate-300">
+                        {text.sharedRoute.noRegionPlaces}
+                      </p>
+                    )}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <p className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3 text-xs font-semibold text-slate-500 dark:border-brand-400/20 dark:bg-[#0b211f] dark:text-slate-300">

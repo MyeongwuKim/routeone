@@ -558,6 +558,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+
   .route-checkout-modal-enter,
   .full-page-popup-enter,
   .route-checkout-step-enter,

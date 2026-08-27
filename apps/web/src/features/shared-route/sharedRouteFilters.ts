@@ -1,5 +1,6 @@
 import {
   getDisplayPlaceOptions,
+  getDisplayRegionNames,
   getDisplayShareTags,
   type SharedRoute,
   type SharedRouteFilterCandidate,
@@ -35,6 +36,7 @@ const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
 
 export type SharedRouteFilters = {
   tags: string[];
+  regions: string[];
   places: SharedRoutePlaceFilterOption[];
 };
 
@@ -51,6 +53,7 @@ export type SharedRouteFilterOptions = {
 
 export const EMPTY_SHARED_ROUTE_FILTERS: SharedRouteFilters = {
   tags: [],
+  regions: [],
   places: [],
 };
 
@@ -297,6 +300,12 @@ export function getFilterLabel(
     return text.sharedRoute.filterTagLabel(filter.value);
   }
 
+  if (filter.type === "region") {
+    return text.sharedRoute.filterRegionLabel(
+      getLocalizedRegionName(filter.value, text)
+    );
+  }
+
   return text.sharedRoute.filterPlaceLabel(filter.value);
 }
 
@@ -323,6 +332,10 @@ export function hasFilterCandidate(
     return filters.tags.includes(filter.value);
   }
 
+  if (filter.type === "region") {
+    return filters.regions.includes(filter.value);
+  }
+
   return filters.places.some((place) =>
     isSamePlaceFilter(place, {
       name: filter.value,
@@ -339,43 +352,55 @@ export function addFilterCandidate(
     return filters;
   }
 
-  return filter.type === "tag"
-    ? {
-        ...filters,
-        tags: [...filters.tags, filter.value],
-      }
-    : {
-        ...filters,
-        places: [
-          ...filters.places,
-          {
-            name: filter.value,
-            region: filter.region,
-            category: "기타",
-          },
-        ],
-      };
+  if (filter.type === "tag") {
+    return { ...filters, tags: [...filters.tags, filter.value] };
+  }
+
+  if (filter.type === "region") {
+    return { ...filters, regions: [...filters.regions, filter.value] };
+  }
+
+  return {
+    ...filters,
+    regions: filters.regions.includes(filter.region)
+      ? filters.regions
+      : [...filters.regions, filter.region],
+    places: [
+      ...filters.places,
+      { name: filter.value, region: filter.region, category: "기타" },
+    ],
+  };
 }
 
 export function removeFilterCandidate(
   filters: SharedRouteFilters,
   filter: SharedRouteFilterCandidate
 ): SharedRouteFilters {
-  return filter.type === "tag"
-    ? {
-        ...filters,
-        tags: filters.tags.filter((tag) => tag !== filter.value),
-      }
-    : {
-        ...filters,
-        places: filters.places.filter(
-          (place) =>
-            !isSamePlaceFilter(place, {
-              name: filter.value,
-              region: filter.region,
-            })
-        ),
-      };
+  if (filter.type === "tag") {
+    return {
+      ...filters,
+      tags: filters.tags.filter((tag) => tag !== filter.value),
+    };
+  }
+
+  if (filter.type === "region") {
+    return {
+      ...filters,
+      regions: filters.regions.filter((region) => region !== filter.value),
+      places: filters.places.filter((place) => place.region !== filter.value),
+    };
+  }
+
+  return {
+    ...filters,
+    places: filters.places.filter(
+      (place) =>
+        !isSamePlaceFilter(place, {
+          name: filter.value,
+          region: filter.region,
+        })
+    ),
+  };
 }
 
 export function toggleFilterCandidate(
@@ -388,7 +413,7 @@ export function toggleFilterCandidate(
 }
 
 export function getActiveFilterCount(filters: SharedRouteFilters) {
-  return filters.tags.length + filters.places.length;
+  return filters.tags.length + filters.regions.length + filters.places.length;
 }
 
 export function routeMatchesFilters(
@@ -401,7 +426,11 @@ export function routeMatchesFilters(
   }
 
   const routeTags = getDisplayShareTags(route, text);
+  const routeRegions = getDisplayRegionNames(route);
   const routePlaces = getDisplayPlaceOptions(route, text);
+  const matchesRegions =
+    filters.regions.length === 0 ||
+    filters.regions.some((region) => routeRegions.includes(region));
   const matchesTags =
     filters.tags.length === 0 ||
     filters.tags.every((tag) => routeTags.includes(tag));
@@ -413,7 +442,7 @@ export function routeMatchesFilters(
       )
     );
 
-  return matchesTags && matchesPlaces;
+  return matchesTags && matchesRegions && matchesPlaces;
 }
 
 export function getSharedRouteFilterOptions(

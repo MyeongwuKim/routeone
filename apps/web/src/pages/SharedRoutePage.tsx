@@ -19,7 +19,6 @@ import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import { DropdownSelect } from "@/components/inputs";
 import {
   SERVICE_AREAS,
-  getNearestServiceRegion,
   type ServiceAreaId,
 } from "@/data/serviceAreas";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
@@ -70,7 +69,6 @@ import {
 import { useSharedRouteLike } from "@/features/shared-route/hooks/useSharedRouteLike";
 import { useSharedRouteFilters } from "@/features/shared-route/hooks/useSharedRouteFilters";
 import { getSortedRouteDays } from "@/features/my-route/routeDisplay";
-import { getCurrentPosition } from "@/lib/currentPosition";
 import { localizeTourPlaces } from "@/lib/placeLocalization";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useHomeExploreStore } from "@/stores/homeExploreStore";
@@ -120,12 +118,6 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     removeActiveFilter: handleRemoveActiveFilter,
     toggleDraftFilter: handleToggleDraftFilter,
   } = useSharedRouteFilters(appLanguage);
-  const [defaultFilterRegion, setDefaultFilterRegion] = useState(
-    canSelectServiceArea
-      ? (serviceArea.developmentFixedRegion?.label ??
-        serviceArea.defaultRegion.label)
-      : serviceArea.defaultRegion.label
-  );
   const routeListScrollRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const handleOpenRoute = useCallback(
@@ -242,7 +234,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       replaceActiveFiltersWithCandidate({
         type: "place",
         value: place.title,
-        region: codedRegion ?? optionRegion ?? defaultFilterRegion,
+        region: codedRegion ?? optionRegion ?? serviceArea.defaultRegion.label,
       });
       resetMapSheet();
       setSelectedRouteId(null);
@@ -255,11 +247,11 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       });
     },
     [
-      defaultFilterRegion,
       filterOptions.placeRegions,
       replaceActiveFiltersWithCandidate,
       resetMapSheet,
       serviceArea.regions,
+      serviceArea.defaultRegion.label,
     ]
   );
 
@@ -272,7 +264,6 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       const nextArea = SERVICE_AREAS[nextAreaId];
       const nextInitialRegion =
         nextArea.developmentFixedRegion ?? nextArea.defaultRegion;
-      setDefaultFilterRegion(nextInitialRegion.label);
       setSelectedAreaId(nextAreaId);
       resetForArea(nextInitialRegion.sigunguCode);
       resetMapSheet();
@@ -443,34 +434,6 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     () => (checkoutRoutePlan ? getRoutePlanTripDays(checkoutRoutePlan) : 1),
     [checkoutRoutePlan]
   );
-
-  useEffect(() => {
-    if (canSelectServiceArea && serviceArea.developmentFixedRegion) {
-      return;
-    }
-
-    let isMounted = true;
-
-    getCurrentPosition()
-      .then((position) => {
-        if (!isMounted) {
-          return;
-        }
-
-        setDefaultFilterRegion(
-          getNearestServiceRegion(serviceArea, position).label
-        );
-      })
-      .catch(() => {
-        if (isMounted) {
-          setDefaultFilterRegion(serviceArea.defaultRegion.label);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [canSelectServiceArea, serviceArea]);
 
   useEffect(() => {
     const root = routeListScrollRef.current;
@@ -645,6 +608,22 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
                 <MdClose className="shrink-0 text-xs" />
               </button>
             ))}
+            {activeFilters.regions.map((region) => (
+              <button
+                key={`region:${region}`}
+                type="button"
+                onClick={() =>
+                  handleRemoveActiveFilter({ type: "region", value: region })
+                }
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-[11px] font-black text-brand-700 dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-100"
+              >
+                <MdOutlinePlace className="shrink-0 text-xs" />
+                <span className="min-w-0 truncate">
+                  {getFilterLabel({ type: "region", value: region }, text)}
+                </span>
+                <MdClose className="shrink-0 text-xs" />
+              </button>
+            ))}
             {activeFilters.places.map((place) => (
               <button
                 key={`place:${place.region}:${place.name}`}
@@ -789,7 +768,6 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           filters={draftFilters}
           tagOptions={filterOptions.tags}
           placeRegions={filterOptions.placeRegions}
-          defaultRegion={defaultFilterRegion}
           onToggle={handleToggleDraftFilter}
           onClear={handleClearDraftFilters}
           onClose={closeFilterDialog}
@@ -798,7 +776,10 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       ) : null}
       {selectedRouteId &&
       (selectedRouteQuery.isLoading || isSelectedRouteLocalizationLoading) ? (
-        <SharedRouteDetailSkeleton onClose={() => setSelectedRouteId(null)} />
+        <SharedRouteDetailSkeleton
+          route={displayRoutes.find((route) => route.id === selectedRouteId)}
+          onClose={() => setSelectedRouteId(null)}
+        />
       ) : null}
       {selectedRouteId && selectedRouteQuery.isError ? (
         <div className="fixed inset-0 z-[2300] flex items-center justify-center bg-white px-4 dark:bg-[#071718]">

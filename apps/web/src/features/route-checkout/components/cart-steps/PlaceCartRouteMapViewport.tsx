@@ -1,5 +1,6 @@
 import { useMemo, type RefObject } from "react";
 import { SegmentedToggle, type SegmentedToggleOption } from "@/components/inputs";
+import MapLoadingSkeleton from "@/components/map/MapLoadingSkeleton";
 import type { UiText } from "@/lib/uiText";
 import type {
   RouteMapDayOption,
@@ -70,6 +71,9 @@ function PlaceCartRouteMapViewport({
           width: "100%",
         }}
       />
+      {!isSdkReady && !routeError ? (
+        <MapLoadingSkeleton label={text.dayRoute.mapPreparing} />
+      ) : null}
       {hasDaySelector ? (
         <div className="scrollbar-hide absolute inset-x-0 top-4 z-10 overflow-x-auto px-3 pb-1">
           <div className="flex w-max min-w-full gap-2 pr-3">
@@ -145,15 +149,13 @@ function PlaceCartRouteMapViewport({
         >
           {routeError}
         </div>
-      ) : !isSdkReady || isRouteLoading ? (
+      ) : isSdkReady && isRouteLoading ? (
         <div
           className={`absolute left-3 z-20 inline-flex max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-full border border-brand-400/30 bg-[#071718]/90 px-3 py-2 text-xs font-black text-brand-100 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur ${floatingPanelTopClass}`}
         >
           <span className="size-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" />
           <span className="truncate">
-            {isSdkReady
-              ? text.dayRoute.routeCalculating
-              : text.dayRoute.mapPreparing}
+            {text.dayRoute.routeCalculating}
           </span>
         </div>
       ) : null}

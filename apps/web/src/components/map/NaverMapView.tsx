@@ -14,6 +14,7 @@ import {
 import { useUiText } from "@/lib/uiText";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
+import MapLoadingSkeleton from "./MapLoadingSkeleton";
 
 export type NaverMapPoint = {
   lat: number;
@@ -297,12 +298,7 @@ function NaverMapView({
       ) : null}
 
       {!mapError && !isMapReady ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-brand-50">
-          <div className="flex items-center gap-2 rounded-2xl border border-brand-100 bg-white px-4 py-3 text-xs font-bold text-brand-700 shadow-sm">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" />
-            {loadingLabel ?? text.dayRoute.mapPreparing}
-          </div>
-        </div>
+        <MapLoadingSkeleton label={loadingLabel ?? text.dayRoute.mapPreparing} />
       ) : null}
 
       {children}

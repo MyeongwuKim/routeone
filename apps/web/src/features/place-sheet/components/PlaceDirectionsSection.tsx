@@ -5,6 +5,7 @@ import {
   IoNavigate,
 } from "react-icons/io5";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
+import MapLoadingSkeleton from "@/components/map/MapLoadingSkeleton";
 import {
   applyNaverMapTheme,
   getNaverMapThemeOptions,
@@ -14,7 +15,7 @@ import type { AppLanguage } from "@/stores/appLanguageStore";
 import type { MapSheetDirectionOrigin } from "@/stores/mapSheetStore";
 import type { MapSheetPlace } from "@/types/place";
 import type { PlaceSheetCoordinates } from "../placeSheetModel";
-import { RouteInfoSkeleton, SkeletonBar } from "./PlaceSheetPrimitives";
+import { RouteInfoSkeleton } from "./PlaceSheetPrimitives";
 
 const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 const NAVER_MAP_SCHEME_APP_NAME = "com.routeone.app";
@@ -339,27 +340,20 @@ function PlaceDirectionsSection({
           ref={previewMapRef}
           className="pointer-events-none h-48 w-full touch-none select-none"
         />
-        {!isPreviewMapSdkReady && !previewMapError ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 px-6 backdrop-blur-[1px] dark:bg-slate-950/45">
-            <div className="flex items-center gap-2 rounded-2xl border border-brand-100 bg-white/90 px-4 py-3 text-xs font-bold text-brand-700 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/80 dark:text-brand-100">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" />
-              {text.placeSheet.mapPreparing}
-            </div>
-          </div>
-        ) : previewMapError ? (
+        {previewMapError ? (
           <div className="absolute inset-0 flex items-center justify-center bg-white/75 px-6 text-center backdrop-blur-[1px] dark:bg-slate-950/45">
             <p className="rounded-2xl border border-rose-100 bg-white/90 px-4 py-3 text-xs font-bold text-rose-600 shadow-sm dark:border-rose-400/30 dark:bg-slate-950/80 dark:text-rose-200">
               {previewMapError}
             </p>
           </div>
-        ) : isRouteLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/55 px-6 backdrop-blur-[1px] dark:bg-slate-950/35">
-            <div className="w-full max-w-[220px] space-y-3 rounded-2xl border border-brand-100 bg-white/85 p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/80">
-              <SkeletonBar className="h-3 w-2/3" />
-              <SkeletonBar className="h-3 w-full" />
-              <SkeletonBar className="h-3 w-1/2" />
-            </div>
-          </div>
+        ) : !isPreviewMapSdkReady || isRouteLoading ? (
+          <MapLoadingSkeleton
+            label={
+              isPreviewMapSdkReady
+                ? text.dayRoute.routeCalculating
+                : text.placeSheet.mapPreparing
+            }
+          />
         ) : null}
       </div>
 

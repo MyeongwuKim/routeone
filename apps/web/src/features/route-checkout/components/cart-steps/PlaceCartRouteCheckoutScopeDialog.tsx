@@ -43,17 +43,17 @@ function PlaceCartRouteCheckoutScopeDialog({
 }: PlaceCartRouteCheckoutScopeDialogProps) {
   return (
     <div
-      className="absolute inset-0 z-[2147483600] flex items-end bg-slate-950/50 px-4 pb-4 backdrop-blur-[2px]"
+      className="absolute inset-0 z-[2147483600] flex items-end justify-center bg-slate-950/50 px-4 pb-[max(1rem,var(--app-safe-area-bottom))] pt-[max(1rem,var(--app-safe-area-top))] backdrop-blur-[2px]"
       onMouseDown={onClose}
     >
       <section
         role="dialog"
         aria-modal="true"
         aria-label={text.dayRoute.checkoutScopeAria}
-        className="flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-[28px] border border-brand-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.28)]"
+        className="flex h-[min(32rem,76dvh)] max-h-full w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-brand-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.28)]"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex shrink-0 items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-black text-brand-700">
               {text.dayRoute.checkoutScope}
@@ -76,7 +76,7 @@ function PlaceCartRouteCheckoutScopeDialog({
           type="button"
           aria-pressed={isAllSelected}
           onClick={onToggleAll}
-          className="mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-left transition hover:border-brand-400 hover:bg-brand-100"
+          className="mt-4 flex w-full shrink-0 items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-left transition hover:border-brand-400 hover:bg-brand-100"
         >
           <span className="inline-flex min-w-0 items-center gap-3">
             <span
@@ -103,7 +103,7 @@ function PlaceCartRouteCheckoutScopeDialog({
           </span>
         </button>
 
-        <div className="scrollbar-hide mt-3 grid max-h-[40dvh] gap-2 overflow-y-auto pr-1">
+        <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
           {dayOptions.map((option) => {
             const isCurrentRouteDay = option.id === currentDayOptionId;
             const isSelected = selectedDayIdSet.has(option.id);
@@ -160,7 +160,7 @@ function PlaceCartRouteCheckoutScopeDialog({
           })}
         </div>
 
-        <div className="mt-4 flex items-center gap-3 border-t border-slate-100 pt-4">
+        <div className="mt-4 flex shrink-0 items-center gap-3 border-t border-slate-100 pt-4">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-black text-brand-700">
               {text.dayRoute.selectedDays(selectedRoutePlanLength)}

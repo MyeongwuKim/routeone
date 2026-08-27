@@ -28,6 +28,10 @@ export type SharedRouteFilterCandidate =
       value: string;
     }
   | {
+      type: "region";
+      value: string;
+    }
+  | {
       type: "place";
       value: string;
       region: string;

@@ -1,11 +1,8 @@
 import { MdSell } from "react-icons/md";
-import type { RouteByIdQuery } from "@/generated/graphql";
 import { useUiText } from "@/lib/uiText";
-import { getDisplayShareTags } from "../sharedRouteCardModel";
+import { getDisplayShareTags, type SharedRoute } from "../sharedRouteCardModel";
 
-type SharedRouteDetail = NonNullable<RouteByIdQuery["route"]>;
-
-function SharedRouteDetailMeta({ route }: { route: SharedRouteDetail }) {
+function SharedRouteDetailMeta({ route }: { route: SharedRoute }) {
   const text = useUiText();
   const shareTags = getDisplayShareTags(route, text);
 

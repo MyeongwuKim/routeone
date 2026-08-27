@@ -417,6 +417,7 @@ export type UiText = {
     filterDescription: string;
     filterClose: string;
     tagFilter: string;
+    regionFilter: string;
     placeFilter: string;
     noTags: string;
     noPlaces: string;
@@ -424,9 +425,11 @@ export type UiText = {
     regionPlaces: (region: string) => string;
     placeCount: (count: number) => string;
     noRegionPlaces: string;
+    loadingRegionPlaces: string;
     selectedCount: (count: number) => string;
     apply: (count: number) => string;
     filterTagLabel: (value: string) => string;
+    filterRegionLabel: (value: string) => string;
     filterPlaceLabel: (value: string) => string;
     selectedRouteMissing: string;
     routeNotFound: string;
@@ -444,6 +447,7 @@ export type UiText = {
     searchingConditions: string;
     loadingNext: string;
     detailError: string;
+    loadingDetail: string;
     mineBadge: string;
     ownRouteLikeAria: (count: number) => string;
     unlikeAria: (count: number) => string;
@@ -1508,19 +1512,22 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       clearActiveFilters: "전체 해제",
       filterTitle: "필터 옵션",
       filterDescription:
-        "태그를 고르거나, 지역을 누른 뒤 해당 지역의 장소를 선택해요.",
+        "지역을 고르면 그 지역의 공유 루트만 보여요. 태그나 장소로 더 좁혀볼 수 있어요.",
       filterClose: "필터 닫기",
       tagFilter: "태그 필터",
+      regionFilter: "지역 필터",
       placeFilter: "장소 필터",
       noTags: "선택할 태그가 없어요.",
       noPlaces: "선택할 장소가 없어요.",
       chooseRegion: "지역 선택",
-      regionPlaces: (region) => `${region} 장소`,
+      regionPlaces: (region) => `${region} 장소로 더 좁히기 (선택)`,
       placeCount: (count) => `${count}곳`,
       noRegionPlaces: "이 지역의 명소를 찾지 못했어요.",
+      loadingRegionPlaces: "장소를 불러오는 중이에요.",
       selectedCount: (count) => `${count}개 선택`,
       apply: (count) => `확인${count > 0 ? ` ${count}` : ""}`,
       filterTagLabel: (value) => `태그: ${value}`,
+      filterRegionLabel: (value) => `지역: ${value}`,
       filterPlaceLabel: (value) => `장소: ${value}`,
       selectedRouteMissing: "선택한 공유 루트가 없습니다.",
       routeNotFound: "공유 루트를 찾지 못했어요.",
@@ -1538,6 +1545,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       searchingConditions: "조건 찾는 중",
       loadingNext: "다음 루트 찾는 중",
       detailError: "공유 루트 상세를 불러오지 못했어요.",
+      loadingDetail: "공유 루트 일정을 불러오는 중이에요.",
       mineBadge: "내 공유 루트",
       ownRouteLikeAria: (count) => `내가 공유한 루트, 하트 ${count}개`,
       unlikeAria: (count) => `좋아요 취소, 하트 ${count}개`,
@@ -2743,19 +2751,22 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       clearActiveFilters: "Clear all",
       filterTitle: "Filter Options",
       filterDescription:
-        "Choose tags, or select a region and then places in that region.",
+        "Select a region to see routes there. Narrow the results with tags or places.",
       filterClose: "Close filters",
       tagFilter: "Tag Filter",
+      regionFilter: "Region Filter",
       placeFilter: "Place Filter",
       noTags: "No tags to choose.",
       noPlaces: "No places to choose.",
       chooseRegion: "Choose region",
-      regionPlaces: (region) => `${region} places`,
+      regionPlaces: (region) => `Narrow by places in ${region} (optional)`,
       placeCount: (count) => `${count} ${count === 1 ? "place" : "places"}`,
       noRegionPlaces: "No attractions found in this region.",
+      loadingRegionPlaces: "Loading places.",
       selectedCount: (count) => `${count} selected`,
       apply: (count) => `Apply${count > 0 ? ` ${count}` : ""}`,
       filterTagLabel: (value) => `Tag: ${value}`,
+      filterRegionLabel: (value) => `Region: ${value}`,
       filterPlaceLabel: (value) => `Place: ${value}`,
       selectedRouteMissing: "No shared route is selected.",
       routeNotFound: "Shared route not found.",
@@ -2773,6 +2784,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       searchingConditions: "Searching filters",
       loadingNext: "Finding more routes",
       detailError: "Could not load shared route details.",
+      loadingDetail: "Loading the shared route itinerary.",
       mineBadge: "My shared route",
       ownRouteLikeAria: (count) => `My shared route, ${count} hearts`,
       unlikeAria: (count) => `Unlike, ${count} hearts`,
