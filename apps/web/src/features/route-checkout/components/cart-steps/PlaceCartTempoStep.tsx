@@ -12,6 +12,9 @@ function PlaceCartTempoStep() {
         <p className="mt-1 text-xl font-semibold text-slate-900">
           {text.cart.tempoTitle}
         </p>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          {text.cart.tempoDescription}
+        </p>
       </div>
 
       <button

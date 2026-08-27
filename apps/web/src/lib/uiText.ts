@@ -570,7 +570,6 @@ export type UiText = {
     gpsVerificationPhoto: string;
     photoPublicationQuestion: string;
     photoPublicationDescription: (title: string) => string;
-    photoPublicationPrivacy: string;
     publishPhoto: string;
     keepPhotoPrivate: string;
     photoPublished: string;
@@ -810,6 +809,7 @@ export type UiText = {
     customTripDaysDescription: string;
     customTripDaysPlaceholder: string;
     tempoTitle: string;
+    tempoDescription: string;
     tempoRelaxedTitle: string;
     tempoRelaxedDescription: string;
     tempoBalancedTitle: string;
@@ -1682,11 +1682,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       placeFallback: "장소",
       gpsVerification: "GPS 인증",
       gpsVerificationPhoto: "GPS 인증 사진",
-      photoPublicationQuestion: "이 사진을 장소 사진에 공개할까요?",
+      photoPublicationQuestion: "이 사진을 다른 사용자에게 공개할까요?",
       photoPublicationDescription: (title) =>
-        `공개하면 ${title} 상세의 ‘사용자들이 올린 사진’에서 다른 사용자가 볼 수 있어요.`,
-      photoPublicationPrivacy:
-        "사진만 공개되며 비공개 루트와 일정은 공개되지 않아요.",
+        `공개한 사진은 ${title}의 ‘사용자들이 올린 사진’에 표시돼요.`,
       publishPhoto: "사진 공개하기",
       keepPhotoPrivate: "나만 보기",
       photoPublished: "장소 사진에 공개 중",
@@ -1988,12 +1986,14 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       customTripDaysDescription: "1일 이상 숫자를 입력해 주세요.",
       customTripDaysPlaceholder: "예: 10",
       tempoTitle: "여행 템포를 골라주세요",
+      tempoDescription:
+        "선택한 템포에 따라 장소별 머무는 시간이 달라져요. 일정 생성 후 직접 조정할 수 있어요.",
       tempoRelaxedTitle: "여유롭게",
-      tempoRelaxedDescription: "장소당 체류시간을 길게 배치",
+      tempoRelaxedDescription: "한 장소에 오래 머무는 일정",
       tempoBalancedTitle: "보통",
-      tempoBalancedDescription: "체류시간을 적당하게 배치",
+      tempoBalancedDescription: "기본 체류시간으로 구성한 일정",
       tempoPackedTitle: "촘촘하게",
-      tempoPackedDescription: "많이 둘러보는 밀도 높은 일정",
+      tempoPackedDescription: "장소별 체류시간을 짧게 잡은 일정",
       startLocationTitle: "출발 위치가 맞나요?",
       startLocationDescription:
         "여행을 실제로 시작할 위치로 마커를 옮기면 그 지점 기준으로 루트를 계산해요.",
@@ -2917,11 +2917,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       placeFallback: "Place",
       gpsVerification: "GPS verified",
       gpsVerificationPhoto: "GPS verification photo",
-      photoPublicationQuestion: "Share this photo on the place page?",
+      photoPublicationQuestion: "Share this photo with other users?",
       photoPublicationDescription: (title) =>
-        `Other users will be able to see it in the community photos for ${title}.`,
-      photoPublicationPrivacy:
-        "Only the photo is shared. Your private route and schedule stay private.",
+        `Your photo will appear in the community photos for ${title}.`,
       publishPhoto: "Share photo",
       keepPhotoPrivate: "Keep private",
       photoPublished: "Shared on place page",
@@ -3228,12 +3226,14 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       customTripDaysDescription: "Enter a number of 1 day or more.",
       customTripDaysPlaceholder: "e.g. 10",
       tempoTitle: "Choose your travel tempo",
+      tempoDescription:
+        "Your tempo sets how long you stay at each place. You can adjust these times after creating your plan.",
       tempoRelaxedTitle: "Relaxed",
-      tempoRelaxedDescription: "Longer stay time at each place",
+      tempoRelaxedDescription: "Spend more time at each place",
       tempoBalancedTitle: "Balanced",
-      tempoBalancedDescription: "Moderate stay time at each place",
+      tempoBalancedDescription: "Use the default stay times",
       tempoPackedTitle: "Packed",
-      tempoPackedDescription: "A dense plan to see more places",
+      tempoPackedDescription: "Keep visits to each place shorter",
       startLocationTitle: "Is this start point right?",
       startLocationDescription:
         "Move the marker to where you will actually start, and the route will be calculated from there.",

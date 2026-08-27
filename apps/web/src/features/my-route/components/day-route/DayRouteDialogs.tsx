@@ -694,10 +694,6 @@ export function PhotoPublicationPopup({
               target.stop.place.title
             )}
           </p>
-          <div className="mt-3 flex items-start gap-2 rounded-2xl bg-slate-50 px-3 py-2.5 text-xs font-semibold leading-5 text-slate-500 dark:bg-slate-900 dark:text-slate-300">
-            <MdLockOutline className="mt-0.5 shrink-0 text-base text-brand-600" />
-            <span>{text.dayRoute.photoPublicationPrivacy}</span>
-          </div>
           <div className="mt-5 grid grid-cols-2 gap-2">
             <button
               type="button"

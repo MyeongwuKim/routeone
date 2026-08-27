@@ -71,7 +71,7 @@ const ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE = TRUTHY_ENV_VALUES.has(
     .toLowerCase() ?? ""
 );
 
-let routeArrivalDeliveryQueue: Promise<void> = Promise.resolve();
+let routeArrivalOperationQueue: Promise<void> = Promise.resolve();
 let routeArrivalSyncQueue: Promise<void> = Promise.resolve();
 let routeArrivalTestState: {
   stopId: string;
@@ -88,6 +88,17 @@ type RouteArrivalPosition = {
 
 export function resetNativeRouteArrivalTestState() {
   routeArrivalTestState = null;
+}
+
+// Keep receipt persistence, inbox dismissal and registration in the same queue.
+function enqueueRouteArrivalOperation<T>(operation: () => Promise<T>) {
+  const request = routeArrivalOperationQueue.then(operation);
+  routeArrivalOperationQueue = request.then(
+    () => undefined,
+    () => undefined
+  );
+
+  return request;
 }
 
 function enqueueRouteArrivalSync<T>(operation: () => Promise<T>) {
@@ -159,9 +170,18 @@ async function getIosRegistrationSummary(
   const expectedIdentifiers = places.map((place) =>
     getRouteArrivalNotificationId(place, getRouteArrivalDateKey(place))
   );
-  const status = await getIosRouteArrivalNotificationStatus();
+  const [status, notifiedRegionDates] = await Promise.all([
+    getIosRouteArrivalNotificationStatus(),
+    readNotifiedRegionDates(),
+  ]);
   const pendingIdentifiers = new Set(status.pendingIdentifiers);
   const deliveredIdentifiers = new Set(status.deliveredIdentifiers);
+  for (const place of places) {
+    const dateKey = getRouteArrivalDateKey(place);
+    if (notifiedRegionDates[getRouteArrivalRegionId(place)] === dateKey) {
+      deliveredIdentifiers.add(getRouteArrivalNotificationId(place, dateKey));
+    }
+  }
   const pendingCount = expectedIdentifiers.filter((identifier) =>
     pendingIdentifiers.has(identifier)
   ).length;
@@ -184,6 +204,14 @@ async function getBackgroundNotificationStatus(
   place: NativeRouteArrivalNotificationPlace
 ) {
   if (Platform.OS === "ios") {
+    const notifiedRegionDates = await readNotifiedRegionDates();
+    if (
+      notifiedRegionDates[getRouteArrivalRegionId(place)] ===
+      getRouteArrivalDateKey(place)
+    ) {
+      return "delivered" as const;
+    }
+
     const notificationId = getRouteArrivalNotificationId(
       place,
       getRouteArrivalDateKey(place)
@@ -320,6 +348,30 @@ async function writeNotifiedRegionDates(value: Record<string, string>) {
     ROUTE_ARRIVAL_NOTIFIED_STORAGE_KEY,
     JSON.stringify(value)
   );
+}
+
+async function rememberDeliveredRouteArrivalNotifications(
+  notifications: Pick<
+    NativeDeliveredRouteArrivalNotification,
+    "routeId" | "stopId" | "dateKey"
+  >[]
+) {
+  const notifiedRegionDates = await readNotifiedRegionDates();
+  let didUpdate = false;
+
+  for (const notification of notifications) {
+    const regionId = `${notification.routeId}:${notification.stopId}`;
+    if ((notifiedRegionDates[regionId] ?? "") < notification.dateKey) {
+      notifiedRegionDates[regionId] = notification.dateKey;
+      didUpdate = true;
+    }
+  }
+
+  if (didUpdate) {
+    await writeNotifiedRegionDates(notifiedRegionDates);
+  }
+
+  return notifiedRegionDates;
 }
 
 async function readDeliveredNotificationHistory() {
@@ -485,28 +537,23 @@ async function writeDeliveredNotificationHistory(
   );
 }
 
-export async function recordDeliveredRouteArrivalNotification(
+export function recordDeliveredRouteArrivalNotification(
   notification: Notifications.Notification
 ) {
-  const routeArrivalNotification =
-    parsePresentedRouteArrivalNotification(notification)?.notification;
+  return enqueueRouteArrivalOperation(async () => {
+    const routeArrivalNotification =
+      parsePresentedRouteArrivalNotification(notification)?.notification;
 
-  if (!routeArrivalNotification) {
-    return;
-  }
+    if (!routeArrivalNotification) {
+      return;
+    }
 
-  const history = await readDeliveredNotificationHistory();
-  await writeDeliveredNotificationHistory(
-    mergeDeliveredNotificationHistory(history, [routeArrivalNotification])
-  );
-
-  const regionId = `${routeArrivalNotification.routeId}:${routeArrivalNotification.stopId}`;
-  const notifiedRegionDates = await readNotifiedRegionDates();
-
-  if (notifiedRegionDates[regionId] !== routeArrivalNotification.dateKey) {
-    notifiedRegionDates[regionId] = routeArrivalNotification.dateKey;
-    await writeNotifiedRegionDates(notifiedRegionDates);
-  }
+    await rememberDeliveredRouteArrivalNotifications([routeArrivalNotification]);
+    const history = await readDeliveredNotificationHistory();
+    await writeDeliveredNotificationHistory(
+      mergeDeliveredNotificationHistory(history, [routeArrivalNotification])
+    );
+  });
 }
 
 async function appendDeliveredRouteArrivalNotification(
@@ -736,30 +783,65 @@ async function getCurrentRouteArrivalPosition() {
 async function reconcilePresentedRouteArrivalNotifications(
   places: StoredRouteArrivalPlace[]
 ) {
-  const notifiedRegionDates = await readNotifiedRegionDates();
-  const presentedNotifications =
-    await readPresentedRouteArrivalNotifications().catch(() => []);
-  let didUpdateNotifiedDates = false;
+  const [history, presentedNotifications] = await Promise.all([
+    readDeliveredNotificationHistory(),
+    readPresentedRouteArrivalNotifications(),
+  ]);
+  const deliveredIds = new Set([
+    ...history.map((notification) => notification.id),
+    ...presentedNotifications.map((notification) => notification.notificationId),
+  ]);
 
-  for (const place of places) {
-    const dateKey = getRouteArrivalDateKey(place);
-    const regionId = getRouteArrivalRegionId(place);
-    const notificationId = getRouteArrivalNotificationId(place, dateKey);
+  return rememberDeliveredRouteArrivalNotifications(
+    places
+      .filter((place) =>
+        deliveredIds.has(
+          getRouteArrivalNotificationId(place, getRouteArrivalDateKey(place))
+        )
+      )
+      .map((place) => ({
+        routeId: place.routeId,
+        stopId: place.stopId,
+        dateKey: getRouteArrivalDateKey(place),
+      }))
+  );
+}
 
-    if (
-      presentedNotifications.some(
-        (notification) => notification.notificationId === notificationId
-      ) &&
-      notifiedRegionDates[regionId] !== dateKey
-    ) {
-      notifiedRegionDates[regionId] = dateKey;
-      didUpdateNotifiedDates = true;
-    }
-  }
+function syncIosRouteArrivalPlaces(
+  places: StoredRouteArrivalPlace[],
+  radiusMeters: number
+) {
+  return enqueueRouteArrivalOperation(async () => {
+    const notifiedRegionDates =
+      await reconcilePresentedRouteArrivalNotifications(places);
+    const unnotifiedPlaces = places.filter(
+      (place) =>
+        notifiedRegionDates[getRouteArrivalRegionId(place)] !==
+        getRouteArrivalDateKey(place)
+    );
+    const activeCount = await syncIosRouteArrivalNotifications(
+      unnotifiedPlaces.map((place) => ({
+        identifier: getRouteArrivalNotificationId(
+          place,
+          getRouteArrivalDateKey(place)
+        ),
+        regionIdentifier: getRouteArrivalRegionId(place),
+        title: place.notificationTitle,
+        body: place.notificationBody,
+        routeId: place.routeId,
+        routeTitle: place.routeTitle ?? null,
+        dayId: place.dayId,
+        stopId: place.stopId,
+        placeTitle: place.title,
+        dateKey: getRouteArrivalDateKey(place),
+        latitude: place.lat,
+        longitude: place.lng,
+      })),
+      radiusMeters
+    );
 
-  if (didUpdateNotifiedDates) {
-    await writeNotifiedRegionDates(notifiedRegionDates);
-  }
+    return activeCount + places.length - unnotifiedPlaces.length;
+  });
 }
 
 async function reconcileRouteArrivalAtPosition(
@@ -808,8 +890,11 @@ async function reconcileCurrentRouteArrival(
   radiusMeters: number,
   knownCurrentPosition?: RouteArrivalPosition | null
 ) {
-  await reconcilePresentedRouteArrivalNotifications(places);
+  await enqueueRouteArrivalOperation(() =>
+    reconcilePresentedRouteArrivalNotifications(places)
+  );
 
+  // Do not block receipt persistence or inbox sync while waiting for GPS.
   const currentPosition =
     knownCurrentPosition === undefined
       ? await getCurrentRouteArrivalPosition()
@@ -857,26 +942,7 @@ async function reconcileStoredRouteArrivalNotificationsInternal() {
   );
 
   if (Platform.OS === "ios") {
-    await syncIosRouteArrivalNotifications(
-      places.map((place) => ({
-        identifier: getRouteArrivalNotificationId(
-          place,
-          getRouteArrivalDateKey(place)
-        ),
-        regionIdentifier: getRouteArrivalRegionId(place),
-        title: place.notificationTitle,
-        body: place.notificationBody,
-        routeId: place.routeId,
-        routeTitle: place.routeTitle ?? null,
-        dayId: place.dayId,
-        stopId: place.stopId,
-        placeTitle: place.title,
-        dateKey: getRouteArrivalDateKey(place),
-        latitude: place.lat,
-        longitude: place.lng,
-      })),
-      DEFAULT_GEOFENCE_RADIUS_METERS
-    );
+    await syncIosRouteArrivalPlaces(places, DEFAULT_GEOFENCE_RADIUS_METERS);
     await stopRouteArrivalLocationTrackingIfStarted().catch(() => undefined);
     await reconcileCurrentRouteArrival(places, DEFAULT_GEOFENCE_RADIUS_METERS);
   } else {
@@ -939,31 +1005,28 @@ async function deliverRouteArrivalNotification(
   }
 }
 
-async function deliverRouteArrivalNotificationOnce(
+function deliverRouteArrivalNotificationOnce(
   place: StoredRouteArrivalPlace,
   dateKey: string
 ) {
-  const regionId = getRouteArrivalRegionId(place);
-  let didDeliver = false;
-  const delivery = routeArrivalDeliveryQueue.then(async () => {
-    const notifiedRegionDates = await readNotifiedRegionDates();
+  return enqueueRouteArrivalOperation(async () => {
+    const regionId = getRouteArrivalRegionId(place);
+    // The system may deliver an iOS location alert while the GPS lookup is pending.
+    const notifiedRegionDates =
+      Platform.OS === "ios"
+        ? await reconcilePresentedRouteArrivalNotifications([place])
+        : await readNotifiedRegionDates();
 
     if (notifiedRegionDates[regionId] === dateKey) {
-      return;
+      return false;
     }
 
     await deliverRouteArrivalNotification(place, dateKey);
-    if (Platform.OS === "android") {
-      notifiedRegionDates[regionId] = dateKey;
-      await writeNotifiedRegionDates(notifiedRegionDates);
-    }
-    didDeliver = true;
+    // Persist successful scheduling on iOS too, before a delayed receipt callback.
+    notifiedRegionDates[regionId] = dateKey;
+    await writeNotifiedRegionDates(notifiedRegionDates);
+    return true;
   });
-
-  routeArrivalDeliveryQueue = delivery.catch(() => undefined);
-  await delivery;
-
-  return didDeliver;
 }
 
 if (
@@ -1019,10 +1082,7 @@ if (!TaskManager.isTaskDefined(ROUTE_ARRIVAL_LOCATION_TASK)) {
         return;
       }
 
-      await reconcilePresentedRouteArrivalNotifications(places).catch(
-        () => undefined
-      );
-      await reconcileRouteArrivalAtPosition(
+      await reconcileCurrentRouteArrival(
         places,
         DEFAULT_GEOFENCE_RADIUS_METERS,
         currentPosition
@@ -1043,7 +1103,9 @@ async function syncNativeRouteArrivalNotifications(
 
       if (Platform.OS === "ios") {
         await stopRouteArrivalGeofencingIfStarted().catch(() => undefined);
-        await syncIosRouteArrivalNotifications([], DEFAULT_GEOFENCE_RADIUS_METERS);
+        await enqueueRouteArrivalOperation(() =>
+          syncIosRouteArrivalNotifications([], DEFAULT_GEOFENCE_RADIUS_METERS)
+        );
       } else {
         await stopRouteArrivalGeofencingIfStarted();
       }
@@ -1088,26 +1150,7 @@ async function syncNativeRouteArrivalNotifications(
 
     if (Platform.OS === "ios") {
       await stopRouteArrivalGeofencingIfStarted().catch(() => undefined);
-      activeCount = await syncIosRouteArrivalNotifications(
-        places.map((place) => ({
-          identifier: getRouteArrivalNotificationId(
-            place,
-            getRouteArrivalDateKey(place)
-          ),
-          regionIdentifier: getRouteArrivalRegionId(place),
-          title: place.notificationTitle,
-          body: place.notificationBody,
-          routeId: place.routeId,
-          routeTitle: place.routeTitle ?? null,
-          dayId: place.dayId,
-          stopId: place.stopId,
-          placeTitle: place.title,
-          dateKey: getRouteArrivalDateKey(place),
-          latitude: place.lat,
-          longitude: place.lng,
-        })),
-        radius
-      );
+      activeCount = await syncIosRouteArrivalPlaces(places, radius);
       await reconcileCurrentRouteArrival(places, radius).catch(() => undefined);
     } else {
       await Location.startGeofencingAsync(
@@ -1290,7 +1333,7 @@ export async function handleNativeRouteArrivalTestLocationRequest(
   }
 }
 
-export async function handleNativeDeliveredNotificationHistoryRequest(
+async function syncNativeDeliveredNotificationHistory(
   message: NativeDeliveredNotificationHistoryRequest,
   webViewRef: WebViewRef
 ) {
@@ -1299,6 +1342,16 @@ export async function handleNativeDeliveredNotificationHistoryRequest(
     const history = await readDeliveredNotificationHistory();
     const presentedNotifications =
       await readPresentedRouteArrivalNotifications();
+    const deliveredNotifications = mergeDeliveredNotificationHistory(
+      history,
+      presentedNotifications.flatMap((notification) =>
+        notification.notification ? [notification.notification] : []
+      )
+    );
+
+    // Notification Center is a visible list, not a durable delivery ledger.
+    // Save deduplication state before acknowledging and dismissing its entries.
+    await rememberDeliveredRouteArrivalNotifications(deliveredNotifications);
 
     await Promise.all(
       presentedNotifications
@@ -1311,12 +1364,9 @@ export async function handleNativeDeliveredNotificationHistoryRequest(
           )
         )
     );
-    const notifications = mergeDeliveredNotificationHistory(
-      history,
-      presentedNotifications.flatMap((notification) =>
-        notification.notification ? [notification.notification] : []
-      )
-    ).filter((notification) => !acknowledgedIds.has(notification.id));
+    const notifications = deliveredNotifications.filter(
+      (notification) => !acknowledgedIds.has(notification.id)
+    );
 
     await writeDeliveredNotificationHistory(notifications);
 
@@ -1333,4 +1383,13 @@ export async function handleNativeDeliveredNotificationHistoryRequest(
           : "Delivered notification history lookup failed",
     });
   }
+}
+
+export function handleNativeDeliveredNotificationHistoryRequest(
+  message: NativeDeliveredNotificationHistoryRequest,
+  webViewRef: WebViewRef
+) {
+  return enqueueRouteArrivalOperation(() =>
+    syncNativeDeliveredNotificationHistory(message, webViewRef)
+  );
 }
