@@ -1,5 +1,4 @@
-import { useEffect, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";
 import {
@@ -12,16 +11,10 @@ import {
   MdLocationOn,
   MdNotifications,
 } from "react-icons/md";
-import { authApi, ME_QUERY_KEY, ME_QUERY_STALE_TIME_MS } from "@/api/authApi";
-import AccountAvatar from "@/components/account/AccountAvatar";
-import {
-  getAccountDisplayName,
-  getAccountIdentifier,
-  getAccountProviderLabels,
-} from "@/lib/accountDisplay";
+import AccountSummaryCard from "@/components/account/AccountSummaryCard";
+import { useAccountUser } from "@/components/account/useAccountUser";
 import { useUiText } from "@/lib/uiText";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
-import { useAuthUserStore, type AuthUser } from "@/stores/authUserStore";
 import {
   isDevelopmentServiceAreaEnabled,
   useEffectiveServiceArea,
@@ -104,54 +97,6 @@ function MyInfoToggleRow({
   );
 }
 
-function AccountSummaryCard({
-  user,
-  isLoading,
-  onClick,
-}: {
-  user: AuthUser | null;
-  isLoading: boolean;
-  onClick: () => void;
-}) {
-  const text = useUiText();
-  const displayName = getAccountDisplayName(user, text.account.fallbackName);
-  const identifier = isLoading
-    ? text.myInfo.accountChecking
-    : (getAccountIdentifier(user) ?? text.myInfo.localTestAccount);
-  const providerSummary = isLoading
-    ? text.myInfo.accountChecking
-    : getAccountProviderLabels(user, text.account.providers).join(" · ");
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex w-full items-center gap-4 overflow-hidden rounded-3xl border border-brand-200 bg-gradient-to-br from-white via-white to-brand-50 px-4 py-5 text-left shadow-sm transition hover:border-brand-300 active:scale-[0.99] dark:border-brand-400/25 dark:from-[#0d2926] dark:via-[#0b211f] dark:to-[#0f3431]"
-    >
-      <AccountAvatar
-        user={user}
-        fallbackName={text.account.fallbackName}
-        className="size-[4.5rem]"
-        textClassName="text-2xl"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-lg font-black text-slate-900">
-          {displayName}
-        </span>
-        <span className="mt-1 block truncate text-sm font-semibold text-slate-500">
-          {identifier}
-        </span>
-        <span className="mt-2 inline-flex rounded-full bg-brand-100 px-2.5 py-1 text-[11px] font-black text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
-          {providerSummary}
-        </span>
-      </span>
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/80 text-2xl text-brand-700 shadow-sm transition group-hover:translate-x-0.5 dark:bg-brand-400/10 dark:text-brand-100">
-        <MdChevronRight />
-      </span>
-    </button>
-  );
-}
-
 function MyInfoPage() {
   const text = useUiText();
   const navigate = useNavigate();
@@ -160,27 +105,14 @@ function MyInfoPage() {
   const language = useAppLanguageStore((state) => state.language);
   const serviceArea = useEffectiveServiceArea();
   const canSelectServiceArea = isDevelopmentServiceAreaEnabled();
-  const authUser = useAuthUserStore((state) => state.user);
-  const setAuthUser = useAuthUserStore((state) => state.setUser);
-  const meQuery = useQuery({
-    queryKey: ME_QUERY_KEY,
-    queryFn: authApi.me,
-    enabled: !authUser,
-    staleTime: ME_QUERY_STALE_TIME_MS,
-  });
-  const user = authUser ?? meQuery.data?.me ?? null;
-
-  useEffect(() => {
-    if (meQuery.data?.me) {
-      setAuthUser(meQuery.data.me);
-    }
-  }, [meQuery.data?.me, setAuthUser]);
+  const { user, isLoading, retry } = useAccountUser();
 
   return (
     <section className="space-y-4 pb-8 text-slate-900">
       <AccountSummaryCard
         user={user}
-        isLoading={meQuery.isLoading}
+        isLoading={isLoading}
+        onRetry={retry}
         onClick={() => navigate("/me/account")}
       />
 

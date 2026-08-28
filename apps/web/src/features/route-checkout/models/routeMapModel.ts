@@ -255,7 +255,7 @@ function calculateRouteMapDistanceKm(
   return earthRadiusKm * c;
 }
 
-function reorderRouteItemsFromStart(
+export function reorderRouteItemsFromStart(
   items: PlannedRouteItem[],
   startLocation: RouteStartLocation
 ) {

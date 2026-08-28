@@ -1,4 +1,5 @@
 import { MdDragIndicator } from "react-icons/md";
+import { useUiText } from "@/lib/uiText";
 import PlaceCartRouteMapPopup from "@/features/route-checkout/components/cart-steps/PlaceCartRouteMapPopup";
 import StartLocationPickerPopup from "@/features/route-checkout/components/cart-steps/StartLocationPickerPopup";
 import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupController";
@@ -19,6 +20,7 @@ type DayRoutePopupOverlaysProps = {
 };
 
 function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
+  const text = useUiText();
   const {
     mapTargetRouteDay,
     mapTargetDayOption,
@@ -28,8 +30,8 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
     onRequestCheckout,
     handleRequestCheckoutFromMap,
     closeMap,
-    isStartLocationPickerOpen,
-    startLocation,
+    startLocationPickerTarget,
+    startLocationPickerDay,
     closeStartLocationPicker,
     handleApplyStartLocation,
     draggedStop,
@@ -98,10 +100,12 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
           onClose={closeMap}
         />
       ) : null}
-      {isStartLocationPickerOpen && startLocation ? (
+      {startLocationPickerTarget && startLocationPickerDay ? (
         <StartLocationPickerPopup
-          routePlan={routeMapDayOptions.map((option) => option.day)}
-          initialLocation={startLocation}
+          key={`${startLocationPickerTarget.routeId}:${startLocationPickerTarget.dayId}:${startLocationPickerTarget.mode}`}
+          routePlan={[startLocationPickerDay]}
+          initialLocation={startLocationPickerTarget.initialLocation}
+          title={text.cart.dayStartLocationTitle(startLocationPickerTarget.dayIndex)}
           onClose={closeStartLocationPicker}
           onApply={handleApplyStartLocation}
         />

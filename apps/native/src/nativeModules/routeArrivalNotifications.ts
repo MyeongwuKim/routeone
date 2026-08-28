@@ -18,6 +18,9 @@ export type IosRouteArrivalNotification = {
 export type IosRouteArrivalNotificationStatus = {
   pendingIdentifiers: string[];
   deliveredIdentifiers: string[];
+  // Older native builds only expose the currently visible delivery list.
+  // Handled IDs survive dismissal and are not a delivery timestamp/history.
+  handledIdentifiers?: string[];
 };
 
 type RouteArrivalNotificationsNativeModule = {

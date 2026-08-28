@@ -167,11 +167,10 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     [routeListQuery.data, mode]
   );
   const {
-    likedRouteIds,
+    applyLikeState,
     pendingLikeRouteIds,
     toggleLike: handleToggleLike,
   } = useSharedRouteLike({
-    routes,
     mode,
     serviceAreaId: canSelectServiceArea ? serviceArea.id : undefined,
   });
@@ -199,14 +198,17 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       }),
   });
   const displayRoutes = useMemo(
-    () =>
-      appLanguage === "en"
+    () => {
+      const routesWithLikes = routes.map(applyLikeState);
+
+      return appLanguage === "en"
         ? localizeSharedRoutePlaces(
-            routes,
+            routesWithLikes,
             routePlaceLocalizationQuery.data ?? []
           )
-        : routes,
-    [appLanguage, routePlaceLocalizationQuery.data, routes]
+        : routesWithLikes;
+    },
+    [appLanguage, applyLikeState, routePlaceLocalizationQuery.data, routes]
   );
   const filterOptions = useMemo(
     () =>
@@ -406,14 +408,17 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     !hasReusableSelectedRouteLocalizations &&
     selectedRoutePlaceLocalizationQuery.isFetching;
   const displaySelectedRoute = useMemo(
-    () =>
-      appLanguage === "en"
+    () => {
+      const routeWithLikes = selectedRoute ? applyLikeState(selectedRoute) : null;
+
+      return appLanguage === "en"
         ? localizeRouteDetailPlaces(
-            selectedRoute,
+            routeWithLikes,
             selectedRouteLocalizedPlaces
           )
-        : selectedRoute,
-    [appLanguage, selectedRoute, selectedRouteLocalizedPlaces]
+        : routeWithLikes;
+    },
+    [appLanguage, applyLikeState, selectedRoute, selectedRouteLocalizedPlaces]
   );
   const selectedRouteDay = displaySelectedRoute
     ? (getSortedRouteDays(displaySelectedRoute)[0] ?? null)
@@ -722,7 +727,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           <SharedRouteCard
             key={route.id}
             route={route}
-            isLiked={likedRouteIds.has(route.id) || route.likedByMe}
+            isLiked={route.likedByMe}
             isLikePending={pendingLikeRouteIds.has(route.id)}
             onToggleLike={handleToggleLike}
             onOpen={handleOpenRoute}
@@ -842,23 +847,18 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
               : {
                   label: String(displaySelectedRoute.likeCount),
                   ariaLabel:
-                    likedRouteIds.has(displaySelectedRoute.id) ||
                     displaySelectedRoute.likedByMe
                       ? text.sharedRoute.unlikeAria(
                           displaySelectedRoute.likeCount
                         )
                       : text.sharedRoute.likeAria(displaySelectedRoute.likeCount),
                   icon:
-                    likedRouteIds.has(displaySelectedRoute.id) ||
                     displaySelectedRoute.likedByMe ? (
                       <FaHeart className="text-lg" />
                     ) : (
                       <FaRegHeart className="text-lg" />
                     ),
-                  isActive:
-                    likedRouteIds.has(displaySelectedRoute.id) ||
-                    displaySelectedRoute.likedByMe,
-                  disabled: pendingLikeRouteIds.has(displaySelectedRoute.id),
+                  isActive: displaySelectedRoute.likedByMe,
                   onClick: () => void handleToggleLike(displaySelectedRoute),
                 }
           }

@@ -13,6 +13,7 @@ import type {
 } from "../../models/routePlanTypes";
 
 type StartLocationPickerPopupProps = {
+  title?: string;
   routePlan: PlannedRouteDay[];
   initialLocation: RouteStartLocation;
   onClose: () => void;
@@ -86,6 +87,7 @@ function createPlaceMarkerIconHtml(index: number) {
 }
 
 function StartLocationPickerPopup({
+  title,
   routePlan,
   initialLocation,
   onClose,
@@ -94,6 +96,7 @@ function StartLocationPickerPopup({
   const text = useUiText();
   const mapInstanceRef = useRef<NaverMapInstance | null>(null);
   const startMarkerRef = useRef<NaverMarkerInstance | null>(null);
+  const isApplyingRef = useRef(false);
   const [draftLocation, setDraftLocation] = useState(initialLocation);
   const [isApplying, setIsApplying] = useState(false);
   const visiblePlaces = useMemo(
@@ -114,6 +117,7 @@ function StartLocationPickerPopup({
 
   const updateDraftLocation = useCallback(
     (nextLocation: RouteStartLocation, options: { pan?: boolean } = {}) => {
+      if (isApplyingRef.current) return;
       setDraftLocation(nextLocation);
 
       if (!window.naver?.maps) {
@@ -132,6 +136,22 @@ function StartLocationPickerPopup({
     },
     []
   );
+
+  const handleClose = () => {
+    if (!isApplyingRef.current) onClose();
+  };
+  const handleApply = async () => {
+    if (isApplyingRef.current) return;
+    isApplyingRef.current = true;
+    setIsApplying(true);
+    try {
+      const didApply = await onApply(draftLocation);
+      if (didApply !== false) onClose();
+    } finally {
+      isApplyingRef.current = false;
+      setIsApplying(false);
+    }
+  };
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -252,13 +272,14 @@ function StartLocationPickerPopup({
           <div className="min-w-0">
             <p className="font-trip text-sm text-brand-700">START POINT</p>
             <h2 className="mt-0.5 text-lg font-bold text-slate-900">
-              {text.cart.startLocationPickerTitle}
+              {title ?? text.cart.startLocationPickerTitle}
             </h2>
           </div>
           <button
             type="button"
             aria-label={text.cart.startLocationPickerCloseAria}
-            onClick={onClose}
+            onClick={handleClose}
+            disabled={isApplying}
             className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
           >
             <IoClose />
@@ -267,7 +288,7 @@ function StartLocationPickerPopup({
 
         <NaverMapView
           center={initialLocation}
-          className="relative min-h-0 flex-1 bg-brand-50"
+          className={`relative min-h-0 flex-1 bg-brand-50 ${isApplying ? "pointer-events-none" : ""}`}
           resetKey={mapResetKey}
           onReady={handleMapReady}
         >
@@ -286,7 +307,8 @@ function StartLocationPickerPopup({
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
+              disabled={isApplying}
               className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600"
             >
               {text.common.cancel}
@@ -294,16 +316,7 @@ function StartLocationPickerPopup({
             <button
               type="button"
               disabled={isApplying}
-              onClick={() => {
-                setIsApplying(true);
-                void Promise.resolve(onApply(draftLocation))
-                  .then((didApply) => {
-                    if (didApply !== false) {
-                      onClose();
-                    }
-                  })
-                  .finally(() => setIsApplying(false));
-              }}
+              onClick={() => void handleApply()}
               className="rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
             >
               {isApplying ? text.cart.saving : text.cart.apply}

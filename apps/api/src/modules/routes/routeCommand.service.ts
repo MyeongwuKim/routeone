@@ -16,12 +16,17 @@ import type {
   CreateRouteInput,
   CreateRouteStopInput,
   ReorderRouteStopsInput,
+  RouteDayStartLocationInput,
   RouteStartLocationInput,
   StartRouteInput,
   UpdateRouteLayoutInput,
   UpdateRouteStartLocationInput,
   UpdateRouteStopStayMinutesInput,
 } from "./route.types.js";
+import {
+  normalizeRouteDayInputs,
+  normalizeRouteStartLocation,
+} from "./routeDayInput.js";
 import { syncPlaceStayStatForRouteStopChange } from "./routeVisit.service.js";
 
 type RouteCommandPrisma = PrismaClient | Prisma.TransactionClient;
@@ -156,51 +161,6 @@ async function runRouteCreateTransactionWithRetry<T>(
   throw lastError;
 }
 
-function clampTripDays(value: number) {
-  return Math.max(1, Math.min(30, Math.round(value || 1)));
-}
-
-function normalizeRouteStopDayIndex(
-  value: number | null | undefined,
-  tripDays: number
-) {
-  const dayIndex = Number.isFinite(value) ? Math.round(value ?? 1) : 1;
-  return Math.max(1, Math.min(tripDays, dayIndex));
-}
-
-function normalizeRouteStopDayInputs(
-  tripDays: number,
-  stops: CreateRouteStopInput[]
-) {
-  const requestedTripDays = clampTripDays(tripDays);
-  const normalizedStops = stops.map((stop) => ({
-    ...stop,
-    dayIndex: normalizeRouteStopDayIndex(stop.dayIndex, requestedTripDays),
-  }));
-
-  if (normalizedStops.length === 0) {
-    return {
-      tripDays: 1,
-      stops: normalizedStops,
-    };
-  }
-
-  const usedDayIndexes = [
-    ...new Set(normalizedStops.map((stop) => stop.dayIndex)),
-  ].sort((left, right) => left - right);
-  const compactDayIndexByOriginal = new Map(
-    usedDayIndexes.map((dayIndex, index) => [dayIndex, index + 1] as const)
-  );
-
-  return {
-    tripDays: usedDayIndexes.length,
-    stops: normalizedStops.map((stop) => ({
-      ...stop,
-      dayIndex: compactDayIndexByOriginal.get(stop.dayIndex) ?? 1,
-    })),
-  };
-}
-
 function assertValidDate(value: Date) {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     throw new UserFacingError("시작 날짜가 올바르지 않습니다.");
@@ -271,26 +231,6 @@ function assertNoDuplicateRouteStops(stops: CreateRouteStopInput[]) {
   }
 }
 
-function normalizeRouteStartLocation(
-  startLocation?: RouteStartLocationInput | null
-) {
-  if (!startLocation) {
-    return null;
-  }
-
-  if (
-    !Number.isFinite(startLocation.lat) ||
-    !Number.isFinite(startLocation.lng)
-  ) {
-    throw new UserFacingError("출발 위치 좌표가 올바르지 않습니다.");
-  }
-
-  return {
-    lat: startLocation.lat,
-    lng: startLocation.lng,
-  };
-}
-
 function normalizeTravelMinutes(value?: number | null) {
   if (value == null) {
     return null;
@@ -306,18 +246,29 @@ function normalizeTravelMinutes(value?: number | null) {
 async function createRouteDays(
   prisma: RouteCommandPrisma,
   routeId: string,
-  tripDays: number,
-  travelStartDate?: Date | null
+  input: {
+    tripDays: number;
+    travelStartDate: Date | null;
+    startLocation: RouteStartLocationInput | null;
+    dayStartLocations: RouteDayStartLocationInput[];
+    dayIndexOffset?: number;
+  }
 ) {
   const days = [];
+  const startLocationByDay = new Map(
+    input.dayStartLocations.map((day) => [day.dayIndex, day.startLocation])
+  );
 
-  for (let dayIndex = 1; dayIndex <= tripDays; dayIndex += 1) {
+  for (let dayIndex = 1; dayIndex <= input.tripDays; dayIndex += 1) {
     days.push(
       await prisma.routeDay.create({
         data: {
           routeId,
-          dayIndex,
-          date: travelStartDate ? addDays(travelStartDate, dayIndex - 1) : null,
+          dayIndex: (input.dayIndexOffset ?? 0) + dayIndex,
+          date: input.travelStartDate
+            ? addDays(input.travelStartDate, dayIndex - 1)
+            : null,
+          startLocation: startLocationByDay.get(dayIndex) ?? input.startLocation,
         },
       })
     );
@@ -331,12 +282,14 @@ export async function createRoute(
   owner: User,
   input: CreateRouteInput
 ) {
-  const normalizedRouteStops = normalizeRouteStopDayInputs(
+  const normalizedRouteDays = normalizeRouteDayInputs(
     input.tripDays,
-    input.stops ?? []
+    input.stops ?? [],
+    input.dayStartLocations
   );
-  const tripDays = normalizedRouteStops.tripDays;
-  const stopInputs = normalizedRouteStops.stops;
+  const tripDays = normalizedRouteDays.tripDays;
+  const stopInputs = normalizedRouteDays.stops;
+  const dayStartLocations = normalizedRouteDays.dayStartLocations;
   assertNoDuplicateRouteStops(stopInputs);
   const travelStartDate = input.travelStartDate ?? null;
   const travelEndDate =
@@ -360,6 +313,8 @@ export async function createRoute(
     dailyStartMinutes,
     scheduleEndMinutes,
     startLocation,
+    // Preserve existing idempotency hashes when no DAY overrides are supplied.
+    ...(dayStartLocations.length > 0 ? { dayStartLocations } : {}),
     stops: stopInputs.map((stop) => ({
       ...stop,
       place: normalizePlaceSnapshot(stop.place),
@@ -389,12 +344,12 @@ export async function createRoute(
         totalStopCount: stopInputs.length,
       },
     });
-    const days = await createRouteDays(
-      database,
-      route.id,
+    const days = await createRouteDays(database, route.id, {
       tripDays,
-      travelStartDate
-    );
+      travelStartDate,
+      startLocation,
+      dayStartLocations,
+    });
     const dayIdByIndex = new Map(days.map((day) => [day.dayIndex, day.id]));
 
     for (const [index, stop] of stopInputs.entries()) {
@@ -477,12 +432,13 @@ export async function appendRouteDays(
   input: AppendRouteDaysInput
 ) {
   const route = await assertRouteOwner(prisma, input.routeId, user.id);
-  const normalizedRouteStops = normalizeRouteStopDayInputs(
+  const normalizedRouteDays = normalizeRouteDayInputs(
     input.tripDays,
-    input.stops ?? []
+    input.stops ?? [],
+    input.dayStartLocations
   );
-  const tripDays = normalizedRouteStops.tripDays;
-  const stopInputs = normalizedRouteStops.stops;
+  const tripDays = normalizedRouteDays.tripDays;
+  const stopInputs = normalizedRouteDays.stops;
   assertNoDuplicateRouteStops(stopInputs);
 
   if (stopInputs.length === 0) {
@@ -500,7 +456,9 @@ export async function appendRouteDays(
     travelStartDate
       ? addDays(travelStartDate, tripDays - 1)
       : (input.travelEndDate ?? null);
-  const startLocation = normalizeRouteStartLocation(input.startLocation);
+  const startLocation = normalizeRouteStartLocation(
+    input.startLocation ?? route.startLocation
+  );
 
   if (
     route.travelEndDate &&
@@ -518,19 +476,13 @@ export async function appendRouteDays(
     route.id
   );
 
-  const newDays = [];
-
-  for (let offset = 0; offset < tripDays; offset += 1) {
-    newDays.push(
-      await prisma.routeDay.create({
-        data: {
-          routeId: route.id,
-          dayIndex: baseDayIndex + offset + 1,
-          date: travelStartDate ? addDays(travelStartDate, offset) : null,
-        },
-      })
-    );
-  }
+  const newDays = await createRouteDays(prisma, route.id, {
+    tripDays,
+    travelStartDate,
+    startLocation,
+    dayStartLocations: normalizedRouteDays.dayStartLocations,
+    dayIndexOffset: baseDayIndex,
+  });
 
   const dayIdByRelativeIndex = new Map(
     newDays.map((day, index) => [index + 1, day.id])
@@ -565,7 +517,6 @@ export async function appendRouteDays(
         normalizeDayMinutes(input.dailyStartMinutes) ?? route.dailyStartMinutes,
       scheduleEndMinutes:
         normalizeDayMinutes(input.scheduleEndMinutes) ?? route.scheduleEndMinutes,
-      startLocation: route.startLocation ?? startLocation,
       status: "ACTIVE",
     },
   });
@@ -736,14 +687,25 @@ export async function updateRouteStartLocation(
     throw new UserFacingError("스타트 지점을 선택해 주세요.");
   }
 
-  await prisma.route.update({
-    where: {
-      id: route.id,
-    },
-    data: {
-      startLocation,
-    },
-  });
+  if (input.dayId != null) {
+    const day = await prisma.routeDay.findUnique({
+      where: { id: input.dayId },
+    });
+
+    if (!day || day.routeId !== route.id) {
+      throw new UserFacingError("일정 날짜를 찾을 수 없습니다.");
+    }
+
+    await prisma.routeDay.update({
+      where: { id: day.id },
+      data: { startLocation },
+    });
+  } else {
+    await prisma.route.update({
+      where: { id: route.id },
+      data: { startLocation },
+    });
+  }
 
   return refreshRouteProgress(prisma, route.id);
 }
@@ -863,7 +825,12 @@ export async function updateRouteLayout(
     throw new UserFacingError("남아 있는 모든 DAY의 장소를 포함해 주세요.");
   }
 
-  const layoutByDayId = new Map(input.days.map((day) => [day.dayId, day]));
+  const layoutByDayId = new Map(
+    input.days.map((day) => [
+      day.dayId,
+      { ...day, startLocation: normalizeRouteStartLocation(day.startLocation) },
+    ])
+  );
   const keptStopIds: string[] = [];
 
   for (const day of remainingDays) {
@@ -911,6 +878,7 @@ export async function updateRouteLayout(
 
     let nextOrder = 1;
     for (const [dayIndex, day] of remainingDays.entries()) {
+      const layout = layoutByDayId.get(day.id);
       await transaction.routeDay.update({
         where: { id: day.id },
         data: {
@@ -918,10 +886,10 @@ export async function updateRouteLayout(
           date: route.travelStartDate
             ? addDays(route.travelStartDate, dayIndex)
             : day.date,
+          ...(layout?.startLocation ? { startLocation: layout.startLocation } : {}),
         },
       });
 
-      const layout = layoutByDayId.get(day.id);
       for (const stopInput of layout?.stops ?? []) {
         const stayMinutes =
           stopInput.stayMinutes == null
@@ -1165,6 +1133,12 @@ export async function cloneRoute(
     throw new UserFacingError("복사할 수 있는 공유 루트를 찾을 수 없습니다.");
   }
 
+  const startLocation = normalizeRouteStartLocation(sourceRoute.startLocation);
+  const sourceDays = sourceRoute.days.map((day) => ({
+    ...day,
+    startLocation: normalizeRouteStartLocation(day.startLocation ?? startLocation),
+  }));
+
   const route = await prisma.route.create({
     data: {
       ownerId: user.id,
@@ -1177,7 +1151,7 @@ export async function cloneRoute(
       travelEndDate: sourceRoute.travelEndDate,
       dailyStartMinutes: sourceRoute.dailyStartMinutes,
       scheduleEndMinutes: sourceRoute.scheduleEndMinutes,
-      startLocation: sourceRoute.startLocation,
+      startLocation,
       status: input.startImmediately ? "ACTIVE" : "DRAFT",
       totalStopCount: sourceRoute.stops.length,
       startedAt: input.startImmediately ? new Date() : null,
@@ -1185,7 +1159,7 @@ export async function cloneRoute(
   });
   const dayIdBySourceDayId = new Map<string, string>();
 
-  for (const day of sourceRoute.days) {
+  for (const day of sourceDays) {
     const copiedDayStartedAt =
       input.startImmediately && day.dayIndex === 1 ? new Date() : null;
     const copiedDay = await prisma.routeDay.create({
@@ -1195,6 +1169,7 @@ export async function cloneRoute(
         date: day.date,
         plannedStartMinutes: day.plannedStartMinutes,
         startedAt: copiedDayStartedAt,
+        startLocation: day.startLocation,
       },
     });
     dayIdBySourceDayId.set(day.id, copiedDay.id);

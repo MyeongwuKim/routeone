@@ -20,6 +20,8 @@ type CurrentPositionState = {
 };
 
 let pendingPositionRequest: Promise<RouteOnePosition> | null = null;
+let pendingFreshPositionRequest: Promise<RouteOnePosition> | null = null;
+let latestPositionRequestId = 0;
 const CACHED_POSITION_MAX_AGE_MS = 1000 * 60 * 5;
 
 function getPositionErrorMessage(error: unknown) {
@@ -44,37 +46,56 @@ export const useCurrentPositionStore = create<CurrentPositionState>(
         return Promise.resolve(currentPosition);
       }
 
-      if (pendingPositionRequest) {
-        return pendingPositionRequest;
+      const pendingRequest = forceRefresh
+        ? pendingFreshPositionRequest
+        : pendingFreshPositionRequest ?? pendingPositionRequest;
+
+      if (pendingRequest) {
+        return pendingRequest;
       }
 
+      const requestId = ++latestPositionRequestId;
       set({
         error: null,
         status: "loading",
       });
 
-      pendingPositionRequest = getCurrentPosition()
+      const positionRequest = getCurrentPosition({ forceRefresh })
         .then((position) => {
-          set({
-            error: null,
-            position,
-            status: "success",
-          });
+          if (requestId === latestPositionRequestId) {
+            set({
+              error: null,
+              position,
+              status: "success",
+            });
+          }
           return position;
         })
         .catch((error: unknown) => {
-          set({
-            error: getPositionErrorMessage(error),
-            position: null,
-            status: "error",
-          });
+          if (requestId === latestPositionRequestId) {
+            set({
+              error: getPositionErrorMessage(error),
+              position: null,
+              status: "error",
+            });
+          }
           throw error;
         })
         .finally(() => {
-          pendingPositionRequest = null;
+          if (forceRefresh) {
+            pendingFreshPositionRequest = null;
+          } else {
+            pendingPositionRequest = null;
+          }
         });
 
-      return pendingPositionRequest;
+      if (forceRefresh) {
+        pendingFreshPositionRequest = positionRequest;
+      } else {
+        pendingPositionRequest = positionRequest;
+      }
+
+      return positionRequest;
     },
   })
 );

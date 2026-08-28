@@ -88,6 +88,10 @@ fragment RouteDetailFields on Route {
     date
     plannedStartMinutes
     startedAt
+    startLocation {
+      lat
+      lng
+    }
     stops {
       ...RouteStopFields
     }

@@ -32,6 +32,16 @@ import {
   getLocalizedDayDateLabel,
   getLocalizedRouteTitle,
 } from "../utils/dayRouteFormatting";
+import {
+  createRouteLayoutInput,
+  createRouteLayoutSignature,
+  createRouteStopsByDayId,
+} from "../utils/dayRouteLayout";
+import {
+  getDayRouteStartLocation,
+  updateDayRouteStartLocationDraft,
+  type DayRouteStartLocations,
+} from "../utils/dayRouteStartLocation";
 import { useDayRouteTravelSegments } from "./useDayRouteTravelSegments";
 import {
   useRouteStopDrag,
@@ -44,44 +54,11 @@ import { useRouteShareMutation } from "./useRouteShareMutation";
 import { useRouteStartDateMutation } from "./useRouteStartDateMutation";
 import { useRouteStopVisitMutation } from "./useRouteStopVisitMutation";
 import { useRouteDayStartMutation } from "./useRouteDayStartMutation";
-import { useRouteStartLocationMutation } from "./useRouteStartLocationMutation";
+import { useDayRouteStartLocationEditor } from "./useDayRouteStartLocationEditor";
 import {
   isTestAccountModeEnabled,
   isVisitVerificationBypassEnabled,
 } from "../services/visitPhotoService";
-
-function createRouteStopsByDayId(
-  days: MyRouteDay[],
-  activeDayId?: string,
-  activeStops?: MyRouteStop[]
-) {
-  return Object.fromEntries(
-    days.map((routeDay) => [
-      routeDay.id,
-      routeDay.id === activeDayId && activeStops
-        ? activeStops
-        : routeDay.stops,
-    ])
-  ) as RouteStopsByDayId;
-}
-
-function createRouteLayoutSignature(
-  days: MyRouteDay[],
-  stopsByDayId: RouteStopsByDayId,
-  deletedDayIds: Set<string>
-) {
-  return days
-    .filter((routeDay) => !deletedDayIds.has(routeDay.id))
-    .map((routeDay) =>
-      [
-        routeDay.id,
-        ...(stopsByDayId[routeDay.id] ?? []).map(
-          (stop) => `${stop.id}:${stop.stayMinutes ?? 60}`
-        ),
-      ].join("|")
-    )
-    .join("::");
-}
 
 export function useDayRoutePopupController({
   route,
@@ -122,14 +99,14 @@ export function useDayRoutePopupController({
   const [isGpsTestApplying, setIsGpsTestApplying] = useState(false);
   const [dayStartTimeTarget, setDayStartTimeTarget] =
     useState<DayStartTimeTarget | null>(null);
-  const [isStartLocationPickerOpen, setIsStartLocationPickerOpen] =
-    useState(false);
   const [directionsOpeningStopId, setDirectionsOpeningStopId] = useState<
     string | null
   >(null);
   const sortedDays = useMemo(() => getSortedRouteDays(route), [route]);
   const [draftStopsByDayId, setDraftStopsByDayId] =
     useState<RouteStopsByDayId>(() => createRouteStopsByDayId(sortedDays));
+  const [draftStartLocationsByDayId, setDraftStartLocationsByDayId] =
+    useState<DayRouteStartLocations>({});
   const [deletedDayIds, setDeletedDayIds] = useState<Set<string>>(
     () => new Set()
   );
@@ -187,9 +164,22 @@ export function useDayRoutePopupController({
     resetDayEditorState(nextDay);
     stopCurrentDrag();
   };
-  const visibleDays = isOrderEditing
-    ? sortedDays.filter((routeDay) => !deletedDayIds.has(routeDay.id))
-    : sortedDays;
+  const visibleDays = useMemo(
+    () =>
+      isOrderEditing
+        ? sortedDays
+            .filter((routeDay) => !deletedDayIds.has(routeDay.id))
+            .map((routeDay) =>
+              draftStartLocationsByDayId[routeDay.id]
+                ? {
+                    ...routeDay,
+                    startLocation: draftStartLocationsByDayId[routeDay.id],
+                  }
+                : routeDay
+            )
+        : sortedDays,
+    [deletedDayIds, draftStartLocationsByDayId, isOrderEditing, sortedDays]
+  );
   const displayedStopsByDayId = useMemo(
     () =>
       isOrderEditing
@@ -203,7 +193,7 @@ export function useDayRoutePopupController({
     activeDayId: activeDay.id,
     orderedStops,
     stopsByDayId: isOrderEditing ? draftStopsByDayId : undefined,
-    startLocation: route.startLocation,
+    routeStartLocation: route.startLocation,
   });
   const routeStopCount = visibleDays.reduce((total, routeDay) => {
     return total + (displayedStopsByDayId[routeDay.id]?.length ?? 0);
@@ -219,7 +209,8 @@ export function useDayRoutePopupController({
     createRouteLayoutSignature(
       sortedDays,
       draftStopsByDayId,
-      deletedDayIds
+      deletedDayIds,
+      draftStartLocationsByDayId
     ) !== baseLayoutSignature;
   const { isSavingLayout: isSavingOrder, saveLayout } =
     useRouteLayoutMutation({
@@ -233,6 +224,8 @@ export function useDayRoutePopupController({
         stopCurrentDrag();
         setDeletedDayIds(new Set());
         setDraftStopsByDayId(nextStopsByDayId);
+        setDraftStartLocationsByDayId({});
+        resetStartLocationPicker();
         setBaseLayoutSignature(
           createRouteLayoutSignature(nextDays, nextStopsByDayId, new Set())
         );
@@ -256,10 +249,6 @@ export function useDayRoutePopupController({
     isOrderEditing,
     setOrderedStops,
   });
-  const {
-    isUpdatingRouteStartLocation,
-    updateRouteStartLocation,
-  } = useRouteStartLocationMutation();
   const { isSharingRoute, shareRoute } = useRouteShareMutation(route.id);
   const { isUpdatingRouteDayStart, updateRouteDayStart } =
     useRouteDayStartMutation();
@@ -390,9 +379,49 @@ export function useDayRoutePopupController({
     ? (routeMapDayOptions.find((option) => option.id === mapTargetDayId) ?? null)
     : null;
   const mapTargetRouteDay = mapTargetDayOption?.day ?? null;
+  const {
+    startLocationPickerTarget,
+    canEditStartLocation,
+    isUpdatingRouteStartLocation,
+    openStartLocationPicker,
+    closeStartLocationPicker,
+    resetStartLocationPicker,
+    handleApplyStartLocation,
+  } = useDayRouteStartLocationEditor({
+    route,
+    days: visibleDays,
+    stopsByDayId: displayedStopsByDayId,
+    isReadOnly,
+    isOrderEditing,
+    isSavingOrder,
+    onDraftChange: (dayId, location) => {
+      const savedDay = sortedDays.find((routeDay) => routeDay.id === dayId);
+
+      if (savedDay) {
+        setDraftStartLocationsByDayId((current) =>
+          updateDayRouteStartLocationDraft(
+            current,
+            savedDay,
+            route.startLocation,
+            location
+          )
+        );
+      }
+    },
+  });
+  const startLocationPickerDay = startLocationPickerTarget
+    ? (routeMapDayOptions.find(
+        (option) => option.id === startLocationPickerTarget.dayId
+      )?.day ?? null)
+    : null;
 
   const handleStartOrderEditing = () => {
-    if (isReadOnly || isOrderEditing || isSavingOrder) {
+    if (
+      isReadOnly ||
+      isOrderEditing ||
+      isSavingOrder ||
+      isUpdatingRouteStartLocation
+    ) {
       return;
     }
 
@@ -402,6 +431,8 @@ export function useDayRoutePopupController({
       orderedStops
     );
     setDraftStopsByDayId(nextStopsByDayId);
+    setDraftStartLocationsByDayId({});
+    resetStartLocationPicker();
     setDeletedDayIds(new Set());
     setBaseLayoutSignature(
       createRouteLayoutSignature(sortedDays, nextStopsByDayId, new Set())
@@ -411,6 +442,10 @@ export function useDayRoutePopupController({
   };
 
   const handleCancelOrderEditing = () => {
+    if (isSavingOrder) {
+      return;
+    }
+
     stopCurrentDrag();
     const nextStopsByDayId = createRouteStopsByDayId(
       sortedDays,
@@ -418,6 +453,8 @@ export function useDayRoutePopupController({
       orderedStops
     );
     setDraftStopsByDayId(nextStopsByDayId);
+    setDraftStartLocationsByDayId({});
+    resetStartLocationPicker();
     setDeletedDayIds(new Set());
     setBaseLayoutSignature(
       createRouteLayoutSignature(sortedDays, nextStopsByDayId, new Set())
@@ -426,21 +463,24 @@ export function useDayRoutePopupController({
   };
 
   const handleSaveOrder = () => {
-    if (!isOrderDirty || isSavingOrder) {
+    if (
+      !isOrderEditing ||
+      !isOrderDirty ||
+      isSavingOrder ||
+      isUpdatingRouteStartLocation
+    ) {
       return;
     }
 
-    saveLayout({
-      routeId: route.id,
-      days: visibleDays.map((routeDay) => ({
-        dayId: routeDay.id,
-        stops: (draftStopsByDayId[routeDay.id] ?? []).map((stop) => ({
-          stopId: stop.id,
-          stayMinutes: stop.stayMinutes ?? 60,
-        })),
-      })),
-      deletedDayIds: [...deletedDayIds],
-    });
+    saveLayout(
+      createRouteLayoutInput({
+        routeId: route.id,
+        days: sortedDays,
+        stopsByDayId: draftStopsByDayId,
+        deletedDayIds,
+        startLocationsByDayId: draftStartLocationsByDayId,
+      })
+    );
   };
 
   const handleMoveStopToDay = (
@@ -688,6 +728,7 @@ export function useDayRoutePopupController({
           label: "삭제",
           variant: "danger",
           onClick: () => {
+            resetStartLocationPicker();
             const nextVisibleDay =
               visibleDays.find(
                 (routeDay) =>
@@ -786,11 +827,15 @@ export function useDayRoutePopupController({
     });
   };
 
-  const handleOpenStopDirections = async (stop: MyRouteStop) => {
+  const handleOpenStopDirections = async (
+    routeDay: MyRouteDay,
+    stop: MyRouteStop
+  ) => {
     if (directionsOpeningStopId) {
       return;
     }
 
+    const startLocation = getDayRouteStartLocation(routeDay, route.startLocation);
     setDirectionsOpeningStopId(stop.id);
 
     try {
@@ -810,11 +855,11 @@ export function useDayRoutePopupController({
     } catch {
       openSheet(createMapSheetPlaceFromRouteStop(stop), {
         mode: "directions-popup",
-        directionOrigin: route.startLocation
+        directionOrigin: startLocation
           ? {
               coordinates: {
-                lat: route.startLocation.lat,
-                lng: route.startLocation.lng,
+                lat: startLocation.lat,
+                lng: startLocation.lng,
               },
               label: text.dayRoute.savedStartLocation,
               isCurrentLocation: false,
@@ -866,15 +911,6 @@ export function useDayRoutePopupController({
       mode: "start",
     });
   };
-
-  const handleApplyStartLocation = (startLocation: {
-    lat: number;
-    lng: number;
-  }) =>
-    updateRouteStartLocation({
-      routeId: route.id,
-      startLocation,
-    });
 
   const isGpsTestEnabled =
     !isReadOnly &&
@@ -1007,7 +1043,7 @@ export function useDayRoutePopupController({
       activeDay,
       expandedDayIds,
       stopsByDayId: displayedStopsByDayId,
-      startLocation: route.startLocation,
+      routeStartLocation: route.startLocation,
       dailyStartMinutes: route.dailyStartMinutes,
       isOrderEditing,
       activeDropTarget,
@@ -1019,8 +1055,7 @@ export function useDayRoutePopupController({
         route.isMine &&
         (!isRetrospectiveCompletion || allowVisitCompletion),
       canEditDayStartTime,
-      canEditStartLocation:
-        route.isMine && !isReadOnly && Boolean(route.startLocation),
+      canEditStartLocation,
       isRetrospectiveCompletion,
       isVerificationBypassEnabled,
       canEditVerificationPhoto:
@@ -1040,7 +1075,7 @@ export function useDayRoutePopupController({
       handleSelectDay,
       handleRequestDeleteDay,
       setDayStartTimeTarget,
-      openStartLocationPicker: () => setIsStartLocationPickerOpen(true),
+      openStartLocationPicker,
       setStayMinutesEditTarget,
       setVisitTimesEditTarget,
       handleToggleStopVisited,
@@ -1089,14 +1124,10 @@ export function useDayRoutePopupController({
       onRequestCheckout,
       handleRequestCheckoutFromMap,
       closeMap: () => setMapTargetDayId(null),
-      isStartLocationPickerOpen,
-      startLocation: route.startLocation,
+      startLocationPickerTarget,
+      startLocationPickerDay,
       isUpdatingRouteStartLocation,
-      closeStartLocationPicker: () => {
-        if (!isUpdatingRouteStartLocation) {
-          setIsStartLocationPickerOpen(false);
-        }
-      },
+      closeStartLocationPicker,
       handleApplyStartLocation,
       draggedStop,
       dayStartTimeTarget,

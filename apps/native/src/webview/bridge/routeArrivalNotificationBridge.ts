@@ -175,7 +175,10 @@ async function getIosRegistrationSummary(
     readNotifiedRegionDates(),
   ]);
   const pendingIdentifiers = new Set(status.pendingIdentifiers);
-  const deliveredIdentifiers = new Set(status.deliveredIdentifiers);
+  const deliveredIdentifiers = new Set([
+    ...status.deliveredIdentifiers,
+    ...(status.handledIdentifiers ?? []),
+  ]);
   for (const place of places) {
     const dateKey = getRouteArrivalDateKey(place);
     if (notifiedRegionDates[getRouteArrivalRegionId(place)] === dateKey) {
@@ -183,7 +186,7 @@ async function getIosRegistrationSummary(
     }
   }
   const pendingCount = expectedIdentifiers.filter((identifier) =>
-    pendingIdentifiers.has(identifier)
+    pendingIdentifiers.has(identifier) && !deliveredIdentifiers.has(identifier)
   ).length;
   const deliveredCount = expectedIdentifiers.filter((identifier) =>
     deliveredIdentifiers.has(identifier)
@@ -218,12 +221,15 @@ async function getBackgroundNotificationStatus(
     );
     const status = await getIosRouteArrivalNotificationStatus();
 
-    if (status.pendingIdentifiers.includes(notificationId)) {
-      return "registered" as const;
+    if (
+      status.deliveredIdentifiers.includes(notificationId) ||
+      status.handledIdentifiers?.includes(notificationId)
+    ) {
+      return "delivered" as const;
     }
 
-    if (status.deliveredIdentifiers.includes(notificationId)) {
-      return "delivered" as const;
+    if (status.pendingIdentifiers.includes(notificationId)) {
+      return "registered" as const;
     }
 
     return "not-registered" as const;
@@ -783,28 +789,43 @@ async function getCurrentRouteArrivalPosition() {
 async function reconcilePresentedRouteArrivalNotifications(
   places: StoredRouteArrivalPlace[]
 ) {
-  const [history, presentedNotifications] = await Promise.all([
+  const [history, presentedNotifications, iosStatus] = await Promise.all([
     readDeliveredNotificationHistory(),
     readPresentedRouteArrivalNotifications(),
+    Platform.OS === "ios"
+      ? getIosRouteArrivalNotificationStatus()
+      : Promise.resolve(null),
   ]);
   const deliveredIds = new Set([
     ...history.map((notification) => notification.id),
     ...presentedNotifications.map((notification) => notification.notificationId),
+    ...(iosStatus?.deliveredIdentifiers ?? []),
+    ...(iosStatus?.handledIdentifiers ?? []),
   ]);
 
-  return rememberDeliveredRouteArrivalNotifications(
-    places
-      .filter((place) =>
-        deliveredIds.has(
-          getRouteArrivalNotificationId(place, getRouteArrivalDateKey(place))
-        )
-      )
-      .map((place) => ({
-        routeId: place.routeId,
-        stopId: place.stopId,
-        dateKey: getRouteArrivalDateKey(place),
-      }))
+  // A one-shot alert can be consumed while JS is not running and then dismissed.
+  // Keep its native no-repeat marker, without inventing an inbox delivery time.
+  const handledPlaces = places.filter((place) =>
+    deliveredIds.has(
+      getRouteArrivalNotificationId(place, getRouteArrivalDateKey(place))
+    )
   );
+  const notifiedRegionDates = await rememberDeliveredRouteArrivalNotifications(
+    handledPlaces.map((place) => ({
+      routeId: place.routeId,
+      stopId: place.stopId,
+      dateKey: getRouteArrivalDateKey(place),
+    }))
+  );
+
+  // The persisted summary keeps the latest date. An exact handled ID still wins
+  // when a route is moved to an earlier date or the device clock moves back.
+  for (const place of handledPlaces) {
+    notifiedRegionDates[getRouteArrivalRegionId(place)] =
+      getRouteArrivalDateKey(place);
+  }
+
+  return notifiedRegionDates;
 }
 
 function syncIosRouteArrivalPlaces(

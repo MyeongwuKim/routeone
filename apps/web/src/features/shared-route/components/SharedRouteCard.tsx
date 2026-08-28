@@ -104,12 +104,13 @@ const SharedRouteCard = memo(function SharedRouteCard({
             aria-label={text.sharedRouteCard.likeAria(
               getSharedRouteTitle(route, text)
             )}
-            disabled={isLikePending}
+            aria-pressed={isLiked}
+            aria-busy={isLikePending}
             onClick={(event) => {
               event.stopPropagation();
               void onToggleLike(route);
             }}
-            className={`flex shrink-0 items-center gap-1 rounded-full border px-3 py-2 text-xs font-bold transition disabled:cursor-wait disabled:opacity-75 ${
+            className={`flex shrink-0 items-center gap-1 rounded-full border px-3 py-2 text-xs font-bold transition ${
               isLiked
                 ? "border-brand-500 bg-brand-50 text-brand-700 dark:border-brand-300 dark:bg-brand-500/15 dark:text-brand-100"
                 : "border-slate-200 bg-white text-slate-500 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-300"

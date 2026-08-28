@@ -20,7 +20,8 @@ export function setNativeRouteArrivalTestPosition(
 
 async function getNativeCurrentPosition(
   locationTestModeEnabled: boolean,
-  useRealPosition: boolean
+  useRealPosition: boolean,
+  forceRefresh: boolean
 ): Promise<NativeLocationResponse> {
   if (
     locationTestModeEnabled &&
@@ -35,7 +36,7 @@ async function getNativeCurrentPosition(
 
   return {
     ok: true,
-    ...(await prepareNativeCurrentPosition())
+    ...(await prepareNativeCurrentPosition({ forceRefresh }))
   };
 }
 
@@ -50,7 +51,8 @@ export async function handleNativeLocationRequest(
       message.id,
       await getNativeCurrentPosition(
         locationTestModeEnabled,
-        message.useRealPosition === true
+        message.useRealPosition === true,
+        message.forceRefresh === true
       )
     );
   } catch (error) {

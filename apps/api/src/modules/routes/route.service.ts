@@ -7,6 +7,7 @@ export type {
   PlaceStaySummary,
   ReorderRouteStopsInput,
   RouteDayLayoutInput,
+  RouteDayStartLocationInput,
   RouteLayoutStopInput,
   RouteStopVisitVerificationInput,
   StartRouteInput,

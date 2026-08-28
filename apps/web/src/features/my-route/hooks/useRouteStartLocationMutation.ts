@@ -1,9 +1,11 @@
+import { useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { routeApi } from "@/api/routeApi";
 import type {
   MyRoutesQuery,
   UpdateRouteStartLocationInput,
 } from "@/generated/graphql";
+import { useUiText } from "@/lib/uiText";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import {
   MY_ROUTE_HISTORY_QUERY_KEY,
@@ -12,8 +14,10 @@ import {
 } from "../myRouteCache";
 
 export function useRouteStartLocationMutation() {
+  const text = useUiText();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
+  const isApplyingRef = useRef(false);
   const mutation = useMutation({
     mutationFn: (input: UpdateRouteStartLocationInput) =>
       routeApi.updateRouteStartLocation(input),
@@ -30,24 +34,29 @@ export function useRouteStartLocationMutation() {
   });
 
   const updateRouteStartLocation = async (
-    input: UpdateRouteStartLocationInput
+    input: UpdateRouteStartLocationInput,
+    dayIndex: number
   ) => {
-    if (mutation.isPending) {
+    if (isApplyingRef.current) {
       return false;
     }
 
+    isApplyingRef.current = true;
+
     try {
       await mutation.mutateAsync(input);
-      showToast("스타트 지점을 변경했어요.");
+      showToast(text.dayRoute.startLocationSaved(dayIndex));
       return true;
     } catch (error) {
       showToast(
         error instanceof Error
           ? error.message
-          : "스타트 지점을 저장하지 못했어요.",
+          : text.dayRoute.startLocationSaveFailed,
         2600
       );
       return false;
+    } finally {
+      isApplyingRef.current = false;
     }
   };
 

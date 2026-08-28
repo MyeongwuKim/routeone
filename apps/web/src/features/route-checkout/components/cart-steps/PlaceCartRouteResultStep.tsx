@@ -1,20 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { IoLocationSharp, IoReorderThreeOutline } from "react-icons/io5";
-import {
-  getEffectiveRoutePlanTripDays,
-  routeCheckoutApi,
-} from "@/api/routeCheckoutApi";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { IoReorderThreeOutline } from "react-icons/io5";
 import { routeApi } from "@/api/routeApi";
-import {
-  MY_ROUTES_QUERY_KEY,
-  upsertMyRouteCache,
-} from "@/features/my-route/myRouteCache";
-import { useUiToastStore } from "@/stores/uiToastStore";
-import { useUiModalStore } from "@/stores/uiModalStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import { createPlaceDuplicateKeySet } from "@/lib/placeDuplicate";
 import {
   getMapSheetPlaceStaySummaryKey,
@@ -22,15 +10,15 @@ import {
   resolvePlaceStaySummaryForDisplay,
   type PlaceStaySummaryPreview,
 } from "@/lib/routePlaceSnapshot";
-import { useUiText, type UiText } from "@/lib/uiText";
+import { useUiText } from "@/lib/uiText";
 import { useRouteCheckout } from "../../hooks/useRouteCheckout";
+import { useRouteCheckoutSave } from "../../hooks/useRouteCheckoutSave";
 import PlaceCartRouteDayCard from "./PlaceCartRouteDayCard";
 import StartLocationPickerPopup from "./StartLocationPickerPopup";
 import { useRouteResultEditor } from "../../hooks/useRouteResultEditor";
-import { findRouteDateConflict } from "../../utils/routeDateConflict";
+import { formatRouteClock } from "../../models/routeDayCardModel";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
-import type { MyRoutesQuery } from "@/generated/graphql";
 import type {
   PlannedRouteDay,
   RouteStartLocation,
@@ -46,27 +34,6 @@ type PlaceCartRouteResultStepProps = {
   onRequestSearchPlace: () => void;
 };
 
-function formatClock(totalMinutes: number) {
-  const normalizedMinutes = Math.max(0, Math.round(totalMinutes));
-  const hour = Math.floor(normalizedMinutes / 60);
-  const minute = normalizedMinutes % 60;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-function formatDurationText(totalMinutes: number, text: UiText) {
-  const normalizedMinutes = Math.max(0, Math.round(totalMinutes));
-
-  if (normalizedMinutes < 60) {
-    return text.dayRoute.minutes(normalizedMinutes);
-  }
-
-  const hour = Math.floor(normalizedMinutes / 60);
-  const minute = normalizedMinutes % 60;
-  return minute > 0
-    ? text.dayRoute.hoursMinutes(hour, minute)
-    : text.dayRoute.hours(hour);
-}
-
 function isSameRouteDay(left: PlannedRouteDay, right: PlannedRouteDay) {
   if (
     left.startLocation?.lat !== right.startLocation?.lat ||
@@ -81,20 +48,6 @@ function isSameRouteDay(left: PlannedRouteDay, right: PlannedRouteDay) {
   );
 }
 
-function getRouteSaveErrorMessage(error: unknown, text: UiText) {
-  return error instanceof Error
-    ? error.message
-    : text.cart.saveRouteFallbackError;
-}
-
-function createRouteRequestId() {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `route-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 function PlaceCartRouteResultStep({
   savedPlaces,
   candidatePlaces,
@@ -105,15 +58,10 @@ function PlaceCartRouteResultStep({
   onRequestSearchPlace,
 }: PlaceCartRouteResultStepProps) {
   const text = useUiText();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const showToast = useUiToastStore((state) => state.showToast);
-  const openModal = useUiModalStore((state) => state.openModal);
   const appendTarget = useRouteEditFlowStore((state) => state.appendTarget);
-  const clearAppendTarget = useRouteEditFlowStore(
-    (state) => state.clearAppendTarget
-  );
   const {
+    isSavingRoute,
+    isRouteSaveInFlight,
     travelStartDate,
     tripDays,
     setStep,
@@ -125,12 +73,13 @@ function PlaceCartRouteResultStep({
   const {
     routePlan,
     appliedRoutePlan,
-    startLocation,
     isRouteEditDirty,
     isRouteTravelLoading,
     hasRouteTravelFallback,
+    routeTravelLoadingDays,
+    routeTravelFallbackDays,
     handleChangeStayMinutes,
-    handleChangeStartLocation,
+    handleChangeDayStartLocation,
     handleInsertPlace,
     handleRemoveRoutePlace,
     handleReorderRoutePlan,
@@ -146,34 +95,40 @@ function PlaceCartRouteResultStep({
     tempo,
     isScheduleValid,
     currentLocation,
+    isRouteSaveInFlight,
   });
   const [isOrderEditing, setIsOrderEditing] = useState(false);
-  const [isSavingRoute, setIsSavingRoute] = useState(false);
-  const isSaveRequestInFlightRef = useRef(false);
-  const createRouteRequestIdRef = useRef<string | null>(null);
-  const [isStartLocationPickerOpen, setIsStartLocationPickerOpen] =
-    useState(false);
+  const [startLocationDayNumber, setStartLocationDayNumber] =
+    useState<number | null>(null);
+  const startLocationDay =
+    routePlan.find((day) => day.day === startLocationDayNumber) ?? null;
+  const pickerStartLocation =
+    startLocationDay?.startLocation ??
+    currentLocation ??
+    startLocationDay?.items[0]?.place ??
+    null;
   const hasOverSchedule = routePlan.some((day) =>
     day.items.some((item) => item.isOverSchedule)
   );
   const hasEditableRoute = routePlan.some((day) => day.items.length > 0);
-  const firstRouteItem =
-    routePlan.find((day) => day.items.length > 0)?.items[0] ?? null;
-  const firstTravelMinutes = firstRouteItem?.travelMinutesFromPrevious ?? null;
   const isRouteOrderEditing = isOrderEditing && hasEditableRoute;
-  useEffect(() => {
-    if (!isSaveRequestInFlightRef.current) {
-      createRouteRequestIdRef.current = null;
-    }
-  }, [
-    appendTarget?.routeId,
-    dailyStartMinutes,
-    routePlan,
-    scheduleEndMinutes,
-    startLocation,
-    travelStartDate,
-    tripDays,
-  ]);
+  const { handleSaveRoute } = useRouteCheckoutSave({
+    input: {
+      routePlan,
+      travelStartDate,
+      tripDays,
+      dailyStartMinutes,
+      scheduleEndMinutes,
+      startLocation: currentLocation,
+    },
+    canSave: !isRouteTravelLoading && !isRouteOrderEditing && !isRouteEditDirty,
+    onClose,
+    onClearPlaces,
+    onChooseDate: () => {
+      setIsOrderEditing(false);
+      setStep("schedule");
+    },
+  });
   const routePlanPlaces = useMemo(() => {
     const usedKeys = new Set<string>();
 
@@ -229,14 +184,19 @@ function PlaceCartRouteResultStep({
   const getBaselineDay = (dayNumber: number) =>
     appliedRoutePlan.find((day) => day.day === dayNumber) ?? null;
   const startOrderEditing = () => {
-    if (!hasEditableRoute || isRouteTravelLoading || isOrderEditing) {
+    if (
+      isRouteSaveInFlight() ||
+      !hasEditableRoute ||
+      isRouteTravelLoading ||
+      isOrderEditing
+    ) {
       return;
     }
 
     setIsOrderEditing(true);
   };
   const finishOrderEditing = () => {
-    if (!isOrderEditing) {
+    if (isRouteSaveInFlight() || !isOrderEditing) {
       return;
     }
 
@@ -306,122 +266,28 @@ function PlaceCartRouteResultStep({
   }
 
   const handleApplyResultEdits = () => {
+    if (isRouteSaveInFlight()) {
+      return;
+    }
+
     handleApplyRouteEdits();
     setIsOrderEditing(false);
   };
 
   const handleCancelResultEdits = () => {
+    if (isRouteSaveInFlight()) {
+      return;
+    }
+
     handleCancelRouteEdits();
     setIsOrderEditing(false);
   };
-  const handleSaveRoute = async () => {
-    if (isSavingRoute || isSaveRequestInFlightRef.current) {
+  const handleOpenDayStartLocation = (dayNumber: number) => {
+    if (isRouteSaveInFlight() || isRouteTravelLoading || !isRouteOrderEditing) {
       return;
     }
-
-    if (!hasEditableRoute) {
-      showToast(text.cart.noPlacesToSaveToast);
-      return;
-    }
-
-    isSaveRequestInFlightRef.current = true;
-    setIsSavingRoute(true);
-
-    try {
-      const routesData =
-        queryClient.getQueryData<MyRoutesQuery>(MY_ROUTES_QUERY_KEY) ??
-        (await queryClient.fetchQuery<MyRoutesQuery>({
-          queryKey: MY_ROUTES_QUERY_KEY,
-          queryFn: () => routeApi.myRoutes(),
-        }));
-      const effectiveTripDays = getEffectiveRoutePlanTripDays(routePlan);
-      const conflict = findRouteDateConflict({
-        routes: routesData.myRoutes,
-        travelStartDate,
-        tripDays: effectiveTripDays,
-        excludeRouteId: appendTarget?.routeId,
-      });
-
-      if (conflict) {
-        openModal({
-          title: text.cart.dateConflictTitle,
-          description: text.cart.dateConflictDescription(
-            conflict.requestedRangeLabel,
-            conflict.existingRangeLabel
-          ),
-          detail: text.cart.dateConflictDetail,
-          actions: [
-            {
-              label: text.cart.viewMyRoutes,
-              variant: "secondary",
-              onClick: () => {
-                onClose();
-                navigate("/my-route");
-              },
-            },
-            {
-              label: text.cart.chooseDateAgain,
-              variant: "primary",
-              onClick: () => {
-                setIsOrderEditing(false);
-                setStep("schedule");
-              },
-            },
-          ],
-        });
-        isSaveRequestInFlightRef.current = false;
-        setIsSavingRoute(false);
-        return;
-      }
-
-      if (appendTarget) {
-        const route = await routeCheckoutApi.appendRouteDays(appendTarget.routeId, {
-          routePlan,
-          travelStartDate,
-          tripDays,
-          dailyStartMinutes,
-          scheduleEndMinutes,
-          startLocation,
-        });
-        queryClient.setQueryData<MyRoutesQuery>(
-          MY_ROUTES_QUERY_KEY,
-          (currentData) => upsertMyRouteCache(currentData, route.appendRouteDays)
-        );
-      } else {
-        createRouteRequestIdRef.current ??= createRouteRequestId();
-        const route = await routeCheckoutApi.saveRoutePlan(
-          {
-            routePlan,
-            travelStartDate,
-            tripDays,
-            dailyStartMinutes,
-            scheduleEndMinutes,
-            startLocation,
-          },
-          createRouteRequestIdRef.current
-        );
-        queryClient.setQueryData<MyRoutesQuery>(
-          MY_ROUTES_QUERY_KEY,
-          (currentData) => upsertMyRouteCache(currentData, route.createRoute)
-        );
-
-        showToast(text.cart.routeSavedToast(route.createRoute.totalStopCount));
-      }
-
-      if (appendTarget) {
-        showToast(text.cart.appendDaySavedToast(appendTarget.routeTitle));
-      }
-      isSaveRequestInFlightRef.current = false;
-      clearAppendTarget();
-      onClearPlaces();
-      onClose();
-    } catch (error) {
-      showToast(getRouteSaveErrorMessage(error, text), 2600);
-      isSaveRequestInFlightRef.current = false;
-      setIsSavingRoute(false);
-    }
+    setStartLocationDayNumber(dayNumber);
   };
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -453,7 +319,7 @@ function PlaceCartRouteResultStep({
 
           {!isRouteTravelLoading && hasOverSchedule ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
-              {text.cart.overScheduleWarning(formatClock(scheduleEndMinutes))}
+              {text.cart.overScheduleWarning(formatRouteClock(scheduleEndMinutes))}
             </div>
           ) : null}
 
@@ -464,64 +330,27 @@ function PlaceCartRouteResultStep({
           ) : null}
 
           <div className="space-y-4">
-            {startLocation ? (
-              <section className="rounded-2xl border border-brand-100 bg-white px-4 py-3 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-1 text-xs font-black text-brand-700">
-                      <IoLocationSharp className="text-sm" />
-                      {text.cart.startLocationLabel}
-                    </p>
-                    <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">
-                      {isRouteTravelLoading
-                        ? text.dayRoute.travelLoading
-                        : firstTravelMinutes != null && firstTravelMinutes >= 60
-                        ? text.cart.firstPlaceTravelWarning(
-                            formatDurationText(firstTravelMinutes, text)
-                          )
-                        : text.cart.startLocationRecalculateDescription}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsStartLocationPickerOpen(true)}
-                    className="shrink-0 rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700"
-                  >
-                    {text.cart.changeOnMap}
-                  </button>
-                </div>
-              </section>
-            ) : null}
-
-            {isRouteTravelLoading ? (
-              <PotatoLoadingCard
-                title={text.dayRoute.routeCalculating}
-                description={text.cart.routeTravelCalculatingDescription}
-                animation="running"
-                compact
-                className="shadow-sm"
+            {routePlan.map((day) => (
+              <PlaceCartRouteDayCard
+                key={day.day}
+                day={day}
+                routePlan={routePlan}
+                isOrderEditing={isRouteOrderEditing}
+                isTravelTimeEstimated={routeTravelFallbackDays.includes(day.day)}
+                isTravelTimeLoading={routeTravelLoadingDays.includes(day.day)}
+                comparisonDay={getComparisonDay(day)}
+                candidatePlaces={candidatePlaces}
+                excludedPlaceKeys={excludedPlaceKeys}
+                placeStaySummaryByPlaceId={placeStaySummaryByPlaceId}
+                onChangeStayMinutes={handleChangeStayMinutes}
+                onChangeStartLocation={handleOpenDayStartLocation}
+                onInsertPlace={handleInsertPlace}
+                onRemovePlace={handleRemoveRoutePlace}
+                onReorderDayItems={handleReorderDayItems}
+                onMovePlaceToDay={handleMovePlaceToDay}
+                onRequestSearchPlace={onRequestSearchPlace}
               />
-            ) : (
-              routePlan.map((day) => (
-                <PlaceCartRouteDayCard
-                  key={day.day}
-                  day={day}
-                  routePlan={routePlan}
-                  isOrderEditing={isRouteOrderEditing}
-                  isTravelTimeEstimated={hasRouteTravelFallback}
-                  comparisonDay={getComparisonDay(day)}
-                  candidatePlaces={candidatePlaces}
-                  excludedPlaceKeys={excludedPlaceKeys}
-                  placeStaySummaryByPlaceId={placeStaySummaryByPlaceId}
-                  onChangeStayMinutes={handleChangeStayMinutes}
-                  onInsertPlace={handleInsertPlace}
-                  onRemovePlace={handleRemoveRoutePlace}
-                  onReorderDayItems={handleReorderDayItems}
-                  onMovePlaceToDay={handleMovePlaceToDay}
-                  onRequestSearchPlace={onRequestSearchPlace}
-                />
-              ))
-            )}
+            ))}
           </div>
         </div>
       </div>
@@ -540,7 +369,7 @@ function PlaceCartRouteResultStep({
             <button
               type="button"
               onClick={startOrderEditing}
-              disabled={isRouteTravelLoading || !hasEditableRoute}
+              disabled={isSavingRoute || isRouteTravelLoading || !hasEditableRoute}
               className="inline-flex items-center justify-center gap-1 rounded-2xl border border-brand-200 bg-brand-50 px-2 py-3 text-xs font-bold text-brand-700 disabled:opacity-40"
             >
               <IoReorderThreeOutline className="text-base" />
@@ -549,14 +378,16 @@ function PlaceCartRouteResultStep({
             <button
               type="button"
               onClick={handleCancelResultEdits}
-              className="rounded-2xl border border-slate-200 bg-white px-2 py-3 text-xs font-bold text-slate-600"
+              disabled={isSavingRoute || isRouteTravelLoading}
+              className="rounded-2xl border border-slate-200 bg-white px-2 py-3 text-xs font-bold text-slate-600 disabled:opacity-40"
             >
               {text.cart.cancelChanges}
             </button>
             <button
               type="button"
               onClick={handleApplyResultEdits}
-              className="rounded-2xl bg-brand-600 px-2 py-3 text-xs font-bold text-white"
+              disabled={isSavingRoute || isRouteTravelLoading}
+              className="rounded-2xl bg-brand-600 px-2 py-3 text-xs font-bold text-white disabled:opacity-40"
             >
               {text.cart.applyChanges}
             </button>
@@ -566,7 +397,7 @@ function PlaceCartRouteResultStep({
             <button
               type="button"
               onClick={startOrderEditing}
-              disabled={isRouteTravelLoading || !hasEditableRoute}
+              disabled={isSavingRoute || isRouteTravelLoading || !hasEditableRoute}
               className="inline-flex items-center justify-center gap-1.5 rounded-2xl border border-brand-200 bg-brand-50 px-3 py-3 text-sm font-bold text-brand-700 disabled:opacity-40"
             >
               <IoReorderThreeOutline className="text-lg" />
@@ -592,12 +423,19 @@ function PlaceCartRouteResultStep({
         )}
       </footer>
 
-      {isStartLocationPickerOpen && startLocation ? (
+      {startLocationDay && pickerStartLocation ? (
         <StartLocationPickerPopup
-          routePlan={routePlan}
-          initialLocation={startLocation}
-          onClose={() => setIsStartLocationPickerOpen(false)}
-          onApply={handleChangeStartLocation}
+          key={startLocationDay.day}
+          title={text.cart.dayStartLocationTitle(startLocationDay.day)}
+          routePlan={[startLocationDay]}
+          initialLocation={pickerStartLocation}
+          onClose={() => {
+            if (!isRouteSaveInFlight()) setStartLocationDayNumber(null);
+          }}
+          onApply={(location) => {
+            if (isRouteSaveInFlight()) return false;
+            handleChangeDayStartLocation(startLocationDay.day, location);
+          }}
         />
       ) : null}
     </div>

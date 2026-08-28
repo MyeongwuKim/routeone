@@ -635,7 +635,8 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
           JSON.stringify({
             type: "routeone:native-location-current",
             id: requestId,
-            useRealPosition: Boolean(options && options.useRealPosition)
+            useRealPosition: Boolean(options && options.useRealPosition),
+            forceRefresh: Boolean(options && options.forceRefresh)
           })
         );
       });

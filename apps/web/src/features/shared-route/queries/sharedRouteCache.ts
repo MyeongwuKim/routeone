@@ -19,6 +19,21 @@ export type SharedRouteInfiniteData = InfiniteData<
   string | null
 >;
 
+export type SharedRouteLikeState = Pick<SharedRoute, "likedByMe" | "likeCount">;
+
+export function getSharedRouteLikeState(
+  route: SharedRouteLikeState,
+  liked = route.likedByMe
+): SharedRouteLikeState {
+  return {
+    likedByMe: liked,
+    likeCount: Math.max(
+      0,
+      route.likeCount + Number(liked) - Number(route.likedByMe)
+    ),
+  };
+}
+
 export function getSharedRouteConnection(
   page: SharedRouteConnectionPage,
   mode: SharedRoutePageMode
@@ -79,6 +94,66 @@ function updateSharedRouteInfiniteData(
     ...data,
     pages: data.pages.map((page) =>
       mapSharedRouteConnectionPage(page, mode, mapper)
+    ),
+  };
+}
+
+export function restoreSharedRouteInInfiniteData(
+  data: SharedRouteInfiniteData | undefined,
+  previousData: SharedRouteInfiniteData | undefined,
+  mode: SharedRoutePageMode,
+  routeId: string
+) {
+  if (!data) {
+    return data;
+  }
+
+  const previousPageIndex = previousData?.pages.findIndex((page) =>
+    getSharedRouteConnection(page, mode).nodes.some(
+      (route) => route.id === routeId
+    )
+  ) ?? -1;
+  const previousPage = previousData?.pages[previousPageIndex];
+  const previousRoutes = previousPage
+    ? getSharedRouteConnection(previousPage, mode).nodes
+    : [];
+  const previousRouteIndex = previousRoutes.findIndex(
+    (route) => route.id === routeId
+  );
+  const previousRoute = previousRoutes[previousRouteIndex];
+
+  if (!previousRoute) {
+    return updateSharedRouteInfiniteData(data, mode, (routes) =>
+      routes.filter((route) => route.id !== routeId)
+    );
+  }
+
+  const hasRoute = data.pages.some((page) =>
+    getSharedRouteConnection(page, mode).nodes.some(
+      (route) => route.id === routeId
+    )
+  );
+
+  if (hasRoute) {
+    return updateSharedRouteInfiniteData(data, mode, (routes) =>
+      routes.map((route) =>
+        route.id === routeId
+          ? { ...route, ...getSharedRouteLikeState(previousRoute) }
+          : route
+      )
+    );
+  }
+
+  return {
+    ...data,
+    pages: data.pages.map((page, index) =>
+      index === Math.min(previousPageIndex, data.pages.length - 1)
+        ? mapSharedRouteConnectionPage(page, mode, (routes) => [
+            ...routes.slice(0, previousRouteIndex),
+            previousRoute,
+            ...routes.slice(previousRouteIndex),
+          ])
+        : page
     ),
   };
 }
@@ -155,9 +230,7 @@ export function optimisticUpdateSharedRouteInfiniteLike({
   likeCount?: number;
   keepUnlikedRoute?: boolean;
 }) {
-  const nextLikeCount =
-    likeCount ??
-    Math.max(0, route.likeCount + (liked ? (route.likedByMe ? 0 : 1) : -1));
+  const nextLikeCount = likeCount ?? getSharedRouteLikeState(route, liked).likeCount;
 
   return upsertSharedRouteInInfiniteData(
     data,

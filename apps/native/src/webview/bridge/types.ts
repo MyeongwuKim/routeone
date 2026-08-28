@@ -61,6 +61,7 @@ export type NativeLocationRequest = {
   type: "routeone:native-location-current";
   id: string;
   useRealPosition?: boolean;
+  forceRefresh?: boolean;
 };
 
 export type NativePhotoRequest = {

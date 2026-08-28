@@ -9,6 +9,7 @@ import {
   recalculateRoutePlanDays,
 } from "../utils/routePlanBuilder";
 import { useRoutePlanDrivingTimes } from "./useRoutePlanDrivingTimes";
+import { reorderRouteItemsFromStart } from "../models/routeMapModel";
 import type {
   ManualRouteInsertion,
   PlannedRouteDay,
@@ -27,6 +28,7 @@ type UseRouteResultEditorParams = {
   tempo: TravelTempo | null;
   isScheduleValid: boolean;
   currentLocation: RouteStartLocation | null;
+  isRouteSaveInFlight: () => boolean;
 };
 
 type RouteEditSnapshot = {
@@ -34,7 +36,6 @@ type RouteEditSnapshot = {
   manualInsertions: ManualRouteInsertion[];
   removedPlaceIds: string[];
   routePlanOverride: PlannedRouteDay[] | null;
-  startLocation: RouteStartLocation | null;
 };
 
 type RouteEditorState = {
@@ -56,20 +57,17 @@ type RouteEditorAction =
     }
   | { type: "remove-place-from-empty-plan"; placeId: string }
   | { type: "reorder-route-plan"; routePlanOverride: PlannedRouteDay[] }
-  | { type: "change-start-location"; location: RouteStartLocation }
   | { type: "apply-draft" }
   | { type: "cancel-draft" };
 
 function createInitialRouteEditSnapshot(
-  initialRoutePlan: PlannedRouteDay[] | null,
-  currentLocation: RouteStartLocation | null
+  initialRoutePlan: PlannedRouteDay[] | null
 ): RouteEditSnapshot {
   return {
     stayOverrides: {},
     manualInsertions: [],
     removedPlaceIds: [],
     routePlanOverride: initialRoutePlan,
-    startLocation: currentLocation,
   };
 }
 
@@ -151,14 +149,6 @@ function routeEditorReducer(
           removedPlaceIds: [],
         },
       };
-    case "change-start-location":
-      return {
-        ...state,
-        draft: {
-          ...state.draft,
-          startLocation: action.location,
-        },
-      };
     case "apply-draft":
       return {
         applied: state.draft,
@@ -221,6 +211,10 @@ function alignRoutePlanWithSchedule(options: {
       ...sourceDay,
       day: dayNumber,
       date,
+      startLocation: sourceDay.startLocation ?? options.currentLocation,
+      startsFromCurrentLocation: Boolean(
+        sourceDay.startLocation ?? options.currentLocation
+      ),
     };
   });
 
@@ -330,12 +324,10 @@ export function useRouteResultEditor({
   tempo,
   isScheduleValid,
   currentLocation,
+  isRouteSaveInFlight,
 }: UseRouteResultEditorParams) {
   const [editorState, dispatchEditor] = useReducer(routeEditorReducer, null, () => {
-    const initialSnapshot = createInitialRouteEditSnapshot(
-      initialRoutePlan,
-      currentLocation
-    );
+    const initialSnapshot = createInitialRouteEditSnapshot(initialRoutePlan);
 
     return {
       applied: initialSnapshot,
@@ -343,10 +335,11 @@ export function useRouteResultEditor({
     };
   });
   const { applied, draft } = editorState;
-  const resolvedAppliedStartLocation =
-    applied.startLocation ?? currentLocation;
-  const resolvedDraftStartLocation = draft.startLocation ?? currentLocation;
-
+  const dispatchWhenEditable = (action: RouteEditorAction) => {
+    if (!isRouteSaveInFlight()) {
+      dispatchEditor(action);
+    }
+  };
   const isRouteEditDirty = useMemo(
     () =>
       JSON.stringify(draft.stayOverrides) !==
@@ -354,23 +347,17 @@ export function useRouteResultEditor({
       JSON.stringify(draft.manualInsertions) !==
         JSON.stringify(applied.manualInsertions) ||
       JSON.stringify([...draft.removedPlaceIds].sort()) !==
-        JSON.stringify([...applied.removedPlaceIds].sort()) ||
+      JSON.stringify([...applied.removedPlaceIds].sort()) ||
       JSON.stringify(draft.routePlanOverride) !==
-        JSON.stringify(applied.routePlanOverride) ||
-      !isSameStartLocation(
-        resolvedDraftStartLocation,
-        resolvedAppliedStartLocation
-      ),
+        JSON.stringify(applied.routePlanOverride),
     [
       applied.manualInsertions,
       applied.removedPlaceIds,
       applied.routePlanOverride,
-      resolvedAppliedStartLocation,
       applied.stayOverrides,
       draft.manualInsertions,
       draft.removedPlaceIds,
       draft.routePlanOverride,
-      resolvedDraftStartLocation,
       draft.stayOverrides,
     ]
   );
@@ -378,6 +365,22 @@ export function useRouteResultEditor({
   const estimatedRoutePlan = useMemo(() => {
     if (!tempo || !isScheduleValid) {
       return [];
+    }
+
+    if (draft.routePlanOverride) {
+      return recalculateRoutePlanDays({
+        routePlan: alignRoutePlanWithSchedule({
+          routePlan: draft.routePlanOverride,
+          travelStartDate,
+          tripDays,
+          currentLocation,
+        }),
+        dailyStartMinutes,
+        dailyEndMinutes,
+        tempo,
+        stayOverrides: draft.stayOverrides,
+        currentLocation,
+      });
     }
 
     const removedPlaceIdSet = new Set(draft.removedPlaceIds);
@@ -391,7 +394,7 @@ export function useRouteResultEditor({
       dailyEndMinutes,
       tempo,
       stayOverrides: draft.stayOverrides,
-      currentLocation: resolvedDraftStartLocation,
+      currentLocation,
     });
 
     const routePlanWithInsertions = applyManualRouteInsertions({
@@ -401,33 +404,17 @@ export function useRouteResultEditor({
       dailyEndMinutes,
       tempo,
       stayOverrides: draft.stayOverrides,
-      currentLocation: resolvedDraftStartLocation,
+      currentLocation,
     });
 
-    if (!draft.routePlanOverride) {
-      return routePlanWithInsertions;
-    }
-
-    return recalculateRoutePlanDays({
-      routePlan: alignRoutePlanWithSchedule({
-        routePlan: draft.routePlanOverride,
-        travelStartDate,
-        tripDays,
-        currentLocation: resolvedDraftStartLocation,
-      }),
-      dailyStartMinutes,
-      dailyEndMinutes,
-      tempo,
-      stayOverrides: draft.stayOverrides,
-      currentLocation: resolvedDraftStartLocation,
-    });
+    return routePlanWithInsertions;
   }, [
     dailyEndMinutes,
     dailyStartMinutes,
     draft.manualInsertions,
     draft.removedPlaceIds,
     draft.routePlanOverride,
-    resolvedDraftStartLocation,
+    currentLocation,
     draft.stayOverrides,
     isScheduleValid,
     savedPlaces,
@@ -440,6 +427,8 @@ export function useRouteResultEditor({
     routePlan,
     isLoading: isRouteTravelLoading,
     hasFallback: hasRouteTravelFallback,
+    loadingDayNumbers: routeTravelLoadingDays,
+    fallbackDayNumbers: routeTravelFallbackDays,
   } = useRoutePlanDrivingTimes({
     routePlan: estimatedRoutePlan,
     dailyStartMinutes,
@@ -449,6 +438,22 @@ export function useRouteResultEditor({
   const appliedRoutePlan = useMemo(() => {
     if (!tempo || !isScheduleValid) {
       return [];
+    }
+
+    if (applied.routePlanOverride) {
+      return recalculateRoutePlanDays({
+        routePlan: alignRoutePlanWithSchedule({
+          routePlan: applied.routePlanOverride,
+          travelStartDate,
+          tripDays,
+          currentLocation,
+        }),
+        dailyStartMinutes,
+        dailyEndMinutes,
+        tempo,
+        stayOverrides: applied.stayOverrides,
+        currentLocation,
+      });
     }
 
     const removedPlaceIdSet = new Set(applied.removedPlaceIds);
@@ -462,7 +467,7 @@ export function useRouteResultEditor({
       dailyEndMinutes,
       tempo,
       stayOverrides: applied.stayOverrides,
-      currentLocation: resolvedAppliedStartLocation,
+      currentLocation,
     });
 
     const routePlanWithInsertions = applyManualRouteInsertions({
@@ -472,26 +477,10 @@ export function useRouteResultEditor({
       dailyEndMinutes,
       tempo,
       stayOverrides: applied.stayOverrides,
-      currentLocation: resolvedAppliedStartLocation,
+      currentLocation,
     });
 
-    if (!applied.routePlanOverride) {
-      return routePlanWithInsertions;
-    }
-
-    return recalculateRoutePlanDays({
-      routePlan: alignRoutePlanWithSchedule({
-        routePlan: applied.routePlanOverride,
-        travelStartDate,
-        tripDays,
-        currentLocation: resolvedAppliedStartLocation,
-      }),
-      dailyStartMinutes,
-      dailyEndMinutes,
-      tempo,
-      stayOverrides: applied.stayOverrides,
-      currentLocation: resolvedAppliedStartLocation,
-    });
+    return routePlanWithInsertions;
   }, [
     applied.manualInsertions,
     applied.removedPlaceIds,
@@ -500,7 +489,7 @@ export function useRouteResultEditor({
     dailyEndMinutes,
     dailyStartMinutes,
     isScheduleValid,
-    resolvedAppliedStartLocation,
+    currentLocation,
     savedPlaces,
     tempo,
     travelStartDate,
@@ -508,7 +497,7 @@ export function useRouteResultEditor({
   ]);
 
   const handleChangeStayMinutes = (placeId: string, minutes: number) => {
-    dispatchEditor({ type: "change-stay-minutes", placeId, minutes });
+    dispatchWhenEditable({ type: "change-stay-minutes", placeId, minutes });
   };
 
   const handleInsertPlace = (
@@ -550,7 +539,7 @@ export function useRouteResultEditor({
       };
     });
 
-    dispatchEditor({
+    dispatchWhenEditable({
       type: "insert-place",
       placeId: place.id,
       routePlanOverride: nextRoutePlan,
@@ -559,7 +548,7 @@ export function useRouteResultEditor({
 
   const handleRemoveRoutePlace = (placeId: string) => {
     if (routePlan.length > 0) {
-      dispatchEditor({
+      dispatchWhenEditable({
         type: "remove-place-from-plan",
         placeId,
         routePlanOverride: routePlan.map((day) => ({
@@ -568,38 +557,62 @@ export function useRouteResultEditor({
         })),
       });
     } else {
-      dispatchEditor({ type: "remove-place-from-empty-plan", placeId });
+      dispatchWhenEditable({ type: "remove-place-from-empty-plan", placeId });
     }
   };
 
   const handleReorderRoutePlan = (nextRoutePlan: PlannedRouteDay[]) => {
-    dispatchEditor({
+    dispatchWhenEditable({
       type: "reorder-route-plan",
       routePlanOverride: nextRoutePlan,
     });
   };
 
-  const handleChangeStartLocation = (location: RouteStartLocation) => {
-    dispatchEditor({ type: "change-start-location", location });
+  const handleChangeDayStartLocation = (
+    dayNumber: number,
+    location: RouteStartLocation
+  ) => {
+    const selectedDay = routePlan.find((day) => day.day === dayNumber);
+    if (
+      isRouteSaveInFlight() ||
+      !selectedDay ||
+      isSameStartLocation(selectedDay.startLocation, location)
+    ) {
+      return;
+    }
+
+    handleReorderRoutePlan(
+      routePlan.map((day) =>
+        day.day === dayNumber
+          ? {
+              ...day,
+              startLocation: location,
+              startsFromCurrentLocation: true,
+              items: reorderRouteItemsFromStart(day.items, location),
+            }
+          : day
+      )
+    );
   };
 
   const handleApplyRouteEdits = () => {
-    dispatchEditor({ type: "apply-draft" });
+    dispatchWhenEditable({ type: "apply-draft" });
   };
 
   const handleCancelRouteEdits = () => {
-    dispatchEditor({ type: "cancel-draft" });
+    dispatchWhenEditable({ type: "cancel-draft" });
   };
 
   return {
     routePlan,
     appliedRoutePlan,
-    startLocation: resolvedDraftStartLocation,
     isRouteEditDirty,
     isRouteTravelLoading,
     hasRouteTravelFallback,
+    routeTravelLoadingDays,
+    routeTravelFallbackDays,
     handleChangeStayMinutes,
-    handleChangeStartLocation,
+    handleChangeDayStartLocation,
     handleInsertPlace,
     handleRemoveRoutePlace,
     handleReorderRoutePlan,

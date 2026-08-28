@@ -26,6 +26,8 @@ type CloudflareImageUploadResponse = {
 
 const VISIT_GPS_VERIFICATION_MAX_DISTANCE_METERS = 100;
 const VISIT_GPS_VERIFICATION_MAX_ACCURACY_METERS = 100;
+const VISIT_GPS_VERIFICATION_MAX_POSITION_AGE_MS = 15_000;
+const VISIT_GPS_VERIFICATION_FUTURE_TOLERANCE_MS = 5_000;
 const EARTH_RADIUS_METERS = 6_371_000;
 const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 
@@ -81,6 +83,24 @@ export function assertVisitPositionNearPlace(
   position: VisitPlaceCoordinates,
   place: VisitPlaceCoordinates
 ) {
+  if (
+    !Number.isFinite(position.lat) ||
+    !Number.isFinite(position.lng) ||
+    Math.abs(position.lat) > 90 ||
+    Math.abs(position.lng) > 180
+  ) {
+    throw new Error("현재 위치를 확인하지 못했어요. 위치 권한과 GPS 상태를 확인해 주세요.");
+  }
+
+  if (
+    !Number.isFinite(place.lat) ||
+    !Number.isFinite(place.lng) ||
+    Math.abs(place.lat) > 90 ||
+    Math.abs(place.lng) > 180
+  ) {
+    throw new Error("장소 좌표가 없어 위치 인증을 진행할 수 없어요.");
+  }
+
   const distanceMeters = calculateDistanceMeters(position, place);
 
   if (distanceMeters > VISIT_GPS_VERIFICATION_MAX_DISTANCE_METERS) {
@@ -116,8 +136,22 @@ export function assertVisitPositionAccuracy(position: NativePosition) {
   }
 }
 
+export function assertVisitPositionFreshness(position: NativePosition) {
+  const ageMs = Date.now() - position.timestamp;
+
+  if (
+    !Number.isFinite(position.timestamp) ||
+    ageMs > VISIT_GPS_VERIFICATION_MAX_POSITION_AGE_MS ||
+    ageMs < -VISIT_GPS_VERIFICATION_FUTURE_TOLERANCE_MS
+  ) {
+    throw new Error("현재 위치가 갱신되지 않았어요. 잠시 후 다시 시도하고, 계속되면 앱을 업데이트해 주세요.");
+  }
+}
+
 export async function requestCurrentPosition() {
-  const positionRequest = nativeBridge.location.getCurrentPosition();
+  const positionRequest = nativeBridge.location.getCurrentPosition({
+    forceRefresh: true,
+  });
 
   if (!positionRequest) {
     throw new Error("앱에서만 위치 인증을 사용할 수 있어요.");
@@ -143,6 +177,7 @@ export async function requestVisitVerificationPosition(
 
   const position = await requestCurrentPosition();
 
+  assertVisitPositionFreshness(position);
   assertVisitPositionAccuracy(position);
   assertVisitPositionNearPlace(position, place);
 

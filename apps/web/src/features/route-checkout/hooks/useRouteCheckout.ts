@@ -6,6 +6,10 @@ import type {
 import type { CartFlowStep } from "../models/routeCheckoutFlow";
 
 export type RouteCheckoutContextValue = {
+  isSavingRoute: boolean;
+  isRouteSaveInFlight: () => boolean;
+  startSavingRoute: () => boolean;
+  finishSavingRoute: () => void;
   step: CartFlowStep;
   setStep: (step: CartFlowStep) => void;
   travelStartDate: string;

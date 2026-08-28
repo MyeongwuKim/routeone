@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
+import { getDayRouteStartLocation } from "../utils/dayRouteStartLocation";
 
 export type RouteLatLng = {
   lat: number;
@@ -113,8 +114,45 @@ type UseDayRouteTravelSegmentsOptions = {
   activeDayId: string;
   orderedStops: MyRouteStop[];
   stopsByDayId?: Record<string, MyRouteStop[]>;
-  startLocation: MyRoute["startLocation"];
+  routeStartLocation: MyRoute["startLocation"];
 };
+
+export function createDayRouteTravelSegmentRequests({
+  days,
+  activeDayId,
+  orderedStops,
+  stopsByDayId,
+  routeStartLocation,
+}: Omit<UseDayRouteTravelSegmentsOptions, "language">) {
+  const requestByKey = new Map<string, TravelSegmentRequest>();
+  const appendRequest = (request: TravelSegmentRequest | null) => {
+    if (request) {
+      requestByKey.set(request.key, request);
+    }
+  };
+
+  days.forEach((routeDay) => {
+    const routeDayStops =
+      stopsByDayId?.[routeDay.id] ??
+      (routeDay.id === activeDayId ? orderedStops : routeDay.stops);
+    const firstStop = routeDayStops[0] ?? null;
+    const startLocation = getDayRouteStartLocation(routeDay, routeStartLocation);
+
+    if (firstStop && startLocation) {
+      appendRequest(createTravelSegmentRequest(startLocation, firstStop.place));
+    }
+
+    routeDayStops.forEach((stop, index) => {
+      const nextStop = routeDayStops[index + 1] ?? null;
+
+      if (nextStop && !getStoredTravelSegment(nextStop)) {
+        appendRequest(createTravelSegmentRequest(stop.place, nextStop.place));
+      }
+    });
+  });
+
+  return [...requestByKey.values()];
+}
 
 export function useDayRouteTravelSegments({
   language,
@@ -122,7 +160,7 @@ export function useDayRouteTravelSegments({
   activeDayId,
   orderedStops,
   stopsByDayId,
-  startLocation,
+  routeStartLocation,
 }: UseDayRouteTravelSegmentsOptions) {
   const [travelSegmentByKey, setTravelSegmentByKey] = useState<
     Record<string, TravelSegmentState>
@@ -136,35 +174,17 @@ export function useDayRouteTravelSegments({
   >({});
   const updateFrameRef = useRef<number | null>(null);
   const isMountedRef = useRef(false);
-  const requests = useMemo(() => {
-    const requestByKey = new Map<string, TravelSegmentRequest>();
-    const appendRequest = (request: TravelSegmentRequest | null) => {
-      if (request) {
-        requestByKey.set(request.key, request);
-      }
-    };
-
-    days.forEach((routeDay) => {
-      const routeDayStops =
-        stopsByDayId?.[routeDay.id] ??
-        (routeDay.id === activeDayId ? orderedStops : routeDay.stops);
-      const firstStop = routeDayStops[0] ?? null;
-
-      if (firstStop && startLocation) {
-        appendRequest(createTravelSegmentRequest(startLocation, firstStop.place));
-      }
-
-      routeDayStops.forEach((stop, index) => {
-        const nextStop = routeDayStops[index + 1] ?? null;
-
-        if (nextStop && !getStoredTravelSegment(nextStop)) {
-          appendRequest(createTravelSegmentRequest(stop.place, nextStop.place));
-        }
-      });
-    });
-
-    return [...requestByKey.values()];
-  }, [activeDayId, days, orderedStops, startLocation, stopsByDayId]);
+  const requests = useMemo(
+    () =>
+      createDayRouteTravelSegmentRequests({
+        days,
+        activeDayId,
+        orderedStops,
+        stopsByDayId,
+        routeStartLocation,
+      }),
+    [activeDayId, days, orderedStops, routeStartLocation, stopsByDayId]
+  );
 
   useEffect(() => {
     const queueSegmentUpdate = (
@@ -210,8 +230,8 @@ export function useDayRouteTravelSegments({
       })
         .then((routeResult) => {
           queueSegmentUpdate(request.key, {
-              status: "success",
-              minutes: Math.max(1, Math.round(routeResult.durationMs / 60000)),
+            status: "success",
+            minutes: Math.max(1, Math.round(routeResult.durationMs / 60000)),
           });
         })
         .catch(() => {

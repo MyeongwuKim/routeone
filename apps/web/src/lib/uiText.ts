@@ -112,6 +112,8 @@ export type UiText = {
   account: {
     eyebrow: string;
     title: string;
+    loading: string;
+    loadError: string;
     fallbackName: string;
     accountSection: string;
     email: string;
@@ -533,6 +535,9 @@ export type UiText = {
     openPlaceDirectionsAria: (title: string) => string;
     noStartGps: string;
     editStartLocationAria: string;
+    setStartLocation: string;
+    startLocationSaved: (day: number) => string;
+    startLocationSaveFailed: string;
     firstPlaceTravel: (label: string) => string;
     nextPlaceTravel: (label: string) => string;
     travelLoading: string;
@@ -833,6 +838,8 @@ export type UiText = {
     startLocationPickerCloseAria: string;
     startLocationPickerGuide: string;
     saveRouteFallbackError: string;
+    routeSaveUnconfirmedError: string;
+    appendRouteSaveUnconfirmedError: string;
     noPlacesToSaveToast: string;
     dateConflictTitle: string;
     dateConflictDescription: (requested: string, existing: string) => string;
@@ -850,6 +857,8 @@ export type UiText = {
     startLocationLabel: string;
     firstPlaceTravelWarning: (duration: string) => string;
     startLocationRecalculateDescription: string;
+    dayStartLocationTitle: (day: number) => string;
+    dayStartLocationRecalculateDescription: string;
     changeOnMap: string;
     editOrder: string;
     finishOrderEditing: string;
@@ -857,6 +866,7 @@ export type UiText = {
     cancelChanges: string;
     applyChanges: string;
     saving: string;
+    saveRouteSlowDescription: string;
     addDay: string;
     done: string;
     addSegmentAria: string;
@@ -1145,6 +1155,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     account: {
       eyebrow: "내 정보",
       title: "계정 정보",
+      loading: "계정 정보를 불러오는 중",
+      loadError: "계정 정보를 불러오지 못했어요. 다시 시도해 주세요.",
       fallbackName: "RouteOne 사용자",
       accountSection: "현재 계정",
       email: "이메일",
@@ -1646,6 +1658,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       openPlaceDirectionsAria: (title) => `${title} 지도와 길찾기 보기`,
       noStartGps: "출발 GPS 없음",
       editStartLocationAria: "스타트 지점 수정",
+      setStartLocation: "출발지 설정",
+      startLocationSaved: (day) => `DAY ${day} 출발지를 저장했어요.`,
+      startLocationSaveFailed: "출발지를 저장하지 못했어요.",
       firstPlaceTravel: (label) => `이동 · ${label}`,
       nextPlaceTravel: (label) => `다음 목적지까지 ${label}`,
       travelLoading: "이동 시간 계산 중",
@@ -2019,6 +2034,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startLocationPickerGuide:
         "지도를 탭하거나 시작 마커를 드래그해서 출발 위치를 맞춰요.",
       saveRouteFallbackError: "루트 저장에 실패했어요. 잠시 후 다시 시도해 주세요.",
+      routeSaveUnconfirmedError:
+        "저장 결과를 확인하지 못했어요. 입력은 유지했으니 잠시 후 완료를 다시 눌러 주세요.",
+      appendRouteSaveUnconfirmedError:
+        "DAY 추가 결과를 확인하지 못했어요. 다시 추가하기 전에 내 루트에서 확인해 주세요.",
       noPlacesToSaveToast: "저장할 장소가 없어요.",
       dateConflictTitle: "이미 일정이 있어요",
       dateConflictDescription: (requested, existing) =>
@@ -2043,13 +2062,18 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `첫 장소까지 약 ${duration} 걸려요. 실제 출발지가 다르면 지도에서 위치를 바꿔요.`,
       startLocationRecalculateDescription:
         "현재 위치와 여행 지역이 다르면 지도에서 출발 위치를 바꿔 다시 계산해요.",
+      dayStartLocationTitle: (day) => `DAY ${day} 출발지`,
+      dayStartLocationRecalculateDescription:
+        "이 날짜의 장소 순서와 이동시간만 다시 계산해요.",
       changeOnMap: "지도에서 변경",
-      editOrder: "순서 편집",
-      finishOrderEditing: "순서 편집 완료",
+      editOrder: "일정 편집",
+      finishOrderEditing: "편집 완료",
       dragHandleAria: (title) => `${title} 순서 이동`,
       cancelChanges: "변경 취소",
       applyChanges: "변경 적용",
       saving: "루트 저장 중...",
+      saveRouteSlowDescription:
+        "서버 응답이 늦어지고 있어요. 완료될 때까지 이 화면에서 잠시 기다려 주세요.",
       addDay: "DAY 추가",
       done: "완료",
       addSegmentAria: "이 구간에 장소 추가",
@@ -2360,6 +2384,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     account: {
       eyebrow: "My Info",
       title: "Account",
+      loading: "Loading account information",
+      loadError: "Couldn't load your account. Please try again.",
       fallbackName: "RouteOne user",
       accountSection: "Current Account",
       email: "Email",
@@ -2885,6 +2911,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       openPlaceDirectionsAria: (title) => `View map and directions to ${title}`,
       noStartGps: "No start GPS",
       editStartLocationAria: "Edit start point",
+      setStartLocation: "Set start point",
+      startLocationSaved: (day) => `Saved the start point for DAY ${day}.`,
+      startLocationSaveFailed: "Could not save the start point.",
       firstPlaceTravel: (label) => `Travel · ${label}`,
       nextPlaceTravel: (label) => `To next destination: ${label}`,
       travelLoading: "Calculating travel time",
@@ -3262,6 +3291,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startLocationPickerCloseAria: "Close start point picker",
       startLocationPickerGuide: "Tap the map or drag the start marker to adjust it.",
       saveRouteFallbackError: "Could not save the route. Please try again soon.",
+      routeSaveUnconfirmedError:
+        "Could not confirm the save result. Your entries are kept. Please tap Done again shortly.",
+      appendRouteSaveUnconfirmedError:
+        "Could not confirm whether the DAY was added. Check My Routes before trying again.",
       noPlacesToSaveToast: "There are no places to save.",
       dateConflictTitle: "You already have a schedule",
       dateConflictDescription: (requested, existing) =>
@@ -3286,13 +3319,18 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `It takes about ${duration} to the first place. If your real start point is different, change it on the map.`,
       startLocationRecalculateDescription:
         "If your current location is away from the trip area, change the start point on the map and recalculate.",
+      dayStartLocationTitle: (day) => `DAY ${day} start point`,
+      dayStartLocationRecalculateDescription:
+        "Only this day’s stop order and travel times are recalculated.",
       changeOnMap: "Change on map",
-      editOrder: "Edit order",
-      finishOrderEditing: "Finish editing order",
+      editOrder: "Edit itinerary",
+      finishOrderEditing: "Finish editing",
       dragHandleAria: (title) => `Move ${title}`,
       cancelChanges: "Cancel changes",
       applyChanges: "Apply changes",
       saving: "Saving route...",
+      saveRouteSlowDescription:
+        "The server is taking longer to respond. Please stay on this screen until saving finishes.",
       addDay: "Add DAY",
       done: "Done",
       addSegmentAria: "Add a place to this segment",

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState, type SyntheticEvent } from "react";
 import { IoArrowBack, IoTrashOutline } from "react-icons/io5";
 import {
   RouteCheckoutProvider,
 } from "./RouteCheckoutContext";
 import { useRouteCheckout } from "../hooks/useRouteCheckout";
 import TodayStartScheduleConfirmDialog from "./TodayStartScheduleConfirmDialog";
+import RouteCheckoutSavingOverlay from "./RouteCheckoutSavingOverlay";
 import PlaceCartItemsStep from "./cart-steps/PlaceCartItemsStep";
 import PlaceCartRouteResultStep from "./cart-steps/PlaceCartRouteResultStep";
 import PlaceCartScheduleStep from "./cart-steps/PlaceCartScheduleStep";
@@ -66,6 +67,8 @@ function RouteCheckoutModalContent({
 }: RouteCheckoutModalContentProps) {
   const text = useUiText();
   const {
+    isSavingRoute,
+    isRouteSaveInFlight,
     step,
     setStep,
     tempo,
@@ -78,6 +81,7 @@ function RouteCheckoutModalContent({
     scheduleValidationMessage,
   } = useRouteCheckout();
   const showToast = useUiToastStore((state) => state.showToast);
+  const lastFocusedElementRef = useRef<HTMLElement | null>(null);
   const [isTodayStartConfirmOpen, setIsTodayStartConfirmOpen] = useState(false);
   const [confirmedTodayStartScheduleKey, setConfirmedTodayStartScheduleKey] =
     useState<string | null>(null);
@@ -97,6 +101,10 @@ function RouteCheckoutModalContent({
   );
 
   const handleBack = () => {
+    if (isRouteSaveInFlight()) {
+      return;
+    }
+
     const previousStep = getPreviousCheckoutStep(step, visibleSteps);
     if (previousStep) {
       setStep(previousStep);
@@ -107,6 +115,10 @@ function RouteCheckoutModalContent({
   };
 
   const handleRestartCheckout = () => {
+    if (isRouteSaveInFlight()) {
+      return;
+    }
+
     setStep(firstVisibleStep);
   };
 
@@ -121,6 +133,10 @@ function RouteCheckoutModalContent({
   };
 
   const handleNext = () => {
+    if (isRouteSaveInFlight()) {
+      return;
+    }
+
     if (step === "schedule") {
       if (!isScheduleValid) {
         showToast(scheduleValidationMessage);
@@ -151,6 +167,13 @@ function RouteCheckoutModalContent({
     setIsTodayStartConfirmOpen(false);
   };
 
+  const blockInteractionWhileSaving = (event: SyntheticEvent) => {
+    if (isRouteSaveInFlight()) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
   const nextDisabled =
     (step === "cart" && savedPlaces.length === 0) ||
     (step === "tempo" && !tempo) ||
@@ -162,13 +185,24 @@ function RouteCheckoutModalContent({
     <section
       className={`route-checkout-modal-enter fixed inset-0 ${UI_LAYER_CLASS.routeCheckout} h-dvh overflow-hidden bg-white`}
     >
-      <div className="flex h-full min-h-0 flex-col">
+      <div
+        inert={isSavingRoute}
+        aria-busy={isSavingRoute}
+        onFocusCapture={(event) => {
+          lastFocusedElementRef.current = event.target;
+        }}
+        onClickCapture={blockInteractionWhileSaving}
+        onPointerDownCapture={blockInteractionWhileSaving}
+        onKeyDownCapture={blockInteractionWhileSaving}
+        className="flex h-full min-h-0 flex-col"
+      >
         <header className="app-safe-area-header flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3">
           <div className="flex items-center">
             <button
               type="button"
               aria-label={text.cart.backAria}
               onClick={handleBack}
+              disabled={isSavingRoute}
               className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
             >
               <IoArrowBack />
@@ -197,6 +231,7 @@ function RouteCheckoutModalContent({
               type="button"
               aria-label={text.cart.restartCheckoutAria}
               onClick={handleRestartCheckout}
+              disabled={isSavingRoute}
               className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
             >
               {text.cart.restartCheckout}
@@ -264,6 +299,10 @@ function RouteCheckoutModalContent({
           onConfirm={handleConfirmTodayStartSchedule}
           onUseCurrentTime={handleUseCurrentTime}
         />
+      ) : null}
+
+      {isSavingRoute ? (
+        <RouteCheckoutSavingOverlay returnFocusRef={lastFocusedElementRef} />
       ) : null}
     </section>
   );

@@ -737,6 +737,7 @@ async function createDevHistoryRoute(
         routeId: route.id,
         dayIndex: dayOffset + 1,
         date: getUtcDate(dayDateKey),
+        startLocation: seedRoute.startLocation,
       },
     });
     let cursorMinutes = seedRoute.dailyStartMinutes;

@@ -5,6 +5,7 @@ import {
 } from "@/lib/placeCategory";
 import type { MapSheetPlace } from "@/types/place";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
+import { getDayRouteStartLocation } from "../utils/dayRouteStartLocation";
 
 function normalizeRouteDayDate(value: string | null) {
   return value ? value.slice(0, 10) : "";
@@ -57,8 +58,10 @@ export function createMapSheetPlaceFromRouteStop(stop: MyRouteStop) {
 export function createPlannedRouteDay(
   day: MyRouteDay,
   stops: MyRouteStop[],
-  startLocation: MyRoute["startLocation"] = null
+  routeStartLocation: MyRoute["startLocation"] = null
 ): PlannedRouteDay {
+  const startLocation = getDayRouteStartLocation(day, routeStartLocation);
+
   return {
     day: day.dayIndex,
     date: normalizeRouteDayDate(day.date),

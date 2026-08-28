@@ -193,7 +193,7 @@ type DayRouteAccordionItemProps = {
   onRequestDeleteDay: (day: MyRouteDay) => void;
   onRequestPlannedStartEdit: (day: MyRouteDay) => void;
   onRequestActualStartEdit: (day: MyRouteDay) => void;
-  onRequestStartLocationEdit: () => void;
+  onRequestStartLocationEdit: (day: MyRouteDay) => void;
   onRegisterDropZone: (index: number, node: HTMLDivElement | null) => void;
   onStartDrag: (
     stop: MyRouteStop,
@@ -353,15 +353,15 @@ function DayRouteAccordionItem({
             </p>
           )}
         </div>
-        {startLocation && canEditStartLocation ? (
+        {canEditStartLocation ? (
           <button
             type="button"
-            aria-label={text.dayRoute.editStartLocationAria}
-            onClick={onRequestStartLocationEdit}
+            aria-label={`DAY ${routeDay.dayIndex} ${text.dayRoute.editStartLocationAria}`}
+            onClick={() => onRequestStartLocationEdit(routeDay)}
             className="inline-flex shrink-0 items-center gap-1 rounded-full border border-brand-200 bg-white px-3 py-2 text-[11px] font-black text-brand-700"
           >
             <MdEdit className="text-sm" />
-            {text.common.edit}
+            {startLocation ? text.common.edit : text.dayRoute.setStartLocation}
           </button>
         ) : null}
       </div>

@@ -5,8 +5,10 @@ import {
 
 export type RouteOnePosition = NativePosition;
 
-export function getCurrentPosition() {
-  const nativePositionRequest = nativeBridge.location.getCurrentPosition();
+export function getCurrentPosition({ forceRefresh = false } = {}) {
+  const nativePositionRequest = nativeBridge.location.getCurrentPosition({
+    forceRefresh,
+  });
 
   if (nativePositionRequest) {
     return nativePositionRequest;
@@ -31,9 +33,9 @@ export function getCurrentPosition() {
         reject(new Error("현재 위치를 확인하지 못했어요."));
       },
       {
-        enableHighAccuracy: false,
-        maximumAge: 1000 * 60 * 5,
-        timeout: 4000,
+        enableHighAccuracy: forceRefresh,
+        maximumAge: forceRefresh ? 0 : 1000 * 60 * 5,
+        timeout: forceRefresh ? 20_000 : 4000,
       }
     );
   });

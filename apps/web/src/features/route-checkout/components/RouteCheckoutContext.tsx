@@ -2,6 +2,8 @@ import {
   useCallback,
   useMemo,
   useReducer,
+  useRef,
+  useState,
   type ReactNode,
 } from "react";
 import { useUiText } from "@/lib/uiText";
@@ -18,6 +20,7 @@ import {
 import {
   createRouteCheckoutState,
   routeCheckoutReducer,
+  type RouteCheckoutAction,
 } from "../models/routeCheckoutState";
 import { RouteCheckoutContext } from "../hooks/useRouteCheckout";
 
@@ -37,6 +40,8 @@ export function RouteCheckoutProvider({
   initialStartLocation = null,
 }: RouteCheckoutProviderProps) {
   const text = useUiText();
+  const [isSavingRoute, setIsSavingRoute] = useState(false);
+  const isSaveRequestInFlightRef = useRef(false);
   const [state, dispatch] = useReducer(
     routeCheckoutReducer,
     {
@@ -47,6 +52,28 @@ export function RouteCheckoutProvider({
     },
     createRouteCheckoutState
   );
+  const isRouteSaveInFlight = useCallback(
+    () => isSaveRequestInFlightRef.current,
+    []
+  );
+  const startSavingRoute = useCallback(() => {
+    if (isSaveRequestInFlightRef.current) {
+      return false;
+    }
+
+    isSaveRequestInFlightRef.current = true;
+    setIsSavingRoute(true);
+    return true;
+  }, []);
+  const finishSavingRoute = useCallback(() => {
+    isSaveRequestInFlightRef.current = false;
+    setIsSavingRoute(false);
+  }, []);
+  const dispatchWhenEditable = useCallback((action: RouteCheckoutAction) => {
+    if (!isSaveRequestInFlightRef.current) {
+      dispatch(action);
+    }
+  }, []);
   const {
     step,
     travelStartDate,
@@ -57,33 +84,37 @@ export function RouteCheckoutProvider({
     startLocation,
   } = state;
   const setStep = useCallback(
-    (value: CartFlowStep) => dispatch({ type: "set-step", value }),
-    []
+    (value: CartFlowStep) => dispatchWhenEditable({ type: "set-step", value }),
+    [dispatchWhenEditable]
   );
   const setTravelStartDate = useCallback(
-    (value: string) => dispatch({ type: "set-travel-start-date", value }),
-    []
+    (value: string) =>
+      dispatchWhenEditable({ type: "set-travel-start-date", value }),
+    [dispatchWhenEditable]
   );
   const setTripDays = useCallback(
-    (value: number) => dispatch({ type: "set-trip-days", value }),
-    []
+    (value: number) => dispatchWhenEditable({ type: "set-trip-days", value }),
+    [dispatchWhenEditable]
   );
   const setDailyStartTime = useCallback(
-    (value: string) => dispatch({ type: "set-daily-start-time", value }),
-    []
+    (value: string) =>
+      dispatchWhenEditable({ type: "set-daily-start-time", value }),
+    [dispatchWhenEditable]
   );
   const setScheduleEndTime = useCallback(
-    (value: string) => dispatch({ type: "set-schedule-end-time", value }),
-    []
+    (value: string) =>
+      dispatchWhenEditable({ type: "set-schedule-end-time", value }),
+    [dispatchWhenEditable]
   );
   const setTempo = useCallback(
-    (value: TravelTempo | null) => dispatch({ type: "set-tempo", value }),
-    []
+    (value: TravelTempo | null) =>
+      dispatchWhenEditable({ type: "set-tempo", value }),
+    [dispatchWhenEditable]
   );
   const setStartLocation = useCallback(
     (value: RouteStartLocation | null) =>
-      dispatch({ type: "set-start-location", value }),
-    []
+      dispatchWhenEditable({ type: "set-start-location", value }),
+    [dispatchWhenEditable]
   );
 
   const startDate = parseDateValue(travelStartDate);
@@ -114,6 +145,10 @@ export function RouteCheckoutProvider({
 
   const value = useMemo(
     () => ({
+      isSavingRoute,
+      isRouteSaveInFlight,
+      startSavingRoute,
+      finishSavingRoute,
       step,
       setStep,
       travelStartDate,
@@ -136,6 +171,9 @@ export function RouteCheckoutProvider({
     [
       dailyStartMinutes,
       dailyStartTime,
+      finishSavingRoute,
+      isRouteSaveInFlight,
+      isSavingRoute,
       isScheduleValid,
       scheduleEndMinutes,
       scheduleEndTime,
@@ -147,6 +185,7 @@ export function RouteCheckoutProvider({
       setTempo,
       setTravelStartDate,
       setTripDays,
+      startSavingRoute,
       startLocation,
       step,
       tempo,

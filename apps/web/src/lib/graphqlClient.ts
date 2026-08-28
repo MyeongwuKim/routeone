@@ -16,9 +16,10 @@ const RETRYABLE_HTTP_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504])
 const UNEXPECTED_SERVER_ERROR_MESSAGE =
   "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
 
-type GraphQLRequestOptions = {
+export type GraphQLRequestOptions = {
   timeoutMs?: number;
   maxRetryCount?: number;
+  retryDelayMs?: number;
 };
 
 type GraphQLResponse<TResult> = {
@@ -82,7 +83,15 @@ function sleep(ms: number) {
   });
 }
 
-function getRetryDelayMs(retryIndex: number) {
+function getRetryDelayMs(retryIndex: number, retryDelayMs?: number) {
+  if (
+    retryDelayMs !== undefined &&
+    Number.isFinite(retryDelayMs) &&
+    retryDelayMs >= 0
+  ) {
+    return retryDelayMs;
+  }
+
   const exponentialDelay =
     GRAPHQL_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, retryIndex);
   const jitterMs = Math.floor(Math.random() * 250);
@@ -143,7 +152,11 @@ function isMutationDocument(document: DocumentNode) {
 async function readGraphQLPayload<TResult>(response: Response) {
   try {
     return (await response.json()) as GraphQLResponse<TResult>;
-  } catch {
+  } catch (error) {
+    if (response.ok && (isAbortError(error) || error instanceof TypeError)) {
+      throw error;
+    }
+
     if (RETRYABLE_HTTP_STATUS_CODES.has(response.status)) {
       throw new GraphQLRequestError(
         UNEXPECTED_SERVER_ERROR_MESSAGE,
@@ -259,7 +272,7 @@ export async function requestGraphQL<TResult, TVariables>(
         throw requestError;
       }
 
-      await sleep(getRetryDelayMs(retryCount));
+      await sleep(getRetryDelayMs(retryCount, options?.retryDelayMs));
     }
   }
 

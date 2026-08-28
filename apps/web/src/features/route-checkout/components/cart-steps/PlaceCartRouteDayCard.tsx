@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { IoMapOutline } from "react-icons/io5";
+import { IoLocationSharp, IoMapOutline } from "react-icons/io5";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import { useUiText } from "@/lib/uiText";
 import type { MapSheetPlace } from "@/types/place";
@@ -10,6 +10,7 @@ import PlaceCartRouteMapPopup from "./PlaceCartRouteMapPopup";
 import {
   buildRouteStations,
   formatRouteDayDate,
+  getRouteDurationText,
   splitRouteRows,
   type PlaceStaySummaryPreview,
 } from "../../models/routeDayCardModel";
@@ -25,11 +26,13 @@ type PlaceCartRouteDayCardProps = {
   routePlan: PlannedRouteDay[];
   isOrderEditing: boolean;
   isTravelTimeEstimated: boolean;
+  isTravelTimeLoading: boolean;
   comparisonDay?: PlannedRouteDay | null;
   candidatePlaces: MapSheetPlace[];
   excludedPlaceKeys: string[];
   placeStaySummaryByPlaceId: Map<string, PlaceStaySummaryPreview>;
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
+  onChangeStartLocation: (dayNumber: number) => void;
   onInsertPlace: (request: RouteInsertRequest, place: MapSheetPlace) => void;
   onRemovePlace: (placeId: string) => void;
   onReorderDayItems: (dayNumber: number, nextItems: PlannedRouteItem[]) => void;
@@ -46,11 +49,13 @@ function PlaceCartRouteDayCard({
   routePlan,
   isOrderEditing,
   isTravelTimeEstimated,
+  isTravelTimeLoading,
   comparisonDay,
   candidatePlaces,
   excludedPlaceKeys,
   placeStaySummaryByPlaceId,
   onChangeStayMinutes,
+  onChangeStartLocation,
   onInsertPlace,
   onRemovePlace,
   onReorderDayItems,
@@ -97,6 +102,7 @@ function PlaceCartRouteDayCard({
   });
 
   const hasRouteComparison = Boolean(comparisonDay);
+  const firstTravelMinutes = day.items[0]?.travelMinutesFromPrevious ?? 0;
 
   return (
     <section
@@ -132,7 +138,53 @@ function PlaceCartRouteDayCard({
         </div>
       </div>
 
-      {day.items.length > 0 ? (
+      {day.startLocation || (isOrderEditing && day.items.length > 0) ? (
+        <div className="flex items-center justify-between gap-3 border-b border-brand-100 px-4 py-3">
+          <div className="min-w-0">
+            <p className="flex items-center gap-1 text-xs font-bold text-brand-700">
+              <IoLocationSharp />
+              {text.cart.startLocationLabel}
+              {day.startLocation ? (
+                <span className="font-normal tabular-nums text-slate-500">
+                  {day.startLocation.lat.toFixed(4)}, {day.startLocation.lng.toFixed(4)}
+                </span>
+              ) : null}
+            </p>
+            <p className="mt-1 text-[11px] leading-5 text-slate-500">
+              {isTravelTimeLoading
+                ? text.dayRoute.travelLoading
+                : firstTravelMinutes >= 60
+                  ? text.cart.firstPlaceTravelWarning(
+                      getRouteDurationText(firstTravelMinutes, text)
+                    )
+                  : text.cart.dayStartLocationRecalculateDescription}
+            </p>
+          </div>
+          {isOrderEditing ? (
+            <button
+              type="button"
+              aria-label={text.cart.dayStartLocationTitle(day.day)}
+              disabled={isTravelTimeLoading}
+              onClick={() => onChangeStartLocation(day.day)}
+              className="shrink-0 rounded-full border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700 disabled:opacity-40"
+            >
+              {text.cart.changeOnMap}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {isTravelTimeLoading ? (
+        <div className="m-4">
+          <PotatoLoadingCard
+            title={text.dayRoute.routeCalculating}
+            description={text.cart.routeTravelCalculatingDescription}
+            animation="running"
+            compact
+            className="shadow-sm"
+          />
+        </div>
+      ) : day.items.length > 0 ? (
         <div className="px-6 py-4">
           {isOrderEditing && previousDay ? (
             <div

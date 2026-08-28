@@ -156,6 +156,7 @@ export const routeTypeDefs = gql`
     date: DateTime
     plannedStartMinutes: Int
     startedAt: DateTime
+    startLocation: RouteStartLocation
     stops: [RouteStop!]!
     createdAt: DateTime!
     updatedAt: DateTime!
@@ -265,6 +266,11 @@ export const routeTypeDefs = gql`
     lng: Float!
   }
 
+  input RouteDayStartLocationInput {
+    dayIndex: Int!
+    startLocation: RouteStartLocationInput!
+  }
+
   input CreateRouteStopInput {
     dayIndex: Int
     order: Int
@@ -285,6 +291,7 @@ export const routeTypeDefs = gql`
     dailyStartMinutes: Int
     scheduleEndMinutes: Int
     startLocation: RouteStartLocationInput
+    dayStartLocations: [RouteDayStartLocationInput!]
     stops: [CreateRouteStopInput!]
   }
 
@@ -301,6 +308,7 @@ export const routeTypeDefs = gql`
     dailyStartMinutes: Int
     scheduleEndMinutes: Int
     startLocation: RouteStartLocationInput
+    dayStartLocations: [RouteDayStartLocationInput!]
     stops: [CreateRouteStopInput!]
   }
 
@@ -318,6 +326,7 @@ export const routeTypeDefs = gql`
 
   input UpdateRouteStartLocationInput {
     routeId: ID!
+    dayId: ID
     startLocation: RouteStartLocationInput!
   }
 
@@ -335,6 +344,7 @@ export const routeTypeDefs = gql`
   input RouteDayLayoutInput {
     dayId: ID!
     stops: [RouteLayoutStopInput!]!
+    startLocation: RouteStartLocationInput
   }
 
   input UpdateRouteLayoutInput {

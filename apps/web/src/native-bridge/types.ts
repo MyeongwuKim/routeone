@@ -180,6 +180,7 @@ export type NativeBridgeApi = {
   getAppInfo?: () => Promise<NativeAppInfo>;
   getCurrentPosition?: (options?: {
     useRealPosition?: boolean;
+    forceRefresh?: boolean;
   }) => Promise<NativePosition>;
   takeVisitPhoto?: (options?: {
     source?: NativeVisitPhotoSource;

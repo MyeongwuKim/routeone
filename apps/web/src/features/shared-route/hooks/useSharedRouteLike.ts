@@ -1,256 +1,253 @@
-import { useCallback, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
+import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useStore } from "zustand";
 import { routeApi } from "@/api/routeApi";
-import type {
-  RouteByIdQuery,
-} from "@/generated/graphql";
+import type { RouteByIdQuery } from "@/generated/graphql";
 import { useUiText } from "@/lib/uiText";
 import type { ServiceAreaId } from "@/data/serviceAreas";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import type { SharedRoute } from "../sharedRouteCardModel";
 import {
-  optimisticUpdateSharedRouteInfiniteLike,
+  getSharedRouteLikeState,
+  restoreSharedRouteInInfiniteData,
   upsertSharedRouteInInfiniteData,
   type SharedRouteInfiniteData,
 } from "../queries/sharedRouteCache";
+import { getSharedRouteLikeStore } from "../stores/sharedRouteLikeStore";
 import type { SharedRoutePageMode } from "../sharedRouteListModel";
 import {
   getRouteDetailQueryKey,
   LIKED_SHARED_ROUTES_QUERY_KEY,
+  SHARED_ROUTE_LIKE_MUTATION_KEY,
   SHARED_ROUTES_QUERY_KEY,
 } from "../queries/sharedRouteQueryKeys";
 
 type UseSharedRouteLikeOptions = {
-  routes: SharedRoute[];
   mode: SharedRoutePageMode;
   serviceAreaId?: ServiceAreaId;
 };
 
 type ToggleLikeVariables = {
   route: SharedRoute;
-  wasLiked: boolean;
   nextLiked: boolean;
-  previousLikeCount: number;
   keepUnlikedRoute: boolean;
+  queryKeys: { shared: QueryKey; liked: QueryKey };
+  generation: number;
 };
 
 type ToggleLikeContext = {
+  previousSharedRoutes: SharedRouteInfiniteData | undefined;
   previousLikedRoutes: SharedRouteInfiniteData | undefined;
+  previousDetail: RouteByIdQuery | undefined;
 };
 
 export function useSharedRouteLike({
-  routes,
   mode,
   serviceAreaId,
 }: UseSharedRouteLikeOptions) {
   const text = useUiText();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
-  const pendingLikeRouteIdsRef = useRef<Set<string>>(new Set());
-  const [pendingLikeRouteIds, setPendingLikeRouteIds] = useState<Set<string>>(
-    new Set()
+  const likeStore = useMemo(
+    () => getSharedRouteLikeStore(queryClient),
+    [queryClient]
   );
-  const sharedRoutesQueryKey = serviceAreaId
-    ? [...SHARED_ROUTES_QUERY_KEY, "service-area", serviceAreaId]
-    : SHARED_ROUTES_QUERY_KEY;
-  const likedSharedRoutesQueryKey = serviceAreaId
-    ? [...LIKED_SHARED_ROUTES_QUERY_KEY, "service-area", serviceAreaId]
-    : LIKED_SHARED_ROUTES_QUERY_KEY;
-  const likedRouteIds = useMemo(
-    () =>
-      new Set(
-        routes.filter((route) => route.likedByMe).map((route) => route.id)
-      ),
-    [routes]
+  const pendingLikes = useStore(likeStore, (state) => state.pendingLikes);
+  const setPendingLike = useStore(likeStore, (state) => state.setPendingLike);
+  const queryKeys = useMemo(
+    () => ({
+      shared: serviceAreaId
+        ? [...SHARED_ROUTES_QUERY_KEY, "service-area", serviceAreaId]
+        : SHARED_ROUTES_QUERY_KEY,
+      liked: serviceAreaId
+        ? [...LIKED_SHARED_ROUTES_QUERY_KEY, "service-area", serviceAreaId]
+        : LIKED_SHARED_ROUTES_QUERY_KEY,
+    }),
+    [serviceAreaId]
   );
 
-  const setLikePending = useCallback((routeId: string, pending: boolean) => {
-    const nextIds = new Set(pendingLikeRouteIdsRef.current);
+  const updateLikeCaches = (
+    route: SharedRoute,
+    { queryKeys, keepUnlikedRoute }: ToggleLikeVariables
+  ) => {
+    queryClient.setQueryData<SharedRouteInfiniteData>(queryKeys.shared, (data) =>
+      upsertSharedRouteInInfiniteData(data, "feed", route)
+    );
+    queryClient.setQueryData<SharedRouteInfiniteData>(queryKeys.liked, (data) =>
+      upsertSharedRouteInInfiniteData(data, "liked", route, { keepUnlikedRoute })
+    );
+    queryClient.setQueryData<RouteByIdQuery>(
+      getRouteDetailQueryKey(route.id),
+      (data) => data?.route
+        ? { ...data, route: { ...data.route, ...getSharedRouteLikeState(route) } }
+        : data
+    );
+  };
 
-    if (pending) {
-      nextIds.add(routeId);
-    } else {
-      nextIds.delete(routeId);
-    }
-
-    pendingLikeRouteIdsRef.current = nextIds;
-    setPendingLikeRouteIds(nextIds);
-  }, []);
   const { mutate: mutateLike } = useMutation<
     Awaited<ReturnType<typeof routeApi.likeRoute>>["likeRoute"],
     Error,
     ToggleLikeVariables,
     ToggleLikeContext
   >({
-    mutationFn: async ({ route, nextLiked }) =>
-      nextLiked
-        ? (await routeApi.likeRoute(route.id)).likeRoute
-        : (await routeApi.unlikeRoute(route.id)).unlikeRoute,
-    onMutate: async ({ route, nextLiked, keepUnlikedRoute }) => {
-      await Promise.all([
-        queryClient.cancelQueries({
-          queryKey: sharedRoutesQueryKey,
-        }),
-        queryClient.cancelQueries({
-          queryKey: likedSharedRoutesQueryKey,
-        }),
-      ]);
-      const previousLikedRoutes =
-        queryClient.getQueryData<SharedRouteInfiniteData>(
-          likedSharedRoutesQueryKey
-        );
+    mutationKey: SHARED_ROUTE_LIKE_MUTATION_KEY,
+    mutationFn: async ({ route, nextLiked, generation }) => {
+      if (generation !== likeStore.getState().generation) {
+        throw new Error("Shared route like request was cleared.");
+      }
 
-      queryClient.setQueryData<SharedRouteInfiniteData>(
-        sharedRoutesQueryKey,
-        (currentData) =>
-          optimisticUpdateSharedRouteInfiniteLike({
-            data: currentData,
-            mode: "feed",
-            route,
-            liked: nextLiked,
-          })
+      return nextLiked
+        ? (await routeApi.likeRoute(route.id)).likeRoute
+        : (await routeApi.unlikeRoute(route.id)).unlikeRoute;
+    },
+    onMutate: async (variables) => {
+      const { route, nextLiked, queryKeys } = variables;
+
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.shared }),
+        queryClient.cancelQueries({ queryKey: queryKeys.liked }),
+        queryClient.cancelQueries({ queryKey: getRouteDetailQueryKey(route.id) }),
+      ]);
+
+      if (variables.generation !== likeStore.getState().generation) {
+        throw new Error("Shared route like request was cleared.");
+      }
+
+      const previousSharedRoutes =
+        queryClient.getQueryData<SharedRouteInfiniteData>(queryKeys.shared);
+      const previousLikedRoutes =
+        queryClient.getQueryData<SharedRouteInfiniteData>(queryKeys.liked);
+      const previousDetail = queryClient.getQueryData<RouteByIdQuery>(
+        getRouteDetailQueryKey(route.id)
       );
-      queryClient.setQueryData<SharedRouteInfiniteData>(
-        likedSharedRoutesQueryKey,
-        (currentData) =>
-          optimisticUpdateSharedRouteInfiniteLike({
-            data: currentData,
-            mode: "liked",
-            route,
-            liked: nextLiked,
-            keepUnlikedRoute,
-          })
+
+      updateLikeCaches(
+        { ...route, ...getSharedRouteLikeState(route, nextLiked) },
+        variables
       );
-      queryClient.setQueryData<RouteByIdQuery>(
-        getRouteDetailQueryKey(route.id),
-        (currentData) =>
-          currentData?.route
+
+      return { previousSharedRoutes, previousLikedRoutes, previousDetail };
+    },
+    onSuccess: (interaction, variables) => {
+      if (variables.generation !== likeStore.getState().generation) {
+        return;
+      }
+
+      updateLikeCaches(
+        {
+          ...variables.route,
+          ...interaction.route,
+          likedByMe: interaction.liked,
+        },
+        variables
+      );
+    },
+    onError: (error, { route, queryKeys, generation }, context) => {
+      if (generation !== likeStore.getState().generation) {
+        return;
+      }
+
+      if (context) {
+        queryClient.setQueryData<SharedRouteInfiniteData>(queryKeys.shared, (data) =>
+          restoreSharedRouteInInfiniteData(
+            data, context.previousSharedRoutes, "feed", route.id
+          )
+        );
+        queryClient.setQueryData<SharedRouteInfiniteData>(queryKeys.liked, (data) =>
+          restoreSharedRouteInInfiniteData(
+            data, context.previousLikedRoutes, "liked", route.id
+          )
+        );
+        queryClient.setQueryData<RouteByIdQuery>(
+          getRouteDetailQueryKey(route.id),
+          (data) => data?.route
             ? {
-                ...currentData,
+                ...data,
                 route: {
-                  ...currentData.route,
-                  likedByMe: nextLiked,
-                  likeCount: Math.max(
-                    0,
-                    currentData.route.likeCount + (nextLiked ? 1 : -1)
+                  ...data.route,
+                  ...getSharedRouteLikeState(
+                    context.previousDetail?.route ?? route
                   ),
                 },
               }
-            : currentData
-      );
-
-      return { previousLikedRoutes };
-    },
-    onSuccess: (interaction, { route, keepUnlikedRoute }) => {
-      queryClient.setQueryData<SharedRouteInfiniteData>(
-        sharedRoutesQueryKey,
-        (currentData) =>
-          upsertSharedRouteInInfiniteData(
-            currentData,
-            "feed",
-            interaction.route,
-            {
-              liked: interaction.liked,
-            }
-          )
-      );
-      queryClient.setQueryData<SharedRouteInfiniteData>(
-        likedSharedRoutesQueryKey,
-        (currentData) =>
-          upsertSharedRouteInInfiniteData(
-            currentData,
-            "liked",
-            interaction.route,
-            {
-              liked: interaction.liked,
-              keepUnlikedRoute,
-            }
-          )
-      );
-      queryClient.setQueryData<RouteByIdQuery>(
-        getRouteDetailQueryKey(route.id),
-        (currentData) =>
-          currentData?.route
-            ? {
-                ...currentData,
-                route: {
-                  ...currentData.route,
-                  ...interaction.route,
-                  likedByMe: interaction.liked,
-                },
-              }
-            : currentData
-      );
-    },
-    onError: (
-      error,
-      { route, wasLiked, previousLikeCount },
-      context
-    ) => {
-      queryClient.setQueryData<SharedRouteInfiniteData>(
-        sharedRoutesQueryKey,
-        (currentData) =>
-          optimisticUpdateSharedRouteInfiniteLike({
-            data: currentData,
-            mode: "feed",
-            route,
-            liked: wasLiked,
-            likeCount: previousLikeCount,
-          })
-      );
-      if (context?.previousLikedRoutes) {
-        queryClient.setQueryData<SharedRouteInfiniteData>(
-          likedSharedRoutesQueryKey,
-          context.previousLikedRoutes
+            : data
         );
       }
-      queryClient.setQueryData<RouteByIdQuery>(
-        getRouteDetailQueryKey(route.id),
-        (currentData) =>
-          currentData?.route
-            ? {
-                ...currentData,
-                route: {
-                  ...currentData.route,
-                  likedByMe: wasLiked,
-                  likeCount: previousLikeCount,
-                },
-              }
-            : currentData
-      );
-      showToast(
-        error.message || text.sharedRoute.likeError,
-        2400
-      );
+
+      showToast(error.message || text.sharedRoute.likeError, 2400);
     },
-    onSettled: (_data, _error, { route }) => {
-      setLikePending(route.id, false);
+    onSettled: (interaction, _error, variables) => {
+      if (variables.generation !== likeStore.getState().generation) {
+        return;
+      }
+
+      const pendingLike = likeStore.getState().pendingLikes.get(variables.route.id);
+
+      // Keep the latest click visible while saving each route's requests in order.
+      if (
+        interaction &&
+        pendingLike &&
+        pendingLike.likedByMe !== interaction.liked
+      ) {
+        const confirmedRoute = {
+          ...variables.route,
+          ...interaction.route,
+          likedByMe: interaction.liked,
+        };
+
+        setPendingLike(
+          confirmedRoute.id,
+          getSharedRouteLikeState(confirmedRoute, pendingLike.likedByMe)
+        );
+        mutateLike({
+          ...variables,
+          route: confirmedRoute,
+          nextLiked: pendingLike.likedByMe,
+        });
+        return;
+      }
+
+      setPendingLike(variables.route.id);
     },
   });
 
   const toggleLike = useCallback(
     (route: SharedRoute) => {
-      if (route.isMine || pendingLikeRouteIdsRef.current.has(route.id)) {
+      if (route.isMine) {
         return;
       }
 
-      const wasLiked = likedRouteIds.has(route.id) || route.likedByMe;
+      const pendingLike = likeStore.getState().pendingLikes.get(route.id);
+      const currentLike = pendingLike ?? route;
+      const nextLike = getSharedRouteLikeState(currentLike, !currentLike.likedByMe);
 
-      setLikePending(route.id, true);
-      mutateLike({
-        route,
-        wasLiked,
-        nextLiked: !wasLiked,
-        previousLikeCount: route.likeCount,
-        keepUnlikedRoute: mode === "liked",
-      });
+      // Show the click before query cancellation or network work starts.
+      setPendingLike(route.id, nextLike);
+
+      if (!pendingLike) {
+        mutateLike({
+          route,
+          nextLiked: nextLike.likedByMe,
+          keepUnlikedRoute: mode === "liked",
+          queryKeys,
+          generation: likeStore.getState().generation,
+        });
+      }
     },
-    [likedRouteIds, mode, mutateLike, setLikePending]
+    [likeStore, mode, mutateLike, queryKeys, setPendingLike]
+  );
+
+  const applyLikeState = useCallback(
+    <Route extends SharedRoute>(route: Route): Route => {
+      const pendingLike = pendingLikes.get(route.id);
+      return pendingLike ? { ...route, ...pendingLike } : route;
+    },
+    [pendingLikes]
   );
 
   return {
-    likedRouteIds,
-    pendingLikeRouteIds,
+    applyLikeState,
+    pendingLikeRouteIds: new Set(pendingLikes.keys()),
     toggleLike,
   };
 }

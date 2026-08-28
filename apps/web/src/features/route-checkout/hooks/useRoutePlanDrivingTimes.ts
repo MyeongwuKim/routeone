@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
 import type {
   PlannedRouteDay,
@@ -130,53 +130,56 @@ export function useRoutePlanDrivingTimes({
   dailyStartMinutes,
   dailyEndMinutes,
 }: UseRoutePlanDrivingTimesOptions) {
-  const segments = useMemo(
-    () => buildRouteTravelSegments(routePlan),
+  const segmentsByDay = useMemo(
+    () => routePlan.map((day) => buildRouteTravelSegments([day])),
     [routePlan]
   );
-  const routeSegmentSignature = useMemo(
-    () =>
-      segments.map((segment) => [
-        segment.from.lat,
-        segment.from.lng,
-        segment.to.lat,
-        segment.to.lng,
-      ]),
-    [segments]
-  );
-  const travelMinutesQuery = useQuery({
-    queryKey: ["route-checkout-driving-times", routeSegmentSignature],
-    queryFn: () => fetchRouteTravelMinutes(segments),
-    enabled: segments.length > 0,
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 30,
-    retry: false,
+  const travelMinutesQueries = useQueries({
+    queries: segmentsByDay.map((segments, index) => ({
+      queryKey: [
+        "route-checkout-day-driving-times",
+        routePlan[index].day,
+        segments.map((segment) => [
+          segment.from.lat,
+          segment.from.lng,
+          segment.to.lat,
+          segment.to.lng,
+        ]),
+      ],
+      queryFn: () => fetchRouteTravelMinutes(segments),
+      enabled: segments.length > 0,
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 30,
+      retry: false,
+    })),
   });
-  const resolvedTravelMinutes =
-    travelMinutesQuery.data ?? EMPTY_TRAVEL_MINUTES;
-  const resolvedRoutePlan = useMemo(
-    () =>
-      applyRouteTravelMinutes({
-        routePlan,
-        segments,
-        resolvedTravelMinutes,
-        dailyStartMinutes,
-        dailyEndMinutes,
-      }),
-    [
-      dailyEndMinutes,
+  const resolvedRoutePlan = routePlan.flatMap((day, index) =>
+    applyRouteTravelMinutes({
+      routePlan: [day],
+      segments: segmentsByDay[index],
+      resolvedTravelMinutes:
+        travelMinutesQueries[index].data ?? EMPTY_TRAVEL_MINUTES,
       dailyStartMinutes,
-      resolvedTravelMinutes,
-      routePlan,
-      segments,
-    ]
+      dailyEndMinutes,
+    })
+  );
+  const loadingDayNumbers = routePlan.flatMap((day, index) =>
+    segmentsByDay[index].length > 0 && travelMinutesQueries[index].isPending
+      ? [day.day]
+      : []
+  );
+  const fallbackDayNumbers = routePlan.flatMap((day, index) =>
+    travelMinutesQueries[index].isError ||
+    travelMinutesQueries[index].data?.some((minutes) => minutes == null)
+      ? [day.day]
+      : []
   );
 
   return {
     routePlan: resolvedRoutePlan,
-    isLoading: segments.length > 0 && travelMinutesQuery.isPending,
-    hasFallback:
-      travelMinutesQuery.isError ||
-      resolvedTravelMinutes.some((travelMinutes) => travelMinutes == null),
+    loadingDayNumbers,
+    fallbackDayNumbers,
+    isLoading: loadingDayNumbers.length > 0,
+    hasFallback: fallbackDayNumbers.length > 0,
   };
 }

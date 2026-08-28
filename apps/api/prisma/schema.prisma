@@ -122,6 +122,7 @@ model RouteDay {
   date                DateTime?
   plannedStartMinutes Int?
   startedAt           DateTime?
+  startLocation       RouteStartLocation?
 
   route Route       @relation(fields: [routeId], references: [id])
   stops RouteStop[]

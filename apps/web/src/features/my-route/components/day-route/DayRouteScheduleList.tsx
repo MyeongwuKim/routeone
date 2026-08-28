@@ -3,6 +3,7 @@ import { useUiText } from "@/lib/uiText";
 import DayRouteAccordionItem from "./DayRouteAccordionItem";
 import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupController";
 import { getRouteDateKey, getTodayDateKey } from "../../routeDisplay";
+import { getDayRouteStartLocation } from "../../utils/dayRouteStartLocation";
 
 type DayRouteScheduleListProps = {
   controller: DayRoutePopupController["schedule"];
@@ -15,7 +16,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
     sortedDays,
     expandedDayIds,
     stopsByDayId,
-    startLocation,
+    routeStartLocation,
     dailyStartMinutes,
     isOrderEditing,
     activeDropTarget,
@@ -96,7 +97,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               routeDay={routeDay}
               isExpanded={expandedDayIds.has(routeDay.id)}
               orderedStops={routeDayStops}
-              startLocation={startLocation}
+              startLocation={getDayRouteStartLocation(routeDay, routeStartLocation)}
               dailyStartMinutes={dailyStartMinutes}
               isOrderEditing={isOrderEditing}
               activeDropIndex={
@@ -186,7 +187,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               }
               onOpenPlace={handleOpenPlaceDetail}
               onOpenDirections={(stop) => {
-                void handleOpenStopDirections(stop);
+                void handleOpenStopDirections(routeDay, stop);
               }}
               onEditVerificationPhoto={(stop) =>
                 handleReplaceVerificationPhoto({ routeDay, stop })

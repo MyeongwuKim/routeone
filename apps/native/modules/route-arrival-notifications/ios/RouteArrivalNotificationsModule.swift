@@ -1,10 +1,13 @@
 import CoreLocation
 import ExpoModulesCore
+import Foundation
 import UserNotifications
 
 private let routeArrivalNotificationType = "route-arrival"
 private let minimumRouteArrivalMonitoringRadiusMeters = 300.0
 private let maximumRouteArrivalMonitoringRadiusMeters = 700.0
+private let routeArrivalNotificationLedgerKey = "routeone:arrival-notification-ledger:v1"
+private let routeArrivalNotificationOperationGate = RouteArrivalNotificationOperationGate()
 
 private struct RouteArrivalNotificationRecord: Record {
   @Field
@@ -50,6 +53,22 @@ private struct RouteArrivalNotificationStatusRecord: Record {
 
   @Field
   var deliveredIdentifiers: [String] = []
+
+  @Field
+  var handledIdentifiers: [String] = []
+}
+
+private struct RouteArrivalNotificationSnapshot {
+  let pendingRequests: [UNNotificationRequest]
+  let deliveredIdentifiers: Set<String>
+
+  var pendingIdentifiers: Set<String> {
+    Set(pendingRequests.map(\.identifier))
+  }
+
+  var oneShotPendingIdentifiers: Set<String> {
+    Set(pendingRequests.filter { $0.trigger?.repeats != true }.map(\.identifier))
+  }
 }
 
 public final class RouteArrivalNotificationsModule: Module {
@@ -58,172 +77,193 @@ public final class RouteArrivalNotificationsModule: Module {
 
     AsyncFunction("syncAsync") {
       (notifications: [RouteArrivalNotificationRecord], radiusMeters: Double) async throws -> Int in
-      let center = UNUserNotificationCenter.current()
-      let monitoredRadius = max(
-        minimumRouteArrivalMonitoringRadiusMeters,
-        min(maximumRouteArrivalMonitoringRadiusMeters, radiusMeters.rounded())
-      )
-      let pendingRequests = await center.pendingNotificationRequests()
-      let managedLocationPendingRequests = pendingRequests.filter {
-        self.isRouteArrivalNotification($0.content) &&
-          $0.trigger is UNLocationNotificationTrigger
+      try await routeArrivalNotificationOperationGate.withLock {
+        try await self.syncNotifications(notifications, radiusMeters: radiusMeters)
       }
-      let managedImmediatePendingIdentifiers = Set(
-        pendingRequests
-          .filter {
-            self.isRouteArrivalNotification($0.content) &&
-              !($0.trigger is UNLocationNotificationTrigger)
-          }
-          .map(\.identifier)
-      )
-      var notificationsByIdentifier: [String: RouteArrivalNotificationRecord] = [:]
-      for notification in notifications {
-        notificationsByIdentifier[notification.identifier] = notification
-      }
-      let preservedLocationPendingIdentifiers = Set<String>(
-        managedLocationPendingRequests.compactMap { request in
-          guard
-            let notification = notificationsByIdentifier[request.identifier],
-            self.matches(
-              request,
-              notification: notification,
-              monitoredRadius: monitoredRadius
-            )
-          else {
-            return nil
-          }
-
-          return request.identifier
-        }
-      )
-      let staleLocationPendingIdentifiers = Set(
-        managedLocationPendingRequests.map(\.identifier)
-      ).subtracting(preservedLocationPendingIdentifiers)
-
-      if !staleLocationPendingIdentifiers.isEmpty {
-        center.removePendingNotificationRequests(
-          withIdentifiers: Array(staleLocationPendingIdentifiers)
-        )
-      }
-
-      guard !notifications.isEmpty else {
-        return 0
-      }
-
-      let deliveredNotifications = await center.deliveredNotifications()
-      let deliveredIdentifiers = Set(
-        deliveredNotifications
-          .filter { self.isRouteArrivalNotification($0.request.content) }
-          .map { $0.request.identifier }
-      )
-      var requestsByIdentifier: [String: UNNotificationRequest] = [:]
-
-      for notification in notifications
-      where !deliveredIdentifiers.contains(notification.identifier) &&
-        !managedImmediatePendingIdentifiers.contains(notification.identifier) &&
-        !preservedLocationPendingIdentifiers.contains(notification.identifier) {
-        let content = UNMutableNotificationContent()
-        content.title = notification.title
-        content.body = notification.body
-        content.sound = .default
-        content.threadIdentifier = "route-arrivals"
-        content.userInfo = [
-          "notificationId": notification.identifier,
-          "type": routeArrivalNotificationType,
-          "routeId": notification.routeId,
-          "routeTitle": notification.routeTitle ?? "",
-          "dayId": notification.dayId,
-          "stopId": notification.stopId,
-          "placeTitle": notification.placeTitle,
-          "dateKey": notification.dateKey
-        ]
-
-        let coordinate = CLLocationCoordinate2D(
-          latitude: notification.latitude,
-          longitude: notification.longitude
-        )
-        let region = CLCircularRegion(
-          center: coordinate,
-          radius: monitoredRadius,
-          identifier: notification.regionIdentifier
-        )
-        region.notifyOnEntry = true
-        region.notifyOnExit = false
-
-        let trigger = UNLocationNotificationTrigger(
-          region: region,
-          repeats: false
-        )
-        let request = UNNotificationRequest(
-          identifier: notification.identifier,
-          content: content,
-          trigger: trigger
-        )
-
-        requestsByIdentifier[notification.identifier] = request
-        try await center.add(request)
-      }
-
-      let expectedIdentifiers = Set(notifications.map(\.identifier))
-      var registeredIdentifiers = await self.pendingIdentifiers(center)
-      registeredIdentifiers.formUnion(await self.deliveredIdentifiers(center))
-      var missingIdentifiers = expectedIdentifiers.subtracting(registeredIdentifiers)
-
-      if !missingIdentifiers.isEmpty {
-        for identifier in missingIdentifiers.sorted() {
-          if let request = requestsByIdentifier[identifier] {
-            try await center.add(request)
-          }
-        }
-
-        registeredIdentifiers = await self.pendingIdentifiers(center)
-        registeredIdentifiers.formUnion(await self.deliveredIdentifiers(center))
-        missingIdentifiers = expectedIdentifiers.subtracting(registeredIdentifiers)
-      }
-
-      guard missingIdentifiers.isEmpty else {
-        throw NSError(
-          domain: "RouteArrivalNotifications",
-          code: 1,
-          userInfo: [
-            NSLocalizedDescriptionKey:
-              "iOS가 장소 도착 알림을 등록하지 못했어요. 앱을 다시 열어 주세요."
-          ]
-        )
-      }
-
-      return expectedIdentifiers.count
     }
 
-    AsyncFunction("getStatusAsync") { () async -> RouteArrivalNotificationStatusRecord in
-      let center = UNUserNotificationCenter.current()
-      let status = RouteArrivalNotificationStatusRecord()
-      status.pendingIdentifiers = Array(await self.pendingIdentifiers(center)).sorted()
-      status.deliveredIdentifiers = Array(await self.deliveredIdentifiers(center)).sorted()
-      return status
+    AsyncFunction("getStatusAsync") { () async throws -> RouteArrivalNotificationStatusRecord in
+      try await routeArrivalNotificationOperationGate.withLock {
+        let snapshot = await self.notificationSnapshot(UNUserNotificationCenter.current())
+        let ledger = try self.reconciledLedger(for: snapshot)
+        let status = RouteArrivalNotificationStatusRecord()
+        status.pendingIdentifiers = Array(snapshot.pendingIdentifiers).sorted()
+        status.deliveredIdentifiers = Array(snapshot.deliveredIdentifiers).sorted()
+        status.handledIdentifiers = Array(ledger.handledIdentifiers).sorted()
+        return status
+      }
     }
   }
 
-  private func pendingIdentifiers(
-    _ center: UNUserNotificationCenter
-  ) async -> Set<String> {
-    let pendingRequests = await center.pendingNotificationRequests()
-    return Set(
-      pendingRequests
-        .filter { self.isRouteArrivalNotification($0.content) }
+  private func syncNotifications(
+    _ notifications: [RouteArrivalNotificationRecord],
+    radiusMeters: Double
+  ) async throws -> Int {
+    let center = UNUserNotificationCenter.current()
+    let monitoredRadius = max(
+      minimumRouteArrivalMonitoringRadiusMeters,
+      min(maximumRouteArrivalMonitoringRadiusMeters, radiusMeters.rounded())
+    )
+    let snapshot = await notificationSnapshot(center)
+    var ledger = try reconciledLedger(for: snapshot)
+    let locationPendingRequests = snapshot.pendingRequests.filter {
+      $0.trigger is UNLocationNotificationTrigger
+    }
+    let preservedImmediateIdentifiers = Set(
+      snapshot.pendingRequests
+        .filter {
+          !($0.trigger is UNLocationNotificationTrigger) &&
+            ledger.canPreservePending($0.identifier)
+        }
         .map(\.identifier)
     )
+    var notificationsByIdentifier: [String: RouteArrivalNotificationRecord] = [:]
+    for notification in notifications {
+      notificationsByIdentifier[notification.identifier] = notification
+    }
+    let expectedIdentifiers = Set(notificationsByIdentifier.keys)
+    let preservedLocationIdentifiers = Set<String>(
+      locationPendingRequests.compactMap { request in
+        guard
+          ledger.canPreservePending(request.identifier),
+          let notification = notificationsByIdentifier[request.identifier],
+          matches(request, notification: notification, monitoredRadius: monitoredRadius)
+        else {
+          return nil
+        }
+
+        return request.identifier
+      }
+    )
+    let staleLocationIdentifiers = Set(locationPendingRequests.map(\.identifier))
+      .subtracting(preservedLocationIdentifiers)
+
+    if !staleLocationIdentifiers.isEmpty {
+      ledger.recordCancellation(
+        staleLocationIdentifiers,
+        pendingIdentifiers: snapshot.pendingIdentifiers
+      )
+      // Keep this marker before the OS removal, which has no completion callback.
+      try saveLedger(ledger)
+      center.removePendingNotificationRequests(withIdentifiers: Array(staleLocationIdentifiers))
+    }
+
+    for identifier in expectedIdentifiers.sorted()
+    where ledger.canRegister(identifier) &&
+      !preservedImmediateIdentifiers.contains(identifier) &&
+      !preservedLocationIdentifiers.contains(identifier) {
+      guard let notification = notificationsByIdentifier[identifier] else {
+        continue
+      }
+
+      let request = notificationRequest(notification, monitoredRadius: monitoredRadius)
+      try await center.add(request)
+      ledger.recordSuccessfulRegistration(identifier)
+      try saveLedger(ledger)
+    }
+
+    let registeredSnapshot = await notificationSnapshot(center)
+    ledger.reconcile(
+      pendingIdentifiers: registeredSnapshot.pendingIdentifiers,
+      deliveredIdentifiers: registeredSnapshot.deliveredIdentifiers,
+      adoptablePendingIdentifiers: registeredSnapshot.oneShotPendingIdentifiers
+    )
+    try saveLedger(ledger)
+
+    // An accepted one-shot request may already have fired and been dismissed.
+    // Its absence from both OS lists must not cause another add with the same ID.
+    let registeredIdentifiers = registeredSnapshot.pendingIdentifiers
+      .union(ledger.handledIdentifiers)
+    guard expectedIdentifiers.isSubset(of: registeredIdentifiers) else {
+      throw NSError(
+        domain: "RouteArrivalNotifications",
+        code: 1,
+        userInfo: [
+          NSLocalizedDescriptionKey:
+            "iOS가 장소 도착 알림을 등록하지 못했어요. 앱을 다시 열어 주세요."
+        ]
+      )
+    }
+
+    return expectedIdentifiers.count
   }
 
-  private func deliveredIdentifiers(
-    _ center: UNUserNotificationCenter
-  ) async -> Set<String> {
-    let deliveredNotifications = await center.deliveredNotifications()
-    return Set(
-      deliveredNotifications
-        .filter { self.isRouteArrivalNotification($0.request.content) }
-        .map { $0.request.identifier }
+  private func notificationRequest(
+    _ notification: RouteArrivalNotificationRecord,
+    monitoredRadius: Double
+  ) -> UNNotificationRequest {
+    let content = UNMutableNotificationContent()
+    content.title = notification.title
+    content.body = notification.body
+    content.sound = .default
+    content.threadIdentifier = "route-arrivals"
+    content.userInfo = [
+      "notificationId": notification.identifier,
+      "type": routeArrivalNotificationType,
+      "routeId": notification.routeId,
+      "routeTitle": notification.routeTitle ?? "",
+      "dayId": notification.dayId,
+      "stopId": notification.stopId,
+      "placeTitle": notification.placeTitle,
+      "dateKey": notification.dateKey
+    ]
+
+    let coordinate = CLLocationCoordinate2D(
+      latitude: notification.latitude,
+      longitude: notification.longitude
     )
+    let region = CLCircularRegion(
+      center: coordinate,
+      radius: monitoredRadius,
+      identifier: notification.regionIdentifier
+    )
+    region.notifyOnEntry = true
+    region.notifyOnExit = false
+
+    return UNNotificationRequest(
+      identifier: notification.identifier,
+      content: content,
+      trigger: UNLocationNotificationTrigger(region: region, repeats: false)
+    )
+  }
+
+  private func notificationSnapshot(
+    _ center: UNUserNotificationCenter
+  ) async -> RouteArrivalNotificationSnapshot {
+    let pendingRequests = await center.pendingNotificationRequests()
+    let deliveredNotifications = await center.deliveredNotifications()
+    return RouteArrivalNotificationSnapshot(
+      pendingRequests: pendingRequests.filter { isRouteArrivalNotification($0.content) },
+      deliveredIdentifiers: Set(
+        deliveredNotifications
+          .filter { isRouteArrivalNotification($0.request.content) }
+          .map { $0.request.identifier }
+      )
+    )
+  }
+
+  private func reconciledLedger(
+    for snapshot: RouteArrivalNotificationSnapshot
+  ) throws -> RouteArrivalNotificationLedger {
+    var ledger: RouteArrivalNotificationLedger
+    if let data = UserDefaults.standard.data(forKey: routeArrivalNotificationLedgerKey) {
+      ledger = try JSONDecoder().decode(RouteArrivalNotificationLedger.self, from: data)
+    } else {
+      ledger = RouteArrivalNotificationLedger()
+    }
+
+    ledger.reconcile(
+      pendingIdentifiers: snapshot.pendingIdentifiers,
+      deliveredIdentifiers: snapshot.deliveredIdentifiers,
+      adoptablePendingIdentifiers: snapshot.oneShotPendingIdentifiers
+    )
+    try saveLedger(ledger)
+    return ledger
+  }
+
+  private func saveLedger(_ ledger: RouteArrivalNotificationLedger) throws {
+    let data = try JSONEncoder().encode(ledger)
+    UserDefaults.standard.set(data, forKey: routeArrivalNotificationLedgerKey)
   }
 
   private func isRouteArrivalNotification(
@@ -260,6 +300,7 @@ public final class RouteArrivalNotificationsModule: Module {
       (request.content.userInfo["dateKey"] as? String) == notification.dateKey
 
     return
+      !trigger.repeats &&
       region.identifier == notification.regionIdentifier &&
       coordinateMatches &&
       abs(region.radius - monitoredRadius) < 0.5 &&

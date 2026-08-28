@@ -51,13 +51,22 @@ import {
   type UpdateRouteLayoutInput,
   type UpdateRouteStartLocationInput,
 } from "@/generated/graphql";
-import { requestGraphQL } from "@/lib/graphqlClient";
+import {
+  requestGraphQL,
+  type GraphQLRequestOptions,
+} from "@/lib/graphqlClient";
 
 type RouteId = string | number;
 
+const ROUTE_SAVE_TIMEOUT_MS = 30_000;
+const ROUTE_CREATE_RETRY_DELAY_MS = 1_000;
+
 export const routeApi = {
-  myRoutes(variables?: MyRoutesQueryVariables) {
-    return requestGraphQL(MyRoutesDocument, variables);
+  myRoutes(
+    variables?: MyRoutesQueryVariables,
+    options?: GraphQLRequestOptions
+  ) {
+    return requestGraphQL(MyRoutesDocument, variables, options);
   },
   myRouteHistoryConnection(
     variables?: MyRouteHistoryConnectionQueryVariables
@@ -112,14 +121,22 @@ export const routeApi = {
     });
   },
   createRoute(input: CreateRouteInput) {
-    return requestGraphQL(CreateRouteDocument, {
-      input,
-    });
+    return requestGraphQL(
+      CreateRouteDocument,
+      { input },
+      {
+        timeoutMs: ROUTE_SAVE_TIMEOUT_MS,
+        maxRetryCount: input.clientRequestId?.trim() ? 1 : 0,
+        retryDelayMs: ROUTE_CREATE_RETRY_DELAY_MS,
+      }
+    );
   },
   appendRouteDays(input: AppendRouteDaysInput) {
-    return requestGraphQL(AppendRouteDaysDocument, {
-      input,
-    });
+    return requestGraphQL(
+      AppendRouteDaysDocument,
+      { input },
+      { timeoutMs: ROUTE_SAVE_TIMEOUT_MS, maxRetryCount: 0 }
+    );
   },
   startRoute(input: StartRouteInput) {
     return requestGraphQL(StartRouteDocument, {

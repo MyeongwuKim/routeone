@@ -24,6 +24,11 @@ export type RouteStartLocationInput = {
   lng: number;
 };
 
+export type RouteDayStartLocationInput = {
+  dayIndex: number;
+  startLocation: RouteStartLocationInput;
+};
+
 export type CreateRouteStopInput = {
   dayIndex?: number | null;
   order?: number | null;
@@ -44,6 +49,7 @@ export type CreateRouteInput = {
   dailyStartMinutes?: number | null;
   scheduleEndMinutes?: number | null;
   startLocation?: RouteStartLocationInput | null;
+  dayStartLocations?: RouteDayStartLocationInput[] | null;
   stops?: CreateRouteStopInput[] | null;
 };
 
@@ -55,6 +61,7 @@ export type AppendRouteDaysInput = {
   dailyStartMinutes?: number | null;
   scheduleEndMinutes?: number | null;
   startLocation?: RouteStartLocationInput | null;
+  dayStartLocations?: RouteDayStartLocationInput[] | null;
   stops?: CreateRouteStopInput[] | null;
 };
 
@@ -72,6 +79,7 @@ export type UpdateRouteDayStartInput = {
 
 export type UpdateRouteStartLocationInput = {
   routeId: string;
+  dayId?: string | null;
   startLocation: RouteStartLocationInput;
 };
 
@@ -94,6 +102,7 @@ export type RouteLayoutStopInput = {
 export type RouteDayLayoutInput = {
   dayId: string;
   stops: RouteLayoutStopInput[];
+  startLocation?: RouteStartLocationInput | null;
 };
 
 export type UpdateRouteLayoutInput = {
