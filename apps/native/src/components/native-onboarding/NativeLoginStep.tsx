@@ -14,6 +14,7 @@ import {
   View
 } from "react-native";
 import type { NativeLoginProvider } from "@/auth/nativeLoginTypes";
+import { useNativeLoginErrorAlert } from "@/auth/useNativeLoginErrorAlert";
 import { LOGIN_TEXT, LOGIN_THEME } from "@/constants/nativeOnboarding";
 
 type AppLanguage = "ko" | "en";
@@ -32,6 +33,7 @@ type NativeLoginStepProps = {
   onChangeAccountId: (value: string) => void;
   onChangePassword: (value: string) => void;
   onChangeDisplayName: (value: string) => void;
+  onDismissError: () => void;
   onPasswordLogin: () => void;
   onGoogleLogin: () => void;
   onAppleLogin: () => void;
@@ -76,24 +78,6 @@ function getAppleButtonLabel({
   });
 }
 
-function getFriendlyErrorMessage(
-  errorMessage: string,
-  text: (typeof LOGIN_TEXT)[AppLanguage]
-) {
-  if (errorMessage.includes("URL schemes")) {
-    return text.googleConfigurationError;
-  }
-
-  if (
-    errorMessage.includes("비활성화된 빌드") ||
-    errorMessage.includes("Sign in with Apple")
-  ) {
-    return text.applePermissionError;
-  }
-
-  return errorMessage;
-}
-
 export default function NativeLoginStep({
   language,
   accountId,
@@ -107,6 +91,7 @@ export default function NativeLoginStep({
   onChangeAccountId,
   onChangePassword,
   onChangeDisplayName,
+  onDismissError,
   onPasswordLogin,
   onGoogleLogin,
   onAppleLogin,
@@ -119,9 +104,12 @@ export default function NativeLoginStep({
   const isReviewerLogin = passwordLoginMode === "reviewer";
   const isAppleDisabled = isBusy || Platform.OS !== "ios" || !appleAvailable;
   const [isToastVisible, setIsToastVisible] = useState(Boolean(toastMessage));
-  const friendlyErrorMessage = errorMessage
-    ? getFriendlyErrorMessage(errorMessage, text)
-    : null;
+
+  useNativeLoginErrorAlert({
+    errorMessage,
+    language,
+    onDismiss: onDismissError
+  });
 
   useEffect(() => {
     if (!toastMessage) {
@@ -346,25 +334,6 @@ export default function NativeLoginStep({
             </>
           ) : null}
         </View>
-
-        {friendlyErrorMessage ? (
-          <View
-            style={[
-              styles.errorBox,
-              {
-                backgroundColor: colors.errorBackground,
-                borderColor: colors.errorBorder
-              }
-            ]}
-          >
-            <Text style={[styles.errorTitle, { color: colors.errorText }]}>
-              {text.errorTitle}
-            </Text>
-            <Text style={[styles.errorText, { color: colors.errorText }]}>
-              {friendlyErrorMessage}
-            </Text>
-          </View>
-        ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -506,26 +475,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 15,
     fontWeight: "700",
-    letterSpacing: 0
-  },
-  errorBox: {
-    width: "100%",
-    maxWidth: 326,
-    alignSelf: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14
-  },
-  errorTitle: {
-    fontSize: 14,
-    fontWeight: "900",
-    letterSpacing: 0
-  },
-  errorText: {
-    marginTop: 5,
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 19,
     letterSpacing: 0
   }
 });

@@ -17,10 +17,7 @@ export const LOGIN_THEME = {
     placeholder: "#8ba19c",
     passwordBackground: "#ffffff",
     passwordPressed: "#def2ed",
-    passwordText: "#0f766e",
-    errorBackground: "#fff1f2",
-    errorBorder: "#fecdd3",
-    errorText: "#be123c"
+    passwordText: "#0f766e"
   },
   dark: {
     background: "#061918",
@@ -40,10 +37,7 @@ export const LOGIN_THEME = {
     placeholder: "#78948f",
     passwordBackground: "#14b8a6",
     passwordPressed: "#0f9488",
-    passwordText: "#042f2e",
-    errorBackground: "#3a121b",
-    errorBorder: "#7f1d1d",
-    errorText: "#fecdd3"
+    passwordText: "#042f2e"
   }
 } as const;
 
@@ -56,7 +50,8 @@ export const LOGIN_TEXT = {
     applePreparing: "Apple 준비 중",
     checking: "확인 중",
     displayNamePlaceholder: "닉네임(선택)",
-    errorTitle: "계속 진행하지 못했어요",
+    errorConfirm: "확인",
+    errorTitle: "로그인하지 못했어요",
     googleChecking: "Google 확인 중",
     googleConfigurationError:
       "Google 로그인 설정이 앱에 아직 반영되지 않았어요. 앱을 다시 설치한 뒤 시도해 주세요.",
@@ -77,7 +72,8 @@ export const LOGIN_TEXT = {
     applePreparing: "Preparing Apple",
     checking: "Checking",
     displayNamePlaceholder: "Nickname (optional)",
-    errorTitle: "Could not continue",
+    errorConfirm: "OK",
+    errorTitle: "Could not sign in",
     googleChecking: "Checking Google",
     googleConfigurationError:
       "Google sign-in configuration has not been applied to this app yet. Reinstall the app and try again.",

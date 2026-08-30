@@ -45,8 +45,11 @@ function getAppleDisplayName(
 
 function getNativeAuthErrorMessage(error: unknown) {
   if (isErrorWithCode(error)) {
-    if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-      return "로그인을 취소했어요.";
+    if (
+      error.code === statusCodes.SIGN_IN_CANCELLED ||
+      error.code === "ERR_REQUEST_CANCELED"
+    ) {
+      return null;
     }
 
     if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
@@ -73,6 +76,10 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
   const [accountId, setAccountId] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+
+  const dismissError = useCallback(() => {
+    setErrorMessage(null);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -129,7 +136,6 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
       const response = await GoogleSignin.signIn();
 
       if (!isSuccessResponse(response)) {
-        setErrorMessage("Google 로그인을 취소했어요.");
         return;
       }
 
@@ -195,6 +201,7 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
     activeProvider,
     appleAvailable,
     displayName,
+    dismissError,
     errorMessage,
     password,
     setAccountId,

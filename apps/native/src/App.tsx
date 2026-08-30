@@ -217,6 +217,7 @@ export default function App() {
           onChangeAccountId={nativeLogin.setAccountId}
           onChangeDisplayName={nativeLogin.setDisplayName}
           onChangePassword={nativeLogin.setPassword}
+          onDismissError={nativeLogin.dismissError}
           onGoogleLogin={() => {
             void nativeLogin.handleGoogleLogin();
           }}
