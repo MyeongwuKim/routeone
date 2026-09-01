@@ -268,6 +268,7 @@ export function useDayRoutePopupController({
     updateVisitTimes: handleUpdateVisitTimes,
     visitSavingStopId,
   } = useRouteStopVisitMutation({
+    route,
     routeId: route.id,
     activeDayId: activeDay.id,
     orderedStops,

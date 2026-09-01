@@ -9,7 +9,6 @@ import {
 import {
   getTouristNameMatchScore,
   shouldHideAttraction,
-  type AttractionLoadingStage,
 } from "@/lib/gangwonAttractionMap";
 import { CAFE_LCLS_CODE, isTouristPlace } from "@/lib/placeCategory";
 import {
@@ -27,10 +26,12 @@ import {
 } from "@/lib/visitKoreaTourApi";
 import { TOUR_API_SERVICE_KEY } from "@/pages/HomePage.constants";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import type { HomeAttractionLoadingPhase } from "./homeLoadingPhase";
 
 export type HomeAttractionQueryData = {
   allAttractions: GangwonAttraction[];
   sourceAttractions: GangwonAttraction[];
+  sigunguCode: string;
   topAttractions: Array<{
     attraction: GangwonAttraction;
     touristTrendName: string;
@@ -83,8 +84,8 @@ export function useHomeAttractionData(
   const text = useUiText();
   const queryClient = useQueryClient();
   const appLanguage = useAppLanguageStore((state) => state.language);
-  const [attractionLoadingStage, setAttractionLoadingStage] =
-    useState<AttractionLoadingStage>("idle");
+  const [attractionLoadingPhase, setAttractionLoadingPhase] =
+    useState<HomeAttractionLoadingPhase>("idle");
   const attractionLoadingRequestIdRef = useRef(0);
   const isUpdatingPlaceLabelsRef = useRef(false);
   const isAttractionQueryEnabled = options.enabled ?? true;
@@ -200,7 +201,7 @@ export function useHomeAttractionData(
     queryFn: async () => {
       const loadingRequestId = attractionLoadingRequestIdRef.current + 1;
       attractionLoadingRequestIdRef.current = loadingRequestId;
-      setAttractionLoadingStage("fetching-places");
+      setAttractionLoadingPhase("fetching-places");
       const selectedRegion = serviceArea.regions.find(
         (region) => region.sigunguCode === selectedSigunguCode
       );
@@ -252,7 +253,7 @@ export function useHomeAttractionData(
         appLanguage
       );
       if (attractionLoadingRequestIdRef.current === loadingRequestId) {
-        setAttractionLoadingStage("ranking");
+        setAttractionLoadingPhase("ranking");
       }
 
       const attractionsWithFestivals = [...attractions, ...festivals];
@@ -316,11 +317,12 @@ export function useHomeAttractionData(
       });
 
       if (attractionLoadingRequestIdRef.current === loadingRequestId) {
-        setAttractionLoadingStage("idle");
+        setAttractionLoadingPhase("idle");
       }
       return {
         allAttractions: filteredAttractions,
         sourceAttractions: filteredAttractions,
+        sigunguCode: selectedSigunguCode,
         topAttractions,
         lclsNameByCode: resolvedLclsNameByCode,
         isLocalized: appLanguage !== "en",
@@ -506,9 +508,9 @@ export function useHomeAttractionData(
       : attractionsQuery.error instanceof Error
         ? attractionsQuery.error.message
         : null,
-    attractionLoadingStage: attractionsQuery.isError
+    attractionLoadingPhase: attractionsQuery.isError
       ? "idle"
-      : attractionLoadingStage,
+      : attractionLoadingPhase,
     boundaryBySigunguCode,
     festivalCountBySigunguCode,
     festivals: serviceArea.hasFestivalSource
@@ -523,7 +525,6 @@ export function useHomeAttractionData(
       boundaryQuery.isSuccess ||
       boundaryQuery.isError,
     isUpdatingPlaceLabelsRef,
-    setAttractionLoadingStage,
     topRankByAttractionId,
     trendNameByAttractionId,
   };

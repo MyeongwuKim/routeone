@@ -1,12 +1,24 @@
+/**
+ * 용도:
+ * 장소의 도착 인증, 방문 완료, 사진·머문 시간 수정 상태를 저장한다.
+ *
+ * 동작 방식:
+ * 방문 완료 전에 현재·다음 도착 알림을 함께 사전 등록하고,
+ * API 성공 후 다음 대상만 남긴다. 확정 실패만 기존 타깃으로 되돌리고,
+ * 결과가 불명확하면 재조회로 확정될 때까지 두 대상을 유지한다.
+ */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SetStateAction } from "react";
 import { routeApi } from "@/api/routeApi";
+import { NOTIFICATION_SETTINGS_QUERY_KEY } from "@/api/notificationApi";
 import type {
   MyRoutesQuery,
+  NotificationSettingsQuery,
   RouteStopVerificationStatus,
   RouteStopVisitVerificationInput,
 } from "@/generated/graphql";
 import { useUiToastStore } from "@/stores/uiToastStore";
+import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import {
   MY_ROUTE_HISTORY_QUERY_KEY,
   MY_ROUTES_QUERY_KEY,
@@ -20,6 +32,24 @@ import {
   uploadVerifiedVisitPhoto,
   type VisitPhotoSource,
 } from "../services/visitPhotoService";
+import {
+  prepareRouteArrivalNotificationsForVisitTransition,
+  RouteArrivalVisitTransitionPreparationError,
+  syncTodayRouteArrivalNotifications,
+  type RouteArrivalVisitTransitionPreparation,
+} from "../services/routeArrivalNotificationService";
+import { createRouteArrivalVisitPreview } from "../services/routeArrivalNotificationTarget";
+import {
+  acquireRouteArrivalTransitionLock,
+  isRouteArrivalTransitionLocked,
+  markRouteArrivalTransitionRequestDispatched,
+  markRouteArrivalTransitionUnresolved,
+  resolveRouteArrivalTransition,
+} from "../services/routeArrivalTransitionLock";
+import {
+  getConfirmedRouteVisitState,
+  isDefinitiveRouteMutationFailure,
+} from "../services/routeArrivalMutationRecovery";
 import type {
   ActualStayMinutesTarget,
   PhotoPublicationTarget,
@@ -29,8 +59,10 @@ import type {
 } from "../models/dayRouteDialogTypes";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
 import { isVisitedStop } from "../routeDisplay";
+import { nativeBridge } from "@/native-bridge";
 
 type UseRouteStopVisitMutationOptions = {
+  route: MyRoute;
   routeId: string;
   activeDayId: string;
   orderedStops: MyRouteStop[];
@@ -50,7 +82,16 @@ type UseRouteStopVisitMutationOptions = {
   setVisitTimesEditTarget: (value: VisitTimesEditTarget | null) => void;
 };
 
+type VisitArrivalTransition = {
+  currentRoutes: MyRoute[];
+  nextRoutes: MyRoute[];
+  isApiOutcomeUnresolved: boolean;
+  journalGeneration: number | null;
+  releaseLock: () => void;
+};
+
 type PersistVisitVariables = {
+  arrivalTransition: VisitArrivalTransition | null;
   routeDay: MyRouteDay;
   stop: MyRouteStop;
   nextVisited: boolean;
@@ -79,6 +120,7 @@ type CheckInVariables = {
 };
 
 type CompleteVisitVariables = {
+  arrivalTransition: VisitArrivalTransition;
   target: ActualStayMinutesTarget;
   actualStayMinutes: number | null;
 };
@@ -97,6 +139,7 @@ type UpdateVisitTimesVariables = {
 };
 
 export function useRouteStopVisitMutation({
+  route,
   routeId,
   activeDayId,
   orderedStops,
@@ -110,7 +153,262 @@ export function useRouteStopVisitMutation({
   setVisitTimesEditTarget,
 }: UseRouteStopVisitMutationOptions) {
   const queryClient = useQueryClient();
+  const appLanguage = useAppLanguageStore((state) => state.language);
   const showToast = useUiToastStore((state) => state.showToast);
+  const getRouteArrivalEnabled = () =>
+    queryClient.getQueryData<NotificationSettingsQuery>(
+      NOTIFICATION_SETTINGS_QUERY_KEY
+    )?.notificationSettings.routeArrivalEnabled;
+  const createVisitArrivalTransition = (
+    stopId: string,
+    visitedAt: string,
+    nextVisited: boolean
+  ): VisitArrivalTransition => {
+    const cachedRoutes = queryClient.getQueryData<MyRoutesQuery>(
+      MY_ROUTES_QUERY_KEY
+    )?.myRoutes;
+    const currentRoutes = cachedRoutes?.length ? cachedRoutes : [route];
+    const currentRoute =
+      currentRoutes.find((candidateRoute) => candidateRoute.id === routeId) ??
+      route;
+    const nextRoute = createRouteArrivalVisitPreview(
+      currentRoute,
+      stopId,
+      visitedAt,
+      nextVisited
+    );
+
+    return {
+      currentRoutes,
+      nextRoutes: currentRoutes.map((candidateRoute) =>
+        candidateRoute.id === routeId ? nextRoute : candidateRoute
+      ),
+      isApiOutcomeUnresolved: false,
+      journalGeneration: null,
+      releaseLock: acquireRouteArrivalTransitionLock(routeId),
+    };
+  };
+  const rollbackVisitArrivalTransition = async (
+    transition: VisitArrivalTransition,
+    requestPermissions: boolean
+  ) => {
+    try {
+      const result = await syncTodayRouteArrivalNotifications(
+        transition.currentRoutes,
+        appLanguage,
+        routeId,
+        {
+          routeArrivalEnabled: getRouteArrivalEnabled(),
+          checkCurrentPosition: false,
+          requestPermissions,
+          requireConfirmedRegistration: requestPermissions,
+        }
+      );
+
+      return result !== null;
+    } catch (error) {
+      console.warn(
+        "[route-arrival-notifications] visit transition rollback failed",
+        error instanceof Error ? error.message : error
+      );
+      return false;
+    }
+  };
+  const prepareVisitArrivalTransition = async (
+    transition: VisitArrivalTransition,
+    stopId: string,
+    nextVisited: boolean
+  ) => {
+    const routeArrivalEnabled = getRouteArrivalEnabled();
+
+    if (
+      nativeBridge.runtime.isAvailable() &&
+      routeArrivalEnabled !== false &&
+      transition.journalGeneration === null
+    ) {
+      const unresolvedTransition = markRouteArrivalTransitionUnresolved(
+        routeId,
+        {
+          expectation: {
+            kind: "stop-visit",
+            stopId,
+            visited: nextVisited,
+          },
+        }
+      );
+
+      transition.journalGeneration =
+        unresolvedTransition?.generation ?? null;
+
+      if (transition.journalGeneration === null) {
+        throw new Error(
+          appLanguage === "en"
+            ? "The app could not safely save the arrival alert transition."
+            : "도착 알림 전환 상태를 안전하게 저장하지 못했어요."
+        );
+      }
+    }
+
+    try {
+      const preparation =
+        await prepareRouteArrivalNotificationsForVisitTransition(
+        transition.currentRoutes,
+        transition.nextRoutes,
+        appLanguage,
+        routeId,
+        { routeArrivalEnabled }
+      );
+
+      if (!preparation.rollbackRequired) {
+        resolveVisitArrivalTransitionJournal(transition);
+      }
+
+      return preparation;
+    } catch (error) {
+      if (!(error instanceof RouteArrivalVisitTransitionPreparationError)) {
+        resolveVisitArrivalTransitionJournal(transition);
+        throw error;
+      }
+
+      const didRollback = await rollbackVisitArrivalTransition(
+        transition,
+        error.requestPermissions
+      );
+
+      if (didRollback) {
+        resolveVisitArrivalTransitionJournal(transition);
+      }
+
+      throw error;
+    }
+  };
+  const rollbackPreparedVisitArrivalTransition = async (
+    transition: VisitArrivalTransition,
+    preparation: RouteArrivalVisitTransitionPreparation | null
+  ) => {
+    if (!preparation?.rollbackRequired) {
+      return true;
+    }
+
+    return rollbackVisitArrivalTransition(
+      transition,
+      preparation.requestPermissions
+    );
+  };
+  const resolveVisitArrivalTransitionJournal = (
+    transition: VisitArrivalTransition
+  ) => {
+    if (transition.journalGeneration === null) {
+      return;
+    }
+
+    resolveRouteArrivalTransition(
+      routeId,
+      transition.journalGeneration
+    );
+    transition.journalGeneration = null;
+  };
+  const markVisitArrivalTransitionRequestDispatched = (
+    transition: VisitArrivalTransition
+  ) => {
+    if (transition.journalGeneration === null) {
+      return;
+    }
+
+    const dispatchedTransition =
+      markRouteArrivalTransitionRequestDispatched(
+        routeId,
+        transition.journalGeneration
+      );
+
+    if (!dispatchedTransition) {
+      throw new Error(
+        appLanguage === "en"
+          ? "The app could not safely update the arrival alert transition."
+          : "도착 알림 전환 상태를 안전하게 갱신하지 못했어요."
+      );
+    }
+  };
+  const recoverVisitMutationFailure = async (
+    transition: VisitArrivalTransition,
+    preparation: RouteArrivalVisitTransitionPreparation | null,
+    stopId: string,
+    nextVisited: boolean,
+    error: unknown
+  ) => {
+    if (isDefinitiveRouteMutationFailure(error)) {
+      const didRollback = await rollbackPreparedVisitArrivalTransition(
+        transition,
+        preparation
+      );
+
+      if (didRollback) {
+        resolveVisitArrivalTransitionJournal(transition);
+      }
+
+      return null;
+    }
+
+    try {
+      const result = await routeApi.routeById(routeId);
+      const recoveredRoute = getConfirmedRouteVisitState(
+        result.route,
+        stopId,
+        nextVisited
+      );
+
+      if (recoveredRoute) {
+        return recoveredRoute;
+      }
+    } catch (recoveryError) {
+      console.warn(
+        "[route-arrival-notifications] visit result recovery failed",
+        recoveryError instanceof Error
+          ? recoveryError.message
+          : recoveryError
+      );
+    }
+
+    if (preparation?.rollbackRequired) {
+      transition.isApiOutcomeUnresolved = true;
+    }
+
+    return null;
+  };
+  const syncUpdatedRouteArrivalTarget = async (
+    nextRoute: MyRoute,
+    preparation?: RouteArrivalVisitTransitionPreparation | null
+  ) => {
+    const nextRoutes =
+      queryClient.getQueryData<MyRoutesQuery>(MY_ROUTES_QUERY_KEY)?.myRoutes ??
+      [nextRoute];
+
+    try {
+      const result = await syncTodayRouteArrivalNotifications(
+        nextRoutes,
+        appLanguage,
+        nextRoute.id,
+        {
+          routeArrivalEnabled: getRouteArrivalEnabled(),
+          requestPermissions: preparation?.requestPermissions,
+          requireConfirmedRegistration:
+            preparation?.requestPermissions === true,
+        }
+      );
+
+      if (preparation?.rollbackRequired && result === null) {
+        throw new Error("Native route arrival target sync did not respond");
+      }
+
+      return null;
+    } catch (error) {
+      console.warn(
+        "[route-arrival-notifications] updated route target sync failed",
+        error instanceof Error ? error.message : error
+      );
+      return error;
+    }
+  };
   const invalidatePlaceVisitQueries = (stop: MyRouteStop) => {
     const contentId =
       stop.place.contentId?.trim() ||
@@ -178,9 +476,46 @@ export function useRouteStopVisitMutation({
     },
   });
   const completeVisitMutation = useMutation({
-    mutationFn: ({ target, actualStayMinutes }: CompleteVisitVariables) =>
-      routeApi.completeRouteStopVisit(target.stop.id, actualStayMinutes),
-    onSuccess: (result, variables) => {
+    mutationFn: async ({
+      arrivalTransition,
+      target,
+      actualStayMinutes,
+    }: CompleteVisitVariables) => {
+      const preparation = await prepareVisitArrivalTransition(
+        arrivalTransition,
+        target.stop.id,
+        true
+      );
+
+      markVisitArrivalTransitionRequestDispatched(arrivalTransition);
+
+      try {
+        const data = await routeApi.completeRouteStopVisit(
+          target.stop.id,
+          actualStayMinutes
+        );
+
+        return { data, preparation };
+      } catch (error) {
+        const recoveredRoute = await recoverVisitMutationFailure(
+          arrivalTransition,
+          preparation,
+          target.stop.id,
+          true,
+          error
+        );
+
+        if (recoveredRoute) {
+          return {
+            data: { completeRouteStopVisit: recoveredRoute },
+            preparation,
+          };
+        }
+
+        throw error;
+      }
+    },
+    onSuccess: async ({ data, preparation }, variables) => {
       const previousStops =
         variables.target.routeDay.id === activeDayId
           ? orderedStops
@@ -189,44 +524,102 @@ export function useRouteStopVisitMutation({
         previousStops.length > 0 &&
         previousStops.filter(isVisitedStop).length === previousStops.length;
       const nextStops = applyRouteResult(
-        result.completeRouteStopVisit,
+        data.completeRouteStopVisit,
         variables.target
       );
       const nextIsDayCompleted =
         nextStops.length > 0 &&
         nextStops.filter(isVisitedStop).length === nextStops.length;
+      const arrivalSyncError = await syncUpdatedRouteArrivalTarget(
+        data.completeRouteStopVisit,
+        preparation
+      );
+
+      if (!arrivalSyncError) {
+        resolveVisitArrivalTransitionJournal(
+          variables.arrivalTransition
+        );
+      }
 
       setActualStayMinutesTarget(null);
       showToast(
-        !wasDayCompleted && nextIsDayCompleted
-          ? `DAY ${variables.target.routeDay.dayIndex} 클리어`
-          : "방문을 완료했어요."
+        arrivalSyncError
+          ? "방문은 완료했지만 도착 알림 상태를 정리하지 못했어요. 앱을 다시 열면 자동으로 맞춰져요."
+          : !wasDayCompleted && nextIsDayCompleted
+            ? `DAY ${variables.target.routeDay.dayIndex} 클리어`
+            : "방문을 완료했어요.",
+        arrivalSyncError ? 4200 : undefined
       );
       void queryClient.invalidateQueries({
         queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
       });
       invalidatePlaceVisitQueries(variables.target.stop);
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       showToast(
-        error instanceof Error ? error.message : "방문을 완료하지 못했어요.",
-        2600
+        variables.arrivalTransition.isApiOutcomeUnresolved
+          ? "방문 완료 여부를 확인 중이에요. 현재·다음 장소 알림은 그대로 유지돼요."
+          : error instanceof Error
+            ? error.message
+            : "방문을 완료하지 못했어요.",
+        variables.arrivalTransition.isApiOutcomeUnresolved ? 4200 : 2600
       );
+    },
+    onSettled: (_data, _error, variables) => {
+      variables.arrivalTransition.releaseLock();
     },
   });
   const visitMutation = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
+      arrivalTransition,
       stop,
       nextVisited,
       verification,
       actualStayMinutes,
-    }: PersistVisitVariables) =>
-      routeApi.markRouteStopVisited(
-        stop.id,
-        nextVisited,
-        nextVisited ? verification : null,
-        nextVisited ? actualStayMinutes : null
-      ),
+    }: PersistVisitVariables) => {
+      const preparation =
+        arrivalTransition
+          ? await prepareVisitArrivalTransition(
+              arrivalTransition,
+              stop.id,
+              nextVisited
+            )
+          : null;
+
+      if (arrivalTransition) {
+        markVisitArrivalTransitionRequestDispatched(arrivalTransition);
+      }
+
+      try {
+        const data = await routeApi.markRouteStopVisited(
+          stop.id,
+          nextVisited,
+          nextVisited ? verification : null,
+          nextVisited ? actualStayMinutes : null
+        );
+
+        return { data, preparation };
+      } catch (error) {
+        if (arrivalTransition) {
+          const recoveredRoute = await recoverVisitMutationFailure(
+            arrivalTransition,
+            preparation,
+            stop.id,
+            nextVisited,
+            error
+          );
+
+          if (recoveredRoute) {
+            return {
+              data: { markRouteStopVisited: recoveredRoute },
+              preparation,
+            };
+          }
+        }
+
+        throw error;
+      }
+    },
     onMutate: async (variables) => {
       if (variables.isActiveRouteDay) {
         setOrderedStops(variables.optimisticStops);
@@ -261,8 +654,8 @@ export function useRouteStopVisitMutation({
 
       return { previousRoutes };
     },
-    onSuccess: (result, variables) => {
-      const nextDay = result.markRouteStopVisited.days.find(
+    onSuccess: async ({ data, preparation }, variables) => {
+      const nextDay = data.markRouteStopVisited.days.find(
         (candidateDay) => candidateDay.id === variables.routeDay.id
       );
       const nextStops = nextDay?.stops ?? variables.sourceStops;
@@ -275,33 +668,47 @@ export function useRouteStopVisitMutation({
         setBaseStopIds(nextStops.map((nextStop) => nextStop.id));
       }
 
-      if (!variables.wasDayCompleted && nextIsDayCompleted) {
-        showToast(`DAY ${variables.routeDay.dayIndex} 클리어`);
-      } else {
-        showToast(
-          variables.nextVisited
+      const successMessage =
+        !variables.wasDayCompleted && nextIsDayCompleted
+          ? `DAY ${variables.routeDay.dayIndex} 클리어`
+          : variables.nextVisited
             ? variables.isGpsPhotoVerified
               ? "사진 인증 완료 처리했어요."
               : variables.isGpsVerified
                 ? "GPS 인증 완료 처리했어요."
-              : variables.hasPhotoRecord
-                ? "사진 기록으로 완료 처리했어요."
-                : "장소를 완료 처리했어요."
+                : variables.hasPhotoRecord
+                  ? "사진 기록으로 완료 처리했어요."
+                  : "장소를 완료 처리했어요."
             : variables.stop.checkedInAt
               ? "도착 인증을 취소했어요."
-              : "완료를 취소했어요."
-        );
-      }
+              : "완료를 취소했어요.";
 
       queryClient.setQueryData<MyRoutesQuery>(
         MY_ROUTES_QUERY_KEY,
         (currentData) =>
-          upsertMyRouteCache(currentData, result.markRouteStopVisited)
+          upsertMyRouteCache(currentData, data.markRouteStopVisited)
       );
+      const arrivalSyncError = await syncUpdatedRouteArrivalTarget(
+        data.markRouteStopVisited,
+        preparation
+      );
+
+      if (!arrivalSyncError && variables.arrivalTransition) {
+        resolveVisitArrivalTransitionJournal(
+          variables.arrivalTransition
+        );
+      }
       void queryClient.invalidateQueries({
         queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
       });
       invalidatePlaceVisitQueries(variables.stop);
+
+      showToast(
+        arrivalSyncError
+          ? "장소 상태는 저장했지만 도착 알림 상태를 갱신하지 못했어요. 앱을 다시 열면 자동으로 맞춰져요."
+          : successMessage,
+        arrivalSyncError ? 4200 : undefined
+      );
 
       if (variables.nextVisited && variables.hasPhotoRecord) {
         const nextStop = nextStops.find(
@@ -327,9 +734,16 @@ export function useRouteStopVisitMutation({
         setOrderedStops(variables.previousStops);
       }
       showToast(
-        error instanceof Error ? error.message : "완료 상태를 바꾸지 못했어요.",
-        2600
+        variables.arrivalTransition?.isApiOutcomeUnresolved
+          ? "완료 여부를 확인 중이에요. 현재·다음 장소 알림은 그대로 유지돼요."
+          : error instanceof Error
+            ? error.message
+            : "완료 상태를 바꾸지 못했어요.",
+        variables.arrivalTransition?.isApiOutcomeUnresolved ? 4200 : 2600
       );
+    },
+    onSettled: (_data, _error, variables) => {
+      variables.arrivalTransition?.releaseLock();
     },
   });
   const photoMutation = useMutation({
@@ -589,6 +1003,11 @@ export function useRouteStopVisitMutation({
       return false;
     }
 
+    if (isRouteArrivalTransitionLocked()) {
+      showToast("이전 방문 완료 여부를 확인하고 있어요.", 2600);
+      return false;
+    }
+
     const isActiveRouteDay = routeDay.id === activeDayId;
     const sourceStops = isActiveRouteDay ? orderedStops : routeDay.stops;
     const visitedAt = new Date().toISOString();
@@ -629,6 +1048,11 @@ export function useRouteStopVisitMutation({
 
     try {
       await visitMutation.mutateAsync({
+        arrivalTransition: createVisitArrivalTransition(
+          stop.id,
+          visitedAt,
+          nextVisited
+        ),
         routeDay,
         stop,
         nextVisited,
@@ -661,11 +1085,21 @@ export function useRouteStopVisitMutation({
       return;
     }
 
+    if (isRouteArrivalTransitionLocked()) {
+      showToast("이전 방문 완료 여부를 확인하고 있어요.", 2600);
+      return;
+    }
+
     photoMutation.mutate({ target, source });
   };
 
   const completeStopVisitWithGps = (target: VisitCompletionTarget) => {
     if (visitSavingStopId || isRetrospectiveCompletion) {
+      return;
+    }
+
+    if (isRouteArrivalTransitionLocked()) {
+      showToast("이전 방문 완료 여부를 확인하고 있어요.", 2600);
       return;
     }
 
@@ -676,9 +1110,21 @@ export function useRouteStopVisitMutation({
     target: ActualStayMinutesTarget,
     actualStayMinutes: number | null
   ) => {
+    if (isRouteArrivalTransitionLocked()) {
+      showToast("이전 방문 완료 여부를 확인하고 있어요.", 2600);
+      return false;
+    }
+
     if (target.stop.checkedInAt) {
+      const visitedAt = new Date().toISOString();
+
       try {
         await completeVisitMutation.mutateAsync({
+          arrivalTransition: createVisitArrivalTransition(
+            target.stop.id,
+            visitedAt,
+            true
+          ),
           target,
           actualStayMinutes,
         });

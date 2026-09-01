@@ -50,6 +50,7 @@ type NativeBridgeHandlers = {
   onAuthSessionChange?: (session: {
     token: string | null;
     expiresAt: number | null;
+    sessionId: string | null;
     reason: "logout" | "expired" | null;
   }) => void;
 };

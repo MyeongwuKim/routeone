@@ -12,6 +12,8 @@ import { notificationApi } from "@/api/notificationApi";
 import AccountDetailsSection from "@/components/account/AccountDetailsSection";
 import { useAccountUser } from "@/components/account/useAccountUser";
 import { clearAuthToken } from "@/lib/authToken";
+import { clearRouteArrivalTransitions } from "@/features/my-route/services/routeArrivalTransitionLock";
+import { clearRouteStartAttempts } from "@/features/my-route/services/routeStartAttemptJournal";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import { useAuthUserStore } from "@/stores/authUserStore";
@@ -125,6 +127,8 @@ function MyAccountPage() {
     resetHomeForArea(serviceArea.defaultRegion.sigunguCode);
     resetMapSheet();
     clearAppendTarget();
+    clearRouteArrivalTransitions();
+    clearRouteStartAttempts();
     clearAuthToken();
     clearAuthUser();
     queryClient.clear();

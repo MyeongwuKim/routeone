@@ -33,7 +33,7 @@ type RouteCommandPrisma = PrismaClient | Prisma.TransactionClient;
 
 const ROUTE_START_TIME_ZONE = "Asia/Seoul";
 const MAX_ROUTE_CREATE_REQUEST_ID_LENGTH = 160;
-const ROUTE_CREATE_TRANSACTION_MAX_ATTEMPTS = 4;
+const ROUTE_TRANSACTION_MAX_ATTEMPTS = 4;
 
 function deletePendingRouteStartNotifications(
   prisma: RouteCommandPrisma,
@@ -124,14 +124,14 @@ function buildRouteCreateInputHash(value: unknown) {
   return createHash("sha256").update(stableSerialize(value)).digest("hex");
 }
 
-function isRetryableRouteCreateError(error: unknown) {
+function isRetryableRouteTransactionError(error: unknown) {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
     (error.code === "P2002" || error.code === "P2034")
   );
 }
 
-async function runRouteCreateTransactionWithRetry<T>(
+async function runRouteTransactionWithRetry<T>(
   prisma: PrismaClient,
   operation: (transaction: Prisma.TransactionClient) => Promise<T>
 ) {
@@ -139,7 +139,7 @@ async function runRouteCreateTransactionWithRetry<T>(
 
   for (
     let attempt = 1;
-    attempt <= ROUTE_CREATE_TRANSACTION_MAX_ATTEMPTS;
+    attempt <= ROUTE_TRANSACTION_MAX_ATTEMPTS;
     attempt += 1
   ) {
     try {
@@ -148,8 +148,8 @@ async function runRouteCreateTransactionWithRetry<T>(
       lastError = error;
 
       if (
-        !isRetryableRouteCreateError(error) ||
-        attempt === ROUTE_CREATE_TRANSACTION_MAX_ATTEMPTS
+        !isRetryableRouteTransactionError(error) ||
+        attempt === ROUTE_TRANSACTION_MAX_ATTEMPTS
       ) {
         throw error;
       }
@@ -377,7 +377,7 @@ export async function createRoute(
     return persistRoute(prisma);
   }
 
-  return runRouteCreateTransactionWithRetry(prisma, async (transaction) => {
+  return runRouteTransactionWithRetry(prisma, async (transaction) => {
     const existingRequest = await transaction.routeCreateRequest.findUnique({
       where: {
         ownerId_requestId: {
@@ -531,7 +531,6 @@ export async function startRoute(
   user: User,
   input: StartRouteInput
 ) {
-  const route = await assertRouteOwner(prisma, input.routeId, user.id);
   assertValidDate(input.startedAt);
   const dayStartedAt = input.dayStartedAt ?? null;
 
@@ -543,55 +542,61 @@ export async function startRoute(
     }
   }
 
-  if (route.status === "COMPLETED") {
-    throw new UserFacingError("이미 완료된 일정은 다시 시작할 수 없어요.");
-  }
+  return runRouteTransactionWithRetry(prisma, async (transaction) => {
+    const route = await assertRouteOwner(transaction, input.routeId, user.id);
 
-  if (getRouteDateKey(input.startedAt) > getRouteDateKey(new Date())) {
-    throw new UserFacingError("미래 날짜의 여행은 아직 시작할 수 없어요.");
-  }
+    if (route.status === "COMPLETED") {
+      throw new UserFacingError("이미 완료된 일정은 다시 시작할 수 없어요.");
+    }
 
-  const routeDays = await prisma.routeDay.findMany({
-    where: {
-      routeId: route.id,
-    },
-    orderBy: {
-      dayIndex: "asc",
-    },
-  });
-  const tripDays = Math.max(1, routeDays.length || route.tripDays);
-  const travelStartDate = input.startedAt;
-  const travelEndDate = addDays(travelStartDate, tripDays - 1);
-  const resolvedDayStartedAt =
-    dayStartedAt ??
-    combineRouteDateAndMinutes(
+    if (getRouteDateKey(input.startedAt) > getRouteDateKey(new Date())) {
+      throw new UserFacingError("미래 날짜의 여행은 아직 시작할 수 없어요.");
+    }
+
+    if (route.startedAt) {
+      await deletePendingRouteStartNotifications(transaction, route.id);
+      return refreshRouteProgress(transaction, route.id);
+    }
+
+    const routeDays = await transaction.routeDay.findMany({
+      where: {
+        routeId: route.id,
+      },
+      orderBy: {
+        dayIndex: "asc",
+      },
+    });
+    const tripDays = Math.max(1, routeDays.length || route.tripDays);
+    const travelStartDate = input.startedAt;
+    const travelEndDate = addDays(travelStartDate, tripDays - 1);
+    const resolvedDayStartedAt =
+      dayStartedAt ??
+      combineRouteDateAndMinutes(
+        travelStartDate,
+        routeDays.find((day) => day.dayIndex === 1)?.plannedStartMinutes ??
+          route.dailyStartMinutes ??
+          9 * 60
+      );
+
+    if (
+      dayStartedAt &&
+      getRouteDateKey(dayStartedAt) !== getRouteDateKey(travelStartDate)
+    ) {
+      throw new UserFacingError(
+        "실제 시작시간은 여행 시작일과 같은 날짜여야 해요."
+      );
+    }
+
+    await assertNoRouteDateConflict(
+      transaction,
+      user.id,
       travelStartDate,
-      route.startedAt
-        ? getRouteClockMinutes(route.startedAt)
-        : (routeDays.find((day) => day.dayIndex === 1)
-              ?.plannedStartMinutes ??
-            route.dailyStartMinutes ??
-            9 * 60)
+      travelEndDate,
+      route.id
     );
 
-  if (
-    dayStartedAt &&
-    getRouteDateKey(dayStartedAt) !== getRouteDateKey(travelStartDate)
-  ) {
-    throw new UserFacingError("실제 시작시간은 여행 시작일과 같은 날짜여야 해요.");
-  }
-
-  await assertNoRouteDateConflict(
-    prisma,
-    user.id,
-    travelStartDate,
-    travelEndDate,
-    route.id
-  );
-
-  await Promise.all(
-    routeDays.map((day, index) =>
-      prisma.routeDay.update({
+    for (const [index, day] of routeDays.entries()) {
+      await transaction.routeDay.update({
         where: {
           id: day.id,
         },
@@ -599,27 +604,27 @@ export async function startRoute(
           date: addDays(travelStartDate, index),
           ...(index === 0 ? { startedAt: resolvedDayStartedAt } : {}),
         },
-      })
-    )
-  );
+      });
+    }
 
-  await prisma.route.update({
-    where: {
-      id: route.id,
-    },
-    data: {
-      tripDays,
-      travelStartDate,
-      travelEndDate,
-      status: "ACTIVE",
-      startedAt: resolvedDayStartedAt,
-      completedAt: null,
-    },
+    await transaction.route.update({
+      where: {
+        id: route.id,
+      },
+      data: {
+        tripDays,
+        travelStartDate,
+        travelEndDate,
+        status: "ACTIVE",
+        startedAt: resolvedDayStartedAt,
+        completedAt: null,
+      },
+    });
+
+    await deletePendingRouteStartNotifications(transaction, route.id);
+
+    return refreshRouteProgress(transaction, route.id);
   });
-
-  await deletePendingRouteStartNotifications(prisma, route.id);
-
-  return refreshRouteProgress(prisma, route.id);
 }
 
 export async function updateRouteStopStayMinutes(

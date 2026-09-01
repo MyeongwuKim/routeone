@@ -9,10 +9,14 @@ export function syncNativeRouteArrivalNotifications({
   places,
   radiusMeters,
   language,
+  checkCurrentPosition,
+  requestPermissions,
 }: {
   places: NativeArrivalNotificationPlace[];
   radiusMeters?: number;
   language?: "ko" | "en";
+  checkCurrentPosition?: boolean;
+  requestPermissions?: boolean;
 }) {
   const syncNotifications =
     getNativeBridgeApi()?.syncRouteArrivalNotifications;
@@ -22,6 +26,8 @@ export function syncNativeRouteArrivalNotifications({
         places,
         radiusMeters,
         language,
+        checkCurrentPosition,
+        requestPermissions,
       })
     : null;
 }

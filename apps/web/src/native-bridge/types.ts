@@ -4,6 +4,8 @@ export type NativePermissionStatus =
   | "undetermined"
   | "unavailable";
 
+export type NativeLocationAccuracy = "full" | "reduced" | "unavailable";
+
 export type NativeAppInfo = {
   platform: "ios" | "android" | "web" | "native" | string;
   capabilities: string[];
@@ -17,6 +19,7 @@ export type NativeAppInfo = {
   webBundleChannel?: string | null;
   appVariant?: string | null;
   locationPermissionStatus?: NativePermissionStatus | null;
+  locationAccuracy?: NativeLocationAccuracy | null;
   notificationPermissionStatus?: NativePermissionStatus | null;
   cameraPermissionStatus?: NativePermissionStatus | null;
   photoLibraryPermissionStatus?: NativePermissionStatus | null;
@@ -194,6 +197,8 @@ export type NativeBridgeApi = {
     places: NativeArrivalNotificationPlace[];
     radiusMeters?: number;
     language?: "ko" | "en";
+    checkCurrentPosition?: boolean;
+    requestPermissions?: boolean;
   }) => Promise<NativeArrivalNotificationSyncResult>;
   setRouteArrivalTestLocation?: (options: {
     place: NativeArrivalNotificationPlace | null;

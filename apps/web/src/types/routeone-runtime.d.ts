@@ -5,6 +5,7 @@ import type {
 
 declare global {
   interface Window {
+    __ROUTEONE_NATIVE_AUTH_SESSION_ID__?: string | null;
     RouteOneRuntimeConfig?: {
       graphqlEndpoint?: string;
       routerMode?: "browser" | "hash";

@@ -12,6 +12,8 @@ export function updateNativeAuthSession({
 }) {
   return postNativeMessage({
     type: "routeone:native-auth-token",
+    sessionId:
+      window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ ?? "",
     token,
     expiresAt,
     reason,

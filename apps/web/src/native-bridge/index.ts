@@ -81,6 +81,7 @@ export type {
   NativeFestivalNotification,
   NativeFestivalNotificationKind,
   NativeFestivalNotificationSyncResult,
+  NativeLocationAccuracy,
   NativeRouteReviewNotification,
   NativeRouteReviewNotificationKind,
   NativeRouteReviewNotificationSyncResult,

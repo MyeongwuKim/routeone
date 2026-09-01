@@ -86,7 +86,19 @@ export function isNativeAuthTokenMessage(
 
   const maybeMessage = value as Partial<NativeAuthTokenMessage>;
 
-  return maybeMessage.type === "routeone:native-auth-token";
+  return (
+    maybeMessage.type === "routeone:native-auth-token" &&
+    typeof maybeMessage.sessionId === "string" &&
+    Boolean(maybeMessage.sessionId.trim()) &&
+    (maybeMessage.token == null ||
+      typeof maybeMessage.token === "string") &&
+    (maybeMessage.expiresAt == null ||
+      (typeof maybeMessage.expiresAt === "number" &&
+        Number.isFinite(maybeMessage.expiresAt))) &&
+    (maybeMessage.reason == null ||
+      maybeMessage.reason === "logout" ||
+      maybeMessage.reason === "expired")
+  );
 }
 
 export function isNativeAppLanguageMessage(
@@ -188,8 +200,14 @@ export function isNativeRouteArrivalNotificationSyncRequest(
     maybeRequest.type ===
       "routeone:native-route-arrival-notifications-sync" &&
     typeof maybeRequest.id === "string" &&
+    typeof maybeRequest.sessionId === "string" &&
+    Boolean(maybeRequest.sessionId.trim()) &&
     typeof maybeRequest.language === "string" &&
     NATIVE_APP_LANGUAGES.has(maybeRequest.language) &&
+    (maybeRequest.checkCurrentPosition == null ||
+      typeof maybeRequest.checkCurrentPosition === "boolean") &&
+    (maybeRequest.requestPermissions == null ||
+      typeof maybeRequest.requestPermissions === "boolean") &&
     Array.isArray(maybeRequest.places) &&
     maybeRequest.places.every(isNativeRouteArrivalNotificationPlace)
   );

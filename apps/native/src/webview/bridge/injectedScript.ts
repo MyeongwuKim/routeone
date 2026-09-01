@@ -36,6 +36,10 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     ROUTEONE_RUNTIME_CONFIG
   )});
 
+  var nativeAuthSessionId =
+    typeof window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ === "string"
+      ? window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__
+      : "";
   var didPostBridgeReady = false;
   var didPostRuntimeError = false;
 
@@ -192,6 +196,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
   var pendingPhotoRequests = Object.create(null);
   var pendingPhotoUploadRequests = Object.create(null);
   var pendingRouteArrivalNotificationSyncRequests = Object.create(null);
+  var routeArrivalNotificationSyncTimeoutMs = 60000;
   var pendingRouteArrivalTestLocationRequests = Object.create(null);
   var pendingDeliveredNotificationHistoryRequests = Object.create(null);
   var pendingPushTokenRequests = Object.create(null);
@@ -358,6 +363,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
       webBundleChannel: payload.webBundleChannel,
       appVariant: payload.appVariant,
       locationPermissionStatus: payload.locationPermissionStatus,
+      locationAccuracy: payload.locationAccuracy,
       notificationPermissionStatus: payload.notificationPermissionStatus,
       cameraPermissionStatus: payload.cameraPermissionStatus,
       photoLibraryPermissionStatus: payload.photoLibraryPermissionStatus
@@ -460,6 +466,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
       return;
     }
 
+    window.clearTimeout(handlers.timeoutId);
     delete pendingRouteArrivalNotificationSyncRequests[id];
 
     if (!payload || !payload.ok) {
@@ -694,17 +701,41 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
       var places = options && Array.isArray(options.places) ? options.places : [];
       var radiusMeters = options && typeof options.radiusMeters === "number" ? options.radiusMeters : null;
       var language = options && options.language === "en" ? "en" : "ko";
+      var checkCurrentPosition = !options || options.checkCurrentPosition !== false;
+      var requestPermissions = !options || options.requestPermissions !== false;
 
       return new Promise(function routeOneNativeRouteArrivalNotifications(resolve, reject) {
-        pendingRouteArrivalNotificationSyncRequests[requestId] = { resolve: resolve, reject: reject };
+        var timeoutId = window.setTimeout(function handleRouteArrivalNotificationSyncTimeout() {
+          var handlers = pendingRouteArrivalNotificationSyncRequests[requestId];
+
+          if (!handlers) {
+            return;
+          }
+
+          delete pendingRouteArrivalNotificationSyncRequests[requestId];
+          handlers.reject(new Error(
+            language === "en"
+              ? "The device did not respond while registering the place arrival alert."
+              : "기기가 장소 도착 알림 등록 요청에 응답하지 않았어요."
+          ));
+        }, routeArrivalNotificationSyncTimeoutMs);
+
+        pendingRouteArrivalNotificationSyncRequests[requestId] = {
+          resolve: resolve,
+          reject: reject,
+          timeoutId: timeoutId
+        };
 
         window.ReactNativeWebView.postMessage(
           JSON.stringify({
             type: "routeone:native-route-arrival-notifications-sync",
             id: requestId,
+            sessionId: nativeAuthSessionId,
             places: places,
             radiusMeters: radiusMeters,
-            language: language
+            language: language,
+            checkCurrentPosition: checkCurrentPosition,
+            requestPermissions: requestPermissions
           })
         );
       });

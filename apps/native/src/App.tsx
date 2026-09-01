@@ -34,6 +34,7 @@ export default function App() {
     isRequestingNotificationPermission,
     nativeAuthExpiresAt,
     nativeAuthRole,
+    nativeAuthSessionId,
     nativeAuthToken,
     requestLocationPermission,
     requestNotificationPermission,
@@ -241,6 +242,7 @@ export default function App() {
       appLanguage={appLanguage}
       nativeAuthExpiresAt={nativeAuthExpiresAt}
       nativeAuthRole={nativeAuthRole}
+      nativeAuthSessionId={nativeAuthSessionId}
       nativeAuthToken={nativeAuthToken}
       onAppLanguageChange={updateAppLanguage}
       onAuthSessionChange={handleNativeAuthSessionChange}

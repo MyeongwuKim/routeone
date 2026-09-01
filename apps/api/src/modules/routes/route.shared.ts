@@ -423,7 +423,7 @@ export function buildRouteShareTags(route: Route, stops: RouteStop[]) {
 }
 
 export async function assertRouteOwner(
-  prisma: PrismaClient,
+  prisma: RouteSharedPrisma,
   routeId: string,
   userId: string
 ) {

@@ -259,7 +259,26 @@ export type UiText = {
     startSuccess: string;
     startSuccessWithoutArrivalNotification: (error: string) => string;
     arrivalNotificationRegistrationError: string;
+    locationPermissionWarningTitle: string;
+    locationPermissionWarningDescription: string;
+    openLocationSettings: string;
+    startWithoutLocationPermission: string;
+    locationPermissionLookupError: string;
+    locationSettingsOpenError: string;
+    startPendingTitle: string;
+    startPendingDescription: string;
     startError: string;
+    startAttemptStorageError: string;
+    startRecoverySuccess: string;
+    interruptedStartTitle: string;
+    interruptedStartDescription: string;
+    interruptedStartDetail: string;
+    retryInterruptedStart: string;
+    startStatusUnavailableTitle: string;
+    startStatusUnavailableDescription: string;
+    startStatusUnavailableDetail: string;
+    checkStartStatusAgain: string;
+    checkStartStatusLater: string;
     futureStartError: string;
     viewConflictingRoute: string;
     conflictConfirm: string;
@@ -1363,7 +1382,34 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `여행은 시작했지만 도착 알림은 등록하지 못했어요. ${error}`,
       arrivalNotificationRegistrationError:
         "기기가 장소 도착 알림을 등록하지 못했어요.",
+      locationPermissionWarningTitle: "위치 권한을 확인해 주세요",
+      locationPermissionWarningDescription:
+        "위치 권한이 꺼져 있거나 정확한 위치를 사용할 수 없어 장소 도착 푸시 알림과 GPS 방문 인증을 사용할 수 없어요. 그래도 여행을 시작할까요?",
+      openLocationSettings: "권한 설정",
+      startWithoutLocationPermission: "그대로 시작",
+      locationPermissionLookupError:
+        "위치 권한 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
+      locationSettingsOpenError: "앱 설정을 열지 못했어요.",
+      startPendingTitle: "여행 시작 중...",
+      startPendingDescription:
+        "일정을 준비하고 있어요. 완료될 때까지 앱을 닫지 말아 주세요.",
       startError: "여행을 시작하지 못했어요.",
+      startAttemptStorageError:
+        "여행 시작 상태를 안전하게 저장하지 못했어요. 다시 시도해 주세요.",
+      startRecoverySuccess: "중단됐던 여행 시작 상태를 복구했어요.",
+      interruptedStartTitle: "여행 시작이 완료되지 않았어요",
+      interruptedStartDescription:
+        "이전 여행 시작이 중간에 끊겨 서버에 반영되지 않았어요. 다시 시작하시겠어요?",
+      interruptedStartDetail:
+        "다시 시작하기 전까지 장소 도착 알림과 GPS 방문 인증이 동작하지 않아요.",
+      retryInterruptedStart: "다시 시작",
+      startStatusUnavailableTitle: "여행 시작 상태를 확인할 수 없어요",
+      startStatusUnavailableDescription:
+        "인터넷 연결을 확인한 뒤 다시 확인해 주세요.",
+      startStatusUnavailableDetail:
+        "확인 전에는 여행이 시작됐다고 단정하지 않아요.",
+      checkStartStatusAgain: "다시 확인",
+      checkStartStatusLater: "나중에",
       futureStartError: "미래 날짜의 여행은 아직 시작할 수 없어요.",
       viewConflictingRoute: "해당 일정 보기",
       conflictConfirm: "확인",
@@ -2614,7 +2660,34 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `The trip started, but the arrival alert was not registered. ${error}`,
       arrivalNotificationRegistrationError:
         "The device did not register the place arrival alert.",
+      locationPermissionWarningTitle: "Check location access",
+      locationPermissionWarningDescription:
+        "Location access or Precise Location is off, so place arrival alerts and GPS visit verification are unavailable. Start the trip anyway?",
+      openLocationSettings: "Open settings",
+      startWithoutLocationPermission: "Start anyway",
+      locationPermissionLookupError:
+        "Could not check location access. Please try again shortly.",
+      locationSettingsOpenError: "Could not open the app settings.",
+      startPendingTitle: "Starting your trip...",
+      startPendingDescription:
+        "Preparing your schedule. Please keep the app open until it finishes.",
       startError: "Could not start the trip.",
+      startAttemptStorageError:
+        "Could not safely save the trip start state. Please try again.",
+      startRecoverySuccess: "Your interrupted trip start was recovered.",
+      interruptedStartTitle: "Trip start wasn’t completed",
+      interruptedStartDescription:
+        "Your previous trip start was interrupted before it reached the server. Would you like to start again?",
+      interruptedStartDetail:
+        "Arrival alerts and GPS visit verification won’t work until the trip starts.",
+      retryInterruptedStart: "Start again",
+      startStatusUnavailableTitle: "Couldn’t check trip status",
+      startStatusUnavailableDescription:
+        "Check your internet connection and try again.",
+      startStatusUnavailableDetail:
+        "The trip won’t be treated as started until its status is confirmed.",
+      checkStartStatusAgain: "Check again",
+      checkStartStatusLater: "Later",
       futureStartError: "A trip with a future start date cannot be started yet.",
       viewConflictingRoute: "View schedule",
       conflictConfirm: "OK",

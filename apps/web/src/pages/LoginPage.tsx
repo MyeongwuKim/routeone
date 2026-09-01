@@ -11,6 +11,8 @@ import {
   consumeAuthSessionExpired,
   setAuthToken,
 } from "@/lib/authToken";
+import { clearRouteArrivalTransitions } from "@/features/my-route/services/routeArrivalTransitionLock";
+import { clearRouteStartAttempts } from "@/features/my-route/services/routeStartAttemptJournal";
 import { useAuthUserStore } from "@/stores/authUserStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
@@ -52,6 +54,8 @@ function LoginPage() {
         displayName: displayName.trim() || undefined,
       });
 
+      clearRouteArrivalTransitions();
+      clearRouteStartAttempts();
       setAuthToken(payload.loginWithPassword.token);
       setAuthUser(payload.loginWithPassword.user);
       queryClient.setQueryData(ME_QUERY_KEY, {

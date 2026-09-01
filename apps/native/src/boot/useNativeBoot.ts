@@ -1,14 +1,28 @@
+/**
+ * 용도:
+ * 네이티브 앱의 초기 권한·로그인 상태를 확인하고 WebView 진입 단계를 관리한다.
+ *
+ * 동작 방식:
+ * 저장된 인증 세션이 만료됐거나 새 로그인을 시작할 때 이전 세션의 장소 감시를
+ * 먼저 해제한 뒤 새 인증 정보와 위치 준비 상태를 반영한다.
+ */
 import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import type { NativeAuthPayload } from "@/auth/nativeAuth";
 import {
+  createNativeAuthSessionId,
+  enqueueNativeAuthSessionOperation,
   NATIVE_AUTH_SESSION_DURATION_MS,
   readStoredNativeAuthSession,
   storeNativeAuthToken,
   type NativeAuthRole
 } from "@/auth/nativeAuthStorage";
+import {
+  clearNativeSessionForAccountChange,
+  reconcileNativeSessionCleanup
+} from "@/auth/nativeSessionCleanup";
 import { prepareNativeCurrentPosition } from "@/location/nativeCurrentPosition";
 
 export type NativeBootStep =
@@ -37,6 +51,9 @@ export function useNativeBoot() {
   const [nativeAuthToken, setNativeAuthToken] = useState<string | null>(null);
   const [nativeAuthRole, setNativeAuthRole] =
     useState<NativeAuthRole | null>(null);
+  const [nativeAuthSessionId, setNativeAuthSessionId] = useState<
+    string | null
+  >(null);
   const [nativeAuthExpiresAt, setNativeAuthExpiresAt] = useState<number | null>(
     null
   );
@@ -116,7 +133,19 @@ export function useNativeBoot() {
       const storedLanguage = normalizeAppLanguage(
         await AsyncStorage.getItem(APP_LANGUAGE_STORAGE_KEY)
       );
-      const storedAuthSession = await readStoredNativeAuthSession();
+      const { didClearStoredSession, storedAuthSession } =
+        await enqueueNativeAuthSessionOperation(async () => {
+          const nextStoredAuthSession =
+            await readStoredNativeAuthSession();
+          const didClearSession = await reconcileNativeSessionCleanup(
+            Boolean(nextStoredAuthSession.token)
+          );
+
+          return {
+            didClearStoredSession: didClearSession,
+            storedAuthSession: nextStoredAuthSession
+          };
+        });
 
       if (!isMounted) {
         return;
@@ -126,10 +155,11 @@ export function useNativeBoot() {
         setAppLanguage(storedLanguage);
       }
 
-      if (storedAuthSession.token) {
+      if (storedAuthSession.token && !didClearStoredSession) {
         setNativeAuthToken(storedAuthSession.token);
         setNativeAuthRole(storedAuthSession.role);
         setNativeAuthExpiresAt(storedAuthSession.expiresAt);
+        setNativeAuthSessionId(storedAuthSession.sessionId);
         setBootProgressStage("location");
         await prepareLocationBeforeWebView();
 
@@ -241,12 +271,22 @@ export function useNativeBoot() {
   const completeNativeLogin = useCallback(
     async (payload: NativeAuthPayload) => {
       const expiresAt = Date.now() + NATIVE_AUTH_SESSION_DURATION_MS;
+      const sessionId = createNativeAuthSessionId();
 
+      await enqueueNativeAuthSessionOperation(async () => {
+        await clearNativeSessionForAccountChange();
+        await storeNativeAuthToken(
+          payload.token,
+          expiresAt,
+          payload.user.role,
+          sessionId
+        );
+      });
       setNativeAuthToken(payload.token);
       setNativeAuthRole(payload.user.role);
       setNativeAuthExpiresAt(expiresAt);
+      setNativeAuthSessionId(sessionId);
       setIsAuthSessionExpired(false);
-      await storeNativeAuthToken(payload.token, expiresAt, payload.user.role);
       await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
       await prepareLocationBeforeWebView();
       setBootStep("webview");
@@ -258,6 +298,7 @@ export function useNativeBoot() {
     (session: {
       token: string | null;
       expiresAt: number | null;
+      sessionId: string | null;
       reason: "logout" | "expired" | null;
     }) => {
       setNativeAuthToken(session.token);
@@ -265,6 +306,7 @@ export function useNativeBoot() {
         setNativeAuthRole(null);
       }
       setNativeAuthExpiresAt(session.expiresAt);
+      setNativeAuthSessionId(session.sessionId);
       setIsAuthSessionExpired(session.reason === "expired");
       setBootStep(session.token ? "webview" : "login");
     },
@@ -282,6 +324,7 @@ export function useNativeBoot() {
     isRequestingNotificationPermission,
     nativeAuthExpiresAt,
     nativeAuthRole,
+    nativeAuthSessionId,
     nativeAuthToken,
     requestLocationPermission,
     requestNotificationPermission,

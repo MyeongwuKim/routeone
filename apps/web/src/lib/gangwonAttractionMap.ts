@@ -90,12 +90,6 @@ const CAFE_BADGE: MapMarkerBadge = {
 };
 
 export type SearchFilter = "all" | RoutePlaceCategory | "festival";
-export type AttractionLoadingStage =
-  | "idle"
-  | "fetching-places"
-  | "ranking"
-  | "localizing"
-  | "rendering-markers";
 
 export function resolveMarkerType(
   attraction: GangwonAttraction,

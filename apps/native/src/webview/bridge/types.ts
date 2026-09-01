@@ -29,6 +29,7 @@ export type NativeBridgeReadyMessage = {
 
 export type NativeAuthTokenMessage = {
   type: "routeone:native-auth-token";
+  sessionId: string;
   token?: string | null;
   expiresAt?: number | null;
   reason?: "logout" | "expired";
@@ -56,6 +57,8 @@ export type NativePermissionStatus =
   | "denied"
   | "undetermined"
   | "unavailable";
+
+export type NativeLocationAccuracy = "full" | "reduced" | "unavailable";
 
 export type NativeLocationRequest = {
   type: "routeone:native-location-current";
@@ -102,9 +105,12 @@ export type NativeRouteArrivalNotificationPlace = {
 export type NativeRouteArrivalNotificationSyncRequest = {
   type: "routeone:native-route-arrival-notifications-sync";
   id: string;
+  sessionId: string;
   places: NativeRouteArrivalNotificationPlace[];
   radiusMeters?: number | null;
   language: NativeAppLanguage;
+  checkCurrentPosition?: boolean | null;
+  requestPermissions?: boolean | null;
 };
 
 export type NativeRouteArrivalTestLocationRequest = {
@@ -375,6 +381,7 @@ export type NativeAppInfoResponse = {
   webBundleChannel: string;
   appVariant: string;
   locationPermissionStatus: NativePermissionStatus;
+  locationAccuracy: NativeLocationAccuracy;
   notificationPermissionStatus: NativePermissionStatus;
   cameraPermissionStatus: NativePermissionStatus;
   photoLibraryPermissionStatus: NativePermissionStatus;

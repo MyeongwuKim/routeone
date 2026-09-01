@@ -26,18 +26,26 @@ type GraphQLResponse<TResult> = {
   data?: TResult;
   errors?: Array<{
     message: string;
+    extensions?: {
+      code?: unknown;
+    };
   }>;
 };
 
 export class GraphQLRequestError extends Error {
   retryable: boolean;
   status?: number;
+  code?: string;
 
-  constructor(message: string, options: { retryable: boolean; status?: number }) {
+  constructor(
+    message: string,
+    options: { retryable: boolean; status?: number; code?: string }
+  ) {
     super(message);
     this.name = "GraphQLRequestError";
     this.retryable = options.retryable;
     this.status = options.status;
+    this.code = options.code;
   }
 }
 
@@ -198,12 +206,15 @@ async function executeGraphQLRequest<TResult>({
     const payload = await readGraphQLPayload<TResult>(response);
 
     if (!response.ok || payload.errors?.length) {
+      const firstError = payload.errors?.[0];
+      const errorCode = firstError?.extensions?.code;
+
       throw new GraphQLRequestError(
-        payload.errors?.[0]?.message ??
-          UNEXPECTED_SERVER_ERROR_MESSAGE,
+        firstError?.message ?? UNEXPECTED_SERVER_ERROR_MESSAGE,
         {
           retryable: RETRYABLE_HTTP_STATUS_CODES.has(response.status),
           status: response.status,
+          code: typeof errorCode === "string" ? errorCode : undefined,
         }
       );
     }

@@ -16,6 +16,7 @@ function getActionClassName(action: UiModalAction) {
 
 function GlobalModal() {
   const {
+    modalId,
     isOpen,
     title,
     description,
@@ -31,7 +32,7 @@ function GlobalModal() {
   return (
     <div
       className={`global-modal-backdrop-enter fixed inset-0 ${UI_LAYER_CLASS.appDialog} flex items-end justify-center bg-slate-900/35 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pb-4`}
-      onClick={closeModal}
+      onClick={() => closeModal(modalId)}
     >
       <section
         role="dialog"
@@ -59,7 +60,7 @@ function GlobalModal() {
           <button
             type="button"
             aria-label="닫기"
-            onClick={closeModal}
+            onClick={() => closeModal(modalId)}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
           >
             <IoClose />
@@ -80,7 +81,7 @@ function GlobalModal() {
               onClick={() => {
                 action.onClick?.();
                 if (action.autoClose !== false) {
-                  closeModal();
+                  closeModal(modalId);
                 }
               }}
               className={`rounded-2xl px-4 py-3 text-sm font-bold ${getActionClassName(

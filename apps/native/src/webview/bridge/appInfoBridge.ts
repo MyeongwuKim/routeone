@@ -11,6 +11,7 @@ import type {
   NativeAppInfoRequest,
   NativeAppInfoResponse,
   NativePermissionStatus,
+  NativeLocationAccuracy,
   WebViewRef
 } from "./types";
 
@@ -65,18 +66,39 @@ function normalizePermissionStatus(
   return "unavailable";
 }
 
-async function getLocationPermissionStatus(): Promise<NativePermissionStatus> {
+async function getLocationPermissionDetails(): Promise<{
+  status: NativePermissionStatus;
+  accuracy: NativeLocationAccuracy;
+}> {
   try {
     const permission = await Location.getForegroundPermissionsAsync();
-    return normalizePermissionStatus(permission.status, permission.granted);
+    const accuracy =
+      Platform.OS === "ios" && permission.ios?.accuracy === "reduced"
+        ? "reduced"
+        : Platform.OS === "ios" && permission.ios?.accuracy === "full"
+          ? "full"
+          : "unavailable";
+
+    return {
+      status: normalizePermissionStatus(permission.status, permission.granted),
+      accuracy
+    };
   } catch {
-    return "unavailable";
+    return {
+      status: "unavailable",
+      accuracy: "unavailable"
+    };
   }
 }
 
 async function getNotificationPermissionStatus(): Promise<NativePermissionStatus> {
   try {
     const permission = await Notifications.getPermissionsAsync();
+
+    if (Platform.OS === "ios" && permission.ios?.allowsAlert === false) {
+      return "denied";
+    }
+
     return normalizePermissionStatus(permission.status, permission.granted);
   } catch {
     return "unavailable";
@@ -110,13 +132,13 @@ async function createNativeAppInfo(
   context: NativeAppInfoContext
 ): Promise<NativeAppInfoResponse> {
   const [
-    locationPermissionStatus,
+    locationPermission,
     notificationPermissionStatus,
     cameraPermissionStatus,
     photoLibraryPermissionStatus
   ] =
     await Promise.all([
-      getLocationPermissionStatus(),
+      getLocationPermissionDetails(),
       getNotificationPermissionStatus(),
       getCameraPermissionStatus(),
       getPhotoLibraryPermissionStatus()
@@ -135,7 +157,8 @@ async function createNativeAppInfo(
     webBundleKind: context.webBundleKind,
     webBundleChannel: WEB_BUNDLE_UPDATE_CONFIG.channel,
     appVariant: WEB_BUNDLE_UPDATE_CONFIG.appVariant,
-    locationPermissionStatus,
+    locationPermissionStatus: locationPermission.status,
+    locationAccuracy: locationPermission.accuracy,
     notificationPermissionStatus,
     cameraPermissionStatus,
     photoLibraryPermissionStatus

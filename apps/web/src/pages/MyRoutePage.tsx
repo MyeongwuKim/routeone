@@ -1,19 +1,40 @@
+/**
+ * 진입 경로: 하단 내 루트 탭 → 일정 카드 또는 여행 시작
+ *
+ * 용도:
+ * 저장한 여행 일정을 조회하고 날짜별 장소를 확인하며 여행을 시작한다.
+ * 시작 요청이 중단된 경우에는 영속 기록을 이어받아 안전하게 재시도한다.
+ *
+ * 구조:
+ * 일정 상태별 목록, 일정 상세 팝업, 시작 시각 선택과 시작 진행 상태로 구성되어 있다.
+ */
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { NOTIFICATION_INBOX_QUERY_KEY } from "@/api/notificationApi";
+import {
+  notificationApi,
+  NOTIFICATION_INBOX_QUERY_KEY,
+  NOTIFICATION_SETTINGS_QUERY_KEY,
+} from "@/api/notificationApi";
 import { routeApi } from "@/api/routeApi";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
 import MyRouteCard from "@/features/my-route/components/MyRouteCard";
 import MyRouteEmptyState from "@/features/my-route/components/MyRouteEmptyState";
+import RouteStartProgressOverlay from "@/features/my-route/components/RouteStartProgressOverlay";
 import { useLocalizedMyRoutes } from "@/features/my-route/hooks/useLocalizedMyRoutes";
+import {
+  useRouteStartLocationPermissionGuard,
+  type RouteStartOptions,
+  type RouteStartRequest,
+} from "@/features/my-route/hooks/useRouteStartLocationPermissionGuard";
 import {
   MY_ROUTES_QUERY_KEY,
   removeMyRouteCache,
@@ -31,7 +52,31 @@ import {
   getTodayRouteDay,
   isDateKeyInRouteRange,
 } from "@/features/my-route/routeDisplay";
-import { syncTodayRouteArrivalNotifications } from "@/features/my-route/services/routeArrivalNotificationService";
+import {
+  prepareRouteArrivalNotificationsForStart,
+  syncTodayRouteArrivalNotifications,
+} from "@/features/my-route/services/routeArrivalNotificationService";
+import {
+  getConfirmedStartedRoute,
+  isDefinitiveRouteMutationFailure,
+} from "@/features/my-route/services/routeArrivalMutationRecovery";
+import {
+  acquireRouteArrivalTransitionLock,
+  isRouteArrivalTransitionLocked,
+  markRouteArrivalTransitionRequestDispatched,
+  markRouteArrivalTransitionUnresolved,
+  resolveRouteArrivalTransition,
+} from "@/features/my-route/services/routeArrivalTransitionLock";
+import {
+  beginRouteStartAttempt,
+  getRouteStartAttempts,
+  isRouteStartAttemptLocked,
+  markRouteStartAttemptRequestDispatched,
+  resolveRouteStartAttempt,
+  ROUTE_START_RECOVERY_GENERATION_PARAM,
+  ROUTE_START_RECOVERY_ROUTE_ID_PARAM,
+} from "@/features/my-route/services/routeStartAttemptJournal";
+import { shouldRequestRouteArrivalRegistrationForStart } from "@/features/my-route/services/routeStartLocationPermissionService";
 import type { MyRoute, MyRouteDay } from "@/features/my-route/types";
 import { useUiText, type UiText } from "@/lib/uiText";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
@@ -56,6 +101,18 @@ type StartRouteDatePickerTarget = {
 type StartRouteTimePickerTarget = StartRouteDatePickerTarget & {
   timeValue: string;
 };
+
+type StartRouteArrivalTransition = {
+  sourceRoutes: MyRoute[];
+  didPrepareArrivalTarget: boolean;
+  isApiOutcomeUnresolved: boolean;
+  journalGeneration: number | null;
+  releaseLock: () => void;
+};
+
+type ActiveRouteStartAttempt = NonNullable<
+  ReturnType<typeof beginRouteStartAttempt>
+>;
 
 const ROUTE_DEEP_LINK_SEARCH_PARAM_KEYS = [
   "routeId",
@@ -289,6 +346,17 @@ function MyRoutePage() {
     useState<StartRouteDatePickerTarget | null>(null);
   const [startTimePickerTarget, setStartTimePickerTarget] =
     useState<StartRouteTimePickerTarget | null>(null);
+  const activeStartAttemptRef = useRef<ActiveRouteStartAttempt | null>(
+    null
+  );
+  const handledRecoveryRouteIdRef = useRef<string | null>(null);
+  useEffect(
+    () => () => {
+      activeStartAttemptRef.current?.release();
+      activeStartAttemptRef.current = null;
+    },
+    []
+  );
   const startAppendTarget = useRouteEditFlowStore(
     (state) => state.startAppendTarget
   );
@@ -308,6 +376,11 @@ function MyRoutePage() {
   } = useLocalizedMyRoutes(sourceMyRoutes);
   const deepLinkRouteId = searchParams.get("routeId")?.trim() ?? "";
   const deepLinkDayId = searchParams.get("dayId")?.trim() ?? "";
+  const recoveryRouteId =
+    searchParams.get(ROUTE_START_RECOVERY_ROUTE_ID_PARAM)?.trim() ?? "";
+  const recoveryGeneration = Number(
+    searchParams.get(ROUTE_START_RECOVERY_GENERATION_PARAM)
+  );
   const clearRouteDeepLinkSearchParams = useCallback(() => {
     if (
       !ROUTE_DEEP_LINK_SEARCH_PARAM_KEYS.some((key) => searchParams.has(key))
@@ -375,8 +448,267 @@ function MyRoutePage() {
     },
   });
   const startRouteMutation = useMutation({
-    mutationFn: (input: StartRouteInput) => routeApi.startRoute(input),
-    onSuccess: async (data) => {
+    mutationFn: async ({
+      input,
+      route,
+      startWithoutLocationPermission,
+      arrivalTransition,
+      startAttempt,
+    }: {
+      input: StartRouteInput;
+      route: MyRoute;
+      startWithoutLocationPermission: boolean;
+      arrivalTransition: StartRouteArrivalTransition;
+      startAttempt: ActiveRouteStartAttempt;
+    }) => {
+      const notificationSettings = await queryClient
+        .fetchQuery({
+          queryKey: NOTIFICATION_SETTINGS_QUERY_KEY,
+          queryFn: () => notificationApi.settings(),
+          staleTime: 60_000,
+          retry: false,
+        })
+        .then(
+          (data) => ({ data, error: null }),
+          (error: unknown) => ({ data: null, error })
+        );
+
+      if (
+        nativeBridge.runtime.isAvailable() &&
+        !notificationSettings.data
+      ) {
+        throw new Error(text.myRoute.arrivalNotificationRegistrationError);
+      }
+
+      let shouldRequireArrivalRegistration = false;
+
+      if (notificationSettings.data) {
+        const routeArrivalEnabled =
+          notificationSettings.data.notificationSettings.routeArrivalEnabled;
+
+        if (
+          routeArrivalEnabled &&
+          nativeBridge.runtime.isAvailable() &&
+          !startWithoutLocationPermission
+        ) {
+          shouldRequireArrivalRegistration =
+            await shouldRequestRouteArrivalRegistrationForStart(
+              startWithoutLocationPermission
+            );
+        }
+
+        if (
+          routeArrivalEnabled &&
+          nativeBridge.runtime.isAvailable() &&
+          arrivalTransition.journalGeneration === null
+        ) {
+          const unresolvedTransition =
+            markRouteArrivalTransitionUnresolved(route.id, {
+              expectation: { kind: "route-start" },
+            });
+
+          arrivalTransition.journalGeneration =
+            unresolvedTransition?.generation ?? null;
+
+          if (arrivalTransition.journalGeneration === null) {
+            throw new Error(
+              appLanguage === "en"
+                ? "The app could not safely save the arrival alert transition."
+                : "도착 알림 전환 상태를 안전하게 저장하지 못했어요."
+            );
+          }
+        }
+
+        try {
+          const preparationResult =
+            await prepareRouteArrivalNotificationsForStart(
+              arrivalTransition.sourceRoutes,
+              route,
+              input.startedAt,
+              input.dayStartedAt ?? new Date().toISOString(),
+              appLanguage,
+              routeArrivalEnabled,
+              {
+                requestPermissions: shouldRequireArrivalRegistration,
+                requireConfirmedRegistration:
+                  shouldRequireArrivalRegistration,
+              }
+            );
+          arrivalTransition.didPrepareArrivalTarget = Boolean(
+            preparationResult && routeArrivalEnabled
+          );
+
+          if (
+            !arrivalTransition.didPrepareArrivalTarget &&
+            arrivalTransition.journalGeneration !== null
+          ) {
+            resolveRouteArrivalTransition(
+              route.id,
+              arrivalTransition.journalGeneration
+            );
+            arrivalTransition.journalGeneration = null;
+          }
+        } catch (error) {
+          try {
+            const rollbackResult =
+              await syncTodayRouteArrivalNotifications(
+                arrivalTransition.sourceRoutes,
+                appLanguage,
+                undefined,
+                {
+                  routeArrivalEnabled,
+                  checkCurrentPosition: false,
+                  requestPermissions: shouldRequireArrivalRegistration,
+                  requireConfirmedRegistration:
+                    shouldRequireArrivalRegistration,
+                }
+              );
+
+            if (
+              rollbackResult !== null &&
+              arrivalTransition.journalGeneration !== null
+            ) {
+              resolveRouteArrivalTransition(
+                route.id,
+                arrivalTransition.journalGeneration
+              );
+              arrivalTransition.journalGeneration = null;
+            }
+          } catch (rollbackError) {
+            console.warn(
+              "[route-arrival-notifications] route start preparation rollback failed",
+              rollbackError instanceof Error
+                ? rollbackError.message
+                : rollbackError
+            );
+          }
+
+          if (routeArrivalEnabled) {
+            throw error;
+          }
+
+          console.warn(
+            "[route-arrival-notifications] disabled target cleanup failed",
+            error instanceof Error ? error.message : error
+          );
+        }
+      }
+
+      const dispatchedAttempt = markRouteStartAttemptRequestDispatched(
+        startAttempt.attempt.routeId,
+        startAttempt.attempt.generation
+      );
+
+      if (!dispatchedAttempt) {
+        throw new Error(text.myRoute.startAttemptStorageError);
+      }
+
+      if (arrivalTransition.journalGeneration !== null) {
+        const dispatchedTransition =
+          markRouteArrivalTransitionRequestDispatched(
+            route.id,
+            arrivalTransition.journalGeneration
+          );
+
+        if (!dispatchedTransition) {
+          throw new Error(
+            appLanguage === "en"
+              ? "The app could not safely update the arrival alert transition."
+              : "도착 알림 전환 상태를 안전하게 갱신하지 못했어요."
+          );
+        }
+      }
+
+      try {
+        const data = await routeApi.startRoute(input);
+
+        return {
+          data,
+          notificationSettings,
+          shouldRequireArrivalRegistration,
+        };
+      } catch (error) {
+        if (!isDefinitiveRouteMutationFailure(error)) {
+          try {
+            const routeResult = await routeApi.routeById(route.id);
+            const recoveredRoute = getConfirmedStartedRoute(
+              routeResult.route
+            );
+
+            if (recoveredRoute) {
+              return {
+                data: { startRoute: recoveredRoute },
+                notificationSettings,
+                shouldRequireArrivalRegistration,
+              };
+            }
+          } catch (recoveryError) {
+            console.warn(
+              "[route-arrival-notifications] route start result recovery failed",
+              recoveryError instanceof Error
+                ? recoveryError.message
+                : recoveryError
+            );
+          }
+
+          arrivalTransition.isApiOutcomeUnresolved = true;
+
+          throw error;
+        }
+
+        if (
+          notificationSettings.data &&
+          arrivalTransition.didPrepareArrivalTarget
+        ) {
+          try {
+            const rollbackResult =
+              await syncTodayRouteArrivalNotifications(
+                arrivalTransition.sourceRoutes,
+                appLanguage,
+                undefined,
+                {
+                  routeArrivalEnabled:
+                    notificationSettings.data.notificationSettings
+                      .routeArrivalEnabled,
+                  checkCurrentPosition: false,
+                  requestPermissions: shouldRequireArrivalRegistration,
+                  requireConfirmedRegistration:
+                    shouldRequireArrivalRegistration,
+                }
+              );
+
+            if (
+              rollbackResult !== null &&
+              arrivalTransition.journalGeneration !== null
+            ) {
+              resolveRouteArrivalTransition(
+                route.id,
+                arrivalTransition.journalGeneration
+              );
+              arrivalTransition.journalGeneration = null;
+            }
+          } catch (rollbackError) {
+            console.warn(
+              "[route-arrival-notifications] route start rollback failed",
+              rollbackError instanceof Error
+                ? rollbackError.message
+                : rollbackError
+            );
+          }
+        }
+
+        throw error;
+      }
+    },
+    onSuccess: async ({
+      data,
+      notificationSettings,
+      shouldRequireArrivalRegistration,
+    }, variables) => {
+      resolveRouteStartAttempt(
+        String(variables.input.routeId),
+        variables.startAttempt.attempt.generation
+      );
       const nextRoutesData = queryClient.setQueryData<MyRoutesQuery>(
         MY_ROUTES_QUERY_KEY,
         (currentData) => upsertMyRouteCache(currentData, data.startRoute)
@@ -384,12 +716,71 @@ function MyRoutePage() {
       setStartDatePickerTarget(null);
       setStartTimePickerTarget(null);
 
+      if (!shouldRequireArrivalRegistration) {
+        if (notificationSettings.data) {
+          try {
+            const syncResult = await syncTodayRouteArrivalNotifications(
+              nextRoutesData?.myRoutes ?? [data.startRoute],
+              appLanguage,
+              data.startRoute.id,
+              {
+                routeArrivalEnabled:
+                  notificationSettings.data.notificationSettings
+                    .routeArrivalEnabled,
+                checkCurrentPosition: false,
+                requestPermissions: false,
+              }
+            );
+
+            if (
+              syncResult !== null &&
+              variables.arrivalTransition.journalGeneration !== null
+            ) {
+              resolveRouteArrivalTransition(
+                data.startRoute.id,
+                variables.arrivalTransition.journalGeneration
+              );
+              variables.arrivalTransition.journalGeneration = null;
+            }
+          } catch (error) {
+            console.warn(
+              "[route-arrival-notifications] deferred target storage failed",
+              error instanceof Error ? error.message : error
+            );
+          }
+        }
+
+        showToast(text.myRoute.startSuccess);
+        return;
+      }
+
       try {
+        if (notificationSettings.error || !notificationSettings.data) {
+          throw notificationSettings.error ?? new Error(
+            text.myRoute.arrivalNotificationRegistrationError
+          );
+        }
+
         await syncTodayRouteArrivalNotifications(
           nextRoutesData?.myRoutes ?? [data.startRoute],
           appLanguage,
-          data.startRoute.id
+          data.startRoute.id,
+          {
+            routeArrivalEnabled:
+              notificationSettings.data.notificationSettings
+                .routeArrivalEnabled,
+            requestPermissions: true,
+            requireConfirmedRegistration: true,
+          }
         );
+
+        if (variables.arrivalTransition.journalGeneration !== null) {
+          resolveRouteArrivalTransition(
+            data.startRoute.id,
+            variables.arrivalTransition.journalGeneration
+          );
+          variables.arrivalTransition.journalGeneration = null;
+        }
         showToast(text.myRoute.startSuccess);
       } catch (error) {
         const errorMessage =
@@ -407,11 +798,25 @@ function MyRoutePage() {
         );
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (!variables.arrivalTransition.isApiOutcomeUnresolved) {
+        resolveRouteStartAttempt(
+          String(variables.input.routeId),
+          variables.startAttempt.attempt.generation
+        );
+      }
       showToast(
-        error instanceof Error ? error.message : text.myRoute.startError,
-        2600
+        variables.arrivalTransition.isApiOutcomeUnresolved
+          ? "여행 시작 여부를 확인 중이에요. 장소 도착 알림 대상은 그대로 유지돼요."
+          : error instanceof Error
+            ? error.message
+            : text.myRoute.startError,
+        variables.arrivalTransition.isApiOutcomeUnresolved ? 4200 : 2600
       );
+    },
+    onSettled: (_data, _error, variables) => {
+      variables.arrivalTransition.releaseLock();
+      variables.startAttempt.release();
     },
   });
   const routeGroups = useMemo(() => {
@@ -471,46 +876,6 @@ function MyRoutePage() {
         undatedRoutes.length,
     };
   }, [localizedMyRoutes]);
-  useEffect(() => {
-    if (
-      myRoutesQuery.isLoading ||
-      isMyRouteLocalizationLoading ||
-      myRoutesQuery.isError
-    ) {
-      return;
-    }
-
-    const syncRouteArrivalNotifications = async () => {
-      try {
-        await syncTodayRouteArrivalNotifications(
-          localizedMyRoutes,
-          appLanguage
-        );
-      } catch (error) {
-        console.error("Failed to sync route arrival notifications.", error);
-        showToast(
-          error instanceof Error
-            ? error.message
-            : text.home.currentLocationUnavailable,
-          3200
-        );
-      }
-    };
-
-    void syncRouteArrivalNotifications();
-
-    return nativeBridge.events.subscribeAppActive(() => {
-      void syncRouteArrivalNotifications();
-    });
-  }, [
-    appLanguage,
-    isMyRouteLocalizationLoading,
-    localizedMyRoutes,
-    myRoutesQuery.isError,
-    myRoutesQuery.isLoading,
-    showToast,
-    text.home.currentLocationUnavailable,
-  ]);
   const deepLinkedRouteDay = useMemo(() => {
     if (
       !deepLinkRouteId ||
@@ -671,61 +1036,237 @@ function MyRoutePage() {
     showToast(text.myRoute.appendToast);
     navigate("/home");
   };
-  const handleStartRoute = (
-    route: MyRoute,
-    startedAt: string,
-    dayStartedAt: string
-  ) => {
-    if (startRouteMutation.isPending || !startedAt || !dayStartedAt) {
-      return;
-    }
+  const handlePermissionApprovedRouteStart = useCallback(
+    (request: RouteStartRequest, options: RouteStartOptions) => {
+      const startAttempt = activeStartAttemptRef.current;
 
-    startRouteMutation.mutate({
-      routeId: route.id,
-      startedAt,
-      dayStartedAt,
-    });
-  };
-  const openStartTimePicker = (route: MyRoute, startedAt: string) => {
-    if (!startedAt || startedAt > getTodayDateKey()) {
-      showToast(text.myRoute.futureStartError, 2600);
-      return;
-    }
+      if (
+        !startAttempt ||
+        startAttempt.attempt.routeId !== request.route.id
+      ) {
+        showToast(text.myRoute.startAttemptStorageError, 2600);
+        return;
+      }
 
-    setStartDatePickerTarget(null);
-    setStartTimePickerTarget({
-      route,
-      startedAt,
-      timeValue: toTimeValue(getRoutePlannedStartMinutes(route)),
-    });
-  };
-  const handleRequestStartRoute = (route: MyRoute) => {
-    if (startRouteMutation.isPending) {
-      return;
-    }
+      if (isRouteArrivalTransitionLocked()) {
+        activeStartAttemptRef.current = null;
+        resolveRouteStartAttempt(
+          startAttempt.attempt.routeId,
+          startAttempt.attempt.generation
+        );
+        startAttempt.release();
+        showToast("이전 일정 상태를 확인하고 있어요.", 2600);
+        return;
+      }
 
-    const todayKey = getTodayDateKey();
-    const plannedStartKey = getRouteStartDateKey(route);
-    const plannedEndKey = getRouteEndDateKey(route);
+      activeStartAttemptRef.current = null;
+      const cachedRoutes = queryClient.getQueryData<MyRoutesQuery>(
+        MY_ROUTES_QUERY_KEY
+      )?.myRoutes;
 
-    const plannedStartMinutes = getRoutePlannedStartMinutes(route);
-    const plannedTimeLabel = formatMinutesLabel(plannedStartMinutes, text);
-    const currentTimeLabel = formatMinutesLabel(getCurrentMinutes(), text);
+      startRouteMutation.mutate({
+        route: request.route,
+        input: {
+          routeId: request.route.id,
+          startedAt: request.startedAt,
+          dayStartedAt: request.dayStartedAt,
+        },
+        startWithoutLocationPermission:
+          options.startWithoutLocationPermission,
+        startAttempt,
+        arrivalTransition: {
+          sourceRoutes: cachedRoutes?.length
+            ? cachedRoutes
+            : sourceMyRoutes,
+          didPrepareArrivalTarget: false,
+          isApiOutcomeUnresolved: false,
+          journalGeneration: null,
+          releaseLock: acquireRouteArrivalTransitionLock(
+            request.route.id
+          ),
+        },
+      });
+    },
+    [
+      queryClient,
+      showToast,
+      sourceMyRoutes,
+      startRouteMutation,
+      text.myRoute.startAttemptStorageError,
+    ]
+  );
+  const handlePermissionRouteStartCancel = useCallback(
+    (request: RouteStartRequest) => {
+      const startAttempt = activeStartAttemptRef.current;
 
-    if (!plannedStartKey || plannedStartKey === todayKey) {
+      if (
+        !startAttempt ||
+        startAttempt.attempt.routeId !== request.route.id
+      ) {
+        return;
+      }
+
+      activeStartAttemptRef.current = null;
+      resolveRouteStartAttempt(
+        startAttempt.attempt.routeId,
+        startAttempt.attempt.generation
+      );
+      startAttempt.release();
+    },
+    []
+  );
+  const {
+    isPermissionLookupPending,
+    requestRouteStart,
+  } = useRouteStartLocationPermissionGuard({
+    isStartPending: startRouteMutation.isPending,
+    onStart: handlePermissionApprovedRouteStart,
+    onCancel: handlePermissionRouteStartCancel,
+  });
+  const isRouteStartPending =
+    startRouteMutation.isPending || isPermissionLookupPending;
+  const handleStartRoute = useCallback(
+    (
+      route: MyRoute,
+      startedAt: string,
+      dayStartedAt: string,
+      replaceAttemptGeneration?: number
+    ) => {
+      if (isRouteStartPending || !startedAt || !dayStartedAt) {
+        return false;
+      }
+
+      if (
+        isRouteArrivalTransitionLocked() ||
+        (isRouteStartAttemptLocked() &&
+          replaceAttemptGeneration === undefined)
+      ) {
+        showToast("이전 일정 상태를 확인하고 있어요.", 2600);
+        return false;
+      }
+
+      const startAttempt = beginRouteStartAttempt(
+        {
+          routeId: route.id,
+          startedAt,
+          dayStartedAt,
+        },
+        {
+          replaceGeneration: replaceAttemptGeneration,
+        }
+      );
+
+      if (!startAttempt) {
+        showToast(text.myRoute.startAttemptStorageError, 2600);
+        return false;
+      }
+
+      activeStartAttemptRef.current = startAttempt;
+
+      void requestRouteStart({
+        route,
+        startedAt,
+        dayStartedAt,
+      });
+      return true;
+    }, [
+      isRouteStartPending,
+      requestRouteStart,
+      showToast,
+      text.myRoute.startAttemptStorageError,
+    ]
+  );
+  const openStartTimePicker = useCallback(
+    (route: MyRoute, startedAt: string) => {
+      if (!startedAt || startedAt > getTodayDateKey()) {
+        showToast(text.myRoute.futureStartError, 2600);
+        return;
+      }
+
+      setStartDatePickerTarget(null);
+      setStartTimePickerTarget({
+        route,
+        startedAt,
+        timeValue: toTimeValue(getRoutePlannedStartMinutes(route)),
+      });
+    },
+    [showToast, text.myRoute.futureStartError]
+  );
+  const handleRequestStartRoute = useCallback(
+    (route: MyRoute) => {
+      if (isRouteStartPending) {
+        return;
+      }
+
+      const todayKey = getTodayDateKey();
+      const plannedStartKey = getRouteStartDateKey(route);
+      const plannedEndKey = getRouteEndDateKey(route);
+
+      const plannedStartMinutes = getRoutePlannedStartMinutes(route);
+      const plannedTimeLabel = formatMinutesLabel(plannedStartMinutes, text);
+      const currentTimeLabel = formatMinutesLabel(getCurrentMinutes(), text);
+
+      if (!plannedStartKey || plannedStartKey === todayKey) {
+        openModal({
+          title: text.dayRoute.dayStartTitle(1),
+          description: text.myRoute.startTimeReviewDescription(
+            plannedTimeLabel,
+            currentTimeLabel
+          ),
+          detail: text.myRoute.startTimeReviewDetail,
+          actions: [
+            {
+              label: text.myRoute.startNow,
+              variant: "primary",
+              onClick: () =>
+                handleStartRoute(
+                  route,
+                  todayKey,
+                  new Date().toISOString()
+                ),
+            },
+            {
+              label: text.myRoute.chooseStartTime,
+              variant: "secondary",
+              onClick: () => openStartTimePicker(route, todayKey),
+            },
+            {
+              label: text.common.cancel,
+              variant: "secondary",
+            },
+          ],
+        });
+        return;
+      }
+
+      const isPastPlannedPeriod = plannedEndKey
+        ? todayKey > plannedEndKey
+        : false;
+
       openModal({
-        title: text.dayRoute.dayStartTitle(1),
-        description: text.myRoute.startTimeReviewDescription(
-          plannedTimeLabel,
-          currentTimeLabel
-        ),
-        detail: text.myRoute.startTimeReviewDetail,
+        title: isPastPlannedPeriod
+          ? text.myRoute.plannedPeriodPastTitle
+          : text.myRoute.plannedStartDiffTitle,
+        description: isPastPlannedPeriod
+          ? text.myRoute.plannedPeriodDescription(
+              formatDateKeyLabel(plannedStartKey, text),
+              formatDateKeyLabel(plannedEndKey, text)
+            )
+          : text.myRoute.plannedStartDescription(
+              formatDateKeyLabel(plannedStartKey, text),
+              formatDateKeyLabel(todayKey, text)
+            ),
+        detail: text.myRoute.startTodayDetail,
         actions: [
           {
-            label: text.myRoute.startNow,
+            label: text.myRoute.startToday,
             variant: "primary",
             onClick: () =>
-              handleStartRoute(route, todayKey, new Date().toISOString()),
+              handleStartRoute(
+                route,
+                todayKey,
+                new Date().toISOString()
+              ),
           },
           {
             label: text.myRoute.chooseStartTime,
@@ -733,54 +1274,108 @@ function MyRoutePage() {
             onClick: () => openStartTimePicker(route, todayKey),
           },
           {
-            label: text.common.cancel,
+            label: text.myRoute.chooseDate,
             variant: "secondary",
+            onClick: () =>
+              setStartDatePickerTarget({
+                route,
+                startedAt: todayKey,
+              }),
           },
         ],
       });
+    }, [
+      handleStartRoute,
+      isRouteStartPending,
+      openModal,
+      openStartTimePicker,
+      text,
+    ]
+  );
+  useEffect(() => {
+    if (!recoveryRouteId) {
+      handledRecoveryRouteIdRef.current = null;
       return;
     }
 
-    const isPastPlannedPeriod = plannedEndKey ? todayKey > plannedEndKey : false;
+    const recoveryRequestKey = `${recoveryRouteId}:${recoveryGeneration}`;
 
-    openModal({
-      title: isPastPlannedPeriod
-        ? text.myRoute.plannedPeriodPastTitle
-        : text.myRoute.plannedStartDiffTitle,
-      description: isPastPlannedPeriod
-        ? text.myRoute.plannedPeriodDescription(
-            formatDateKeyLabel(plannedStartKey, text),
-            formatDateKeyLabel(plannedEndKey, text)
-          )
-        : text.myRoute.plannedStartDescription(
-            formatDateKeyLabel(plannedStartKey, text),
-            formatDateKeyLabel(todayKey, text)
-          ),
-      detail: text.myRoute.startTodayDetail,
-      actions: [
-        {
-          label: text.myRoute.startToday,
-          variant: "primary",
-          onClick: () =>
-            handleStartRoute(route, todayKey, new Date().toISOString()),
-        },
-        {
-          label: text.myRoute.chooseStartTime,
-          variant: "secondary",
-          onClick: () => openStartTimePicker(route, todayKey),
-        },
-        {
-          label: text.myRoute.chooseDate,
-          variant: "secondary",
-          onClick: () =>
-            setStartDatePickerTarget({
-              route,
-              startedAt: todayKey,
-            }),
-        },
-      ],
-    });
-  };
+    if (
+      !Number.isSafeInteger(recoveryGeneration) ||
+      recoveryGeneration <= 0 ||
+      handledRecoveryRouteIdRef.current === recoveryRequestKey ||
+      myRoutesQuery.isLoading ||
+      myRoutesQuery.isError
+    ) {
+      return;
+    }
+
+    const recoveryAttempt = getRouteStartAttempts().find(
+      (attempt) =>
+        attempt.routeId === recoveryRouteId &&
+        attempt.generation === recoveryGeneration
+    );
+    const route = sourceMyRoutes.find(
+      (candidateRoute) => candidateRoute.id === recoveryRouteId
+    );
+    const clearRecoverySearchParams = () => {
+      const nextSearchParams = new URLSearchParams(searchParams);
+      nextSearchParams.delete(ROUTE_START_RECOVERY_ROUTE_ID_PARAM);
+      nextSearchParams.delete(ROUTE_START_RECOVERY_GENERATION_PARAM);
+      setSearchParams(nextSearchParams, { replace: true });
+    };
+
+    if (!recoveryAttempt) {
+      handledRecoveryRouteIdRef.current = recoveryRequestKey;
+      clearRecoverySearchParams();
+      return;
+    }
+
+    if (!route) {
+      handledRecoveryRouteIdRef.current = recoveryRequestKey;
+      resolveRouteStartAttempt(
+        recoveryAttempt.routeId,
+        recoveryAttempt.generation
+      );
+      clearRecoverySearchParams();
+      showToast(text.myRoute.startError, 2600);
+      return;
+    }
+
+    if (getConfirmedStartedRoute(route)) {
+      handledRecoveryRouteIdRef.current = recoveryRequestKey;
+      resolveRouteStartAttempt(
+        recoveryAttempt.routeId,
+        recoveryAttempt.generation
+      );
+      clearRecoverySearchParams();
+      showToast(text.myRoute.startRecoverySuccess, 2600);
+      return;
+    }
+
+    if (
+      handleStartRoute(
+        route,
+        recoveryAttempt.startedAt,
+        recoveryAttempt.dayStartedAt ?? new Date().toISOString(),
+        recoveryAttempt.generation
+      )
+    ) {
+      handledRecoveryRouteIdRef.current = recoveryRequestKey;
+      clearRecoverySearchParams();
+    }
+  }, [
+    handleStartRoute,
+    myRoutesQuery.isError,
+    myRoutesQuery.isLoading,
+    recoveryGeneration,
+    recoveryRouteId,
+    searchParams,
+    setSearchParams,
+    showToast,
+    sourceMyRoutes,
+    text.myRoute,
+  ]);
   const handleConfirmCustomStartDate = () => {
     if (!startDatePickerTarget) {
       return;
@@ -956,7 +1551,7 @@ function MyRoutePage() {
           day={selectedRouteDay.day}
           onClose={handleCloseSelectedDayRoute}
           onRequestStartRoute={handleRequestStartRoute}
-          isRouteStartPending={startRouteMutation.isPending}
+          isRouteStartPending={isRouteStartPending}
           enableVerificationPhotoPreview
         />
       ) : null}
@@ -964,7 +1559,7 @@ function MyRoutePage() {
       {startDatePickerTarget ? (
         <StartRouteDatePickerModal
           target={startDatePickerTarget}
-          isPending={startRouteMutation.isPending}
+          isPending={isRouteStartPending}
           onChange={(startedAt) =>
             setStartDatePickerTarget((currentTarget) =>
               currentTarget
@@ -983,7 +1578,7 @@ function MyRoutePage() {
       {startTimePickerTarget ? (
         <StartRouteTimePickerModal
           target={startTimePickerTarget}
-          isPending={startRouteMutation.isPending}
+          isPending={isRouteStartPending}
           onChange={(timeValue) =>
             setStartTimePickerTarget((currentTarget) =>
               currentTarget
@@ -998,6 +1593,8 @@ function MyRoutePage() {
           onConfirm={handleConfirmCustomStartTime}
         />
       ) : null}
+
+      {isRouteStartPending ? <RouteStartProgressOverlay /> : null}
     </section>
   );
 }

@@ -5,6 +5,7 @@ import {
   appendRouteDays,
   cloneRoute,
   createRoute,
+  startRoute,
   updateRouteLayout,
   updateRouteStartLocation,
 } from "../src/modules/routes/routeCommand.service.ts";
@@ -381,4 +382,114 @@ test("removing a DAY from layout preserves origins on the surviving DAY IDs", as
   assert.deepEqual(db.state.days.map((day) => [day.id, day.dayIndex, day.startLocation]), [
     ["day-2", 1, secondOrigin], ["day-3", 2, changedOrigin],
   ]);
+});
+
+test("start updates every route record inside one transaction", async () => {
+  const travelStartDate = new Date("2026-08-30T15:00:00.000Z");
+  const actualStartedAt = new Date("2026-08-31T01:30:00.000Z");
+  const db = memoryDatabase({
+    routes: [routeRow()],
+    days: [dayRow(1), dayRow(2, secondOrigin)],
+    stops: [
+      {
+        id: "stop-1",
+        routeId: "route",
+        dayId: "day-1",
+        order: 1,
+        visitStatus: "PENDING",
+      },
+    ],
+  });
+
+  const startedRoute = await startRoute(db.prisma, owner, {
+    routeId: "route",
+    startedAt: travelStartDate,
+    dayStartedAt: actualStartedAt,
+  });
+
+  assert.deepEqual(startedRoute.startedAt, actualStartedAt);
+  assert.deepEqual(db.state.routes[0].travelStartDate, travelStartDate);
+  assert.deepEqual(
+    db.state.days.map((day) => day.date),
+    [travelStartDate, new Date("2026-08-31T15:00:00.000Z")]
+  );
+  assert.deepEqual(db.state.days[0].startedAt, actualStartedAt);
+  assert.ok(
+    db.writes
+      .filter((write) => write.model === "routes" || write.model === "days")
+      .every((write) => write.inTransaction)
+  );
+});
+
+test("repeating start preserves the first start dates and actual time", async () => {
+  const firstTravelStartDate = new Date("2026-08-29T15:00:00.000Z");
+  const firstActualStartedAt = new Date("2026-08-30T01:10:00.000Z");
+  const firstDayDate = new Date("2026-08-29T15:00:00.000Z");
+  const secondDayDate = new Date("2026-08-30T15:00:00.000Z");
+  const db = memoryDatabase({
+    routes: [
+      routeRow({
+        travelStartDate: firstTravelStartDate,
+        travelEndDate: secondDayDate,
+        startedAt: firstActualStartedAt,
+      }),
+    ],
+    days: [
+      dayRow(1, origin, {
+        date: firstDayDate,
+        startedAt: firstActualStartedAt,
+      }),
+      dayRow(2, secondOrigin, { date: secondDayDate }),
+    ],
+  });
+
+  const repeatedRoute = await startRoute(db.prisma, owner, {
+    routeId: "route",
+    startedAt: new Date("2026-08-30T15:00:00.000Z"),
+    dayStartedAt: new Date("2026-08-31T02:20:00.000Z"),
+  });
+
+  assert.deepEqual(repeatedRoute.startedAt, firstActualStartedAt);
+  assert.deepEqual(db.state.routes[0].travelStartDate, firstTravelStartDate);
+  assert.deepEqual(db.state.routes[0].travelEndDate, secondDayDate);
+  assert.deepEqual(
+    db.state.days.map((day) => day.date),
+    [firstDayDate, secondDayDate]
+  );
+  assert.deepEqual(db.state.days[0].startedAt, firstActualStartedAt);
+});
+
+test("start rolls back DAY changes when the route write fails", async () => {
+  const db = memoryDatabase({
+    routes: [routeRow()],
+    days: [dayRow(1), dayRow(2, secondOrigin)],
+  });
+  const updateRoute = db.prisma.route.update.bind(db.prisma.route);
+
+  db.prisma.route.update = async (args) => {
+    if (args.data.startedAt) {
+      throw new Error("forced route start failure");
+    }
+
+    return updateRoute(args);
+  };
+
+  await assert.rejects(
+    startRoute(db.prisma, owner, {
+      routeId: "route",
+      startedAt: new Date("2026-08-30T15:00:00.000Z"),
+      dayStartedAt: new Date("2026-08-31T02:20:00.000Z"),
+    }),
+    /forced route start failure/
+  );
+
+  assert.equal(db.state.routes[0].startedAt, null);
+  assert.equal(db.state.routes[0].travelStartDate, null);
+  assert.deepEqual(
+    db.state.days.map((day) => [day.date, day.startedAt]),
+    [
+      [null, null],
+      [null, null],
+    ]
+  );
 });

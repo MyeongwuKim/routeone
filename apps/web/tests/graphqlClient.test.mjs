@@ -288,6 +288,7 @@ test("GraphQL validation 오류는 HTTP 200이나 400이어도 재시도하지 �
     await assert.rejects(requestMutation(), (error) => {
       assert.equal(error.retryable, false);
       assert.equal(error.status, status);
+      assert.equal(error.code, "GRAPHQL_VALIDATION_FAILED");
       assert.equal(error.message, "Invalid input");
       return true;
     });

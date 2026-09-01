@@ -4,23 +4,10 @@ import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
 import RecentSearchItem from "@/components/search/RecentSearchItem";
-import type {
-  ResolvedMarkerType,
-  SearchFilter,
-} from "@/lib/gangwonAttractionMap";
+import type { HomeSearchResult } from "@/features/home/homeSearchResults";
+import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText } from "@/lib/uiText";
-import type { GangwonAttraction } from "@/lib/visitKoreaTourApi";
-
-export type PlaceSearchResult = {
-  attraction: GangwonAttraction;
-  markerType: ResolvedMarkerType;
-  rank: number | null;
-  distanceLabel: string | null;
-  thumbnailUrl: string;
-  icon: string;
-  touristTrendName: string;
-};
 
 type PlaceSearchPopupProps = {
   searchInputRef: RefObject<HTMLInputElement | null>;
@@ -31,15 +18,15 @@ type PlaceSearchPopupProps = {
   }>;
   searchKeyword: string;
   searchFilter: SearchFilter;
-  searchResults: PlaceSearchResult[];
-  visibleSearchResults: PlaceSearchResult[];
+  searchResults: HomeSearchResult[];
+  visibleSearchResults: HomeSearchResult[];
   recentSearches: string[];
   onKeywordChange: (keyword: string) => void;
   onSearchSubmit: (keyword: string) => void;
   onSearchFilterChange: (filter: SearchFilter) => void;
   onClose: () => void;
   onLoadMore: () => void;
-  onResultClick: (result: PlaceSearchResult) => void;
+  onResultClick: (result: HomeSearchResult) => void;
   onRecentSearchSelect: (keyword: string) => void;
   onRecentSearchDelete: (keyword: string) => void;
   onRecentSearchClear: () => void;

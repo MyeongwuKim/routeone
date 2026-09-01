@@ -33,6 +33,8 @@ import NotificationSettingsSkeleton from "@/components/feedback/NotificationSett
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import RoutePageHeader from "@/components/layout/RoutePageHeader";
 import NativeNotificationInboxSync from "@/features/notifications/NativeNotificationInboxSync";
+import RouteArrivalNotificationCoordinator from "@/features/my-route/components/RouteArrivalNotificationCoordinator";
+import RouteStartAttemptRecoveryCoordinator from "@/features/my-route/components/RouteStartAttemptRecoveryCoordinator";
 import BottomTabLayout from "@/layouts/BottomTabLayout";
 import {
   AUTH_SESSION_REFRESH_INTERVAL_MS,
@@ -654,6 +656,8 @@ function AppRouter() {
     <Router>
       <AuthSessionTracker />
       <NativeNotificationInboxSync />
+      <RouteStartAttemptRecoveryCoordinator />
+      <RouteArrivalNotificationCoordinator />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route element={<RequireAuth />}>

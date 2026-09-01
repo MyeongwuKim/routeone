@@ -3,6 +3,7 @@ import {
   clearAuthToken,
   getAuthToken,
   hasStoredAuthToken,
+  isStoredAuthTokenCurrent,
   setAuthToken,
 } from "@/lib/authToken";
 
@@ -52,11 +53,19 @@ export function refreshAuthSessionIfNeeded() {
   refreshRequest = authApi
     .refreshAuthSession()
     .then((payload) => {
+      if (!isStoredAuthTokenCurrent(token)) {
+        return "skipped" as const;
+      }
+
       setAuthToken(payload.refreshAuthSession.token);
       return "refreshed" as const;
     })
     .catch((error: unknown) => {
       if (isExpiredSessionError(error)) {
+        if (!isStoredAuthTokenCurrent(token)) {
+          return "skipped" as const;
+        }
+
         clearAuthToken("expired");
         return "expired" as const;
       }

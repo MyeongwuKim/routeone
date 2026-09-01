@@ -139,9 +139,14 @@ export const routeApi = {
     );
   },
   startRoute(input: StartRouteInput) {
-    return requestGraphQL(StartRouteDocument, {
-      input,
-    });
+    return requestGraphQL(
+      StartRouteDocument,
+      { input },
+      {
+        maxRetryCount: 1,
+        retryDelayMs: ROUTE_CREATE_RETRY_DELAY_MS,
+      }
+    );
   },
   updateRouteDayStart(input: UpdateRouteDayStartInput) {
     return requestGraphQL(UpdateRouteDayStartDocument, {

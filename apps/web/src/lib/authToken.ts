@@ -65,6 +65,13 @@ export function hasStoredAuthToken() {
   );
 }
 
+export function isStoredAuthTokenCurrent(token: string) {
+  return (
+    typeof window !== "undefined" &&
+    window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) === token
+  );
+}
+
 export function setAuthToken(token: string) {
   const expiresAt = createAuthSessionExpiresAt();
 

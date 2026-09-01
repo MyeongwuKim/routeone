@@ -12,15 +12,16 @@ import HomeMapControls, {
   HomeMapControlsSkeleton,
 } from "@/components/home/HomeMapControls";
 import PlaceSearchPopup from "@/components/search/PlaceSearchPopup";
+import { resolveHomeLoadingPhase } from "@/features/home/homeLoadingPhase";
 import { useHomeAttractionData } from "@/features/home/useHomeAttractionData";
 import { useHomeMap } from "@/features/home/useHomeMap";
+import {
+  useHomeSearch,
+  useHomeSearchResults,
+} from "@/features/home/useHomeSearch";
 import type { ServiceRegion } from "@/data/serviceAreas";
 import { useUiText } from "@/lib/uiText";
 import { getAuthToken } from "@/lib/authToken";
-import {
-  readRecentPlaceSearches,
-  writeRecentPlaceSearches,
-} from "@/lib/recentPlaceSearches";
 import {
   calculateDistanceMeters,
   findRegionContainingLocation,
@@ -28,10 +29,6 @@ import {
 } from "@/lib/gangwonBoundaryUtils";
 import {
   createMapSheetPlaceFromAttraction,
-  formatDistanceLabel,
-  getMarkerTypeIcon,
-  getPlaceSearchMatchPriority,
-  matchesPlaceFilter,
   resolveMarkerType,
   type OpenPlaceSheetFromAttractionOptions,
 } from "@/lib/gangwonAttractionMap";
@@ -45,11 +42,7 @@ import {
 } from "@/stores/serviceAreaStore";
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
-import {
-  PLACE_SEARCH_FILTERS,
-  SEARCH_RESULTS_PAGE_SIZE,
-  TOUR_API_SERVICE_KEY,
-} from "@/pages/HomePage.constants";
+import { TOUR_API_SERVICE_KEY } from "@/pages/HomePage.constants";
 
 function getNearestServiceRegion(
   currentLocation: CurrentLocation,
@@ -111,37 +104,35 @@ function HomePage() {
   const isInitialRegionResolved = useHomeExploreStore(
     (state) => state.isInitialRegionResolved
   );
-  const searchKeyword = useHomeExploreStore((state) => state.searchKeyword);
-  const searchFilter = useHomeExploreStore((state) => state.searchFilter);
-  const visibleSearchState = useHomeExploreStore(
-    (state) => state.visibleSearchState
-  );
   const resolveInitialRegion = useHomeExploreStore(
     (state) => state.resolveInitialRegion
   );
   const selectRegion = useHomeExploreStore((state) => state.selectRegion);
-  const setSearchKeyword = useHomeExploreStore(
-    (state) => state.setSearchKeyword
-  );
-  const setSearchFilter = useHomeExploreStore(
-    (state) => state.setSearchFilter
-  );
-  const resetSearch = useHomeExploreStore((state) => state.resetSearch);
-  const loadMoreSearchResults = useHomeExploreStore(
-    (state) => state.loadMoreSearchResults
-  );
+  const {
+    actions: {
+      appendRecentSearch,
+      clearRecentSearches,
+      closeSearchPopup,
+      loadMore,
+      openSearchPopup,
+      removeRecentSearch,
+      setSearchFilter,
+      setSearchKeyword,
+    },
+    isSearchPopupOpen,
+    placeSearchFilters,
+    recentSearches,
+    searchFilter,
+    searchInputRef,
+    searchKeyword,
+    visibleSearchResultCount,
+  } = useHomeSearch({
+    hasFestivalSource: serviceArea.hasFestivalSource,
+    selectedSigunguCode,
+    serviceAreaId: serviceArea.id,
+  });
   const [canLoadHomeAttractions, setCanLoadHomeAttractions] =
     useState(false);
-  const [isSearchPopupOpen, setIsSearchPopupOpen] = useState(false);
-  const searchResultScope = `${serviceArea.id}:${selectedSigunguCode}:${searchFilter}:${searchKeyword}`;
-  const visibleSearchResultCount =
-    visibleSearchState?.scope === searchResultScope
-      ? visibleSearchState.count
-      : SEARCH_RESULTS_PAGE_SIZE;
-  const [recentSearches, setRecentSearches] = useState<string[]>(
-    readRecentPlaceSearches
-  );
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const currentLocationRef = useRef<CurrentLocation | null>(null);
   const isCurrentLocationLookupPendingRef = useRef(true);
   const notificationInboxQuery = useQuery({
@@ -160,14 +151,13 @@ function HomePage() {
   const {
     attractionData,
     attractionError,
-    attractionLoadingStage,
+    attractionLoadingPhase,
     boundaryBySigunguCode,
     festivalCountBySigunguCode,
     isAttractionFetching,
     isAttractionLoading,
     isBoundaryDataReady,
     isUpdatingPlaceLabelsRef,
-    setAttractionLoadingStage,
     topRankByAttractionId,
     trendNameByAttractionId,
   } = useHomeAttractionData(selectedSigunguCode, serviceArea, {
@@ -226,6 +216,7 @@ function HomePage() {
     focusAttraction,
     focusCurrentLocation,
     isCurrentLocationLookupPending,
+    isRenderingMarkers,
     mapError,
     mapReady,
     mapRef,
@@ -239,10 +230,19 @@ function HomePage() {
     mapCenter: serviceArea.center,
     regions: serviceArea.regions,
     selectedSigunguCode,
-    setAttractionLoadingStage,
     topRankByAttractionId,
     trendNameByAttractionId,
   });
+  const { searchResults, visibleSearchResults } =
+    useHomeSearchResults({
+      attractionData,
+      currentLocation,
+      searchFilter,
+      searchKeyword,
+      topRankByAttractionId,
+      trendNameByAttractionId,
+      visibleSearchResultCount,
+    });
 
   useEffect(() => {
     currentLocationRef.current = currentLocation;
@@ -321,18 +321,26 @@ function HomePage() {
     },
     [focusAttraction, handleSelectAttraction]
   );
-  const shouldShowAttractionLoader =
+  const canShowAttractionLoading =
     Boolean(TOUR_API_SERVICE_KEY) &&
     canLoadHomeAttractions &&
     mapReady &&
-    !mapError &&
-    (attractionLoadingStage !== "idle" || isAttractionFetching);
+    !mapError;
   const shouldShowInitialRegionLoader =
     !developmentFixedRegion &&
     !isInitialRegionResolved &&
     !mapError;
   const shouldShowMapSetupSkeleton = !isInitialRegionResolved;
   const shouldShowInteractiveMapUi = isInitialRegionResolved;
+  const homeLoadingPhase = resolveHomeLoadingPhase({
+    attractionLoadingPhase,
+    canShowAttractionLoading,
+    hasAttractionData: Boolean(attractionData),
+    isAttractionFetching,
+    isInitialRegionLoading: shouldShowInitialRegionLoader,
+    isRenderingMarkers,
+    isSearchPopupOpen,
+  });
   const orderedRegions = useMemo(
     () =>
       [...serviceArea.regions].sort((left, right) =>
@@ -363,18 +371,6 @@ function HomePage() {
         label: text.placeSheet.referenceLocation(selectedRegionLabel),
         isCurrentLocation: false,
       };
-  const placeSearchFilters = useMemo(
-    () =>
-      PLACE_SEARCH_FILTERS.filter(
-        (filter) =>
-          serviceArea.hasFestivalSource || filter.key !== "festival"
-      ).map((filter) => ({
-          ...filter,
-          label: text.search.filters[filter.key],
-        })),
-    [serviceArea.hasFestivalSource, text]
-  );
-
   useEffect(() => {
     const festivalRegionCode = searchParams.get("festivalRegion");
     const festivalTitle = searchParams.get("festivalTitle")?.trim() ?? "";
@@ -402,13 +398,13 @@ function HomePage() {
     nextSearchParams.delete("source");
     const frameId = requestAnimationFrame(() => {
       selectRegion(festivalRegion.sigunguCode);
-      setSearchFilter("festival");
-      setSearchKeyword(
-        festivalTitle ||
+      openSearchPopup({
+        filter: "festival",
+        keyword:
+          festivalTitle ||
           text.labels.regions[festivalRegion.label] ||
-          festivalRegion.label
-      );
-      setIsSearchPopupOpen(true);
+          festivalRegion.label,
+      });
       setSearchParams(nextSearchParams, { replace: true });
     });
 
@@ -416,98 +412,13 @@ function HomePage() {
       cancelAnimationFrame(frameId);
     };
   }, [
+    openSearchPopup,
     searchParams,
     selectRegion,
-    setSearchFilter,
-    setSearchKeyword,
     setSearchParams,
     serviceArea,
     text,
   ]);
-
-
-  const searchResults = useMemo(() => {
-    if (!attractionData) {
-      return [];
-    }
-
-    const keyword = searchKeyword.trim();
-
-    return attractionData.allAttractions
-      .map((attraction) => {
-        const markerType = resolveMarkerType(attraction, attractionData.lclsNameByCode);
-        const rank = topRankByAttractionId.get(attraction.id) ?? null;
-        const searchMatchPriority = getPlaceSearchMatchPriority(
-          attraction.title,
-          attraction.address,
-          markerType.typeName,
-          keyword
-        );
-        const distanceM = currentLocation
-          ? calculateDistanceMeters(currentLocation, {
-              lat: attraction.lat,
-              lng: attraction.lng,
-            })
-          : null;
-
-        const matchesFilter = matchesPlaceFilter(attraction, markerType, searchFilter);
-
-        return {
-          attraction,
-          markerType,
-          rank,
-          distanceM,
-          distanceLabel: formatDistanceLabel(distanceM),
-          thumbnailUrl: attraction.firstImage || attraction.secondImage,
-          icon: getMarkerTypeIcon(markerType),
-          touristTrendName: trendNameByAttractionId.get(attraction.id) ?? attraction.title,
-          searchMatchPriority,
-          matchesFilter,
-        };
-      })
-      .filter(
-        (item) => item.matchesFilter && item.searchMatchPriority !== null
-      )
-      .sort((a, b) => {
-        if (a.searchMatchPriority !== b.searchMatchPriority) {
-          return (
-            (a.searchMatchPriority ?? Number.POSITIVE_INFINITY) -
-            (b.searchMatchPriority ?? Number.POSITIVE_INFINITY)
-          );
-        }
-        if (a.distanceM != null && b.distanceM != null) {
-          return a.distanceM - b.distanceM;
-        }
-        if (a.distanceM != null) {
-          return -1;
-        }
-        if (b.distanceM != null) {
-          return 1;
-        }
-        if (a.rank != null && b.rank != null) {
-          return a.rank - b.rank;
-        }
-        if (a.rank != null) {
-          return -1;
-        }
-        if (b.rank != null) {
-          return 1;
-        }
-        return a.attraction.title.localeCompare(b.attraction.title, "ko");
-      })
-  }, [
-    attractionData,
-    currentLocation,
-    searchFilter,
-    searchKeyword,
-    topRankByAttractionId,
-    trendNameByAttractionId,
-  ]);
-
-  const visibleSearchResults = useMemo(
-    () => searchResults.slice(0, visibleSearchResultCount),
-    [searchResults, visibleSearchResultCount]
-  );
   const routeInsertCandidatePlaces = useMemo(() => {
     if (!attractionData) {
       return [];
@@ -540,57 +451,8 @@ function HomePage() {
     trendNameByAttractionId,
   ]);
 
-  const appendRecentSearch = (keyword: string) => {
-    const trimmedKeyword = keyword.trim();
-    if (!trimmedKeyword) {
-      return;
-    }
-    setRecentSearches((previous) =>
-      writeRecentPlaceSearches([
-        trimmedKeyword,
-        ...previous.filter((item) => item !== trimmedKeyword),
-      ])
-    );
-  };
-  const removeRecentSearch = (keyword: string) => {
-    setRecentSearches((previous) =>
-      writeRecentPlaceSearches(
-        previous.filter((item) => item !== keyword)
-      )
-    );
-  };
-  const clearRecentSearches = () => {
-    setRecentSearches(writeRecentPlaceSearches([]));
-  };
-  const closeSearchPopup = useCallback(() => {
-    setIsSearchPopupOpen(false);
-    resetSearch();
-  }, [resetSearch]);
-
   useEffect(() => {
-    if (!isSearchPopupOpen) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-    });
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isSearchPopupOpen]);
-
-  useEffect(() => {
-    if (isSearchPopupOpen) {
-      hideLoading();
-      return;
-    }
-
-    if (shouldShowInitialRegionLoader) {
+    if (homeLoadingPhase === "location") {
       showLoading({
         title: text.home.loadingLocationTitle,
         description: text.home.loadingLocationDescription,
@@ -600,17 +462,7 @@ function HomePage() {
       return;
     }
 
-    if (!shouldShowAttractionLoader) {
-      hideLoading();
-      return;
-    }
-
-    if (
-      attractionLoadingStage === "fetching-places" ||
-      (attractionLoadingStage === "idle" &&
-        isAttractionFetching &&
-        !attractionData)
-    ) {
+    if (homeLoadingPhase === "places") {
       showLoading({
         title: text.home.loadingPlacesTitle,
         description: text.home.loadingPlacesDescription,
@@ -620,17 +472,7 @@ function HomePage() {
       return;
     }
 
-    if (attractionLoadingStage === "ranking" || isAttractionFetching) {
-      if (attractionLoadingStage === "localizing") {
-        showLoading({
-          title: text.home.loadingEnglishTitle,
-          description: text.home.loadingEnglishDescription,
-          footerText: text.home.loadingEnglishFooter,
-          animation: "searching",
-        });
-        return;
-      }
-
+    if (homeLoadingPhase === "ranking") {
       showLoading({
         title: text.home.loadingRankingTitle,
         description: text.home.loadingRankingDescription,
@@ -640,46 +482,24 @@ function HomePage() {
       return;
     }
 
+    if (homeLoadingPhase !== "markers") {
+      hideLoading();
+      return;
+    }
+
     showLoading({
       title: text.home.loadingMarkersTitle,
       description: text.home.loadingMarkersDescription,
       footerText: text.home.loadingFooter,
       animation: "map-rendering",
     });
-  }, [
-    attractionLoadingStage,
-    attractionData,
-    isAttractionFetching,
-    hideLoading,
-    isSearchPopupOpen,
-    shouldShowAttractionLoader,
-    shouldShowInitialRegionLoader,
-    showLoading,
-    text,
-  ]);
+  }, [homeLoadingPhase, hideLoading, showLoading, text]);
 
   useEffect(() => {
     return () => {
       hideLoading();
     };
   }, [hideLoading]);
-
-  useEffect(() => {
-    if (!isSearchPopupOpen) {
-      return;
-    }
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeSearchPopup();
-      }
-    };
-
-    window.addEventListener("keydown", handleEscape);
-    return () => {
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [closeSearchPopup, isSearchPopupOpen]);
 
   return (
     <section className="relative h-full overflow-hidden bg-brand-50">
@@ -708,7 +528,7 @@ function HomePage() {
           isCurrentLocationLookupPending={isCurrentLocationLookupPending}
           isMapReady={mapReady}
           onOpenNotifications={() => navigate("/notifications")}
-          onOpenSearch={() => setIsSearchPopupOpen(true)}
+          onOpenSearch={() => openSearchPopup()}
           onOpenSavedList={() => {
             resetSheet();
             openSavedList();
@@ -789,10 +609,7 @@ function HomePage() {
         }}
         onRemovePlace={removeSavedPlace}
         onClearPlaces={clearSavedPlaces}
-        onRequestSearchPlace={() => {
-          setIsSearchPopupOpen(true);
-          window.setTimeout(() => searchInputRef.current?.focus(), 0);
-        }}
+        onRequestSearchPlace={() => openSearchPopup()}
       />
       {isSearchPopupOpen ? (
         <PlaceSearchPopup
@@ -808,12 +625,7 @@ function HomePage() {
           onSearchSubmit={appendRecentSearch}
           onSearchFilterChange={setSearchFilter}
           onClose={closeSearchPopup}
-          onLoadMore={() => {
-            loadMoreSearchResults(
-              searchResultScope,
-              SEARCH_RESULTS_PAGE_SIZE
-            );
-          }}
+          onLoadMore={loadMore}
           onResultClick={(item) => {
             appendRecentSearch(searchKeyword);
             openPlaceSheetFromAttraction({

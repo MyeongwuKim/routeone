@@ -3,29 +3,16 @@ import {
   useEffect,
   useRef,
   useState,
-  type Dispatch,
   type RefObject,
-  type SetStateAction,
 } from "react";
-import {
-  createBadgeMarkerIconHtml,
-  createCurrentLocationMarkerIconHtml,
-  CURRENT_LOCATION_MARKER_SIZE,
-} from "@/components/map/NaverMapMarkerIcon";
 import type { ServiceRegion } from "@/data/serviceAreas";
-import {
-  convertUtmkToWgs84,
-  type CurrentLocation,
-  type GeoMultiPolygon,
+import type {
+  CurrentLocation,
+  GeoMultiPolygon,
 } from "@/lib/gangwonBoundaryUtils";
-import {
-  buildSpreadMarkerPositionMap,
-  getAttractionMarkerKey,
-  matchesPlaceFilter,
-  resolveMarkerType,
-  type AttractionLoadingStage,
-  type OpenPlaceSheetFromAttractionOptions,
-  type SearchFilter,
+import type {
+  OpenPlaceSheetFromAttractionOptions,
+  SearchFilter,
 } from "@/lib/gangwonAttractionMap";
 import { enableNaverMapPointerInteractions } from "@/lib/naverMapInteractions";
 import {
@@ -44,46 +31,27 @@ import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useCurrentPositionStore } from "@/stores/currentPositionStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
+import type {
+  HomeMapBounds,
+  HomeMapInstance,
+  HomeMapRuntime,
+  HomeNaverMaps,
+} from "./map/homeMapTypes";
+import { useHomeAttractionMarkerOverlay } from "./map/useHomeAttractionMarkerOverlay";
+import { useHomeCurrentLocationOverlay } from "./map/useHomeCurrentLocationOverlay";
+import { useHomeRegionBoundaryOverlay } from "./map/useHomeRegionBoundaryOverlay";
 import type { HomeAttractionQueryData } from "./useHomeAttractionData";
 
-const MARKER_RENDER_CHUNK_SIZE = 80;
 const MAP_BOUNDS_RETRY_LIMIT = 6;
 const MAP_BOUNDS_RETRY_DELAY_MS = 120;
 const MAP_READY_FALLBACK_DELAY_MS = 650;
 
-type HomeMapInstance = {
-  fitBounds: (bounds: unknown) => void;
-  getZoom: () => number;
-  panTo?: (position: unknown, options?: { duration: number }) => void;
-  setCenter: (position: unknown) => void;
-  setOptions?: (
-    optionsOrKey: Record<string, unknown> | string,
-    value?: unknown
-  ) => void;
-  setZoom: (zoom: number) => void;
-};
-
-type HomeMapOverlay = {
-  setMap: (map: null) => void;
-};
-
-type HomeMapBounds = {
-  extend: (position: unknown) => void;
-};
-
-type CoordinateLike = {
-  lat?: (() => number) | number;
-  lng?: (() => number) | number;
-  x?: number;
-  y?: number;
-  _lat?: number;
-  _lng?: number;
-};
-
 type HomeMapStatus = {
-  language: string;
-  isReady: boolean;
   error: string | null;
+  isReady: boolean;
+  language: string;
+  runtime: HomeMapRuntime | null;
+  sessionKey: string;
 };
 
 type UseHomeMapOptions = {
@@ -98,9 +66,6 @@ type UseHomeMapOptions = {
   mapCenter: CurrentLocation;
   regions: readonly ServiceRegion[];
   selectedSigunguCode: string;
-  setAttractionLoadingStage: Dispatch<
-    SetStateAction<AttractionLoadingStage>
-  >;
   topRankByAttractionId: Map<string, number>;
   trendNameByAttractionId: Map<string, string>;
 };
@@ -129,7 +94,6 @@ export function useHomeMap({
   mapCenter,
   regions,
   selectedSigunguCode,
-  setAttractionLoadingStage,
   topRankByAttractionId,
   trendNameByAttractionId,
 }: UseHomeMapOptions) {
@@ -146,57 +110,30 @@ export function useHomeMap({
   );
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<HomeMapInstance | null>(null);
-  const naverMapsRef = useRef<
-    NonNullable<Window["naver"]>["maps"] | null
-  >(null);
-  const boundaryPolygonRefs = useRef<HomeMapOverlay[]>([]);
-  const markerRefs = useRef<HomeMapOverlay[]>([]);
-  const currentLocationOverlayRefs = useRef<HomeMapOverlay[]>([]);
-  const markerListenerRefs = useRef<unknown[]>([]);
+  const naverMapsRef = useRef<HomeNaverMaps | null>(null);
   const mapBoundsMoveRequestRef = useRef(0);
-  const hasRenderedAttractionMarkersRef = useRef(false);
-  const onSelectAttractionRef = useRef(onSelectAttraction);
-  const isCurrentLocationLookupPending =
-    currentLocationStatus === "idle" || currentLocationStatus === "loading";
+  const mapBoundsRetryTimeoutIdsRef = useRef<Set<number>>(new Set());
+  const mapSessionKey = `${appLanguage}:${mapCenter.lat}:${mapCenter.lng}`;
   const [mapStatus, setMapStatus] = useState<HomeMapStatus>({
-    language: appLanguage,
-    isReady: false,
     error: null,
+    isReady: false,
+    language: appLanguage,
+    runtime: null,
+    sessionKey: mapSessionKey,
   });
-  const mapReady =
-    mapStatus.language === appLanguage && mapStatus.isReady;
+  const runtime =
+    mapStatus.sessionKey === mapSessionKey && mapStatus.isReady
+      ? mapStatus.runtime
+      : null;
+  const mapReady = runtime !== null;
   const mapError = !NCP_KEY_ID
     ? text.home.mapMissingKey
-    : mapStatus.language === appLanguage
+    : mapStatus.sessionKey === mapSessionKey &&
+        mapStatus.language === appLanguage
       ? mapStatus.error
       : null;
-
-  useEffect(() => {
-    onSelectAttractionRef.current = onSelectAttraction;
-  }, [onSelectAttraction]);
-
-  const clearMarkers = useCallback(() => {
-    const naverMaps = naverMapsRef.current;
-
-    markerListenerRefs.current.forEach((listener) => {
-      naverMaps?.Event?.removeListener(listener);
-    });
-    markerRefs.current.forEach((marker) => marker.setMap(null));
-    markerRefs.current = [];
-    markerListenerRefs.current = [];
-  }, []);
-
-  const clearBoundaryPolygons = useCallback(() => {
-    boundaryPolygonRefs.current.forEach((polygon) => polygon.setMap(null));
-    boundaryPolygonRefs.current = [];
-  }, []);
-
-  const clearCurrentLocationOverlays = useCallback(() => {
-    currentLocationOverlayRefs.current.forEach((overlay) =>
-      overlay.setMap(null)
-    );
-    currentLocationOverlayRefs.current = [];
-  }, []);
+  const isCurrentLocationLookupPending =
+    currentLocationStatus === "idle" || currentLocationStatus === "loading";
 
   const focusAttraction = useCallback((attraction: GangwonAttraction) => {
     const mapInstance = mapInstanceRef.current;
@@ -247,146 +184,40 @@ export function useHomeMap({
     return true;
   }, [currentLocation, requestCurrentPosition]);
 
-  const drawSelectedRegionBoundary = useCallback(() => {
-    const mapInstance = mapInstanceRef.current;
-    const naverMaps = naverMapsRef.current;
-
-    if (!mapInstance || !naverMaps) {
-      return null;
-    }
-
-    clearBoundaryPolygons();
-    const multiPolygon = boundaryBySigunguCode[selectedSigunguCode];
-    if (!multiPolygon || multiPolygon.length === 0) {
-      return null;
-    }
-
-    const regionBounds = new naverMaps.LatLngBounds() as HomeMapBounds;
-    const isKoreaLatLng = (lat: number, lng: number) =>
-      lat >= 32 && lat <= 40 && lng >= 123 && lng <= 133;
-    const readLatLng = (coord: unknown) => {
-      if (!coord || typeof coord !== "object") {
-        return null;
-      }
-
-      const value = coord as CoordinateLike;
-      const lat =
-        typeof value.lat === "function"
-          ? value.lat()
-          : typeof value.y === "number"
-            ? value.y
-            : typeof value._lat === "number"
-              ? value._lat
-              : null;
-      const lng =
-        typeof value.lng === "function"
-          ? value.lng()
-          : typeof value.x === "number"
-            ? value.x
-            : typeof value._lng === "number"
-              ? value._lng
-              : null;
-
-      if (
-        typeof lat !== "number" ||
-        typeof lng !== "number" ||
-        !Number.isFinite(lat) ||
-        !Number.isFinite(lng)
-      ) {
-        return null;
-      }
-
-      return { lat, lng };
-    };
-
-    const toLatLng = ([x, y]: [number, number]) => {
-      if (Math.abs(x) <= 180 && Math.abs(y) <= 90) {
-        return isKoreaLatLng(y, x) ? new naverMaps.LatLng(y, x) : null;
-      }
-
-      const transCoord = naverMaps.TransCoord;
-      const convertCandidates = [
-        () => transCoord?.fromUTMKToLatLng?.(new naverMaps.Point(x, y)),
-        () => transCoord?.fromTM128ToLatLng?.(new naverMaps.Point(x, y)),
-        () => transCoord?.fromNaverToLatLng?.(new naverMaps.Point(x, y)),
-      ];
-
-      for (const convert of convertCandidates) {
-        const parsed = readLatLng(convert());
-        if (parsed && isKoreaLatLng(parsed.lat, parsed.lng)) {
-          return new naverMaps.LatLng(parsed.lat, parsed.lng);
-        }
-      }
-
-      const converted = convertUtmkToWgs84(x, y);
-      if (converted && isKoreaLatLng(converted.lat, converted.lng)) {
-        return new naverMaps.LatLng(converted.lat, converted.lng);
-      }
-
-      return null;
-    };
-
-    multiPolygon.forEach((polygon) => {
-      const paths = polygon
-        .map((ring) =>
-          ring
-            .map((point) => {
-              const latLng = toLatLng(point);
-              if (latLng) {
-                regionBounds.extend(latLng);
-              }
-              return latLng;
-            })
-            .filter((point): point is NonNullable<typeof point> => point != null)
-        )
-        .filter((ring) => ring.length > 0);
-
-      if (paths.length === 0) {
-        return;
-      }
-
-      const boundaryPolygon = new naverMaps.Polygon({
-        map: mapInstance,
-        paths,
-        strokeColor: "#0d9488",
-        strokeWeight: 2,
-        strokeOpacity: 0.95,
-        fillColor: "#14b8a6",
-        fillOpacity: 0.1,
-        zIndex: 880,
-      }) as HomeMapOverlay;
-      boundaryPolygonRefs.current.push(boundaryPolygon);
-
-      paths.forEach((path) => {
-        const boundaryHaloLine = new naverMaps.Polyline({
-          map: mapInstance,
-          path,
-          strokeColor: "#ffffff",
-          strokeWeight: 8,
-          strokeOpacity: 0.9,
-          zIndex: 900,
-          clickable: false,
-        }) as HomeMapOverlay;
-        const boundaryLine = new naverMaps.Polyline({
-          map: mapInstance,
-          path,
-          strokeColor: "#0d9488",
-          strokeWeight: 4,
-          strokeOpacity: 1,
-          zIndex: 901,
-          clickable: false,
-        }) as HomeMapOverlay;
-
-        boundaryPolygonRefs.current.push(boundaryHaloLine, boundaryLine);
-      });
+  const {
+    clearBoundaryPolygons,
+    drawSelectedRegionBoundary,
+  } = useHomeRegionBoundaryOverlay({
+    boundaryBySigunguCode,
+    runtime,
+    selectedSigunguCode,
+  });
+  const { clearCurrentLocationOverlays } =
+    useHomeCurrentLocationOverlay({
+      currentLocation,
+      currentLocationTitle: text.home.currentLocation,
+      runtime,
+    });
+  const { clearMarkers, isRenderingMarkers } =
+    useHomeAttractionMarkerOverlay({
+      attractionData,
+      focusAttraction,
+      isUpdatingPlaceLabelsRef,
+      onSelectAttraction,
+      runtime,
+      searchFilter,
+      selectedSigunguCode,
+      topRankByAttractionId,
+      trendNameByAttractionId,
     });
 
-    return boundaryPolygonRefs.current.length > 0 ? regionBounds : null;
-  }, [
-    boundaryBySigunguCode,
-    clearBoundaryPolygons,
-    selectedSigunguCode,
-  ]);
+  const cancelPendingMapBoundsMove = useCallback(() => {
+    mapBoundsMoveRequestRef.current += 1;
+    mapBoundsRetryTimeoutIdsRef.current.forEach((timeoutId) => {
+      window.clearTimeout(timeoutId);
+    });
+    mapBoundsRetryTimeoutIdsRef.current.clear();
+  }, []);
 
   const moveMapToBounds = useCallback(
     (bounds: HomeMapBounds, requestId: number) => {
@@ -406,10 +237,14 @@ export function useHomeMap({
             attempt < MAP_BOUNDS_RETRY_LIMIT &&
             isNaverMapModelPendingError(error)
           ) {
-            window.setTimeout(
-              () => move(attempt + 1),
+            const timeoutId = window.setTimeout(
+              () => {
+                mapBoundsRetryTimeoutIdsRef.current.delete(timeoutId);
+                move(attempt + 1);
+              },
               MAP_BOUNDS_RETRY_DELAY_MS
             );
+            mapBoundsRetryTimeoutIdsRef.current.add(timeoutId);
             return;
           }
 
@@ -422,40 +257,42 @@ export function useHomeMap({
     []
   );
 
-  const fitMapToSelectedRegion = useCallback(
-    () => {
-      const mapInstance = mapInstanceRef.current;
-      const naverMaps = naverMapsRef.current;
-      const currentRegion =
-        regions.find(
-          (region) => region.sigunguCode === selectedSigunguCode
-        ) ?? regions[0];
+  const fitMapToSelectedRegion = useCallback(() => {
+    if (!runtime) {
+      return;
+    }
 
-      if (!mapInstance || !naverMaps || !currentRegion) {
-        return;
-      }
+    const currentRegion =
+      regions.find(
+        (region) => region.sigunguCode === selectedSigunguCode
+      ) ?? regions[0];
+    if (!currentRegion) {
+      return;
+    }
 
-      const moveRequestId = mapBoundsMoveRequestRef.current + 1;
-      mapBoundsMoveRequestRef.current = moveRequestId;
-      const regionBounds = drawSelectedRegionBoundary();
-      if (regionBounds) {
-        moveMapToBounds(regionBounds, moveRequestId);
-        return;
-      }
+    cancelPendingMapBoundsMove();
+    const moveRequestId = mapBoundsMoveRequestRef.current + 1;
+    mapBoundsMoveRequestRef.current = moveRequestId;
+    const regionBounds = drawSelectedRegionBoundary();
+    if (regionBounds) {
+      moveMapToBounds(regionBounds, moveRequestId);
+      return;
+    }
 
-      const center = new naverMaps.LatLng(
-        currentRegion.center.lat,
-        currentRegion.center.lng
-      );
-      mapInstance.setCenter(center);
-      mapInstance.setZoom(10);
-    }, [
-      drawSelectedRegionBoundary,
-      moveMapToBounds,
-      regions,
-      selectedSigunguCode,
-    ]
-  );
+    const center = new runtime.naverMaps.LatLng(
+      currentRegion.center.lat,
+      currentRegion.center.lng
+    );
+    runtime.map.setCenter(center);
+    runtime.map.setZoom(10);
+  }, [
+    cancelPendingMapBoundsMove,
+    drawSelectedRegionBoundary,
+    moveMapToBounds,
+    regions,
+    runtime,
+    selectedSigunguCode,
+  ]);
 
   useEffect(() => {
     void requestCurrentPosition().catch(() => undefined);
@@ -473,52 +310,69 @@ export function useHomeMap({
     let mapReadyListener: unknown = null;
     let readyFallbackTimeoutId: number | null = null;
     let resizeFrameId: number | null = null;
+    let hasAuthFailed = false;
     const resizeTimeoutIds: number[] = [];
-    const resetFrameId = window.requestAnimationFrame(() => {
-      setMapStatus({
-        language: appLanguage,
-        isReady: false,
-        error: null,
-      });
-    });
+    let initializedRuntime: HomeMapRuntime | null = null;
 
     container.innerHTML = "";
-    window.navermap_authFailure = () => {
-      const authOrigin = getNaverMapAuthOrigin();
-      const authHref = getNaverMapAuthHref();
-
-      setMapStatus({
-        language: appLanguage,
-        isReady: false,
-        error: text.home.mapAuthError(authOrigin, authHref),
-      });
-    };
-
-    const markMapReady = () => {
+    const handleMapAuthFailure = () => {
       if (isDisposed) {
         return;
       }
 
+      hasAuthFailed = true;
+      if (readyFallbackTimeoutId !== null) {
+        window.clearTimeout(readyFallbackTimeoutId);
+        readyFallbackTimeoutId = null;
+      }
+      if (mapReadyListener) {
+        initializedRuntime?.naverMaps.Event?.removeListener(
+          mapReadyListener
+        );
+        mapReadyListener = null;
+      }
+      const authOrigin = getNaverMapAuthOrigin();
+      const authHref = getNaverMapAuthHref();
+
       setMapStatus({
+        error: text.home.mapAuthError(authOrigin, authHref),
+        isReady: false,
         language: appLanguage,
-        isReady: true,
+        runtime: null,
+        sessionKey: mapSessionKey,
+      });
+    };
+    window.navermap_authFailure = handleMapAuthFailure;
+
+    const markMapReady = () => {
+      if (isDisposed || hasAuthFailed || !initializedRuntime) {
+        return;
+      }
+
+      setMapStatus({
         error: null,
+        isReady: true,
+        language: appLanguage,
+        runtime: initializedRuntime,
+        sessionKey: mapSessionKey,
       });
     };
 
     const initializeMap = async () => {
       try {
         await loadNaverMapSdk(NCP_KEY_ID, appLanguage);
-        if (isDisposed) {
+        if (isDisposed || hasAuthFailed) {
           return;
         }
 
         const naverMaps = window.naver?.maps;
         if (!naverMaps) {
           setMapStatus({
-            language: appLanguage,
-            isReady: false,
             error: text.home.mapSdkMissing,
+            isReady: false,
+            language: appLanguage,
+            runtime: null,
+            sessionKey: mapSessionKey,
           });
           return;
         }
@@ -540,11 +394,19 @@ export function useHomeMap({
         }) as HomeMapInstance;
 
         mapInstanceRef.current = mapInstance;
+        initializedRuntime = {
+          map: mapInstance,
+          naverMaps,
+          sessionKey: mapSessionKey,
+        };
         applyNaverMapTheme(mapInstance, shouldUseDarkMap);
         enableNaverMapPointerInteractions(mapInstance);
+        if (hasAuthFailed) {
+          return;
+        }
 
         const forceResize = () => {
-          if (mapInstanceRef.current) {
+          if (mapInstanceRef.current === mapInstance) {
             naverMaps.Event.trigger(mapInstance, "resize");
           }
         };
@@ -557,9 +419,7 @@ export function useHomeMap({
             markMapReady();
           }
         );
-        resizeFrameId = window.requestAnimationFrame(() => {
-          forceResize();
-        });
+        resizeFrameId = window.requestAnimationFrame(forceResize);
         readyFallbackTimeoutId = window.setTimeout(
           markMapReady,
           MAP_READY_FALLBACK_DELAY_MS
@@ -574,11 +434,13 @@ export function useHomeMap({
         resizeObserver = new ResizeObserver(forceResize);
         resizeObserver.observe(container);
       } catch {
-        if (!isDisposed) {
+        if (!isDisposed && !hasAuthFailed) {
           setMapStatus({
-            language: appLanguage,
-            isReady: false,
             error: text.home.mapLoadError,
+            isReady: false,
+            language: appLanguage,
+            runtime: null,
+            sessionKey: mapSessionKey,
           });
         }
       }
@@ -588,8 +450,7 @@ export function useHomeMap({
 
     return () => {
       isDisposed = true;
-      mapBoundsMoveRequestRef.current += 1;
-      window.cancelAnimationFrame(resetFrameId);
+      cancelPendingMapBoundsMove();
       if (readyFallbackTimeoutId !== null) {
         window.clearTimeout(readyFallbackTimeoutId);
       }
@@ -603,255 +464,55 @@ export function useHomeMap({
       clearBoundaryPolygons();
       clearCurrentLocationOverlays();
       if (mapReadyListener) {
-        naverMapsRef.current?.Event?.removeListener(mapReadyListener);
+        initializedRuntime?.naverMaps.Event?.removeListener(mapReadyListener);
       }
       if (handleResize) {
         window.removeEventListener("resize", handleResize);
       }
       resizeObserver?.disconnect();
-      mapInstanceRef.current = null;
-      naverMapsRef.current = null;
+      if (mapInstanceRef.current === initializedRuntime?.map) {
+        mapInstanceRef.current = null;
+      }
+      if (naverMapsRef.current === initializedRuntime?.naverMaps) {
+        naverMapsRef.current = null;
+      }
       closeSheet();
-      window.navermap_authFailure = undefined;
+      if (window.navermap_authFailure === handleMapAuthFailure) {
+        window.navermap_authFailure = undefined;
+      }
       container.innerHTML = "";
     };
   }, [
     appLanguage,
+    cancelPendingMapBoundsMove,
     clearBoundaryPolygons,
     clearCurrentLocationOverlays,
     clearMarkers,
     closeSheet,
     mapCenter.lat,
     mapCenter.lng,
+    mapSessionKey,
     text,
   ]);
 
   useEffect(() => {
-    applyNaverMapTheme(mapInstanceRef.current, isDarkMode);
-    enableNaverMapPointerInteractions(mapInstanceRef.current);
-  }, [isDarkMode]);
+    applyNaverMapTheme(runtime?.map ?? null, isDarkMode);
+    enableNaverMapPointerInteractions(runtime?.map ?? null);
+  }, [isDarkMode, runtime]);
 
   useEffect(() => {
-    if (mapReady && isBoundaryDataReady) {
+    if (runtime && isBoundaryDataReady) {
       fitMapToSelectedRegion();
     }
-  }, [fitMapToSelectedRegion, isBoundaryDataReady, mapReady]);
-
-  useEffect(() => {
-    const mapInstance = mapInstanceRef.current;
-    const naverMaps = naverMapsRef.current;
-
-    clearCurrentLocationOverlays();
-    if (!mapReady || !mapInstance || !naverMaps || !currentLocation) {
-      return;
-    }
-
-    const position = new naverMaps.LatLng(
-      currentLocation.lat,
-      currentLocation.lng
-    );
-    const accuracyMeters = currentLocation.accuracyMeters;
-
-    if (
-      typeof accuracyMeters === "number" &&
-      Number.isFinite(accuracyMeters) &&
-      accuracyMeters > 0
-    ) {
-      const accuracyCircle = new naverMaps.Circle({
-        map: mapInstance,
-        center: position,
-        radius: accuracyMeters,
-        strokeColor: "#2563eb",
-        strokeWeight: 1,
-        strokeOpacity: 0.45,
-        fillColor: "#60a5fa",
-        fillOpacity: 0.14,
-        clickable: false,
-        zIndex: 1000,
-      }) as HomeMapOverlay;
-      currentLocationOverlayRefs.current.push(accuracyCircle);
-    }
-
-    const marker = new naverMaps.Marker({
-      map: mapInstance,
-      position,
-      title: text.home.currentLocation,
-      zIndex: 2800,
-      icon: {
-        content: createCurrentLocationMarkerIconHtml(),
-        anchor: new naverMaps.Point(
-          CURRENT_LOCATION_MARKER_SIZE / 2,
-          CURRENT_LOCATION_MARKER_SIZE / 2
-        ),
-      },
-    }) as HomeMapOverlay;
-    currentLocationOverlayRefs.current.push(marker);
-
-    return clearCurrentLocationOverlays;
-  }, [
-    clearCurrentLocationOverlays,
-    currentLocation,
-    mapReady,
-    text.home.currentLocation,
-  ]);
-
-  useEffect(() => {
-    if (!mapReady) {
-      return;
-    }
-
-    closeSheet();
-    hasRenderedAttractionMarkersRef.current = false;
-    clearMarkers();
-  }, [clearMarkers, closeSheet, mapReady, selectedSigunguCode]);
-
-  useEffect(() => {
-    const mapInstance = mapInstanceRef.current;
-    const naverMaps = naverMapsRef.current;
-    if (!mapReady || !mapInstance || !naverMaps || !attractionData) {
-      return;
-    }
-
-    const isPlaceLabelUpdate =
-      isUpdatingPlaceLabelsRef.current &&
-      hasRenderedAttractionMarkersRef.current;
-    if (!isPlaceLabelUpdate) {
-      setAttractionLoadingStage("rendering-markers");
-      hasRenderedAttractionMarkersRef.current = false;
-    }
-
-    clearMarkers();
-    let isCancelled = false;
-    let frameId: number | null = null;
-    const visibleAttractions = attractionData.allAttractions
-      .map((attraction) => ({
-        attraction,
-        markerType: resolveMarkerType(
-          attraction,
-          attractionData.lclsNameByCode
-        ),
-      }))
-      .filter(({ attraction, markerType }) =>
-        matchesPlaceFilter(attraction, markerType, searchFilter)
-      );
-    const spreadPositionByMarkerKey = buildSpreadMarkerPositionMap(
-      visibleAttractions.map(({ attraction }) => attraction)
-    );
-
-    const completeMarkerRendering = () => {
-      if (isCancelled || mapInstanceRef.current !== mapInstance) {
-        return;
-      }
-
-      hasRenderedAttractionMarkersRef.current = true;
-      setAttractionLoadingStage("idle");
-      isUpdatingPlaceLabelsRef.current = false;
-    };
-
-    let markerIndex = 0;
-    const renderMarkerChunk = () => {
-      if (isCancelled || mapInstanceRef.current !== mapInstance) {
-        return;
-      }
-
-      const nextIndex = Math.min(
-        markerIndex + MARKER_RENDER_CHUNK_SIZE,
-        visibleAttractions.length
-      );
-
-      try {
-        for (; markerIndex < nextIndex; markerIndex += 1) {
-          const markerItem = visibleAttractions[markerIndex];
-          if (!markerItem) {
-            continue;
-          }
-
-          const { attraction, markerType } = markerItem;
-          const spreadPosition =
-            spreadPositionByMarkerKey.get(
-              getAttractionMarkerKey(attraction)
-            ) ?? {
-              lat: attraction.lat,
-              lng: attraction.lng,
-            };
-          const position = new naverMaps.LatLng(
-            spreadPosition.lat,
-            spreadPosition.lng
-          );
-          const rank = topRankByAttractionId.get(attraction.id) ?? null;
-          const touristTrendName =
-            trendNameByAttractionId.get(attraction.id) ?? attraction.title;
-          const isTodayFestival = attraction.isTodayFestival;
-          const markerAnchor = isTodayFestival ? 27 : 17;
-          const marker = new naverMaps.Marker({
-            map: mapInstance,
-            position,
-            title: attraction.title,
-            zIndex: isTodayFestival ? 2600 : rank ? 2000 - rank : 1100,
-            icon: {
-              content: createBadgeMarkerIconHtml(
-                markerType.badge,
-                rank ? `${rank}` : undefined,
-                {
-                  highlighted: isTodayFestival,
-                  highlightLabel: text.home.ongoing,
-                }
-              ),
-              anchor: new naverMaps.Point(markerAnchor, markerAnchor),
-            },
-          }) as HomeMapOverlay;
-
-          markerRefs.current.push(marker);
-          const listener = naverMaps.Event.addListener(
-            marker,
-            "click",
-            () => {
-              focusAttraction(attraction);
-              onSelectAttractionRef.current({
-                attraction,
-                markerType,
-                touristTrendName,
-                rank,
-              });
-            }
-          );
-          markerListenerRefs.current.push(listener);
-        }
-      } catch (error) {
-        console.warn("[routeone-web] failed to render map markers", error);
-        completeMarkerRendering();
-        return;
-      }
-
-      if (markerIndex < visibleAttractions.length) {
-        frameId = window.requestAnimationFrame(renderMarkerChunk);
-      } else {
-        completeMarkerRendering();
-      }
-    };
-
-    renderMarkerChunk();
 
     return () => {
-      isCancelled = true;
-      if (isPlaceLabelUpdate) {
-        isUpdatingPlaceLabelsRef.current = false;
-      }
-      if (frameId != null) {
-        window.cancelAnimationFrame(frameId);
-      }
+      cancelPendingMapBoundsMove();
     };
   }, [
-    attractionData,
-    clearMarkers,
-    focusAttraction,
-    isUpdatingPlaceLabelsRef,
-    mapReady,
-    searchFilter,
-    setAttractionLoadingStage,
-    text,
-    topRankByAttractionId,
-    trendNameByAttractionId,
+    cancelPendingMapBoundsMove,
+    fitMapToSelectedRegion,
+    isBoundaryDataReady,
+    runtime,
   ]);
 
   return {
@@ -859,6 +520,7 @@ export function useHomeMap({
     focusAttraction,
     focusCurrentLocation,
     isCurrentLocationLookupPending,
+    isRenderingMarkers,
     mapError,
     mapReady,
     mapRef,

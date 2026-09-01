@@ -48,11 +48,13 @@ type NativeWebViewScreenProps = {
   appLanguage: AppLanguage;
   nativeAuthExpiresAt: number | null;
   nativeAuthRole: NativeAuthRole | null;
+  nativeAuthSessionId: string | null;
   nativeAuthToken: string | null;
   onAppLanguageChange: (language: AppLanguage) => Promise<void> | void;
   onAuthSessionChange: (session: {
     token: string | null;
     expiresAt: number | null;
+    sessionId: string | null;
     reason: "logout" | "expired" | null;
   }) => void;
 };
@@ -292,6 +294,7 @@ export default function NativeWebViewScreen({
   appLanguage,
   nativeAuthExpiresAt,
   nativeAuthRole,
+  nativeAuthSessionId,
   nativeAuthToken,
   onAppLanguageChange,
   onAuthSessionChange
@@ -319,7 +322,10 @@ export default function NativeWebViewScreen({
   );
   const injectedScript = useMemo(() => {
     const authScript = nativeAuthToken
-      ? `try {
+      ? `window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ = ${JSON.stringify(
+          nativeAuthSessionId
+        )};
+        try {
           window.localStorage.setItem(${JSON.stringify(
             AUTH_TOKEN_STORAGE_KEY
           )}, ${JSON.stringify(nativeAuthToken)});
@@ -355,6 +361,7 @@ export default function NativeWebViewScreen({
   }, [
     appLanguage,
     nativeAuthExpiresAt,
+    nativeAuthSessionId,
     nativeAuthToken,
     testAccountMode
   ]);
@@ -668,7 +675,7 @@ export default function NativeWebViewScreen({
       <StatusBar barStyle="dark-content" />
       {resolvedBundle ? (
         <WebView
-          key={resolvedBundle.key}
+          key={`${resolvedBundle.key}:${nativeAuthSessionId ?? "no-session"}`}
           ref={webViewRef}
           source={resolvedBundle.source}
           allowingReadAccessToURL={resolvedBundle.allowingReadAccessToUrl}
