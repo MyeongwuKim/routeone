@@ -44,7 +44,7 @@ import { getAuthToken } from "@/lib/authToken";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import MyInfoPage from "@/pages/MyInfoPage";
-import { isDevelopmentServiceAreaEnabled } from "@/stores/serviceAreaStore";
+import { isTestServiceAreaEnabled } from "@/stores/serviceAreaStore";
 
 type PreloadableLazyComponent<
   T extends ComponentType<Record<string, never>>,
@@ -420,22 +420,22 @@ function AppInfoLazyFallback() {
   const rows = [
     {
       key: "platform",
-      label: "실행 환경",
+      label: text.appInfo.runtimeEnvironment,
       valueWidth: "w-20",
     },
     {
       key: "app-version",
-      label: "앱 버전",
+      label: text.appInfo.appVersion,
       valueWidth: "w-24",
     },
     {
       key: "os-version",
-      label: "OS 버전",
+      label: text.appInfo.osVersion,
       valueWidth: "w-28",
     },
     {
       key: "web-bundle-version",
-      label: "웹 번들 버전",
+      label: text.appInfo.webBundleVersion,
       valueWidth: "w-24",
     },
   ];
@@ -443,22 +443,22 @@ function AppInfoLazyFallback() {
     {
       key: "location",
       icon: <MdLocationOn />,
-      label: "위치 권한",
+      label: text.appInfo.locationPermission,
     },
     {
       key: "notification",
       icon: <MdNotifications />,
-      label: "푸시 알림 권한",
+      label: text.appInfo.notificationPermission,
     },
     {
       key: "camera",
       icon: <MdPhotoCamera />,
-      label: "카메라 권한",
+      label: text.appInfo.cameraPermission,
     },
     {
       key: "photo-library",
       icon: <MdPhotoLibrary />,
-      label: "앨범 권한",
+      label: text.appInfo.photoLibraryPermission,
     },
   ];
 
@@ -475,7 +475,7 @@ function AppInfoLazyFallback() {
       <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
         <div className="border-b border-brand-50 px-4 py-3 dark:border-brand-400/15">
           <p className="text-xs font-black text-brand-700 dark:text-brand-200">
-            앱 정보
+            {text.appInfo.infoSection}
           </p>
         </div>
         {rows.map((row, index) => (
@@ -499,7 +499,7 @@ function AppInfoLazyFallback() {
         <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
           <div className="border-b border-brand-50 px-4 py-3 dark:border-brand-400/15">
             <p className="text-xs font-black text-brand-700 dark:text-brand-200">
-              권한
+              {text.appInfo.permissionsSection}
             </p>
           </div>
           {permissionRows.map((row, index) => (
@@ -743,7 +743,7 @@ function AppRouter() {
           <Route
             path="/me/service-area"
             element={
-              isDevelopmentServiceAreaEnabled() ? (
+              isTestServiceAreaEnabled() ? (
                 withRouteSuspense(<ServiceAreaSettingsPage />)
               ) : (
                 <Navigate to="/me" replace />

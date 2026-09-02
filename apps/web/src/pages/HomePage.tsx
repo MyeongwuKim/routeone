@@ -19,6 +19,7 @@ import {
   useHomeSearch,
   useHomeSearchResults,
 } from "@/features/home/useHomeSearch";
+import { useTestRegionLocation } from "@/features/home/useTestRegionLocation";
 import type { ServiceRegion } from "@/data/serviceAreas";
 import { useUiText } from "@/lib/uiText";
 import { getAuthToken } from "@/lib/authToken";
@@ -37,7 +38,7 @@ import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import {
-  isDevelopmentServiceAreaEnabled,
+  isTestServiceAreaEnabled,
   useEffectiveServiceArea,
 } from "@/stores/serviceAreaStore";
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
@@ -73,8 +74,7 @@ function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasAuthToken = Boolean(getAuthToken());
   const serviceArea = useEffectiveServiceArea();
-  const isDevelopmentRuntime = isDevelopmentServiceAreaEnabled();
-  const canSelectServiceArea = isDevelopmentRuntime;
+  const canSelectServiceArea = isTestServiceAreaEnabled();
   const developmentFixedRegion = canSelectServiceArea
     ? serviceArea.developmentFixedRegion
     : undefined;
@@ -93,6 +93,11 @@ function HomePage() {
   const showLoading = useUiLoadingStore((state) => state.showLoading);
   const hideLoading = useUiLoadingStore((state) => state.hideLoading);
   const showToast = useUiToastStore((state) => state.showToast);
+  const {
+    applyRegionPosition,
+    clearRegionPosition,
+    isEnabled: isTestRegionLocationEnabled,
+  } = useTestRegionLocation();
   const appendTarget = useRouteEditFlowStore((state) => state.appendTarget);
   const clearAppendTarget = useRouteEditFlowStore(
     (state) => state.clearAppendTarget
@@ -354,6 +359,72 @@ function HomePage() {
     ) ?? serviceArea.defaultRegion;
   const selectedRegionLabel =
     text.labels.regions[selectedRegion.label] ?? selectedRegion.label;
+  const handleSelectRegion = useCallback(
+    (sigunguCode: string) => {
+      selectRegion(sigunguCode);
+
+      const region = serviceArea.regions.find(
+        (candidate) => candidate.sigunguCode === sigunguCode
+      );
+      if (!region || !isTestRegionLocationEnabled) {
+        return;
+      }
+
+      const regionLabel = text.labels.regions[region.label] ?? region.label;
+
+      void applyRegionPosition(region)
+        .then((didApply) => {
+          if (didApply) {
+            showToast(text.home.testLocationApplied(regionLabel));
+          }
+        })
+        .catch(() => {
+          showToast(text.home.testLocationFailed);
+        });
+    },
+    [
+      applyRegionPosition,
+      isTestRegionLocationEnabled,
+      selectRegion,
+      serviceArea.regions,
+      showToast,
+      text,
+    ]
+  );
+  const handleFocusCurrentLocation = useCallback(() => {
+    const focus = async () => {
+      let shouldForceRefresh = false;
+
+      if (isTestRegionLocationEnabled) {
+        try {
+          shouldForceRefresh = await clearRegionPosition();
+        } catch {
+          showToast(text.home.testLocationFailed);
+          return;
+        }
+      }
+
+      const didFocus = await focusCurrentLocation({
+        forceRefresh: shouldForceRefresh,
+      });
+      if (!didFocus) {
+        showToast(text.home.currentLocationUnavailable);
+        return;
+      }
+
+      if (shouldForceRefresh) {
+        showToast(text.home.testLocationRestored);
+      }
+    };
+
+    void focus();
+  }, [
+    clearRegionPosition,
+    focusCurrentLocation,
+    isTestRegionLocationEnabled,
+    showToast,
+    text,
+  ]);
   const routeStartLocation = currentLocation
     ? {
         lat: currentLocation.lat,
@@ -533,14 +604,8 @@ function HomePage() {
             resetSheet();
             openSavedList();
           }}
-          onFocusCurrentLocation={() => {
-            void focusCurrentLocation().then((didFocus) => {
-              if (!didFocus) {
-                showToast(text.home.currentLocationUnavailable);
-              }
-            });
-          }}
-          onSelectRegion={selectRegion}
+          onFocusCurrentLocation={handleFocusCurrentLocation}
+          onSelectRegion={handleSelectRegion}
           onSelectFilter={(filter) => {
             resetSheet();
             setSearchFilter(filter);

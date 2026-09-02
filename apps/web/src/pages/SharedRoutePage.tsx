@@ -75,7 +75,7 @@ import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import {
-  isDevelopmentServiceAreaEnabled,
+  isTestServiceAreaEnabled,
   useEffectiveServiceArea,
   useServiceAreaStore,
 } from "@/stores/serviceAreaStore";
@@ -94,7 +94,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const serviceArea = useEffectiveServiceArea();
-  const canSelectServiceArea = isDevelopmentServiceAreaEnabled();
+  const canSelectServiceArea = isTestServiceAreaEnabled();
   const setSelectedAreaId = useServiceAreaStore(
     (state) => state.setSelectedAreaId
   );

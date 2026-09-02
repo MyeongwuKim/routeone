@@ -16,7 +16,7 @@ import { useAccountUser } from "@/components/account/useAccountUser";
 import { useUiText } from "@/lib/uiText";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import {
-  isDevelopmentServiceAreaEnabled,
+  isTestServiceAreaEnabled,
   useEffectiveServiceArea,
 } from "@/stores/serviceAreaStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
@@ -104,7 +104,7 @@ function MyInfoPage() {
   const toggleDarkMode = useUiThemeStore((state) => state.toggleDarkMode);
   const language = useAppLanguageStore((state) => state.language);
   const serviceArea = useEffectiveServiceArea();
-  const canSelectServiceArea = isDevelopmentServiceAreaEnabled();
+  const canSelectServiceArea = isTestServiceAreaEnabled();
   const { user, isLoading, retry } = useAccountUser();
 
   return (

@@ -22,6 +22,13 @@ export function isNativeRuntime() {
   return Boolean(getReactNativeWebViewApi() || getNativeBridgeApi());
 }
 
+export function isNativeTestAccountMode() {
+  return (
+    typeof window !== "undefined" &&
+    window.RouteOneRuntimeConfig?.testAccountMode === true
+  );
+}
+
 export function postNativeMessage(message: unknown) {
   const reactNativeWebView = getReactNativeWebViewApi();
 

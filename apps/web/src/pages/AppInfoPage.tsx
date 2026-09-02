@@ -1,3 +1,12 @@
+/**
+ * 진입 경로: 내 정보 → 버전 및 권한
+ *
+ * 용도:
+ * 현재 앱과 웹 번들의 버전, iPhone 권한 상태를 언어 설정에 맞춰 보여준다.
+ *
+ * 구조:
+ * 앱 정보와 위치·알림·카메라·앨범 권한 영역으로 구성되어 있다.
+ */
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -16,18 +25,15 @@ import {
   type NativeAppInfo,
   type NativePermissionStatus,
 } from "@/native-bridge";
-
-const APP_INFO_ROW_SKELETONS = [
-  { label: "실행 환경", valueWidth: "w-20" },
-  { label: "앱 버전", valueWidth: "w-24" },
-  { label: "OS 버전", valueWidth: "w-28" },
-  { label: "웹 번들 버전", valueWidth: "w-24" },
-] as const;
+import { useUiText, type UiText } from "@/lib/uiText";
 
 const PERMISSION_ROW_CLASS_NAME =
   "flex w-full items-center gap-3 px-4 py-3 text-left";
 
-function formatPlatform(platform: NativeAppInfo["platform"]) {
+function formatPlatform(
+  platform: NativeAppInfo["platform"],
+  text: UiText["appInfo"]
+) {
   if (platform === "ios") {
     return "iOS";
   }
@@ -41,13 +47,16 @@ function formatPlatform(platform: NativeAppInfo["platform"]) {
   }
 
   if (platform === "native") {
-    return "Native App";
+    return text.nativeApp;
   }
 
   return platform;
 }
 
-function formatWebBundleVersion(info: NativeAppInfo | null) {
+function formatWebBundleVersion(
+  info: NativeAppInfo | null,
+  text: UiText["appInfo"]
+) {
   if (!info) {
     return null;
   }
@@ -56,7 +65,7 @@ function formatWebBundleVersion(info: NativeAppInfo | null) {
     return info.webBundleVersion;
   }
 
-  return info.webBundleKind === "embedded" ? "내장 번들" : null;
+  return info.webBundleKind === "embedded" ? text.embeddedBundle : null;
 }
 
 function AppInfoRow({
@@ -121,37 +130,32 @@ function AppPermissionRowContent({
 }
 
 function formatPermissionStatus(
-  status: NativePermissionStatus | null | undefined
+  status: NativePermissionStatus | null | undefined,
+  text: UiText["appInfo"]
 ) {
-  if (status === "granted") {
-    return "켜짐";
-  }
-
-  if (status === "denied") {
-    return "꺼짐";
-  }
-
-  if (status === "undetermined") {
-    return "미설정";
-  }
-
-  return "확인 불가";
+  return status
+    ? text.permissionStatuses[status]
+    : text.permissionStatuses.unavailable;
 }
 
 function AppPermissionRow({
   icon,
   isLoading,
   label,
+  permissionCheckingAria,
   status,
+  text,
 }: {
   icon: ReactNode;
   isLoading: boolean;
   label: string;
+  permissionCheckingAria: string;
   status?: NativePermissionStatus | null;
+  text: UiText["appInfo"];
 }) {
   const isPending =
     isLoading && (status === null || status === undefined);
-  const statusLabel = formatPermissionStatus(status);
+  const statusLabel = formatPermissionStatus(status, text);
   const isGranted = status === "granted";
 
   return (
@@ -167,7 +171,7 @@ function AppPermissionRow({
           isPending ? (
             <span
               role="status"
-              aria-label="권한 정보 확인 중"
+              aria-label={permissionCheckingAria}
               className="skeleton-shimmer h-3 w-12 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700"
             />
           ) : (
@@ -212,6 +216,7 @@ function AppInfoNotice({
 }
 
 function AppInfoPage() {
+  const text = useUiText();
   const navigate = useNavigate();
   const {
     appInfoState,
@@ -221,22 +226,31 @@ function AppInfoPage() {
   } = useNativeAppInfo();
 
   const appInfo = appInfoState.info;
+  const appInfoText = text.appInfo;
+  const appInfoRowSkeletons = [
+    { label: appInfoText.runtimeEnvironment, valueWidth: "w-20" },
+    { label: appInfoText.appVersion, valueWidth: "w-24" },
+    { label: appInfoText.osVersion, valueWidth: "w-28" },
+    { label: appInfoText.webBundleVersion, valueWidth: "w-24" },
+  ] as const;
 
   return (
     <section className="space-y-4 pb-4 text-slate-900">
       <header className="flex items-center gap-3">
         <button
           type="button"
-          aria-label="내 정보로 돌아가기"
+          aria-label={text.common.backToMyInfo}
           onClick={() => navigate("/me")}
           className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
         >
           <MdArrowBack />
         </button>
         <div className="min-w-0">
-          <p className="text-xs font-black text-brand-700">앱 설정</p>
+          <p className="text-xs font-black text-brand-700">
+            {text.routeShell.appSettings}
+          </p>
           <h1 className="truncate text-lg font-bold text-slate-900">
-            버전 및 권한
+            {text.routeShell.appInfoTitle}
           </h1>
         </div>
       </header>
@@ -244,26 +258,28 @@ function AppInfoPage() {
       {isNativeBridgePending ? (
         <AppInfoNotice
           icon={<MdSystemUpdateAlt />}
-          title="네이티브 버전 연동 준비 중"
-          description="iOS와 Android에서 버전 브릿지가 연결되면 이 화면에 앱 버전이 표시돼요."
+          title={appInfoText.bridgePendingTitle}
+          description={appInfoText.bridgePendingDescription}
         />
       ) : null}
 
       {appInfoState.status === "error" ? (
         <AppInfoNotice
           icon={<MdInfoOutline />}
-          title="버전 및 권한 정보를 불러오지 못했어요"
-          description="잠시 후 다시 확인해 주세요."
+          title={appInfoText.loadErrorTitle}
+          description={appInfoText.loadErrorDescription}
         />
       ) : null}
 
       <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm">
         <div className="border-b border-brand-50 px-4 py-3">
-          <p className="text-xs font-black text-brand-700">앱 정보</p>
+          <p className="text-xs font-black text-brand-700">
+            {appInfoText.infoSection}
+          </p>
         </div>
 
         {appInfoState.status === "loading" ? (
-          APP_INFO_ROW_SKELETONS.map((row, index) => (
+          appInfoRowSkeletons.map((row, index) => (
             <div key={row.label}>
               {index > 0 ? <div className="border-b border-brand-50" /> : null}
               <AppInfoRowSkeleton
@@ -275,21 +291,30 @@ function AppInfoPage() {
         ) : (
           <>
             <AppInfoRow
-              label="실행 환경"
-              value={appInfo ? formatPlatform(appInfo.platform) : "확인 중"}
+              label={appInfoText.runtimeEnvironment}
+              value={
+                appInfo
+                  ? formatPlatform(appInfo.platform, appInfoText)
+                  : appInfoText.checking
+              }
             />
             <div className="border-b border-brand-50" />
             <AppInfoRow
-              label="앱 버전"
+              label={appInfoText.appVersion}
               value={appInfo?.appVersion}
-              fallback={isNativeRuntime ? "네이티브 연동 대기" : "-"}
+              fallback={
+                isNativeRuntime ? appInfoText.nativeIntegrationPending : "-"
+              }
             />
             <div className="border-b border-brand-50" />
-            <AppInfoRow label="OS 버전" value={appInfo?.osVersion} />
+            <AppInfoRow
+              label={appInfoText.osVersion}
+              value={appInfo?.osVersion}
+            />
             <div className="border-b border-brand-50" />
             <AppInfoRow
-              label="웹 번들 버전"
-              value={formatWebBundleVersion(appInfo)}
+              label={appInfoText.webBundleVersion}
+              value={formatWebBundleVersion(appInfo, appInfoText)}
             />
           </>
         )}
@@ -298,35 +323,45 @@ function AppInfoPage() {
       {isNativeRuntime ? (
         <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm">
           <div className="border-b border-brand-50 px-4 py-3">
-            <p className="text-xs font-black text-brand-700">권한</p>
+            <p className="text-xs font-black text-brand-700">
+              {appInfoText.permissionsSection}
+            </p>
           </div>
 
           <AppPermissionRow
             icon={<MdLocationOn />}
             isLoading={isPermissionLookupPending}
-            label="위치 권한"
+            label={appInfoText.locationPermission}
+            permissionCheckingAria={appInfoText.permissionCheckingAria}
             status={appInfo?.locationPermissionStatus}
+            text={appInfoText}
           />
           <div className="border-b border-brand-50" />
           <AppPermissionRow
             icon={<MdNotifications />}
             isLoading={isPermissionLookupPending}
-            label="푸시 알림 권한"
+            label={appInfoText.notificationPermission}
+            permissionCheckingAria={appInfoText.permissionCheckingAria}
             status={appInfo?.notificationPermissionStatus}
+            text={appInfoText}
           />
           <div className="border-b border-brand-50" />
           <AppPermissionRow
             icon={<MdPhotoCamera />}
             isLoading={isPermissionLookupPending}
-            label="카메라 권한"
+            label={appInfoText.cameraPermission}
+            permissionCheckingAria={appInfoText.permissionCheckingAria}
             status={appInfo?.cameraPermissionStatus}
+            text={appInfoText}
           />
           <div className="border-b border-brand-50" />
           <AppPermissionRow
             icon={<MdPhotoLibrary />}
             isLoading={isPermissionLookupPending}
-            label="앨범 권한"
+            label={appInfoText.photoLibraryPermission}
+            permissionCheckingAria={appInfoText.permissionCheckingAria}
             status={appInfo?.photoLibraryPermissionStatus}
+            text={appInfoText}
           />
         </section>
       ) : null}

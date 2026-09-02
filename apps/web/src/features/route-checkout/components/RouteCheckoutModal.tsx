@@ -165,6 +165,7 @@ function RouteCheckoutModalContent({
     setDailyStartTime(getCurrentTimeValue());
     setConfirmedTodayStartScheduleKey(null);
     setIsTodayStartConfirmOpen(false);
+    showToast(text.cart.currentTimeAppliedToast);
   };
 
   const blockInteractionWhileSaving = (event: SyntheticEvent) => {

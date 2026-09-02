@@ -109,6 +109,33 @@ export type UiText = {
     note: string;
     changedToast: (area: string) => string;
   };
+  appInfo: {
+    bridgePendingTitle: string;
+    bridgePendingDescription: string;
+    loadErrorTitle: string;
+    loadErrorDescription: string;
+    infoSection: string;
+    runtimeEnvironment: string;
+    appVersion: string;
+    osVersion: string;
+    webBundleVersion: string;
+    embeddedBundle: string;
+    checking: string;
+    nativeIntegrationPending: string;
+    nativeApp: string;
+    permissionsSection: string;
+    locationPermission: string;
+    notificationPermission: string;
+    cameraPermission: string;
+    photoLibraryPermission: string;
+    permissionCheckingAria: string;
+    permissionStatuses: {
+      granted: string;
+      denied: string;
+      undetermined: string;
+      unavailable: string;
+    };
+  };
   account: {
     eyebrow: string;
     title: string;
@@ -220,6 +247,9 @@ export type UiText = {
     currentLocation: string;
     focusCurrentLocationAria: string;
     currentLocationUnavailable: string;
+    testLocationApplied: (region: string) => string;
+    testLocationRestored: string;
+    testLocationFailed: string;
   };
   notifications: {
     title: string;
@@ -670,6 +700,8 @@ export type UiText = {
     arrivalCheckTitle: string;
     arrivalCheckDescription: string;
     gpsCheckIn: string;
+    gpsCameraCheckIn: string;
+    albumVisitCompletion: string;
     manualVisitCompletion: string;
     visitFinishQuestion: string;
     elapsedSinceArrival: (duration: string) => string;
@@ -815,6 +847,7 @@ export type UiText = {
     todayOneDayDescription: string;
     todayMultiDayDescription: (days: number) => string;
     useCurrentTime: string;
+    currentTimeAppliedToast: string;
     continueAnyway: string;
     chooseAgain: string;
     continueToday: string;
@@ -1171,6 +1204,34 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       note: "개발 빌드에서만 사용하는 설정이에요. 현재 위치와 가까운 시군구가 홈 필터 맨 앞에 표시돼요.",
       changedToast: (area) => `${area} 테스트 모드로 변경했어요.`,
     },
+    appInfo: {
+      bridgePendingTitle: "네이티브 버전 연동 준비 중",
+      bridgePendingDescription:
+        "iPhone 버전 브릿지가 연결되면 이 화면에 앱 버전이 표시돼요.",
+      loadErrorTitle: "버전 및 권한 정보를 불러오지 못했어요",
+      loadErrorDescription: "잠시 후 다시 확인해 주세요.",
+      infoSection: "앱 정보",
+      runtimeEnvironment: "실행 환경",
+      appVersion: "앱 버전",
+      osVersion: "OS 버전",
+      webBundleVersion: "웹 번들 버전",
+      embeddedBundle: "내장 번들",
+      checking: "확인 중",
+      nativeIntegrationPending: "네이티브 연동 대기",
+      nativeApp: "네이티브 앱",
+      permissionsSection: "권한",
+      locationPermission: "위치 권한",
+      notificationPermission: "푸시 알림 권한",
+      cameraPermission: "카메라 권한",
+      photoLibraryPermission: "앨범 권한",
+      permissionCheckingAria: "권한 정보 확인 중",
+      permissionStatuses: {
+        granted: "켜짐",
+        denied: "꺼짐",
+        undetermined: "미설정",
+        unavailable: "확인 불가",
+      },
+    },
     account: {
       eyebrow: "내 정보",
       title: "계정 정보",
@@ -1306,6 +1367,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "현재 위치",
       focusCurrentLocationAria: "현재 위치로 이동",
       currentLocationUnavailable: "현재 위치를 확인하지 못했어요.",
+      testLocationApplied: (region) =>
+        `테스트 위치를 ${region} 중심으로 이동했어요.`,
+      testLocationRestored: "테스트 위치를 끄고 실제 GPS로 돌아왔어요.",
+      testLocationFailed: "테스트 위치를 적용하지 못했어요.",
     },
     notifications: {
       title: "알림함",
@@ -1834,9 +1899,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       finishVisitTitle: "방문 완료",
       arrivalCheckTitle: "도착을 인증할까요?",
       arrivalCheckDescription:
-        "장소 반경 100m 안에서 GPS로 도착을 확인해요. 사진을 남기면 사진 인증도 함께 저장돼요.",
-      gpsCheckIn: "GPS로 도착 인증",
-      manualVisitCompletion: "인증 없이 방문 완료",
+        "GPS 인증과 GPS + 카메라 인증은 장소 반경 100m 안에서 가능해요. 앨범 인증은 위치를 확인하지 않아요.",
+      gpsCheckIn: "GPS 인증",
+      gpsCameraCheckIn: "GPS + 카메라 인증",
+      albumVisitCompletion: "앨범 인증",
+      manualVisitCompletion: "그냥 인증",
       visitFinishQuestion: "방문을 마칠까요?",
       elapsedSinceArrival: (duration) =>
         `도착 후 ${duration}이 지났어요. 완료하면 실제 체류시간으로 기록돼요.`,
@@ -2030,6 +2097,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       todayMultiDayDescription: (days) =>
         `${days}일 일정이지만 시작일이 오늘이에요. 실제로 오늘부터 시작하는 여행이 맞는지 한 번 더 확인해주세요.`,
       useCurrentTime: "현재 시간으로 변경",
+      currentTimeAppliedToast: "현재 시간으로 변경했어요.",
       continueAnyway: "그대로 계속",
       chooseAgain: "다시 선택",
       continueToday: "오늘 시작으로 계속",
@@ -2427,6 +2495,34 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       note: "This setting is available only in development builds. The district nearest your current location appears first on Home.",
       changedToast: (area) => `Changed the test region to ${area}.`,
     },
+    appInfo: {
+      bridgePendingTitle: "Preparing native version details",
+      bridgePendingDescription:
+        "The app version will appear here once the iPhone version bridge connects.",
+      loadErrorTitle: "Couldn't load version and permission details",
+      loadErrorDescription: "Please try again in a moment.",
+      infoSection: "App Info",
+      runtimeEnvironment: "Runtime",
+      appVersion: "App Version",
+      osVersion: "OS Version",
+      webBundleVersion: "Web Bundle Version",
+      embeddedBundle: "Embedded Bundle",
+      checking: "Checking",
+      nativeIntegrationPending: "Waiting for native app",
+      nativeApp: "Native App",
+      permissionsSection: "Permissions",
+      locationPermission: "Location",
+      notificationPermission: "Push Notifications",
+      cameraPermission: "Camera",
+      photoLibraryPermission: "Photo Library",
+      permissionCheckingAria: "Checking permission details",
+      permissionStatuses: {
+        granted: "On",
+        denied: "Off",
+        undetermined: "Not Set",
+        unavailable: "Unavailable",
+      },
+    },
     account: {
       eyebrow: "My Info",
       title: "Account",
@@ -2567,6 +2663,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "Current location",
       focusCurrentLocationAria: "Move to current location",
       currentLocationUnavailable: "Could not find your current location.",
+      testLocationApplied: (region) =>
+        `Test location moved to the center of ${region}.`,
+      testLocationRestored: "Test location is off. Using real GPS.",
+      testLocationFailed: "Could not update the test location.",
     },
     notifications: {
       title: "Notifications",
@@ -3114,9 +3214,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       finishVisitTitle: "Complete visit",
       arrivalCheckTitle: "Verify your arrival?",
       arrivalCheckDescription:
-        "Verify your arrival with GPS within 100 m. Add a photo to save photo verification too.",
-      gpsCheckIn: "Verify arrival with GPS",
-      manualVisitCompletion: "Complete without verification",
+        "GPS and GPS + Camera are available within 100 m. Album verification does not use your location.",
+      gpsCheckIn: "GPS Verification",
+      gpsCameraCheckIn: "GPS + Camera",
+      albumVisitCompletion: "Album Verification",
+      manualVisitCompletion: "Basic Verification",
       visitFinishQuestion: "Finish this visit?",
       elapsedSinceArrival: (duration) =>
         `${duration} has passed since arrival. Completing records it as your actual stay.`,
@@ -3315,6 +3417,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       todayMultiDayDescription: (days) =>
         `This is a ${days}-day trip, but the start date is today. Please confirm that the trip really starts today.`,
       useCurrentTime: "Use current time",
+      currentTimeAppliedToast: "Changed the start time to the current time.",
       continueAnyway: "Continue anyway",
       chooseAgain: "Choose again",
       continueToday: "Continue from today",

@@ -14,6 +14,7 @@ type CurrentPositionState = {
   error: string | null;
   position: RouteOnePosition | null;
   status: CurrentPositionStatus;
+  applyPosition: (position: RouteOnePosition) => void;
   requestCurrentPosition: (options?: {
     forceRefresh?: boolean;
   }) => Promise<RouteOnePosition>;
@@ -35,6 +36,14 @@ export const useCurrentPositionStore = create<CurrentPositionState>(
     error: null,
     position: null,
     status: "idle",
+    applyPosition: (position) => {
+      latestPositionRequestId += 1;
+      set({
+        error: null,
+        position,
+        status: "success",
+      });
+    },
     requestCurrentPosition: ({ forceRefresh = false } = {}) => {
       const currentPosition = get().position;
 

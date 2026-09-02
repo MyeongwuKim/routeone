@@ -1694,14 +1694,16 @@ export async function handleNativeRouteArrivalTestLocationRequest(
     }
 
     if (!message.place) {
-      setNativeRouteArrivalTestPosition(null);
+      const testPosition = message.position ?? null;
+
+      setNativeRouteArrivalTestPosition(testPosition);
       resetNativeRouteArrivalTestState();
       postNativeRouteArrivalTestLocationResponse(webViewRef, message.id, {
         ok: true,
-        active: false,
+        active: testPosition !== null,
         stopId: null,
-        lat: null,
-        lng: null,
+        lat: testPosition?.lat ?? null,
+        lng: testPosition?.lng ?? null,
         distanceMeters: null,
         withinRadius: null,
         notificationScheduled: false,

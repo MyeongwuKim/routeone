@@ -1130,20 +1130,20 @@ export function VisitCompletionPopup({
                 )}
                 {text.dayRoute.gpsCheckIn}
               </button>
+              <button
+                type="button"
+                disabled={photoActionDisabled}
+                onClick={() => onCompleteWithPhoto(target, "camera")}
+                className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-brand-50 px-3 py-3 text-sm font-black text-brand-700 disabled:opacity-60"
+              >
+                {photoActionDisabled ? (
+                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <MdPhotoCamera className="text-lg" />
+                )}
+                {text.dayRoute.gpsCameraCheckIn}
+              </button>
               <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  disabled={photoActionDisabled}
-                  onClick={() => onCompleteWithPhoto(target, "camera")}
-                  className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-brand-50 px-3 py-3 text-sm font-black text-brand-700 disabled:opacity-60"
-                >
-                  {photoActionDisabled ? (
-                    <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : (
-                    <MdPhotoCamera className="text-lg" />
-                  )}
-                  카메라
-                </button>
                 <button
                   type="button"
                   disabled={photoActionDisabled}
@@ -1151,21 +1151,29 @@ export function VisitCompletionPopup({
                   className="flex items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-white px-3 py-3 text-sm font-black text-brand-700 disabled:opacity-60"
                 >
                   <MdImage className="text-lg" />
-                  앨범
+                  {text.dayRoute.albumVisitCompletion}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => onCompleteManually(target)}
+                  className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
+                >
+                  {text.dayRoute.manualVisitCompletion}
                 </button>
               </div>
             </>
           )}
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={() => onCompleteManually(target)}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
-          >
-            {isRetrospective
-              ? text.dayRoute.retrospectiveCompletionAction
-              : text.dayRoute.manualVisitCompletion}
-          </button>
+          {isRetrospective ? (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => onCompleteManually(target)}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
+            >
+              {text.dayRoute.retrospectiveCompletionAction}
+            </button>
+          ) : null}
         </div>
       </section>
     </div>

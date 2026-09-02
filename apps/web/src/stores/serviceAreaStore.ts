@@ -19,6 +19,10 @@ export function isDevelopmentServiceAreaEnabled() {
     return true;
   }
 
+  if (typeof window === "undefined") {
+    return false;
+  }
+
   const runtimeVariant =
     window.RouteOneRuntimeConfig?.nativeAppVariant?.trim().toLowerCase() ||
     window.RouteOneRuntimeConfig?.webBundleChannel?.trim().toLowerCase();
@@ -26,8 +30,16 @@ export function isDevelopmentServiceAreaEnabled() {
   return runtimeVariant === "dev";
 }
 
+export function isTestServiceAreaEnabled() {
+  return (
+    isDevelopmentServiceAreaEnabled() ||
+    (typeof window !== "undefined" &&
+      window.RouteOneRuntimeConfig?.testAccountMode === true)
+  );
+}
+
 export function getEffectiveServiceAreaId(selectedAreaId: ServiceAreaId) {
-  return isDevelopmentServiceAreaEnabled()
+  return isTestServiceAreaEnabled()
     ? selectedAreaId
     : DEFAULT_SERVICE_AREA.id;
 }
@@ -65,4 +77,3 @@ export function useEffectiveServiceArea() {
 
   return getServiceArea(getEffectiveServiceAreaId(selectedAreaId));
 }
-

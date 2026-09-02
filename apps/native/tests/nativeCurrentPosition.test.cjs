@@ -289,6 +289,44 @@ test("native 위치 bridge가 강제 갱신 옵션과 측정 시각·정확도�
   assert.equal(response.accuracyMeters, position.accuracyMeters);
 });
 
+test("심사 위치가 설정되면 실제 GPS 대신 해당 좌표를 현재 위치로 반환한다", async () => {
+  let nativePositionRequestCount = 0;
+  let response;
+  const bridge = loadModule("../src/webview/bridge/locationBridge.ts", {
+    "@/location/nativeCurrentPosition": {
+      prepareNativeCurrentPosition: async () => {
+        nativePositionRequestCount += 1;
+        return { ...TARGET, timestamp: START_TIME, accuracyMeters: 12 };
+      },
+    },
+    "./responses": {
+      postNativeLocationResponse: (_ref, _id, payload) => { response = payload; },
+    },
+  });
+  const reviewerPosition = { lat: 37.8813, lng: 127.7298 };
+
+  bridge.setNativeRouteArrivalTestPosition(reviewerPosition);
+  await bridge.handleNativeLocationRequest({
+    type: "routeone:native-location-current",
+    id: "reviewer-position",
+    forceRefresh: true,
+  }, { current: null }, true);
+
+  assert.equal(nativePositionRequestCount, 0);
+  assert.equal(response.lat, reviewerPosition.lat);
+  assert.equal(response.lng, reviewerPosition.lng);
+  assert.equal(response.accuracyMeters, 1);
+
+  await bridge.handleNativeLocationRequest({
+    type: "routeone:native-location-current",
+    id: "real-position",
+    useRealPosition: true,
+    forceRefresh: true,
+  }, { current: null }, true);
+
+  assert.equal(nativePositionRequestCount, 1);
+});
+
 test("주입 bridge는 forceRefresh를 JSON 메시지에 넣고 응답 timestamp를 보존한다", async () => {
   const { ROUTEONE_WEBVIEW_BRIDGE_SCRIPT } = loadModule("../src/webview/bridge/injectedScript.ts", {
     "@/config/webBundleUpdateConfig": {

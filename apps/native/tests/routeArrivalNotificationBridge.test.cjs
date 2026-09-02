@@ -149,6 +149,7 @@ function createHarness({
     lastKnownPositionRequests: [],
     currentPosition: { lat: place.lat, lng: place.lng, accuracyMeters: 10 },
     currentPositionRequests: [],
+    testPositions: [],
     locationAccuracy: "full",
     notificationAllowsAlert: true,
     onNotificationPermission: null,
@@ -319,7 +320,11 @@ function createHarness({
       postNativeRouteArrivalNotificationSyncResponse: respond,
       postNativeRouteArrivalTestLocationResponse: respond,
     },
-    "./locationBridge": { setNativeRouteArrivalTestPosition: () => {} },
+    "./locationBridge": {
+      setNativeRouteArrivalTestPosition: (position) => {
+        state.testPositions.push(position);
+      },
+    },
   };
   const exports = {};
   vm.runInNewContext(bridgeCode, {
@@ -357,6 +362,65 @@ function createHarness({
     ),
   };
 }
+
+test("심사 계정은 장소 알림 없이 지역 중심을 테스트 현재 위치로 적용한다", async () => {
+  const { bridge, state } = createHarness();
+  const regionCenter = { lat: 37.8813, lng: 127.7298 };
+
+  await bridge.handleNativeRouteArrivalTestLocationRequest(
+    {
+      type: "routeone:native-route-arrival-test-location",
+      id: "reviewer-region",
+      place: null,
+      position: regionCenter,
+      language: "ko",
+    },
+    { current: null },
+    true
+  );
+
+  assert.equal(state.testPositions.length, 1);
+  assert.equal(state.testPositions[0].lat, regionCenter.lat);
+  assert.equal(state.testPositions[0].lng, regionCenter.lng);
+  assert.equal(state.scheduled.length, 0);
+  assert.equal(state.responses.at(-1).active, true);
+  assert.equal(state.responses.at(-1).lat, regionCenter.lat);
+  assert.equal(state.responses.at(-1).lng, regionCenter.lng);
+
+  await bridge.handleNativeRouteArrivalTestLocationRequest(
+    {
+      type: "routeone:native-route-arrival-test-location",
+      id: "reviewer-region-clear",
+      place: null,
+      position: null,
+      language: "ko",
+    },
+    { current: null },
+    true
+  );
+
+  assert.equal(state.testPositions.at(-1), null);
+  assert.equal(state.responses.at(-1).active, false);
+});
+
+test("일반 계정의 테스트 위치 요청은 네이티브에서 차단한다", async () => {
+  const { bridge, state } = createHarness();
+
+  await bridge.handleNativeRouteArrivalTestLocationRequest(
+    {
+      type: "routeone:native-route-arrival-test-location",
+      id: "regular-account-region",
+      place: null,
+      position: { lat: 37.8813, lng: 127.7298 },
+      language: "ko",
+    },
+    { current: null },
+    false
+  );
+
+  assert.equal(state.testPositions.length, 0);
+  assert.equal(state.responses.at(-1).ok, false);
+});
 
 test("세션 정리 중이거나 세션 세대가 바뀌면 늦은 타깃 동기화를 거절한다", async () => {
   const pendingCleanup = createHarness();

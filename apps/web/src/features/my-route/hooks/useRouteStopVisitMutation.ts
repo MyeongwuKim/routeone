@@ -32,6 +32,7 @@ import {
   uploadVerifiedVisitPhoto,
   type VisitPhotoSource,
 } from "../services/visitPhotoService";
+import { getVisitPhotoVerificationStatus } from "../services/visitPhotoVerification";
 import {
   prepareRouteArrivalNotificationsForVisitTransition,
   RouteArrivalVisitTransitionPreparationError,
@@ -748,9 +749,14 @@ export function useRouteStopVisitMutation({
   });
   const photoMutation = useMutation({
     mutationFn: async ({ target, source }: PrepareVisitPhotoVariables) => {
-      const position = isRetrospectiveCompletion
-        ? null
-        : await requestVisitVerificationPosition(target.stop.place);
+      const verificationStatus = getVisitPhotoVerificationStatus(
+        source,
+        isRetrospectiveCompletion
+      );
+      const position =
+        verificationStatus === "GPS_PHOTO"
+          ? await requestVisitVerificationPosition(target.stop.place)
+          : null;
 
       const photo = await requestVisitPhoto(source);
       const uploadPayload = await routeApi.createRouteStopVisitPhotoUpload(
@@ -769,7 +775,7 @@ export function useRouteStopVisitMutation({
 
       let verification: RouteStopVisitVerificationInput;
 
-      if (isRetrospectiveCompletion) {
+      if (verificationStatus === "MANUAL") {
         verification = {
           status: "MANUAL",
           lat: null,
@@ -796,7 +802,7 @@ export function useRouteStopVisitMutation({
       return { ...target, verification } satisfies ActualStayMinutesTarget;
     },
     onSuccess: (target) => {
-      if (isRetrospectiveCompletion) {
+      if (target.verification.status === "MANUAL") {
         setActualStayMinutesTarget(target);
         setVisitCompletionTarget(null);
         return;

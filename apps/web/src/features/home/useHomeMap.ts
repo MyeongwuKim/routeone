@@ -151,12 +151,16 @@ export function useHomeMap({
     }
   }, []);
 
-  const focusCurrentLocation = useCallback(async () => {
+  const focusCurrentLocation = useCallback(async ({
+    forceRefresh = false,
+  }: {
+    forceRefresh?: boolean;
+  } = {}) => {
     let nextLocation = currentLocation;
 
-    if (!nextLocation) {
+    if (!nextLocation || forceRefresh) {
       try {
-        nextLocation = await requestCurrentPosition();
+        nextLocation = await requestCurrentPosition({ forceRefresh });
       } catch {
         return false;
       }

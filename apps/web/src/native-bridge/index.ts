@@ -6,7 +6,10 @@ import {
   subscribeNativeNotificationReceived,
 } from "./events";
 import { postWebBundleReady, reportWebRuntimeError } from "./lifecycle";
-import { getNativeCurrentPosition } from "./location";
+import {
+  getNativeCurrentPosition,
+  setNativeTestPosition,
+} from "./location";
 import {
   saveNativeImage,
   takeNativeVisitPhoto,
@@ -21,11 +24,15 @@ import {
   syncNativeRouteReviewNotifications,
 } from "./notifications";
 import { openNativeAppSettings } from "./permissions";
-import { isNativeRuntime } from "./runtime";
+import {
+  isNativeRuntime,
+  isNativeTestAccountMode,
+} from "./runtime";
 
 export const nativeBridge = {
   runtime: {
     isAvailable: isNativeRuntime,
+    isTestAccountMode: isNativeTestAccountMode,
   },
   appInfo: {
     get: getNativeAppInfo,
@@ -39,6 +46,7 @@ export const nativeBridge = {
   },
   location: {
     getCurrentPosition: getNativeCurrentPosition,
+    setTestPosition: setNativeTestPosition,
   },
   media: {
     takeVisitPhoto: takeNativeVisitPhoto,

@@ -33,6 +33,8 @@ import {
   ROUTEONE_WEBVIEW_BRIDGE_SCRIPT
 } from "@/webview/bridge";
 import type { NativeAuthRole } from "@/auth/nativeAuthStorage";
+import { isNativeTestFeatureEnabled } from "@/auth/testFeatureAccess";
+import { WEB_BUNDLE_UPDATE_CONFIG } from "@/config/webBundleUpdateConfig";
 import {
   openNativeExternalUrl,
   shouldKeepUrlInWebView
@@ -300,7 +302,11 @@ export default function NativeWebViewScreen({
   onAuthSessionChange
 }: NativeWebViewScreenProps) {
   const text = WEB_VIEW_TEXT[appLanguage];
-  const testAccountMode =
+  const testAccountMode = isNativeTestFeatureEnabled(
+    nativeAuthRole,
+    WEB_BUNDLE_UPDATE_CONFIG.appVariant
+  );
+  const reviewerVerificationBypass =
     nativeAuthRole === "OWNER" || nativeAuthRole === "REVIEWER";
   const webViewRef = useRef<WebView>(null);
   const pendingNavigationPathRef = useRef<string | null>("/home");
@@ -351,7 +357,7 @@ export default function NativeWebViewScreen({
         {
           testAccountMode: ${JSON.stringify(testAccountMode)},
           reviewerVerificationBypass: ${JSON.stringify(
-            testAccountMode
+            reviewerVerificationBypass
           )}
         }
       );
@@ -363,6 +369,7 @@ export default function NativeWebViewScreen({
     nativeAuthExpiresAt,
     nativeAuthSessionId,
     nativeAuthToken,
+    reviewerVerificationBypass,
     testAccountMode
   ]);
 
