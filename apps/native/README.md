@@ -424,7 +424,7 @@ releases/
 
 iOS와 Android가 채널별 웹 번들 하나를 공유하므로 같은 채널의 두 플랫폼은 major/minor를 맞춰야 합니다. 서로 다르면 어떤 네이티브 버전을 웹 기준선으로 사용할지 모호해지므로 배포를 실패 처리합니다. Actions에서 수동 실행할 때 `version`을 입력할 수 있지만, 네이티브 major/minor와 같고 현재 해당 채널 웹 버전보다 높은 값만 허용합니다.
 
-`releases`에는 최신 버전 폴더 5개만 유지하고, 오래된 버전은 폴더 안의 `manifest.json`과 `web-ui.zip`을 함께 삭제합니다.
+`releases`에는 최신 버전 폴더 5개만 유지하고, 오래된 버전은 폴더 안의 `manifest.json`과 `web-ui.zip`을 함께 삭제합니다. 구버전 정리는 새 release와 `latest/manifest.json` 게시가 끝난 뒤 실행하며, R2의 일시 오류가 발생하면 제한된 횟수만큼 재시도합니다. 재시도 후에도 정리가 실패하면 완료된 최신 배포는 유지하고 Actions 경고를 남긴 뒤 다음 배포에서 다시 정리합니다.
 
 GitHub 저장소의 `Settings > Secrets and variables > Actions`에서 아래 Repository secrets를 등록해야 합니다.
 

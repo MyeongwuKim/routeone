@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+/**
+ * 용도:
+ * 빌드된 웹 번들과 최신 manifest를 R2에 게시하고 이전 릴리스를 정리한다.
+ *
+ * 동작 방식:
+ * 새 릴리스를 모두 업로드한 뒤 latest를 전환하며, 구버전 정리는 제한된
+ * 재시도를 거쳐 실패하더라도 완료된 게시를 되돌리지 않고 경고로 남긴다.
+ */
+
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -29,6 +38,13 @@ if (!accessKeyId || !secretAccessKey) {
 }
 
 const retention = readPositiveInteger("ROUTEONE_WEB_BUNDLE_RETENTION", 5);
+const awsMaxAttempts = readPositiveInteger("AWS_MAX_ATTEMPTS", 4);
+const awsRetryMode = env.AWS_RETRY_MODE?.trim() || "standard";
+const pruneRetryBaseDelayMs = readNonNegativeInteger(
+  "ROUTEONE_WEB_BUNDLE_PRUNE_RETRY_DELAY_MS",
+  1_000
+);
+const pruneMaxAttempts = 3;
 const channel = readWebBundleChannel();
 const distDir = resolve(env.ROUTEONE_WEB_DIST_DIR || "apps/web/dist");
 const version = required("ROUTEONE_WEB_BUNDLE_VERSION");
@@ -83,7 +99,13 @@ try {
     "public, max-age=31536000, immutable"
   );
   uploadFile(manifestPath, latestManifestKey, "application/json", "no-store");
-  pruneReleases();
+  try {
+    await pruneReleases();
+  } catch (error) {
+    warnCleanup(
+      `Retention cleanup stopped unexpectedly (${summarizeError(error)}). A later publish will retry it.`
+    );
+  }
 
   console.log(`Published ${bundleKey}`);
   console.log(`Published ${releaseWebPrefix}/`);
@@ -138,6 +160,17 @@ function readPositiveInteger(name, fallback) {
 
   if (!Number.isInteger(value) || value < 1) {
     fail(`${name} must be a positive integer.`);
+  }
+
+  return value;
+}
+
+function readNonNegativeInteger(name, fallback) {
+  const rawValue = env[name]?.trim();
+  const value = rawValue ? Number.parseInt(rawValue, 10) : fallback;
+
+  if (!Number.isInteger(value) || value < 0) {
+    fail(`${name} must be a non-negative integer.`);
   }
 
   return value;
@@ -250,7 +283,7 @@ function getCacheControl(relativePath) {
   return "public, max-age=3600";
 }
 
-function pruneReleases() {
+async function pruneReleases() {
   const releases = listReleases();
   const keepVersions = new Set([version]);
 
@@ -267,14 +300,47 @@ function pruneReleases() {
       continue;
     }
 
-    runAws([
-      "s3",
-      "rm",
-      `s3://${bucketName}/${release.prefix}`,
-      "--recursive"
-    ]);
-    console.log(`Deleted old release ${release.prefix}`);
+    if (await deleteReleaseWithRetry(release)) {
+      console.log(`Deleted old release ${release.prefix}`);
+    }
   }
+}
+
+async function deleteReleaseWithRetry(release) {
+  const args = [
+    "s3",
+    "rm",
+    `s3://${bucketName}/${release.prefix}`,
+    "--recursive"
+  ];
+
+  for (let attempt = 1; attempt <= pruneMaxAttempts; attempt += 1) {
+    const result = runAws(args, { allowFailure: true });
+
+    if (result.status === 0) {
+      return true;
+    }
+
+    const failure = summarizeCommandFailure(result);
+
+    if (attempt === pruneMaxAttempts) {
+      warnCleanup(
+        `Could not delete ${release.prefix} after ${pruneMaxAttempts} attempts (${failure}). A later publish will retry it.`
+      );
+      return false;
+    }
+
+    const delayMs = Math.min(
+      pruneRetryBaseDelayMs * 2 ** (attempt - 1),
+      30_000
+    );
+    console.warn(
+      `[web-bundle-cleanup] Failed to delete ${release.prefix} on attempt ${attempt}/${pruneMaxAttempts} (${failure}). Retrying in ${delayMs}ms.`
+    );
+    await wait(delayMs);
+  }
+
+  return false;
 }
 
 function listReleases() {
@@ -291,6 +357,9 @@ function listReleases() {
   );
 
   if (result.status !== 0 || !result.stdout) {
+    warnCleanup(
+      `Could not list existing releases; retention cleanup was skipped (${summarizeCommandFailure(result)}).`
+    );
     return [];
   }
 
@@ -322,7 +391,10 @@ function listReleases() {
     }
 
     return [...releases.values()].sort((a, b) => b.modifiedAt - a.modifiedAt);
-  } catch {
+  } catch (error) {
+    warnCleanup(
+      `Could not parse the existing release list; retention cleanup was skipped (${error instanceof Error ? error.message : String(error)}).`
+    );
     return [];
   }
 }
@@ -349,7 +421,9 @@ function run(command, args, options = {}) {
       ...env,
       AWS_ACCESS_KEY_ID: accessKeyId,
       AWS_SECRET_ACCESS_KEY: secretAccessKey,
-      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_EC2_METADATA_DISABLED: "true",
+      AWS_MAX_ATTEMPTS: `${awsMaxAttempts}`,
+      AWS_RETRY_MODE: awsRetryMode
     },
     stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit"
   });
@@ -367,6 +441,43 @@ function run(command, args, options = {}) {
   }
 
   return result;
+}
+
+function summarizeCommandFailure(result) {
+  return `exit code ${result.status ?? "unknown"}`;
+}
+
+function summarizeError(error) {
+  if (error instanceof Error && error.message) {
+    return error.message.replace(/\s+/g, " ").slice(0, 300);
+  }
+
+  return String(error).replace(/\s+/g, " ").slice(0, 300);
+}
+
+function warnCleanup(message) {
+  if (env.GITHUB_ACTIONS === "true") {
+    console.warn(
+      `::warning title=R2 release cleanup::${escapeWorkflowCommand(message)}`
+    );
+    return;
+  }
+
+  console.warn(`[web-bundle-cleanup] ${message}`);
+}
+
+function escapeWorkflowCommand(value) {
+  return value.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+}
+
+function wait(delayMs) {
+  if (delayMs === 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolvePromise) => {
+    setTimeout(resolvePromise, delayMs);
+  });
 }
 
 function writeJson(filePath, value) {

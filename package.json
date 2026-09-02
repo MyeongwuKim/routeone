@@ -29,6 +29,7 @@
     "publish:native-update-policy:r2": "node scripts/publish-native-update-policy-r2.mjs",
     "validate:native-update-policy": "node scripts/publish-native-update-policy-r2.mjs --validate-only",
     "publish:web-bundle:r2": "node scripts/publish-web-bundle-r2.mjs",
+    "test:web-bundle-scripts": "node --test scripts/resolve-web-bundle-version.test.mjs scripts/publish-web-bundle-r2.test.mjs",
     "test:web-bundle-version": "node --test scripts/resolve-web-bundle-version.test.mjs"
   }
 }
