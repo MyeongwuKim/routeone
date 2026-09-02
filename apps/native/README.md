@@ -11,6 +11,8 @@ React Native WebView로 `apps/web` 빌드 산출물을 감싸는 하이브리드
 | iOS 시뮬레이터 빌드 테스트 | `pnpm native:ios:local` | `EXPO_PUBLIC_GRAPHQL_ENDPOINT`에 현재 실행 중인 API 주소를 넣고, `APP_VARIANT=none` 앱을 빌드해 시뮬레이터에서 실행합니다. |
 | iPhone 실기기 빌드 테스트 | `pnpm native:ios:device` | 연결된 iPhone을 선택하고 Metro에 연결되는 `APP_VARIANT=none` 로컬 개발 앱을 빌드해 설치합니다. |
 | dev TestFlight용 Xcode 프로젝트 생성 | `pnpm native:ios:dev` | `APP_VARIANT=dev`로 `ios/`의 `.xcodeproj`와 `.xcworkspace`를 생성 또는 갱신합니다. |
+| prod 배포용 Xcode 프로젝트 생성 | `pnpm native:ios:prod` | `APP_VARIANT=prod`로 최신 웹뷰 번들을 만들고 `ios/`의 Xcode 프로젝트를 생성 또는 갱신합니다. |
+| prod Expo/EAS 빌드 및 제출 | `pnpm native:ios:prod:expo` | EAS에서 운영 앱을 빌드하고 App Store Connect에 자동 제출합니다. |
 | 로컬 Android 실행 | `pnpm native:android` | `APP_VARIANT=none`으로 Android 앱을 빌드하고 실행합니다. |
 | 이미 설치된 dev client 실행 | `pnpm native:start` | 웹 번들을 다시 빌드하지 않고 Metro dev server를 실행합니다. |
 | Expo Go 실행 | `pnpm native:start:go` | Expo Go로 확인해야 할 때만 사용합니다. |
@@ -18,7 +20,7 @@ React Native WebView로 `apps/web` 빌드 산출물을 감싸는 하이브리드
 | 웹뷰 번들 갱신 | `pnpm native:build:webview` | `apps/web/dist`를 native WebView용 번들로 변환합니다. |
 | 타입 체크 | `pnpm native:typecheck` | native TypeScript 타입 검사를 실행합니다. |
 
-`pnpm native:ios`는 로컬 실행인지 Xcode 파일 생성인지 헷갈리기 때문에 사용하지 않습니다. 로컬 시뮬레이터 실행은 `native:ios:local`, dev Xcode 파일 생성은 `native:ios:dev`로 구분합니다.
+`pnpm native:ios`는 로컬 실행인지 Xcode 파일 생성인지 헷갈리기 때문에 사용하지 않습니다. 로컬 시뮬레이터 실행은 `native:ios:local`, Xcode 파일 생성은 `native:ios:dev`와 `native:ios:prod`, Expo/EAS 배포는 `native:ios:prod:expo`로 구분합니다.
 
 ## 빌드 테스트 순서
 
@@ -27,7 +29,7 @@ Native 변경사항은 아래 순서로 확인합니다.
 1. `local`: `pnpm native:ios:local`로 iOS 시뮬레이터 빌드 테스트
 2. `device`: `pnpm native:ios:device`로 연결된 iPhone 실기기 빌드 테스트
 3. `dev`: `pnpm native:ios:dev`로 dev용 Xcode 프로젝트 생성 후 dev TestFlight 빌드 테스트
-4. `prod`: dev 검증 완료 후 Expo/EAS에 운영 빌드를 올려 App Store Connect 업로드와 TestFlight 테스트
+4. `prod`: `pnpm native:ios:prod`로 prod용 Xcode 프로젝트 생성 후 직접 Archive하거나 `pnpm native:ios:prod:expo`로 EAS 빌드 및 제출
 
 `local → device → dev → prod` 순서로 진행하며, 앞 단계에서 확인된 빌드만 다음 단계로 넘깁니다.
 
@@ -137,23 +139,22 @@ pnpm eas:submit:ios:dev
 
 ### prod Xcode 프로젝트와 운영 빌드
 
-prod 설정의 Xcode 프로젝트만 필요할 때는 Native 패키지에서 아래 prebuild 명령을 직접 실행합니다.
-
-```bash
-cd apps/native
-pnpm prebuild:ios:prod
-```
-
-이 명령은 `APP_VARIANT=prod`와 iOS 플랫폼을 설정하고, 운영 앱 이름·Bundle ID·버전을 `app.config.ts`에 반영해 `ios/` 프로젝트를 생성 또는 갱신합니다. 이 단계도 Xcode 프로젝트만 준비하며 배포 바이너리는 만들지 않습니다.
-
-운영 TestFlight와 App Store에 사용할 실제 빌드와 App Store Connect 제출은 루트에서 아래 명령으로 연속 실행합니다.
+prod 설정의 Xcode 프로젝트는 루트에서 아래 명령으로 생성합니다.
 
 ```bash
 pnpm native:ios:prod
+```
+
+이 명령은 `APP_VARIANT=prod`와 iOS 플랫폼을 설정하고, 최신 웹뷰 번들과 운영 앱 이름·Bundle ID·버전을 반영해 `ios/` 프로젝트를 생성 또는 갱신합니다. 이 단계는 Xcode 프로젝트만 준비하며 배포 바이너리를 만들거나 App Store Connect에 업로드하지 않습니다. 생성된 `.xcworkspace`를 Xcode에서 열어 Archive한 뒤 직접 업로드합니다.
+
+Expo/EAS에서 운영 빌드 생성과 App Store Connect 제출을 연속 실행하려면 아래 명령을 사용합니다.
+
+```bash
+pnpm native:ios:prod:expo
 ```
 
 ```text
-pnpm native:ios:prod
+pnpm native:ios:prod:expo
 → APP_VARIANT=prod, ROUTEONE_BUILD_PLATFORM=ios 설정
 → app-versions.json의 prod.ios 버전 확인
 → 웹뷰 번들 생성과 iOS JavaScript 번들 사전 검증
@@ -178,10 +179,10 @@ pnpm run eas:build:ios:dev
 pnpm run eas:submit:ios:dev
 ```
 
-운영 앱은 `APP_VARIANT=prod`와 `production` 프로필을 사용합니다. iOS 번들 ID는 `com.myeongwukim.routeone`, 앱 이름은 `RouteOne`입니다. 루트 명령은 Expo/EAS 클라우드 빌드가 성공하면 같은 production 제출 프로필로 App Store Connect 업로드까지 이어서 실행합니다.
+운영 앱은 `APP_VARIANT=prod`와 `production` 프로필을 사용합니다. iOS 번들 ID는 `com.myeongwukim.routeone`, 앱 이름은 `RouteOne`입니다. Expo/EAS 배포 명령은 클라우드 빌드가 성공하면 같은 production 제출 프로필로 App Store Connect 업로드까지 이어서 실행합니다.
 
 ```bash
-pnpm native:ios:prod
+pnpm native:ios:prod:expo
 ```
 
 빌드와 제출을 따로 실행해야 할 때는 Native 패키지의 `eas:build:ios`와 `eas:submit:ios` 명령을 각각 사용합니다.
@@ -489,7 +490,8 @@ Native 빌드 명령은 실행 목적에 맞게 `APP_VARIANT`와 플랫폼을 �
 | `pnpm native:ios:device` | `none` | iOS | 내장 웹 번들을 사용하는 iPhone 실기기 앱 빌드·실행 |
 | `pnpm native:android` | `none` | Android | 내장 웹 번들을 사용하는 로컬 Android 앱 빌드·실행 |
 | `pnpm native:ios:dev` | `dev` | iOS | dev R2 채널을 사용하는 Xcode 프로젝트 생성·갱신 |
-| `pnpm native:ios:prod` | `prod` | iOS | production 빌드 생성 후 App Store Connect 자동 제출 |
+| `pnpm native:ios:prod` | `prod` | iOS | prod R2 채널을 사용하는 Xcode 프로젝트 생성·갱신 |
+| `pnpm native:ios:prod:expo` | `prod` | iOS | production EAS 빌드 생성 후 App Store Connect 자동 제출 |
 | `cd apps/native && pnpm eas:build:ios:dev` | `dev` | iOS | dev R2 채널을 사용하는 TestFlight 빌드 생성 |
 | `cd apps/native && pnpm eas:build:ios` | `prod` | iOS | prod R2 채널을 사용하는 운영 빌드 생성 |
 | `cd apps/native && pnpm eas:build:android` | `prod` | Android | prod R2 채널을 사용하는 운영 빌드 생성 |
