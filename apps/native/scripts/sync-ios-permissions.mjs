@@ -17,6 +17,7 @@ const envPaths = explicitEnvFile
       path.join(nativeRoot, ".env"),
       ...(envMode ? [path.join(nativeRoot, `.env.${envMode}`)] : []),
     ];
+const xcodeBuildNumber = "$(CURRENT_PROJECT_VERSION)";
 
 const permissionEntries = [
   {
@@ -60,6 +61,38 @@ function escapePlistString(value) {
     .replaceAll(">", "&gt;");
 }
 
+function syncBuildNumber(source) {
+  const buildNumberPattern =
+    /(<key>CFBundleVersion<\/key>\s*<string>)[^<]*(<\/string>)/;
+
+  if (source.includes(`<string>${xcodeBuildNumber}</string>`)) {
+    return {
+      source,
+      didChange: false,
+    };
+  }
+
+  if (buildNumberPattern.test(source)) {
+    return {
+      source: source.replace(
+        buildNumberPattern,
+        (_match, prefix, suffix) => `${prefix}${xcodeBuildNumber}${suffix}`
+      ),
+      didChange: true,
+    };
+  }
+
+  const buildNumberEntry = [
+    "\t<key>CFBundleVersion</key>",
+    `\t<string>${xcodeBuildNumber}</string>`,
+  ].join("\n");
+
+  return {
+    source: source.replace("</dict>", `${buildNumberEntry}\n</dict>`),
+    didChange: true,
+  };
+}
+
 function getGoogleIosUrlScheme() {
   const env = readConfiguredEnv();
   const explicitScheme =
@@ -91,15 +124,46 @@ function getGoogleIosUrlScheme() {
 function syncGoogleUrlScheme(source) {
   const googleIosUrlScheme = getGoogleIosUrlScheme();
 
-  if (!googleIosUrlScheme || source.includes(`<string>${googleIosUrlScheme}</string>`)) {
+  if (!googleIosUrlScheme) {
     return {
       source,
       didChange: false,
     };
   }
 
+  const escapedScheme = escapePlistString(googleIosUrlScheme);
+  const googleSchemePattern =
+    /([ \t]*)<string>com\.googleusercontent\.apps\.[^<]+<\/string>\s*\n?/g;
+  const existingGoogleSchemes = [
+    ...source.matchAll(
+      /<string>(com\.googleusercontent\.apps\.[^<]+)<\/string>/g
+    ),
+  ].map((match) => match[1]);
+
+  if (existingGoogleSchemes.length > 0) {
+    let didWriteScheme = false;
+    const nextSource = source.replace(
+      googleSchemePattern,
+      (_match, indentation) => {
+        if (didWriteScheme) {
+          return "";
+        }
+
+        didWriteScheme = true;
+        return `${indentation}<string>${escapedScheme}</string>\n`;
+      }
+    );
+
+    return {
+      source: nextSource,
+      didChange:
+        existingGoogleSchemes.length !== 1 ||
+        existingGoogleSchemes[0] !== googleIosUrlScheme,
+    };
+  }
+
   const bundleUrlSchemesMarker = "\t\t\t</array>";
-  const insertion = `\t\t\t\t<string>${escapePlistString(googleIosUrlScheme)}</string>\n`;
+  const insertion = `\t\t\t\t<string>${escapedScheme}</string>\n`;
 
   if (source.includes(bundleUrlSchemesMarker)) {
     return {
@@ -117,7 +181,7 @@ function syncGoogleUrlScheme(source) {
     "\t\t<dict>",
     "\t\t\t<key>CFBundleURLSchemes</key>",
     "\t\t\t<array>",
-    `\t\t\t\t<string>${escapePlistString(googleIosUrlScheme)}</string>`,
+    `\t\t\t\t<string>${escapedScheme}</string>`,
     "\t\t\t</array>",
     "\t\t</dict>",
     "\t</array>",
@@ -222,12 +286,14 @@ if (!existsSync(infoPlistPath)) {
 }
 
 const source = readFileSync(infoPlistPath, "utf8");
-const permissionResult = syncPermissionEntries(source);
+const buildNumberResult = syncBuildNumber(source);
+const permissionResult = syncPermissionEntries(buildNumberResult.source);
 const backgroundLocationResult = syncBackgroundLocationMode(permissionResult.source);
 const googleResult = syncGoogleUrlScheme(backgroundLocationResult.source);
 const appleEntitlementResult = syncAppleEntitlement();
 
 if (
+  buildNumberResult.didChange ||
   permissionResult.count > 0 ||
   backgroundLocationResult.didChange ||
   googleResult.didChange
@@ -236,6 +302,7 @@ if (
 }
 
 if (
+  !buildNumberResult.didChange &&
   !permissionResult.count &&
   !backgroundLocationResult.didChange &&
   !googleResult.didChange &&
@@ -246,10 +313,13 @@ if (
 }
 
 const changes = [
+  buildNumberResult.didChange
+    ? "linked build number to CURRENT_PROJECT_VERSION"
+    : null,
   permissionResult.count
     ? `added permission entries: ${permissionResult.count}`
     : null,
-  googleResult.didChange ? "added Google URL scheme" : null,
+  googleResult.didChange ? "synced Google URL scheme" : null,
   backgroundLocationResult.didChange ? "enabled background location mode" : null,
   appleEntitlementResult === "added"
     ? "added Apple Sign In entitlement"
