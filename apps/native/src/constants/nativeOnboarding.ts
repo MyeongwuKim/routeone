@@ -57,8 +57,6 @@ export const LOGIN_TEXT = {
       "Google 로그인 설정이 앱에 아직 반영되지 않았어요. 앱을 다시 설치한 뒤 시도해 주세요.",
     googleContinue: "Google로 계속",
     passwordPlaceholder: "비밀번호",
-    reviewerAccount: "심사 전용 계정",
-    reviewerAccountContinue: "심사 계정으로 계속",
     testAccount: "테스트 계정",
     testAccountContinue: "테스트 계정으로 계속",
     accountIdPlaceholder: "아이디"
@@ -79,8 +77,6 @@ export const LOGIN_TEXT = {
       "Google sign-in configuration has not been applied to this app yet. Reinstall the app and try again.",
     googleContinue: "Continue with Google",
     passwordPlaceholder: "Password",
-    reviewerAccount: "Reviewer account",
-    reviewerAccountContinue: "Continue with reviewer account",
     testAccount: "Test account",
     testAccountContinue: "Continue with test account",
     accountIdPlaceholder: "ID"

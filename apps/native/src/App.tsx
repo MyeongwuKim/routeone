@@ -14,6 +14,7 @@ import NativeWebViewScreen from "./components/native-webview/NativeWebViewScreen
 import RouteOneLaunchScreen from "./components/native-webview/RouteOneLaunchScreen";
 import { useNativeBoot } from "./boot/useNativeBoot";
 import { useNativeLogin } from "./auth/useNativeLogin";
+import { getPasswordLoginMode } from "./auth/passwordLoginMode";
 import { useNativeUpdate } from "./nativeUpdate/useNativeUpdate";
 import { ONBOARDING_TEXT } from "@/constants/nativeOnboarding";
 import { WEB_BUNDLE_UPDATE_CONFIG } from "@/config/webBundleUpdateConfig";
@@ -226,11 +227,9 @@ export default function App() {
             void nativeLogin.handlePasswordLogin();
           }}
           password={nativeLogin.password}
-          passwordLoginMode={
-            WEB_BUNDLE_UPDATE_CONFIG.appVariant === "prod"
-              ? "reviewer"
-              : "test"
-          }
+          passwordLoginMode={getPasswordLoginMode(
+            WEB_BUNDLE_UPDATE_CONFIG.appVariant
+          )}
           toastMessage={isAuthSessionExpired ? text.sessionExpired : null}
         />
       </SafeAreaView>

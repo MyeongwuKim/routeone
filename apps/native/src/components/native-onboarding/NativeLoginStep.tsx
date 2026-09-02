@@ -14,11 +14,11 @@ import {
   View
 } from "react-native";
 import type { NativeLoginProvider } from "@/auth/nativeLoginTypes";
+import type { PasswordLoginMode } from "@/auth/passwordLoginMode";
 import { useNativeLoginErrorAlert } from "@/auth/useNativeLoginErrorAlert";
 import { LOGIN_TEXT, LOGIN_THEME } from "@/constants/nativeOnboarding";
 
 type AppLanguage = "ko" | "en";
-type PasswordLoginMode = "hidden" | "test" | "reviewer";
 
 type NativeLoginStepProps = {
   language: AppLanguage;
@@ -101,7 +101,6 @@ export default function NativeLoginStep({
   const text = LOGIN_TEXT[language];
   const isBusy = activeProvider !== null;
   const showPasswordLogin = passwordLoginMode !== "hidden";
-  const isReviewerLogin = passwordLoginMode === "reviewer";
   const isAppleDisabled = isBusy || Platform.OS !== "ios" || !appleAvailable;
   const [isToastVisible, setIsToastVisible] = useState(Boolean(toastMessage));
 
@@ -234,9 +233,7 @@ export default function NativeLoginStep({
                 <Text
                   style={[styles.dividerText, { color: colors.mutedText }]}
                 >
-                  {isReviewerLogin
-                    ? text.reviewerAccount
-                    : text.testAccount}
+                  {text.testAccount}
                 </Text>
                 <View
                   style={[
@@ -279,23 +276,21 @@ export default function NativeLoginStep({
                 ]}
                 value={password}
               />
-              {!isReviewerLogin ? (
-                <TextInput
-                  editable={!isBusy}
-                  onChangeText={onChangeDisplayName}
-                  placeholder={text.displayNamePlaceholder}
-                  placeholderTextColor={colors.placeholder}
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: colors.inputBackground,
-                      borderColor: colors.inputBorder,
-                      color: colors.inputText
-                    }
-                  ]}
-                  value={displayName}
-                />
-              ) : null}
+              <TextInput
+                editable={!isBusy}
+                onChangeText={onChangeDisplayName}
+                placeholder={text.displayNamePlaceholder}
+                placeholderTextColor={colors.placeholder}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.inputBorder,
+                    color: colors.inputText
+                  }
+                ]}
+                value={displayName}
+              />
               <Pressable
                 accessibilityRole="button"
                 disabled={isBusy}
@@ -317,9 +312,7 @@ export default function NativeLoginStep({
                     {getButtonLabel({
                       provider: "password",
                       activeProvider,
-                      label: isReviewerLogin
-                        ? text.reviewerAccountContinue
-                        : text.testAccountContinue,
+                      label: text.testAccountContinue,
                       loadingLabel: text.checking
                     })}
                   </Text>
