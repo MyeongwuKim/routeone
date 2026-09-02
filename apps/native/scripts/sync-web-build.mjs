@@ -1,16 +1,27 @@
 import { spawnSync } from "node:child_process";
 import { Buffer } from "node:buffer";
-import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadEnvFile } from "./env-file.mjs";
 
 const nativeRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const webRoot = path.resolve(nativeRoot, "../web");
 const webDist = path.join(webRoot, "dist");
 const generatedFile = path.join(nativeRoot, "src/generated/webBundle.ts");
 const shouldSkipBuild = process.argv.includes("--skip-build");
-loadEnvFile(path.join(nativeRoot, ".env"));
+const explicitEnvFile = process.env.ROUTEONE_ENV_FILE?.trim();
+const envMode = process.env.NODE_ENV?.trim();
+
+if (explicitEnvFile) {
+  loadEnvFile(path.resolve(nativeRoot, explicitEnvFile));
+} else {
+  if (envMode) {
+    loadEnvFile(path.join(nativeRoot, `.env.${envMode}`));
+  }
+
+  loadEnvFile(path.join(nativeRoot, ".env"));
+}
 const packageManager = process.env.npm_execpath?.includes("pnpm")
   ? "pnpm"
   : "npm";
@@ -22,24 +33,6 @@ const nativeRuntimeConfig = {
   routerMode: "hash",
   webBundlePublicOrigin: readHttpOrigin(nativeWebviewBaseUrl)
 };
-
-function loadEnvFile(filePath) {
-  if (!existsSync(filePath)) {
-    return;
-  }
-
-  const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
-
-  for (const line of lines) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)\s*$/);
-
-    if (!match || process.env[match[1]] !== undefined) {
-      continue;
-    }
-
-    process.env[match[1]] = match[2].trim().replace(/^['"]|['"]$/g, "");
-  }
-}
 
 function trimTrailingSlashes(value) {
   return value.replace(/\/+$/g, "");

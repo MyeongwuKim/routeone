@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readEnvFile } from "./env-file.mjs";
 
 const nativeRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const infoPlistPath = path.join(nativeRoot, "ios/RouteOne/Info.plist");
@@ -8,7 +9,14 @@ const entitlementsPath = path.join(
   nativeRoot,
   "ios/RouteOne/RouteOne.entitlements"
 );
-const envPath = path.join(nativeRoot, ".env");
+const explicitEnvFile = process.env.ROUTEONE_ENV_FILE?.trim();
+const envMode = process.env.NODE_ENV?.trim();
+const envPaths = explicitEnvFile
+  ? [path.resolve(nativeRoot, explicitEnvFile)]
+  : [
+      path.join(nativeRoot, ".env"),
+      ...(envMode ? [path.join(nativeRoot, `.env.${envMode}`)] : []),
+    ];
 
 const permissionEntries = [
   {
@@ -38,30 +46,10 @@ const permissionEntries = [
   },
 ];
 
-function readEnvFile() {
-  if (!existsSync(envPath)) {
-    return {};
-  }
-
-  return Object.fromEntries(
-    readFileSync(envPath, "utf8")
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .map((line) => {
-        const separatorIndex = line.indexOf("=");
-
-        if (separatorIndex < 0) {
-          return null;
-        }
-
-        const key = line.slice(0, separatorIndex).trim();
-        const rawValue = line.slice(separatorIndex + 1).trim();
-        const value = rawValue.replace(/^['"]|['"]$/g, "");
-
-        return key ? [key, value] : null;
-      })
-      .filter(Boolean)
+function readConfiguredEnv() {
+  return Object.assign(
+    {},
+    ...envPaths.map((envPath) => readEnvFile(envPath))
   );
 }
 
@@ -73,7 +61,7 @@ function escapePlistString(value) {
 }
 
 function getGoogleIosUrlScheme() {
-  const env = readEnvFile();
+  const env = readConfiguredEnv();
   const explicitScheme =
     process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME?.trim() ||
     process.env.GOOGLE_IOS_URL_SCHEME?.trim() ||

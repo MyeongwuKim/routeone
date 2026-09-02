@@ -145,7 +145,7 @@ prod 설정의 Xcode 프로젝트는 루트에서 아래 명령으로 생성합�
 pnpm native:ios:prod
 ```
 
-이 명령은 `APP_VARIANT=prod`와 iOS 플랫폼을 설정하고, 최신 웹뷰 번들과 운영 앱 이름·Bundle ID·버전을 반영해 `ios/` 프로젝트를 생성 또는 갱신합니다. 이 단계는 Xcode 프로젝트만 준비하며 배포 바이너리를 만들거나 App Store Connect에 업로드하지 않습니다. 생성된 `.xcworkspace`를 Xcode에서 열어 Archive한 뒤 직접 업로드합니다.
+이 명령은 `apps/native/.env.production`의 Native 환경값만 사용하고, 최신 웹뷰 번들과 운영 앱 이름·Bundle ID·버전을 반영해 `ios/` 프로젝트를 생성 또는 갱신합니다. `.env.production`이 없으면 dev 환경값으로 잘못 빌드되지 않도록 실행을 중단합니다. 생성된 Xcode 번들 단계에도 같은 production env를 연결하므로 `.xcworkspace`를 열어 Archive한 뒤 직접 업로드하면 됩니다. 이 단계 자체에서는 배포 바이너리를 만들거나 App Store Connect에 업로드하지 않습니다.
 
 Expo/EAS에서 운영 빌드 생성과 App Store Connect 제출을 연속 실행하려면 아래 명령을 사용합니다.
 
@@ -441,7 +441,7 @@ R2 버킷과 API Token은 dev/prod용으로 각각 만들고, 각 Token의 `Obje
 
 ## 환경변수
 
-로컬 개발 값은 `apps/native/.env`에 저장하고, dev·prod TestFlight와 운영 빌드 값은 Expo/EAS 환경변수로 관리합니다. `EXPO_PUBLIC_`으로 시작하는 값은 앱 번들에 포함되므로 서버 비밀키나 R2 Access Key처럼 외부에 노출되면 안 되는 값은 넣지 않습니다.
+로컬 개발 값은 `apps/native/.env`에 저장하고, Xcode에서 직접 빌드할 prod 값은 `apps/native/.env.production`에 저장합니다. Expo/EAS 빌드의 dev·prod 값은 EAS 환경변수로 관리합니다. `EXPO_PUBLIC_`으로 시작하는 값은 앱 번들에 포함되므로 서버 비밀키나 R2 Access Key처럼 외부에 노출되면 안 되는 값은 넣지 않습니다.
 
 ### 네이티브 앱 설정
 
@@ -482,7 +482,7 @@ EXPO_PUBLIC_NCP_MAPS_KEY=...
 
 ### 명령어별 자동 설정값
 
-Native 빌드 명령은 실행 목적에 맞게 `APP_VARIANT`와 플랫폼을 자동 설정합니다. 명령어에 값이 명시된 경우 `apps/native/.env`의 `APP_VARIANT`보다 명령어의 값이 우선합니다.
+Native 빌드 명령은 실행 목적에 맞게 `APP_VARIANT`와 플랫폼을 자동 설정합니다. `native:ios:prod`는 `apps/native/.env.production` 값을 단독으로 적용하고, 명령어에 지정된 `APP_VARIANT=prod`가 환경변수 파일보다 우선합니다.
 
 | 명령어 | 앱 상태 | 플랫폼 | 실행 결과 |
 | --- | --- | --- | --- |
