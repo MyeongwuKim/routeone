@@ -15,6 +15,7 @@ import {
 } from "react-icons/md";
 import { routeApi } from "@/api/routeApi";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import RoutePageEmptyState from "@/components/feedback/RoutePageEmptyState";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import { DropdownSelect } from "@/components/inputs";
 import {
@@ -125,6 +126,24 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     []
   );
   const pageCopy = getSharedRoutePageCopy(text, mode);
+  const emptyRouteCard = (
+    <PotatoLoadingCard
+      title={pageCopy.empty}
+      description={
+        mode === "liked"
+          ? text.sharedRoute.emptyLikedDescription
+          : text.sharedRoute.emptyFeedDescription
+      }
+      footerText={
+        mode === "liked"
+          ? text.sharedRoute.emptyLikedFooter
+          : text.sharedRoute.emptyFeedFooter
+      }
+      animation="empty"
+      compact
+      className="shadow-sm"
+    />
+  );
   const sortOptions = useMemo(() => getSharedRouteSortOptions(text), [text]);
   const baseRouteListQueryKey =
     mode === "liked" ? LIKED_SHARED_ROUTES_QUERY_KEY : SHARED_ROUTES_QUERY_KEY;
@@ -497,7 +516,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   };
 
   return (
-    <section className="flex h-full min-h-0 flex-col gap-3">
+    <section className="relative flex h-full min-h-0 flex-col gap-3">
       {mode === "liked" ? (
         <header className="flex items-center gap-3">
           <button
@@ -667,9 +686,15 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         ) : null}
       </div>
 
+      {canShowEmptyRoutes && routes.length === 0 && mode === "feed" ? (
+        <RoutePageEmptyState className="pointer-events-none absolute inset-0 z-10">
+          {emptyRouteCard}
+        </RoutePageEmptyState>
+      ) : null}
+
       <div
         ref={routeListScrollRef}
-        className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-px pb-4 pt-1"
+        className="scrollbar-hide -mb-4 min-h-0 flex-1 space-y-3 overflow-y-auto px-px pb-4 pt-1"
       >
         {routeListQuery.isError && routes.length === 0 ? (
           <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
@@ -689,24 +714,9 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           <RouteListSkeleton variant="shared" />
         ) : null}
 
-        {canShowEmptyRoutes && routes.length === 0 ? (
+        {canShowEmptyRoutes && routes.length === 0 && mode === "liked" ? (
           <div className="flex min-h-full flex-col justify-center">
-            <PotatoLoadingCard
-              title={pageCopy.empty}
-              description={
-                mode === "liked"
-                  ? text.sharedRoute.emptyLikedDescription
-                  : text.sharedRoute.emptyFeedDescription
-              }
-              footerText={
-                mode === "liked"
-                  ? text.sharedRoute.emptyLikedFooter
-                  : text.sharedRoute.emptyFeedFooter
-              }
-              animation="empty"
-              compact
-              className="shadow-sm"
-            />
+            {emptyRouteCard}
           </div>
         ) : null}
 

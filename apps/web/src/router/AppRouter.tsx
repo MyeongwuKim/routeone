@@ -308,7 +308,7 @@ function SharedRouteFilterBarSkeleton() {
 
 function SharedRouteListLazySkeleton() {
   return (
-    <div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-px pb-4 pt-1">
+    <div className="scrollbar-hide -mb-4 min-h-0 flex-1 space-y-3 overflow-y-auto px-px pb-4 pt-1">
       <RouteListSkeleton variant="shared" className="pt-0" />
     </div>
   );

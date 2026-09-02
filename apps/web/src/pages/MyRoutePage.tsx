@@ -1436,7 +1436,7 @@ function MyRoutePage() {
   };
 
   return (
-    <section className="space-y-4 text-slate-900">
+    <section className="flex min-h-full flex-col gap-4 text-slate-900">
       {myRoutesQuery.isError ? (
         <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
           <p>{text.myRoute.loadError}</p>
