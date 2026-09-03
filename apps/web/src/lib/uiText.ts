@@ -1863,11 +1863,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestApplying: "적용 중",
       gpsTestApplyLocation: "이 위치 적용",
       gpsTestAppliedWithNotification:
-        "테스트 위치를 적용했고 앱 실행 중 즉시 알림을 보냈어요.",
+        "이 위치로 테스트 GPS를 적용했고 도착 알림도 보냈어요.",
       gpsTestAppliedInsideWithoutNotification:
-        "도착 반경 안에서 이동 중이에요. 같은 진입에서는 알림을 한 번만 보내요.",
+        "이 위치로 테스트 GPS를 적용했어요. 이미 도착 반경 안이라 알림은 추가로 보내지 않았어요.",
       gpsTestAppliedWithoutNotification:
-        "테스트 위치를 적용했어요. 도착 반경 밖이라 알림은 보내지 않았어요.",
+        "이 위치로 테스트 GPS를 적용했어요. 도착 반경 밖이라 알림은 보내지 않았어요.",
       gpsTestBackgroundRegistered: "종료 상태 알림 · 등록됨",
       gpsTestBackgroundDelivered: "종료 상태 알림 · 오늘 이미 발송됨",
       gpsTestBackgroundNotRegistered: "종료 상태 알림 · 등록 안 됨",
@@ -3177,11 +3177,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestApplying: "Applying",
       gpsTestApplyLocation: "Apply location",
       gpsTestAppliedWithNotification:
-        "The test location was applied and an immediate in-app test alert was sent.",
+        "The test GPS was applied to this location and an arrival alert was sent.",
       gpsTestAppliedInsideWithoutNotification:
-        "Moving inside the arrival radius. Only one alert is sent for the same entry.",
+        "The test GPS was applied to this location. You are already inside the arrival radius, so no additional alert was sent.",
       gpsTestAppliedWithoutNotification:
-        "The test location was applied. No alert was sent outside the arrival radius.",
+        "The test GPS was applied to this location. No alert was sent because it is outside the arrival radius.",
       gpsTestBackgroundRegistered: "Closed-app alert · Registered",
       gpsTestBackgroundDelivered: "Closed-app alert · Already sent today",
       gpsTestBackgroundNotRegistered: "Closed-app alert · Not registered",

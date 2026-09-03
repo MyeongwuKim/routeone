@@ -242,7 +242,7 @@ function TodayCurrentStopCard({ day }: { day: MyRouteDay }) {
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1 text-[11px] font-bold text-brand-700">
+        <p className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-black text-brand-50 ring-1 ring-white/15">
           {isCheckedIn ? (
             <MdMyLocation className="text-sm" />
           ) : (

@@ -35,7 +35,10 @@ type GpsTestLocationPopupProps = {
   onApply: (
     target: VisitCompletionTarget,
     position: TestLocation,
-    options?: { showSuccessToast?: boolean }
+    options?: {
+      showSuccessToast?: boolean;
+      notificationWasScheduledEarlier?: boolean;
+    }
   ) => Promise<NativeArrivalTestLocationResult | null>;
   onClear: () => Promise<NativeArrivalTestLocationResult | null>;
   onClose: () => void;
@@ -442,6 +445,7 @@ function GpsTestLocationPopup({
     setAutoWalkStepIndex(0);
     setAutoWalkStepCount(steps.length);
     setAutoWalkDistanceMeters(steps[0]?.distanceMeters ?? null);
+    let notificationWasScheduled = false;
 
     try {
       for (let index = 0; index < steps.length; index += 1) {
@@ -456,11 +460,15 @@ function GpsTestLocationPopup({
 
         const result = await onApply(target, step.position, {
           showSuccessToast: index === steps.length - 1,
+          notificationWasScheduledEarlier: notificationWasScheduled,
         });
 
         if (!result || autoWalkRunIdRef.current !== runId) {
           return;
         }
+
+        notificationWasScheduled =
+          notificationWasScheduled || result.notificationScheduled;
 
         if (index < steps.length - 1) {
           await waitForAutoWalkStep();

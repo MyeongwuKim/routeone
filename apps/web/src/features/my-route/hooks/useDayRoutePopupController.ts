@@ -921,7 +921,10 @@ export function useDayRoutePopupController({
   const handleApplyGpsTestLocation = async (
     target: VisitCompletionTarget,
     position: { lat: number; lng: number },
-    options: { showSuccessToast?: boolean } = {}
+    options: {
+      showSuccessToast?: boolean;
+      notificationWasScheduledEarlier?: boolean;
+    } = {}
   ) => {
     if (!isGpsTestEnabled || isGpsTestApplying) {
       return null;
@@ -962,7 +965,8 @@ export function useDayRoutePopupController({
       );
       if (options.showSuccessToast !== false) {
         showToast(
-          result.notificationScheduled
+          result.notificationScheduled ||
+            options.notificationWasScheduledEarlier
             ? text.dayRoute.gpsTestAppliedWithNotification
             : result.withinRadius
               ? text.dayRoute.gpsTestAppliedInsideWithoutNotification

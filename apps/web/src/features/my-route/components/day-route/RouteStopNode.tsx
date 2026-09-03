@@ -36,6 +36,8 @@ import {
 } from "../../utils/dayRouteFormatting";
 import type { TravelSegmentState } from "../../hooks/useDayRouteTravelSegments";
 
+const NOTIFICATION_FOCUS_SCROLL_DELAY_MS = 320;
+
 function getRouteStopVerificationBadge(stop: MyRouteStop, text: UiText) {
   if (stop.verificationStatus === "GPS_PHOTO") {
     return {
@@ -186,15 +188,24 @@ function RouteStopNode({
       return;
     }
 
-    const frameId = window.requestAnimationFrame(() => {
+    const scrollToCard = (behavior: ScrollBehavior) => {
       cardRef.current?.scrollIntoView({
-        behavior: "smooth",
+        behavior,
         block: "center",
       });
-      cardRef.current?.focus({ preventScroll: true });
+    };
+    const frameId = window.requestAnimationFrame(() => {
+      scrollToCard("auto");
     });
+    const timerId = window.setTimeout(() => {
+      scrollToCard("smooth");
+      cardRef.current?.focus({ preventScroll: true });
+    }, NOTIFICATION_FOCUS_SCROLL_DELAY_MS);
 
-    return () => window.cancelAnimationFrame(frameId);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.clearTimeout(timerId);
+    };
   }, [isNotificationFocused]);
 
   return (
