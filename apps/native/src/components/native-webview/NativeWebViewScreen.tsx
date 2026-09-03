@@ -531,12 +531,13 @@ export default function NativeWebViewScreen({
   useEffect(() => {
     const subscription = Notifications.addNotificationReceivedListener(
       (notification) => {
-        void recordDeliveredRouteArrivalNotification(notification).catch(
-          () => undefined
-        );
-        webViewRef.current?.injectJavaScript(
-          createNotificationReceivedEventScript(notification)
-        );
+        void recordDeliveredRouteArrivalNotification(notification)
+          .catch(() => undefined)
+          .finally(() => {
+            webViewRef.current?.injectJavaScript(
+              createNotificationReceivedEventScript(notification)
+            );
+          });
       }
     );
 
@@ -549,17 +550,27 @@ export default function NativeWebViewScreen({
     const handleNotificationResponse = (
       response: Notifications.NotificationResponse | null
     ) => {
-      if (response?.notification) {
-        void recordDeliveredRouteArrivalNotification(
-          response.notification
-        ).catch(() => undefined);
-      }
-
       const webPath = getNotificationWebPath(response);
+      const continueNotificationResponse = () => {
+        if (response?.notification) {
+          webViewRef.current?.injectJavaScript(
+            createNotificationReceivedEventScript(response.notification)
+          );
+        }
 
-      if (webPath) {
-        navigateWebViewToPath(webPath);
+        if (webPath) {
+          navigateWebViewToPath(webPath);
+        }
+      };
+
+      if (!response?.notification) {
+        continueNotificationResponse();
+        return;
       }
+
+      void recordDeliveredRouteArrivalNotification(response.notification)
+        .catch(() => undefined)
+        .finally(continueNotificationResponse);
     };
 
     const subscription = Notifications.addNotificationResponseReceivedListener(

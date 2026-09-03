@@ -1,3 +1,11 @@
+/**
+ * 용도:
+ * 네이티브에서 수신한 알림과 서버 알림함의 미확인 개수를 맞춘다.
+ *
+ * 동작 방식:
+ * 수신 즉시 배지를 먼저 반영하고, 네이티브 도착 기록을 서버에 저장한 뒤
+ * 알림함을 다시 조회해 탭 이동 중 배지가 이전 값으로 되돌아가지 않게 한다.
+ */
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
@@ -24,11 +32,6 @@ function NativeNotificationInboxSync() {
       return;
     }
 
-    const refreshNotificationInbox = () => {
-      void queryClient.invalidateQueries({
-        queryKey: NOTIFICATION_INBOX_QUERY_KEY,
-      });
-    };
     const unsubscribeNotificationReceived =
       nativeBridge.events.subscribeNotificationReceived(
         ({ notificationId }) => {
@@ -62,30 +65,11 @@ function NativeNotificationInboxSync() {
               }
             );
           }
-
-          refreshNotificationInbox();
         }
       );
-    const unsubscribeAppActive =
-      nativeBridge.events.subscribeAppActive(refreshNotificationInbox);
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refreshNotificationInbox();
-      }
-    };
-
-    document.addEventListener(
-      "visibilitychange",
-      handleVisibilityChange
-    );
 
     return () => {
       unsubscribeNotificationReceived();
-      unsubscribeAppActive();
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange
-      );
     };
   }, [queryClient]);
 
@@ -153,47 +137,54 @@ function NativeNotificationInboxSync() {
 
     let isActive = true;
     let syncPromise: Promise<void> | null = null;
+    let shouldSyncAgain = false;
 
     const syncDeliveredNotifications = () => {
       if (syncPromise) {
+        shouldSyncAgain = true;
         return syncPromise;
       }
 
       syncPromise = (async () => {
-        const notifications =
-          await nativeBridge.notifications.getDelivered();
+        do {
+          shouldSyncAgain = false;
+          const notifications =
+            await nativeBridge.notifications.getDelivered();
 
-        if (!isActive || !notifications?.length) {
-          return;
-        }
+          if (!isActive) {
+            return;
+          }
 
-        const result = await notificationApi.syncRouteArrivalInbox(
-          notifications.map((notification) => ({
-            routeId: notification.routeId,
-            routeTitle: notification.routeTitle ?? null,
-            dayId: notification.dayId,
-            stopId: notification.stopId,
-            placeTitle: notification.placeTitle,
-            dateKey: notification.dateKey,
-            deliveredAt: notification.deliveredAt,
-          }))
-        );
-        const syncedNotificationKeys = new Set(
-          result.syncRouteArrivalNotificationInbox.notificationKeys
-        );
-        await nativeBridge.notifications.getDelivered(
-          notifications
-            .filter((notification) =>
-              syncedNotificationKeys.has(notification.id)
-            )
-            .map((notification) => notification.id)
-        );
+          if (notifications?.length) {
+            const result = await notificationApi.syncRouteArrivalInbox(
+              notifications.map((notification) => ({
+                routeId: notification.routeId,
+                routeTitle: notification.routeTitle ?? null,
+                dayId: notification.dayId,
+                stopId: notification.stopId,
+                placeTitle: notification.placeTitle,
+                dateKey: notification.dateKey,
+                deliveredAt: notification.deliveredAt,
+              }))
+            );
+            const syncedNotificationKeys = new Set(
+              result.syncRouteArrivalNotificationInbox.notificationKeys
+            );
+            await nativeBridge.notifications.getDelivered(
+              notifications
+                .filter((notification) =>
+                  syncedNotificationKeys.has(notification.id)
+                )
+                .map((notification) => notification.id)
+            );
+          }
 
-        if (isActive) {
-          await queryClient.invalidateQueries({
-            queryKey: NOTIFICATION_INBOX_QUERY_KEY,
-          });
-        }
+          if (isActive) {
+            await queryClient.invalidateQueries({
+              queryKey: NOTIFICATION_INBOX_QUERY_KEY,
+            });
+          }
+        } while (isActive && shouldSyncAgain);
       })()
         .catch((error) => {
           console.warn(
@@ -214,12 +205,17 @@ function NativeNotificationInboxSync() {
     };
 
     void syncDeliveredNotifications();
+    const unsubscribeNotificationReceived =
+      nativeBridge.events.subscribeNotificationReceived(() => {
+        void syncDeliveredNotifications();
+      });
     const unsubscribeAppActive =
       nativeBridge.events.subscribeAppActive(syncDeliveredNotifications);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       isActive = false;
+      unsubscribeNotificationReceived();
       unsubscribeAppActive();
       document.removeEventListener(
         "visibilitychange",
