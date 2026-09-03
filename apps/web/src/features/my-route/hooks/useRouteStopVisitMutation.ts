@@ -4,8 +4,8 @@
  *
  * 동작 방식:
  * 방문 완료 전에 현재·다음 도착 알림을 함께 사전 등록하고,
- * API 성공 후 다음 대상만 남긴다. 확정 실패만 기존 타깃으로 되돌리고,
- * 결과가 불명확하면 재조회로 확정될 때까지 두 대상을 유지한다.
+ * API 성공을 화면에 먼저 반영한 뒤 다음 대상만 남긴다. 확정 실패만 기존
+ * 타깃으로 되돌리고, 결과가 불명확하면 재조회로 확정될 때까지 두 대상을 유지한다.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SetStateAction } from "react";
@@ -391,6 +391,7 @@ export function useRouteStopVisitMutation({
         nextRoute.id,
         {
           routeArrivalEnabled: getRouteArrivalEnabled(),
+          checkCurrentPosition: false,
           requestPermissions: preparation?.requestPermissions,
           requireConfirmedRegistration:
             preparation?.requestPermissions === true,
@@ -531,6 +532,14 @@ export function useRouteStopVisitMutation({
       const nextIsDayCompleted =
         nextStops.length > 0 &&
         nextStops.filter(isVisitedStop).length === nextStops.length;
+      const successMessage =
+        !wasDayCompleted && nextIsDayCompleted
+          ? `DAY ${variables.target.routeDay.dayIndex} 클리어`
+          : "방문을 완료했어요.";
+
+      setActualStayMinutesTarget(null);
+      showToast(successMessage);
+
       const arrivalSyncError = await syncUpdatedRouteArrivalTarget(
         data.completeRouteStopVisit,
         preparation
@@ -542,15 +551,12 @@ export function useRouteStopVisitMutation({
         );
       }
 
-      setActualStayMinutesTarget(null);
-      showToast(
-        arrivalSyncError
-          ? "방문은 완료했지만 도착 알림 상태를 정리하지 못했어요. 앱을 다시 열면 자동으로 맞춰져요."
-          : !wasDayCompleted && nextIsDayCompleted
-            ? `DAY ${variables.target.routeDay.dayIndex} 클리어`
-            : "방문을 완료했어요.",
-        arrivalSyncError ? 4200 : undefined
-      );
+      if (arrivalSyncError) {
+        showToast(
+          "방문은 완료했지만 도착 알림 상태를 정리하지 못했어요. 앱을 다시 열면 자동으로 맞춰져요.",
+          4200
+        );
+      }
       void queryClient.invalidateQueries({
         queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
       });
@@ -689,6 +695,8 @@ export function useRouteStopVisitMutation({
         (currentData) =>
           upsertMyRouteCache(currentData, data.markRouteStopVisited)
       );
+      showToast(successMessage);
+
       const arrivalSyncError = await syncUpdatedRouteArrivalTarget(
         data.markRouteStopVisited,
         preparation
@@ -704,12 +712,12 @@ export function useRouteStopVisitMutation({
       });
       invalidatePlaceVisitQueries(variables.stop);
 
-      showToast(
-        arrivalSyncError
-          ? "장소 상태는 저장했지만 도착 알림 상태를 갱신하지 못했어요. 앱을 다시 열면 자동으로 맞춰져요."
-          : successMessage,
-        arrivalSyncError ? 4200 : undefined
-      );
+      if (arrivalSyncError) {
+        showToast(
+          "장소 상태는 저장했지만 도착 알림 상태를 갱신하지 못했어요. 앱을 다시 열면 자동으로 맞춰져요.",
+          4200
+        );
+      }
 
       if (variables.nextVisited && variables.hasPhotoRecord) {
         const nextStop = nextStops.find(
