@@ -108,6 +108,20 @@ type RouteArrivalPositionReconciliation =
   | "outside"
   | "unverified";
 
+class RouteArrivalCurrentPositionLookupError extends Error {
+  readonly originalError: unknown;
+
+  constructor(error: unknown) {
+    super(
+      error instanceof Error
+        ? error.message
+        : "Current route arrival position lookup failed"
+    );
+    this.name = "RouteArrivalCurrentPositionLookupError";
+    this.originalError = error;
+  }
+}
+
 export function resetNativeRouteArrivalTestState() {
   routeArrivalTestState = null;
 }
@@ -905,10 +919,18 @@ async function scheduleRouteArrivalNotification(regionId: string) {
 }
 
 async function getCurrentRouteArrivalPosition() {
-  const currentPosition = await prepareNativeCurrentPosition({
-    requestPermission: false,
-    forceRefresh: true,
-  });
+  let currentPosition: Awaited<
+    ReturnType<typeof prepareNativeCurrentPosition>
+  >;
+
+  try {
+    currentPosition = await prepareNativeCurrentPosition({
+      requestPermission: false,
+      forceRefresh: true,
+    });
+  } catch (error) {
+    throw new RouteArrivalCurrentPositionLookupError(error);
+  }
 
   return {
     coords: {
@@ -1597,27 +1619,39 @@ async function syncNativeRouteArrivalNotifications(
     }
 
     if (shouldCheckCurrentPosition) {
-      lastKnownPositionReconciliation = await reconcileLastKnownRouteArrival(
-        places,
-        radius
-      );
+      try {
+        lastKnownPositionReconciliation =
+          await reconcileLastKnownRouteArrival(places, radius);
 
-      // A location trigger only reacts to an entry transition. When the
-      // request is registered while the user is already inside the region,
-      // wait for a fresh position and persist the immediate delivery before
-      // acknowledging the sync. Otherwise a force-quit right after the ACK
-      // can terminate the only check that covers the initial-inside case.
-      if (lastKnownPositionReconciliation !== "inside") {
-        const freshPositionReconciliation =
-          await reconcileFreshRouteArrival(places, radius);
+        // A location trigger only reacts to an entry transition. When the
+        // request is registered while the user is already inside the region,
+        // try a fresh position so the alert can be delivered immediately.
+        // This is an optimization after OS registration, so a temporary GPS
+        // failure must not turn a valid registration into a sync failure.
+        if (lastKnownPositionReconciliation !== "inside") {
+          const freshPositionReconciliation =
+            await reconcileFreshRouteArrival(places, radius);
 
-        if (freshPositionReconciliation === "unverified") {
-          throw new Error(
-            message.language === "en"
-              ? "The device could not verify its current position accurately enough. Keep the app open and try again."
-              : "현재 위치 정확도가 충분하지 않아요. 앱을 연 상태에서 다시 시도해 주세요."
-          );
+          if (freshPositionReconciliation === "unverified") {
+            warnRouteArrivalError(
+              "current position reconciliation deferred",
+              new Error(
+                message.language === "en"
+                  ? "The device could not verify its current position accurately enough."
+                  : "현재 위치 정확도가 충분하지 않아요."
+              )
+            );
+          }
         }
+      } catch (error) {
+        if (!(error instanceof RouteArrivalCurrentPositionLookupError)) {
+          throw error;
+        }
+
+        warnRouteArrivalError(
+          "current position reconciliation deferred",
+          error.originalError
+        );
       }
     }
 

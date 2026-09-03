@@ -865,7 +865,7 @@ for (const [name, createInvalidLastKnownPosition] of [
   });
 }
 
-test("fresh GPS 오차가 반경보다 크면 강제종료 안전 ACK를 반환하지 않는다", async () => {
+test("fresh GPS 오차가 반경보다 커도 등록 성공 ACK를 반환한다", async () => {
   const { state, sync } = createHarness();
   state.lastKnownPosition = null;
   state.currentPosition = {
@@ -877,11 +877,16 @@ test("fresh GPS 오차가 반경보다 크면 강제종료 안전 ACK를 반환�
 
   assert.equal(state.currentPositionRequests.length, 1);
   assert.equal(state.scheduled.length, 0);
-  assert.equal(state.responses.at(-1).ok, false);
-  assert.match(state.responses.at(-1).error, /위치 정확도/);
+  assert.equal(state.responses.at(-1).ok, true);
+  assert.equal(state.responses.at(-1).registrationStatus, "registered");
+  assert.ok(
+    state.warnings.some(([message]) =>
+      message.includes("current position reconciliation deferred")
+    )
+  );
 });
 
-test("fresh reconcile과 백그라운드 작업 오류를 경고로 남긴다", async () => {
+test("fresh GPS 조회 실패는 등록을 유지하고 백그라운드 작업 오류와 함께 경고로 남긴다", async () => {
   const { state, sync } = createHarness();
   state.lastKnownPosition = null;
   state.onPosition = () => {
@@ -893,10 +898,11 @@ test("fresh reconcile과 백그라운드 작업 오류를 경고로 남긴다", 
   state.storageGetError = new Error("background storage failed");
   await locationTask({ data: { locations: [state.currentPosition] } });
 
-  assert.equal(state.responses.at(-1).ok, false);
+  assert.equal(state.responses.at(-1).ok, true);
+  assert.equal(state.responses.at(-1).registrationStatus, "registered");
   assert.ok(
     state.warnings.some(([message]) =>
-      message.includes("sync failed")
+      message.includes("current position reconciliation deferred")
     )
   );
   assert.ok(

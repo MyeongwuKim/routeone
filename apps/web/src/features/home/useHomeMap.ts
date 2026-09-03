@@ -135,6 +135,14 @@ export function useHomeMap({
   const isCurrentLocationLookupPending =
     currentLocationStatus === "idle" || currentLocationStatus === "loading";
 
+  const cancelPendingMapBoundsMove = useCallback(() => {
+    mapBoundsMoveRequestRef.current += 1;
+    mapBoundsRetryTimeoutIdsRef.current.forEach((timeoutId) => {
+      window.clearTimeout(timeoutId);
+    });
+    mapBoundsRetryTimeoutIdsRef.current.clear();
+  }, []);
+
   const focusAttraction = useCallback((attraction: GangwonAttraction) => {
     const mapInstance = mapInstanceRef.current;
     const naverMaps = naverMapsRef.current;
@@ -151,7 +159,7 @@ export function useHomeMap({
     }
   }, []);
 
-  const focusCurrentLocation = useCallback(async ({
+  const refreshCurrentLocation = useCallback(async ({
     forceRefresh = false,
   }: {
     forceRefresh?: boolean;
@@ -162,20 +170,22 @@ export function useHomeMap({
       try {
         nextLocation = await requestCurrentPosition({ forceRefresh });
       } catch {
-        return false;
+        return null;
       }
     }
 
+    return nextLocation;
+  }, [currentLocation, requestCurrentPosition]);
+
+  const focusLocation = useCallback((location: CurrentLocation) => {
     const mapInstance = mapInstanceRef.current;
     const naverMaps = naverMapsRef.current;
     if (!mapInstance || !naverMaps) {
       return false;
     }
 
-    const position = new naverMaps.LatLng(
-      nextLocation.lat,
-      nextLocation.lng
-    );
+    cancelPendingMapBoundsMove();
+    const position = new naverMaps.LatLng(location.lat, location.lng);
     if (mapInstance.getZoom() < 14) {
       mapInstance.setZoom(14);
     }
@@ -186,7 +196,7 @@ export function useHomeMap({
     }
 
     return true;
-  }, [currentLocation, requestCurrentPosition]);
+  }, [cancelPendingMapBoundsMove]);
 
   const {
     clearBoundaryPolygons,
@@ -214,14 +224,6 @@ export function useHomeMap({
       topRankByAttractionId,
       trendNameByAttractionId,
     });
-
-  const cancelPendingMapBoundsMove = useCallback(() => {
-    mapBoundsMoveRequestRef.current += 1;
-    mapBoundsRetryTimeoutIdsRef.current.forEach((timeoutId) => {
-      window.clearTimeout(timeoutId);
-    });
-    mapBoundsRetryTimeoutIdsRef.current.clear();
-  }, []);
 
   const moveMapToBounds = useCallback(
     (bounds: HomeMapBounds, requestId: number) => {
@@ -522,11 +524,12 @@ export function useHomeMap({
   return {
     currentLocation,
     focusAttraction,
-    focusCurrentLocation,
+    focusLocation,
     isCurrentLocationLookupPending,
     isRenderingMarkers,
     mapError,
     mapReady,
     mapRef,
+    refreshCurrentLocation,
   };
 }

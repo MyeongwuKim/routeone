@@ -84,7 +84,6 @@ export const useCurrentPositionStore = create<CurrentPositionState>(
           if (requestId === latestPositionRequestId) {
             set({
               error: getPositionErrorMessage(error),
-              position: null,
               status: "error",
             });
           }

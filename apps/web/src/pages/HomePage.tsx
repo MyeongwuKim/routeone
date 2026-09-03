@@ -12,6 +12,10 @@ import HomeMapControls, {
   HomeMapControlsSkeleton,
 } from "@/components/home/HomeMapControls";
 import PlaceSearchPopup from "@/components/search/PlaceSearchPopup";
+import {
+  isReliableHomeRegionPosition,
+  resolveHomeRegionFromPosition,
+} from "@/features/home/homeCurrentRegion";
 import { resolveHomeLoadingPhase } from "@/features/home/homeLoadingPhase";
 import { useHomeAttractionData } from "@/features/home/useHomeAttractionData";
 import { useHomeMap } from "@/features/home/useHomeMap";
@@ -20,14 +24,9 @@ import {
   useHomeSearchResults,
 } from "@/features/home/useHomeSearch";
 import { useTestRegionLocation } from "@/features/home/useTestRegionLocation";
-import type { ServiceRegion } from "@/data/serviceAreas";
 import { useUiText } from "@/lib/uiText";
 import { getAuthToken } from "@/lib/authToken";
-import {
-  calculateDistanceMeters,
-  findRegionContainingLocation,
-  type CurrentLocation,
-} from "@/lib/gangwonBoundaryUtils";
+import type { CurrentLocation } from "@/lib/gangwonBoundaryUtils";
 import {
   createMapSheetPlaceFromAttraction,
   resolveMarkerType,
@@ -44,29 +43,6 @@ import {
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import { TOUR_API_SERVICE_KEY } from "@/pages/HomePage.constants";
-
-function getNearestServiceRegion(
-  currentLocation: CurrentLocation,
-  regions: readonly ServiceRegion[]
-) {
-  const [firstRegion, ...remainingRegions] = regions;
-  if (!firstRegion) {
-    return null;
-  }
-
-  return remainingRegions.reduce((nearest, region) => {
-    const nearestDistance = calculateDistanceMeters(
-      currentLocation,
-      nearest.center
-    );
-    const regionDistance = calculateDistanceMeters(
-      currentLocation,
-      region.center
-    );
-
-    return regionDistance < nearestDistance ? region : nearest;
-  }, firstRegion);
-}
 
 function HomePage() {
   const text = useUiText();
@@ -138,6 +114,11 @@ function HomePage() {
   });
   const [canLoadHomeAttractions, setCanLoadHomeAttractions] =
     useState(false);
+  const [pendingCurrentLocationFocus, setPendingCurrentLocationFocus] =
+    useState<{
+      position: CurrentLocation;
+      sigunguCode: string;
+    } | null>(null);
   const currentLocationRef = useRef<CurrentLocation | null>(null);
   const isCurrentLocationLookupPendingRef = useRef(true);
   const notificationInboxQuery = useQuery({
@@ -219,12 +200,13 @@ function HomePage() {
   const {
     currentLocation,
     focusAttraction,
-    focusCurrentLocation,
+    focusLocation,
     isCurrentLocationLookupPending,
     isRenderingMarkers,
     mapError,
     mapReady,
     mapRef,
+    refreshCurrentLocation,
   } = useHomeMap({
     attractionData,
     boundaryBySigunguCode,
@@ -271,11 +253,11 @@ function HomePage() {
       const initialRegion =
         developmentFixedRegion ??
         (currentLocation
-          ? findRegionContainingLocation(
+          ? resolveHomeRegionFromPosition(
               currentLocation,
-              serviceArea.regions,
+              serviceArea,
               boundaryBySigunguCode
-            ) ?? getNearestServiceRegion(currentLocation, serviceArea.regions)
+            ) ?? serviceArea.defaultRegion
           : serviceArea.defaultRegion);
       if (!initialRegion) {
         return;
@@ -393,37 +375,89 @@ function HomePage() {
   );
   const handleFocusCurrentLocation = useCallback(() => {
     const focus = async () => {
-      let shouldForceRefresh = false;
+      let didClearTestLocation = false;
 
       if (isTestRegionLocationEnabled) {
         try {
-          shouldForceRefresh = await clearRegionPosition();
+          didClearTestLocation = await clearRegionPosition();
         } catch {
           showToast(text.home.testLocationFailed);
           return;
         }
       }
 
-      const didFocus = await focusCurrentLocation({
-        forceRefresh: shouldForceRefresh,
+      const nextLocation = await refreshCurrentLocation({
+        forceRefresh: true,
       });
-      if (!didFocus) {
+      if (!nextLocation) {
         showToast(text.home.currentLocationUnavailable);
         return;
       }
 
-      if (shouldForceRefresh) {
+      if (!isReliableHomeRegionPosition(nextLocation)) {
+        showToast(
+          text.home.currentLocationAccuracyLow(
+            nextLocation.accuracyMeters
+          ),
+          3200
+        );
+        return;
+      }
+
+      const nextRegion = resolveHomeRegionFromPosition(
+        nextLocation,
+        serviceArea,
+        boundaryBySigunguCode
+      );
+      if (!nextRegion) {
+        showToast(text.home.currentLocationUnavailable);
+        return;
+      }
+
+      setPendingCurrentLocationFocus({
+        position: nextLocation,
+        sigunguCode: nextRegion.sigunguCode,
+      });
+      selectRegion(nextRegion.sigunguCode);
+
+      if (didClearTestLocation) {
         showToast(text.home.testLocationRestored);
       }
     };
 
     void focus();
   }, [
+    boundaryBySigunguCode,
     clearRegionPosition,
-    focusCurrentLocation,
     isTestRegionLocationEnabled,
+    refreshCurrentLocation,
+    selectRegion,
+    serviceArea,
     showToast,
     text,
+  ]);
+  useEffect(() => {
+    if (
+      !mapReady ||
+      !pendingCurrentLocationFocus ||
+      pendingCurrentLocationFocus.sigunguCode !== selectedSigunguCode
+    ) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      focusLocation(pendingCurrentLocationFocus.position);
+      setPendingCurrentLocationFocus(null);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [
+    focusLocation,
+    mapReady,
+    pendingCurrentLocationFocus,
+    selectedSigunguCode,
   ]);
   const routeStartLocation = currentLocation
     ? {

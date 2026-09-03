@@ -63,6 +63,7 @@ export default function App() {
         <RouteOneLaunchScreen
           message={text.launchCheckingUpdate}
           progress={0.08}
+          showProgress={false}
           tagline={text.launchTagline}
         />
       </View>
@@ -99,6 +100,7 @@ export default function App() {
               : text.launchCheckingStorage
           }
           progress={bootProgressStage === "location" ? 0.28 : 0.16}
+          showProgress={bootProgressStage === "location"}
           tagline={text.launchTagline}
         />
       </View>
