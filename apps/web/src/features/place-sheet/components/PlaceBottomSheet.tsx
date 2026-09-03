@@ -44,6 +44,7 @@ function PlaceBottomSheet() {
     sheetMode,
     sheetResetVersion,
     directionOrigin,
+    fallbackDirectionOrigin,
     contextAction,
     selectedPlace,
     openSheet,
@@ -115,10 +116,11 @@ function PlaceBottomSheet() {
         }
       : {
           coordinates:
+            fallbackDirectionOrigin?.coordinates ??
             fallbackDirectionRegion?.center ??
             fallbackDirectionArea?.center ??
             GANGWON_CENTER,
-          label: fallbackDirectionLabel,
+          label: fallbackDirectionOrigin?.label ?? fallbackDirectionLabel,
           isCurrentLocation: false,
         });
   const currentLocation = resolvedDirectionOrigin.coordinates;

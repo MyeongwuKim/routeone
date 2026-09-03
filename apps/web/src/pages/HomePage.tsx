@@ -13,7 +13,7 @@ import HomeMapControls, {
 } from "@/components/home/HomeMapControls";
 import PlaceSearchPopup from "@/components/search/PlaceSearchPopup";
 import {
-  isReliableHomeRegionPosition,
+  isUsableHomeRegionPosition,
   resolveHomeRegionFromPosition,
 } from "@/features/home/homeCurrentRegion";
 import { resolveHomeLoadingPhase } from "@/features/home/homeLoadingPhase";
@@ -394,13 +394,8 @@ function HomePage() {
         return;
       }
 
-      if (!isReliableHomeRegionPosition(nextLocation)) {
-        showToast(
-          text.home.currentLocationAccuracyLow(
-            nextLocation.accuracyMeters
-          ),
-          3200
-        );
+      if (!isUsableHomeRegionPosition(nextLocation)) {
+        showToast(text.home.currentLocationUnavailable);
         return;
       }
 

@@ -36,7 +36,6 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
     isGpsTestEnabled,
     indoorTestTarget,
     gpsTestLocationStopId,
-    directionsOpeningStopId,
     travelSegmentByKey,
     registerDropZone,
     startDragStop,
@@ -137,7 +136,6 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               }
               isGpsTestEnabled={isGpsTestEnabled}
               gpsTestLocationStopId={gpsTestLocationStopId}
-              directionsOpeningStopId={directionsOpeningStopId}
               travelSegmentByKey={travelSegmentByKey}
               canDeleteDay={isOrderEditing && sortedDays.length > 1}
               previousDay={previousDay}
@@ -186,9 +184,9 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
                 handleToggleStopVisited(routeDay, stop)
               }
               onOpenPlace={handleOpenPlaceDetail}
-              onOpenDirections={(stop) => {
-                void handleOpenStopDirections(routeDay, stop);
-              }}
+              onOpenDirections={(stop) =>
+                handleOpenStopDirections(routeDay, stop)
+              }
               onEditVerificationPhoto={(stop) =>
                 handleReplaceVerificationPhoto({ routeDay, stop })
               }

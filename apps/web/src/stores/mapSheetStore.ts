@@ -25,12 +25,14 @@ type MapSheetState = {
   sheetMode: MapSheetMode;
   sheetResetVersion: number;
   directionOrigin: MapSheetDirectionOrigin | null;
+  fallbackDirectionOrigin: MapSheetDirectionOrigin | null;
   contextAction: MapSheetContextAction | null;
   selectedPlace: MapSheetPlace | null;
   openSheet: (
     place: MapSheetPlace,
     options?: {
       directionOrigin?: MapSheetDirectionOrigin;
+      fallbackDirectionOrigin?: MapSheetDirectionOrigin;
       contextAction?: MapSheetContextAction;
       mode?: MapSheetMode;
     }
@@ -45,6 +47,7 @@ const getClosedSheetState = (sheetResetVersion: number) => ({
   isOpen: false,
   sheetMode: "bottom-sheet" as const,
   directionOrigin: null,
+  fallbackDirectionOrigin: null,
   contextAction: null,
   selectedPlace: null,
   sheetResetVersion: sheetResetVersion + 1,
@@ -55,6 +58,7 @@ export const useMapSheetStore = create<MapSheetState>((set) => ({
   sheetMode: "bottom-sheet",
   sheetResetVersion: 0,
   directionOrigin: null,
+  fallbackDirectionOrigin: null,
   contextAction: null,
   selectedPlace: null,
   openSheet: (place, options) =>
@@ -62,6 +66,7 @@ export const useMapSheetStore = create<MapSheetState>((set) => ({
       isOpen: true,
       sheetMode: options?.mode ?? "bottom-sheet",
       directionOrigin: options?.directionOrigin ?? null,
+      fallbackDirectionOrigin: options?.fallbackDirectionOrigin ?? null,
       contextAction: options?.contextAction ?? null,
       selectedPlace: place,
     }),

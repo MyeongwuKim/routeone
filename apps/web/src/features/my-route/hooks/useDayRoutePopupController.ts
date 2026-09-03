@@ -6,7 +6,6 @@ import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useUiText } from "@/lib/uiText";
-import { getCurrentPosition } from "@/lib/currentPosition";
 import { nativeBridge } from "@/native-bridge";
 import {
   addDaysToDateKey,
@@ -99,9 +98,6 @@ export function useDayRoutePopupController({
   const [isGpsTestApplying, setIsGpsTestApplying] = useState(false);
   const [dayStartTimeTarget, setDayStartTimeTarget] =
     useState<DayStartTimeTarget | null>(null);
-  const [directionsOpeningStopId, setDirectionsOpeningStopId] = useState<
-    string | null
-  >(null);
   const sortedDays = useMemo(() => getSortedRouteDays(route), [route]);
   const [draftStopsByDayId, setDraftStopsByDayId] =
     useState<RouteStopsByDayId>(() => createRouteStopsByDayId(sortedDays));
@@ -828,35 +824,23 @@ export function useDayRoutePopupController({
     });
   };
 
-  const handleOpenStopDirections = async (
+  const handleOpenStopDirections = (
     routeDay: MyRouteDay,
     stop: MyRouteStop
   ) => {
-    if (directionsOpeningStopId) {
-      return;
-    }
-
     const startLocation = getDayRouteStartLocation(routeDay, route.startLocation);
-    setDirectionsOpeningStopId(stop.id);
 
-    try {
-      const currentPosition = gpsTestLocation ?? (await getCurrentPosition());
-
-      openSheet(createMapSheetPlaceFromRouteStop(stop), {
-        mode: "directions-popup",
-        directionOrigin: {
-          coordinates: {
-            lat: currentPosition.lat,
-            lng: currentPosition.lng,
-          },
-          label: text.placeSheet.currentLocation,
-          isCurrentLocation: true,
-        },
-      });
-    } catch {
-      openSheet(createMapSheetPlaceFromRouteStop(stop), {
-        mode: "directions-popup",
-        directionOrigin: startLocation
+    openSheet(createMapSheetPlaceFromRouteStop(stop), {
+      mode: "directions-popup",
+      directionOrigin: gpsTestLocation
+        ? {
+            coordinates: gpsTestLocation,
+            label: text.placeSheet.currentLocation,
+            isCurrentLocation: true,
+          }
+        : undefined,
+      fallbackDirectionOrigin:
+        !gpsTestLocation && startLocation
           ? {
               coordinates: {
                 lat: startLocation.lat,
@@ -866,11 +850,7 @@ export function useDayRoutePopupController({
               isCurrentLocation: false,
             }
           : undefined,
-      });
-      showToast(text.home.currentLocationUnavailable);
-    } finally {
-      setDirectionsOpeningStopId(null);
-    }
+    });
   };
 
   const handleApplyDayStartTime = async (
@@ -1067,7 +1047,6 @@ export function useDayRoutePopupController({
       isGpsTestEnabled,
       indoorTestTarget,
       gpsTestLocationStopId,
-      directionsOpeningStopId,
       travelSegmentByKey,
       registerDropZone,
       startDragStop,

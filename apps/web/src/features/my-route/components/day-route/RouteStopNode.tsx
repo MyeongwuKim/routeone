@@ -86,7 +86,6 @@ type RouteStopNodeProps = {
   isStaySaving: boolean;
   isReadOnly: boolean;
   isActiveDestination: boolean;
-  isDirectionsOpening: boolean;
   canToggleVisited: boolean;
   enableVerificationPhotoPreview: boolean;
   isGpsTestEnabled: boolean;
@@ -121,7 +120,6 @@ function RouteStopNode({
   isStaySaving,
   isReadOnly,
   isActiveDestination,
-  isDirectionsOpening,
   canToggleVisited,
   enableVerificationPhotoPreview,
   isGpsTestEnabled,
@@ -512,18 +510,13 @@ function RouteStopNode({
                     event.stopPropagation();
                     onOpenDirections(stop);
                   }}
-                  disabled={isDirectionsOpening}
-                  className={`mt-2 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition active:scale-[0.99] disabled:opacity-60 ${
+                  className={`mt-2 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition active:scale-[0.99] ${
                     isActiveDestination
                       ? "bg-brand-600 text-white shadow-sm"
                       : "border border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-100"
                   }`}
                 >
-                  {isDirectionsOpening ? (
-                    <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : (
-                    <MdMap className="text-base" />
-                  )}
+                  <MdMap className="text-base" />
                   {text.dayRoute.placeDirections}
                 </button>
               )}

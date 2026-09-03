@@ -247,7 +247,6 @@ export type UiText = {
     currentLocation: string;
     focusCurrentLocationAria: string;
     currentLocationUnavailable: string;
-    currentLocationAccuracyLow: (accuracyMeters: number | null) => string;
     testLocationApplied: (region: string) => string;
     testLocationRestored: string;
     testLocationFailed: string;
@@ -764,8 +763,6 @@ export type UiText = {
     currentLocation: string;
     referenceLocation: (label: string) => string;
     gangwonReferenceLocation: string;
-    currentLocationCheckingTitle: string;
-    currentLocationCheckingDescription: string;
     currentLocationUnavailableTitle: string;
     currentLocationUnavailableDescription: (label: string) => string;
     destination: string;
@@ -1369,10 +1366,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "현재 위치",
       focusCurrentLocationAria: "현재 위치로 이동",
       currentLocationUnavailable: "현재 위치를 확인하지 못했어요.",
-      currentLocationAccuracyLow: (accuracyMeters) =>
-        typeof accuracyMeters === "number" && Number.isFinite(accuracyMeters)
-          ? `위치 정확도가 약 ${Math.round(accuracyMeters)}m라 지역 필터를 바꾸지 않았어요. 잠시 후 다시 눌러 주세요.`
-          : "위치 정확도를 확인할 수 없어 지역 필터를 바꾸지 않았어요. 잠시 후 다시 눌러 주세요.",
       testLocationApplied: (region) =>
         `테스트 위치를 ${region} 중심으로 이동했어요.`,
       testLocationRestored: "테스트 위치를 끄고 실제 GPS로 돌아왔어요.",
@@ -1979,9 +1972,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "현재 위치",
       referenceLocation: (label) => `${label} 중심`,
       gangwonReferenceLocation: "강원 중심",
-      currentLocationCheckingTitle: "현재 위치를 확인하고 있어요.",
-      currentLocationCheckingDescription:
-        "확인이 끝나면 내 위치 기준 경로를 보여드려요.",
       currentLocationUnavailableTitle: "현재 위치를 확인하지 못했어요.",
       currentLocationUnavailableDescription: (label) =>
         `지금은 ${label} 기준의 참고 경로를 보여드려요.`,
@@ -2671,10 +2661,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "Current location",
       focusCurrentLocationAria: "Move to current location",
       currentLocationUnavailable: "Could not find your current location.",
-      currentLocationAccuracyLow: (accuracyMeters) =>
-        typeof accuracyMeters === "number" && Number.isFinite(accuracyMeters)
-          ? `Location accuracy is about ${Math.round(accuracyMeters)} m, so the region filter was not changed. Please try again shortly.`
-          : "Location accuracy is unavailable, so the region filter was not changed. Please try again shortly.",
       testLocationApplied: (region) =>
         `Test location moved to the center of ${region}.`,
       testLocationRestored: "Test location is off. Using real GPS.",
@@ -3301,9 +3287,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "Current location",
       referenceLocation: (label) => `${label} center`,
       gangwonReferenceLocation: "Gangwon center",
-      currentLocationCheckingTitle: "Checking your current location.",
-      currentLocationCheckingDescription:
-        "Your route will update as soon as your location is ready.",
       currentLocationUnavailableTitle:
         "Could not confirm your current location.",
       currentLocationUnavailableDescription: (label) =>

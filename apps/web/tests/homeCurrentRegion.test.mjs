@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 
+let buildBoundaryMapByRegions;
+let getServiceArea;
 let server;
-let isReliableHomeRegionPosition;
+let isUsableHomeRegionPosition;
 let resolveHomeRegionFromPosition;
 
 before(async () => {
@@ -19,10 +22,16 @@ before(async () => {
     optimizeDeps: { noDiscovery: true, include: [] },
   });
   ({
-    isReliableHomeRegionPosition,
+    isUsableHomeRegionPosition,
     resolveHomeRegionFromPosition,
   } = await server.ssrLoadModule(
     "/src/features/home/homeCurrentRegion.ts"
+  ));
+  ({ buildBoundaryMapByRegions } = await server.ssrLoadModule(
+    "/src/lib/gangwonBoundaryUtils.ts"
+  ));
+  ({ getServiceArea } = await server.ssrLoadModule(
+    "/src/data/serviceAreas.ts"
   ));
 });
 
@@ -66,16 +75,27 @@ function createPosition(overrides = {}) {
   };
 }
 
-test("정확도 1km 이내의 현재 위치만 지역 필터에 사용한다", () => {
-  assert.equal(isReliableHomeRegionPosition(createPosition()), true);
+test("위치 정확도와 관계없이 유효한 좌표를 지역 필터에 사용한다", () => {
+  assert.equal(isUsableHomeRegionPosition(createPosition()), true);
   assert.equal(
-    isReliableHomeRegionPosition(
+    isUsableHomeRegionPosition(
       createPosition({ accuracyMeters: 1_001 })
     ),
+    true
+  );
+  assert.equal(
+    isUsableHomeRegionPosition(createPosition({ accuracyMeters: null })),
+    true
+  );
+});
+
+test("좌표 범위를 벗어난 위치는 지역 필터에 사용하지 않는다", () => {
+  assert.equal(
+    isUsableHomeRegionPosition(createPosition({ lat: 91 })),
     false
   );
   assert.equal(
-    isReliableHomeRegionPosition(createPosition({ accuracyMeters: null })),
+    isUsableHomeRegionPosition(createPosition({ lng: Number.NaN })),
     false
   );
 });
@@ -110,4 +130,31 @@ test("지역 경계 안의 위치는 중심점 거리보다 경계 판정을 우
   );
 
   assert.equal(region?.sigunguCode, "east");
+});
+
+test("정확도 반경이 넓어도 여의도 좌표는 영등포구로 선택한다", async () => {
+  const seoul = getServiceArea("seoul");
+  const boundaryCollection = JSON.parse(
+    await readFile(
+      fileURLToPath(
+        new URL("../public/seoul-sigungu-boundary.json", import.meta.url)
+      ),
+      "utf8"
+    )
+  );
+  const boundaryBySigunguCode = buildBoundaryMapByRegions(
+    boundaryCollection,
+    seoul.regions
+  );
+  const region = resolveHomeRegionFromPosition(
+    createPosition({
+      lat: 37.5283,
+      lng: 126.9142,
+      accuracyMeters: 2_500,
+    }),
+    seoul,
+    boundaryBySigunguCode
+  );
+
+  assert.equal(region?.label, "영등포구");
 });
