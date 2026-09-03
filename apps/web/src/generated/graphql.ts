@@ -141,6 +141,7 @@ export type RouteArrivalNotificationSyncInput = {
   dateKey: string;
   dayId: string | number;
   deliveredAt: string;
+  notificationKey?: string | null | undefined;
   placeTitle: string;
   routeId: string | number;
   routeTitle?: string | null | undefined;

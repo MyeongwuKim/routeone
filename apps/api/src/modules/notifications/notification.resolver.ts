@@ -112,6 +112,7 @@ export const notificationTypeDefs = gql`
   }
 
   input RouteArrivalNotificationSyncInput {
+    notificationKey: String
     routeId: ID!
     routeTitle: String
     dayId: ID!

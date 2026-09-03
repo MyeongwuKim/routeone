@@ -5,6 +5,7 @@ import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import { useCurrentPositionStore } from "@/stores/currentPositionStore";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import {
@@ -86,6 +87,12 @@ export function useDayRoutePopupController({
   const openModal = useUiModalStore((state) => state.openModal);
   const openSheet = useMapSheetStore((state) => state.openSheet);
   const showToast = useUiToastStore((state) => state.showToast);
+  const clearCurrentPosition = useCurrentPositionStore(
+    (state) => state.clearPosition
+  );
+  const requestCurrentPosition = useCurrentPositionStore(
+    (state) => state.requestCurrentPosition
+  );
   const [gpsTestLocationStopId, setGpsTestLocationStopId] = useState<
     string | null
   >(null);
@@ -983,10 +990,22 @@ export function useDayRoutePopupController({
 
     try {
       const result = await request;
+      clearCurrentPosition();
       setGpsTestLocationStopId(null);
       setGpsTestLocation(null);
+      const realPosition = await requestCurrentPosition({
+        forceRefresh: true,
+      }).catch(
+        () => null
+      );
       showToast(text.dayRoute.gpsTestCleared);
-      return result;
+      return realPosition
+        ? {
+            ...result,
+            lat: realPosition.lat,
+            lng: realPosition.lng,
+          }
+        : result;
     } catch (error) {
       showToast(
         error instanceof Error

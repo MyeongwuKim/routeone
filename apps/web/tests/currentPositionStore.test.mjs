@@ -84,3 +84,32 @@ test("GPS 재요청 실패 시 마지막으로 확인한 위치를 유지한다"
   assert.equal(state.error, "현재 위치를 확인하지 못했어요.");
   assert.deepEqual(state.position, previousPosition);
 });
+
+test("테스트 위치를 해제하면 캐시를 비우고 실제 GPS를 다시 조회한다", async () => {
+  const virtualPosition = {
+    lat: 37.1,
+    lng: 127.1,
+    accuracyMeters: 1,
+    timestamp: Date.now(),
+  };
+  const realPosition = {
+    lat: 37.5,
+    lng: 126.9,
+    accuracyMeters: 18,
+    timestamp: Date.now() + 1,
+  };
+  const store = useCurrentPositionStore.getState();
+
+  store.applyPosition(virtualPosition);
+  store.clearPosition();
+  positionResult = realPosition;
+
+  assert.equal(useCurrentPositionStore.getState().position, null);
+  assert.deepEqual(
+    await useCurrentPositionStore
+      .getState()
+      .requestCurrentPosition({ forceRefresh: true }),
+    realPosition
+  );
+  assert.deepEqual(useCurrentPositionStore.getState().position, realPosition);
+});

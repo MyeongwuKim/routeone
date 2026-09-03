@@ -33,6 +33,7 @@ export type FestivalNotificationSyncInput = {
 };
 
 export type RouteArrivalNotificationSyncInput = {
+  notificationKey?: string | null;
   routeId: string;
   routeTitle?: string | null;
   dayId: string;
@@ -232,6 +233,10 @@ function normalizeRouteArrivalNotification(
   const stopId = normalizeRequiredText(input.stopId, "장소 ID", 80);
   const dateKey = normalizeRequiredText(input.dateKey, "도착 날짜", 10);
   const deliveredAt = normalizeDate(input.deliveredAt, "도착 알림 시간");
+  const requestedNotificationKey = normalizeOptionalText(
+    input.notificationKey,
+    200
+  );
 
   if (!DATE_KEY_PATTERN.test(dateKey)) {
     throw new UserFacingError("도착 날짜 값이 올바르지 않습니다.");
@@ -244,8 +249,27 @@ function normalizeRouteArrivalNotification(
     throw new UserFacingError("도착 알림 시간이 올바르지 않습니다.");
   }
 
+  const defaultNotificationKey = `arrival:${routeId}:${stopId}:${dateKey}`;
+  const testNotificationKeyPrefix = `arrival-test:${routeId}:${stopId}:`;
+  const testNotificationTimestamp = requestedNotificationKey?.slice(
+    testNotificationKeyPrefix.length
+  );
+  const isAllowedTestNotificationKey = Boolean(
+    requestedNotificationKey?.startsWith(testNotificationKeyPrefix) &&
+      testNotificationTimestamp &&
+      /^\d{10,16}$/.test(testNotificationTimestamp)
+  );
+
+  if (
+    requestedNotificationKey &&
+    requestedNotificationKey !== defaultNotificationKey &&
+    !isAllowedTestNotificationKey
+  ) {
+    throw new UserFacingError("도착 알림 식별자가 올바르지 않습니다.");
+  }
+
   return {
-    notificationKey: `arrival:${routeId}:${stopId}:${dateKey}`,
+    notificationKey: requestedNotificationKey ?? defaultNotificationKey,
     routeId,
     routeTitle: normalizeOptionalText(input.routeTitle, 160),
     dayId,

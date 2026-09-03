@@ -1,6 +1,15 @@
+/**
+ * 사용 위치: 진행 중인 여행의 DAY 장소 → GPS 테스트
+ *
+ * 용도:
+ * 실제 위치에서 장소까지 가상 이동하거나 지도에서 고른 좌표를 테스트 GPS로 적용한다.
+ *
+ * 구조:
+ * 장소·테스트 위치 지도와 가상 출발, 실제 GPS 복귀, 위치 적용 버튼으로 구성된다.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { IoClose, IoLocationSharp } from "react-icons/io5";
-import { MdGpsFixed, MdPlace } from "react-icons/md";
+import { IoClose } from "react-icons/io5";
+import { MdGpsFixed } from "react-icons/md";
 import NaverMapView, {
   type NaverMapInstance,
   type NaverMapReadyContext,
@@ -32,17 +41,15 @@ type GpsTestLocationPopupProps = {
 };
 
 const ARRIVAL_RADIUS_METERS = 300;
-const VISIT_RADIUS_METERS = 100;
 const OUTSIDE_ARRIVAL_PRESET_METERS = 450;
-const ARRIVAL_PRESET_METERS = 180;
-const VISIT_PRESET_METERS = 30;
+const AUTO_WALK_FINAL_DISTANCE_METERS = 30;
 const NEARBY_AUTO_WALK_DISTANCES_METERS = [
   1000,
   450,
   350,
   290,
   180,
-  30,
+  AUTO_WALK_FINAL_DISTANCE_METERS,
 ] as const;
 const AUTO_WALK_STEP_DELAY_MS = 700;
 
@@ -97,7 +104,8 @@ function createAutoWalkSteps(
     .filter(
       (distance) =>
         distance <= totalDistanceMeters &&
-        (distance === totalDistanceMeters || distance >= VISIT_PRESET_METERS)
+        (distance === totalDistanceMeters ||
+          distance >= AUTO_WALK_FINAL_DISTANCE_METERS)
     )
     .sort((left, right) => right - left)
     .filter(
@@ -218,13 +226,13 @@ function GpsTestLocationPopup({
   );
   const [realStartLocation, setRealStartLocation] =
     useState<TestLocation | null>(null);
+  const [initialActiveLocation] = useState(activeLocation);
   const [isResolvingRealStart, setIsResolvingRealStart] = useState(true);
   const [realStartError, setRealStartError] = useState<string | null>(null);
-  const initialLocation = realStartLocation ?? fallbackInitialLocation;
+  const initialLocation =
+    initialActiveLocation ?? realStartLocation ?? fallbackInitialLocation;
   const [draftLocation, setDraftLocation] =
     useState<TestLocation>(fallbackInitialLocation);
-  const [lastResult, setLastResult] =
-    useState<NativeArrivalTestLocationResult | null>(null);
   const [isAutoWalking, setIsAutoWalking] = useState(false);
   const [autoWalkStepIndex, setAutoWalkStepIndex] = useState<number | null>(
     null
@@ -235,12 +243,6 @@ function GpsTestLocationPopup({
   >(null);
   const autoWalkRunIdRef = useRef(0);
   const placeLocation = target.stop.place;
-  const distanceMeters = calculateDistanceMeters(
-    draftLocation,
-    placeLocation
-  );
-  const isInsideArrivalRadius = distanceMeters <= ARRIVAL_RADIUS_METERS;
-  const isInsideVisitRadius = distanceMeters <= VISIT_RADIUS_METERS;
   const mapResetKey = `${target.stop.id}:${initialLocation.lat}:${initialLocation.lng}`;
   const isBusy = isApplying || isAutoWalking || isResolvingRealStart;
 
@@ -266,8 +268,9 @@ function GpsTestLocationPopup({
           lng: position.lng,
         };
         setRealStartLocation(nextLocation);
-        setDraftLocation(nextLocation);
-        setLastResult(null);
+        if (!initialActiveLocation) {
+          setDraftLocation(nextLocation);
+        }
       })
       .catch((error) => {
         if (isActive) {
@@ -288,12 +291,15 @@ function GpsTestLocationPopup({
       isActive = false;
       autoWalkRunIdRef.current += 1;
     };
-  }, [target.stop.id, text.dayRoute.gpsTestRealLocationUnavailable]);
+  }, [
+    initialActiveLocation,
+    target.stop.id,
+    text.dayRoute.gpsTestRealLocationUnavailable,
+  ]);
 
   const updateDraftLocation = useCallback(
     (nextLocation: TestLocation, options: { pan?: boolean } = {}) => {
       setDraftLocation(nextLocation);
-      setLastResult(null);
 
       if (!window.naver?.maps) {
         return;
@@ -435,7 +441,6 @@ function GpsTestLocationPopup({
     setAutoWalkStepIndex(0);
     setAutoWalkStepCount(steps.length);
     setAutoWalkDistanceMeters(steps[0]?.distanceMeters ?? null);
-    setLastResult(null);
 
     try {
       for (let index = 0; index < steps.length; index += 1) {
@@ -453,8 +458,6 @@ function GpsTestLocationPopup({
         if (!result || autoWalkRunIdRef.current !== runId) {
           return;
         }
-
-        setLastResult(result);
 
         if (index < steps.length - 1) {
           await waitForAutoWalkStep();
@@ -498,19 +501,7 @@ function GpsTestLocationPopup({
           resetKey={mapResetKey}
           className="relative min-h-0 flex-1 bg-violet-50 dark:bg-slate-900"
           onReady={handleMapReady}
-        >
-          <div className="pointer-events-none absolute inset-x-4 top-4 rounded-2xl border border-violet-100 bg-white/95 px-4 py-3 text-xs font-semibold leading-5 text-slate-600 shadow-sm backdrop-blur dark:border-violet-400/20 dark:bg-slate-950/90 dark:text-slate-200">
-            {text.dayRoute.gpsTestDescription}
-          </div>
-          <div className="pointer-events-none absolute bottom-4 left-4 flex gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1.5 text-[11px] font-black text-brand-700 shadow-sm dark:bg-slate-950/90 dark:text-brand-100">
-              <MdPlace /> {text.dayRoute.gpsTestPlaceLegend}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1.5 text-[11px] font-black text-violet-700 shadow-sm dark:bg-slate-950/90 dark:text-violet-100">
-              <MdGpsFixed /> {text.dayRoute.gpsTestLocationLegend}
-            </span>
-          </div>
-        </NaverMapView>
+        />
 
         <footer className="app-safe-area-footer shrink-0 border-t border-violet-100 bg-white px-4 py-3 dark:border-violet-400/20 dark:bg-slate-950">
           <button
@@ -538,125 +529,22 @@ function GpsTestLocationPopup({
             <p className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 dark:bg-rose-400/10 dark:text-rose-100">
               {realStartError}
             </p>
-          ) : realStartLocation ? (
-            <p className="mb-3 rounded-xl bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 dark:bg-sky-400/10 dark:text-sky-100">
-              {text.dayRoute.gpsTestRealLocationStart(
-                formatDistance(
-                  calculateDistanceMeters(realStartLocation, placeLocation)
-                )
-              )}
-            </p>
           ) : null}
-          <div className="mb-3 grid grid-cols-3 gap-2">
-            {[
-              {
-                label: text.dayRoute.gpsTestOutsidePreset,
-                distanceMeters: OUTSIDE_ARRIVAL_PRESET_METERS,
-              },
-              {
-                label: text.dayRoute.gpsTestArrivalPreset,
-                distanceMeters: ARRIVAL_PRESET_METERS,
-              },
-              {
-                label: text.dayRoute.gpsTestVisitPreset,
-                distanceMeters: VISIT_PRESET_METERS,
-              },
-            ].map((preset) => (
-              <button
-                key={preset.distanceMeters}
-                type="button"
-                onClick={() =>
-                  updateDraftLocation(
-                    getOffsetTestLocation(
-                      placeLocation,
-                      preset.distanceMeters
-                    ),
-                    { pan: true }
-                  )
-                }
-                disabled={isBusy}
-                className="rounded-xl border border-violet-200 bg-violet-50 px-2 py-2 text-[11px] font-black text-violet-700 disabled:opacity-45 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-100"
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-          <div
-            className={`rounded-2xl border px-3 py-2.5 ${
-              isInsideVisitRadius
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100"
-                : isInsideArrivalRadius
-                  ? "border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-400/30 dark:bg-violet-400/10 dark:text-violet-100"
-                  : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100"
-            }`}
-          >
-            <p className="text-xs font-black">
-              {isInsideVisitRadius
-                ? text.dayRoute.gpsTestInsideVisitRadius(
-                    formatDistance(distanceMeters)
-                  )
-                : isInsideArrivalRadius
-                  ? text.dayRoute.gpsTestInsideArrivalRadius(
-                      formatDistance(distanceMeters)
-                    )
-                  : text.dayRoute.gpsTestOutsideArrivalRadius(
-                      formatDistance(distanceMeters)
-                    )}
-            </p>
-            <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold opacity-80">
-              <IoLocationSharp />
-              {draftLocation.lat.toFixed(6)}, {draftLocation.lng.toFixed(6)}
-            </p>
-          </div>
-
-          {lastResult ? (
-            <div className="mt-2 space-y-2">
-              <p
-                className={`rounded-xl px-3 py-2 text-xs font-bold ${
-                  lastResult.notificationScheduled
-                    ? "bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-100"
-                    : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200"
-                }`}
-              >
-                {lastResult.notificationScheduled
-                  ? text.dayRoute.gpsTestAppliedWithNotification
-                  : lastResult.withinRadius
-                    ? text.dayRoute.gpsTestAppliedInsideWithoutNotification
-                  : text.dayRoute.gpsTestAppliedWithoutNotification}
-              </p>
-              {lastResult.backgroundNotificationStatus ? (
-                <p
-                  className={`rounded-xl px-3 py-2 text-xs font-black ${
-                    lastResult.backgroundNotificationStatus === "registered"
-                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-100"
-                      : lastResult.backgroundNotificationStatus === "delivered"
-                        ? "bg-sky-50 text-sky-700 dark:bg-sky-400/10 dark:text-sky-100"
-                        : lastResult.backgroundNotificationStatus ===
-                            "not-registered"
-                          ? "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-100"
-                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200"
-                  }`}
-                >
-                  {lastResult.backgroundNotificationStatus === "registered"
-                    ? text.dayRoute.gpsTestBackgroundRegistered
-                    : lastResult.backgroundNotificationStatus === "delivered"
-                      ? text.dayRoute.gpsTestBackgroundDelivered
-                      : lastResult.backgroundNotificationStatus ===
-                          "not-registered"
-                        ? text.dayRoute.gpsTestBackgroundNotRegistered
-                        : text.dayRoute.gpsTestBackgroundUnsupported}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => {
                 void onClear().then((result) => {
                   if (result) {
-                    setLastResult(null);
+                    const restoredLocation =
+                      result.lat != null && result.lng != null
+                        ? { lat: result.lat, lng: result.lng }
+                        : realStartLocation;
+
+                    if (restoredLocation) {
+                      setRealStartLocation(restoredLocation);
+                      updateDraftLocation(restoredLocation, { pan: true });
+                    }
                   }
                 });
               }}
@@ -668,11 +556,7 @@ function GpsTestLocationPopup({
             <button
               type="button"
               onClick={() => {
-                void onApply(target, draftLocation).then((result) => {
-                  if (result) {
-                    setLastResult(result);
-                  }
-                });
+                void onApply(target, draftLocation);
               }}
               disabled={isBusy}
               className="rounded-2xl bg-violet-600 px-3 py-3 text-sm font-bold text-white disabled:opacity-45"
@@ -682,18 +566,6 @@ function GpsTestLocationPopup({
                 : text.dayRoute.gpsTestApplyLocation}
             </button>
           </div>
-          {lastResult?.active &&
-          lastResult.distanceMeters != null &&
-          lastResult.distanceMeters <= VISIT_RADIUS_METERS ? (
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isBusy}
-              className="mt-2 w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm font-black text-emerald-700 disabled:opacity-45 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100"
-            >
-              {text.dayRoute.gpsTestContinueVisit}
-            </button>
-          ) : null}
         </footer>
       </div>
     </div>

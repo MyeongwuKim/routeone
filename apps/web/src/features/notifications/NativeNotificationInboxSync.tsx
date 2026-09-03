@@ -158,6 +158,7 @@ function NativeNotificationInboxSync() {
           if (notifications?.length) {
             const result = await notificationApi.syncRouteArrivalInbox(
               notifications.map((notification) => ({
+                notificationKey: notification.id,
                 routeId: notification.routeId,
                 routeTitle: notification.routeTitle ?? null,
                 dayId: notification.dayId,
