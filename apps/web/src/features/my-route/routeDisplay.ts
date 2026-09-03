@@ -281,6 +281,6 @@ export function getDayProgressPercent(day: MyRouteDay) {
   return Math.round((getDayCompletedStopCount(day) / day.stops.length) * 100);
 }
 
-export function getNextRouteStop(day: MyRouteDay) {
+export function getCurrentRouteStop(day: MyRouteDay) {
   return day.stops.find((stop) => !isVisitedStop(stop)) ?? null;
 }

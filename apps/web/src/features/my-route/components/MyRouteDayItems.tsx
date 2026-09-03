@@ -12,7 +12,7 @@ import {
   getDayDateLabel,
   getDayProgressPercent,
   getDaySummary,
-  getNextRouteStop,
+  getCurrentRouteStop,
   getRouteDayState,
 } from "../routeDisplay";
 import {
@@ -202,12 +202,12 @@ function TodayRoutePreview({ day }: { day: MyRouteDay }) {
   );
 }
 
-function TodayNextStopCard({ day }: { day: MyRouteDay }) {
+function TodayCurrentStopCard({ day }: { day: MyRouteDay }) {
   const text = useUiText();
-  const nextStop = getNextRouteStop(day);
-  const isCheckedIn = Boolean(nextStop?.checkedInAt);
+  const currentStop = getCurrentRouteStop(day);
+  const isCheckedIn = Boolean(currentStop?.checkedInAt);
 
-  if (!nextStop) {
+  if (!currentStop) {
     return (
       <div className="mt-3 flex items-center gap-3 rounded-2xl bg-slate-950/35 px-3 py-2.5 text-white shadow-sm ring-1 ring-white/10">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-400/15 text-xl text-brand-100">
@@ -228,9 +228,9 @@ function TodayNextStopCard({ day }: { day: MyRouteDay }) {
   return (
     <div className="mt-3 flex items-center gap-3 rounded-2xl bg-slate-950/35 px-3 py-2.5 text-white shadow-sm ring-1 ring-white/10">
       <div className="size-10 shrink-0 overflow-hidden rounded-2xl bg-brand-400/15">
-        {nextStop.place.imageUrl ? (
+        {currentStop.place.imageUrl ? (
           <img
-            src={nextStop.place.imageUrl}
+            src={currentStop.place.imageUrl}
             alt=""
             className="h-full w-full object-cover"
             loading="lazy"
@@ -248,14 +248,16 @@ function TodayNextStopCard({ day }: { day: MyRouteDay }) {
           ) : (
             <MdFlag className="text-sm" />
           )}
-          {isCheckedIn ? text.dayRoute.visiting : text.dayRoute.nextPlace}
+          {isCheckedIn
+            ? text.dayRoute.visiting
+            : text.dayRoute.currentDestination}
         </p>
         <p className="truncate text-sm font-black text-white">
-          {nextStop.place.title}
+          {currentStop.place.title}
         </p>
         <p className="mt-0.5 truncate text-[11px] font-semibold text-white/70">
           {localizePlaceCategoryLabel(
-            nextStop.place.categoryLabel ?? nextStop.place.categoryName,
+            currentStop.place.categoryLabel ?? currentStop.place.categoryName,
             text
           )}
         </p>
@@ -330,7 +332,7 @@ export function TodayRouteDayCard({
       </div>
 
       <TodayRoutePreview day={day} />
-      <TodayNextStopCard day={day} />
+      <TodayCurrentStopCard day={day} />
     </button>
   );
 }
