@@ -70,6 +70,7 @@ function HomePage() {
   const hideLoading = useUiLoadingStore((state) => state.hideLoading);
   const showToast = useUiToastStore((state) => state.showToast);
   const {
+    activePosition: activeTestRegionPosition,
     applyRegionPosition,
     clearRegionPosition,
     isEnabled: isTestRegionLocationEnabled,
@@ -157,7 +158,8 @@ function HomePage() {
       rank,
       mode = "bottom-sheet",
     }: OpenPlaceSheetFromAttractionOptions) => {
-      const currentLocationForOrigin = currentLocationRef.current;
+      const currentLocationForOrigin =
+        activeTestRegionPosition ?? currentLocationRef.current;
       const selectedRegionForOrigin =
         serviceArea.regions.find(
           (region) => region.sigunguCode === selectedSigunguCode
@@ -195,7 +197,13 @@ function HomePage() {
         }
       );
     },
-    [openSheet, selectedSigunguCode, serviceArea, text]
+    [
+      activeTestRegionPosition,
+      openSheet,
+      selectedSigunguCode,
+      serviceArea,
+      text,
+    ]
   );
   const {
     currentLocation,
@@ -454,15 +462,16 @@ function HomePage() {
     pendingCurrentLocationFocus,
     selectedSigunguCode,
   ]);
-  const routeStartLocation = currentLocation
+  const homeOriginLocation = activeTestRegionPosition ?? currentLocation;
+  const routeStartLocation = homeOriginLocation
     ? {
-        lat: currentLocation.lat,
-        lng: currentLocation.lng,
+        lat: homeOriginLocation.lat,
+        lng: homeOriginLocation.lng,
       }
     : null;
-  const selectedRegionDirectionOrigin = currentLocation
+  const selectedRegionDirectionOrigin = homeOriginLocation
     ? {
-        coordinates: currentLocation,
+        coordinates: homeOriginLocation,
         label: text.placeSheet.currentLocation,
         isCurrentLocation: true,
       }
@@ -695,9 +704,10 @@ function HomePage() {
         onClose={closeSavedList}
         onSelectPlace={(place) => {
           openSheet(place, {
-            directionOrigin: isCurrentLocationLookupPending
-              ? undefined
-              : selectedRegionDirectionOrigin,
+            directionOrigin:
+              isCurrentLocationLookupPending && !activeTestRegionPosition
+                ? undefined
+                : selectedRegionDirectionOrigin,
             mode: "full-popup",
           });
         }}

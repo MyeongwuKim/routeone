@@ -4,8 +4,8 @@
  * 앱 내부의 현재 위치로 적용하는 훅이다.
  *
  * 동작 방식:
- * 네이티브가 전달한 테스트 기능 허용 여부를 확인한 뒤 테스트 좌표를 저장하고,
- * 홈에서 공유하는 현재 위치 상태를 같은 좌표로 즉시 갱신한다.
+ * 허용된 계정이 지역을 선택하면 홈 길찾기 기준 좌표를 먼저 바꾸고,
+ * 네이티브 테스트 위치 등록이 확인되면 공유 현재 위치에도 반영한다.
  */
 import { useCallback, useRef, useState } from "react";
 import type { ServiceRegion } from "@/data/serviceAreas";
@@ -19,6 +19,9 @@ export function useTestRegionLocation() {
     (state) => state.applyPosition
   );
   const [isActive, setIsActive] = useState(false);
+  const [activePosition, setActivePosition] = useState<
+    ServiceRegion["center"] | null
+  >(null);
   const latestRequestIdRef = useRef(0);
   const isEnabled = nativeBridge.runtime.isTestAccountMode();
 
@@ -30,25 +33,42 @@ export function useTestRegionLocation() {
 
       const requestId = latestRequestIdRef.current + 1;
       latestRequestIdRef.current = requestId;
+      setActivePosition(region.center);
       const request = nativeBridge.location.setTestPosition({
         position: region.center,
         language: appLanguage,
       });
 
       if (!request) {
+        if (latestRequestIdRef.current === requestId) {
+          setActivePosition(null);
+        }
         return false;
       }
 
-      const result = await request;
+      let result: Awaited<typeof request>;
+
+      try {
+        result = await request;
+      } catch (error) {
+        if (latestRequestIdRef.current === requestId) {
+          setActivePosition(null);
+        }
+        throw error;
+      }
 
       if (
         latestRequestIdRef.current !== requestId ||
         result.lat === null ||
         result.lng === null
       ) {
+        if (latestRequestIdRef.current === requestId) {
+          setActivePosition(null);
+        }
         return false;
       }
 
+      setActivePosition({ lat: result.lat, lng: result.lng });
       applyCurrentPosition({
         lat: result.lat,
         lng: result.lng,
@@ -62,7 +82,10 @@ export function useTestRegionLocation() {
   );
 
   const clearRegionPosition = useCallback(async () => {
-    if (!nativeBridge.runtime.isTestAccountMode() || !isActive) {
+    if (
+      !nativeBridge.runtime.isTestAccountMode() ||
+      (!isActive && !activePosition)
+    ) {
       return false;
     }
 
@@ -77,11 +100,13 @@ export function useTestRegionLocation() {
     }
 
     await request;
+    setActivePosition(null);
     setIsActive(false);
     return true;
-  }, [appLanguage, isActive]);
+  }, [activePosition, appLanguage, isActive]);
 
   return {
+    activePosition,
     applyRegionPosition,
     clearRegionPosition,
     isActive,
