@@ -376,6 +376,8 @@ function MyRoutePage() {
   } = useLocalizedMyRoutes(sourceMyRoutes);
   const deepLinkRouteId = searchParams.get("routeId")?.trim() ?? "";
   const deepLinkDayId = searchParams.get("dayId")?.trim() ?? "";
+  const deepLinkStopId = searchParams.get("stopId")?.trim() ?? "";
+  const deepLinkSource = searchParams.get("source")?.trim() ?? "";
   const recoveryRouteId =
     searchParams.get(ROUTE_START_RECOVERY_ROUTE_ID_PARAM)?.trim() ?? "";
   const recoveryGeneration = Number(
@@ -898,11 +900,17 @@ function MyRoutePage() {
       ? {
           route,
           day,
+          focusedStopId: day.stops.some(
+            (candidateStop) => candidateStop.id === deepLinkStopId
+          )
+            ? deepLinkStopId
+            : null,
         }
       : null;
   }, [
     deepLinkDayId,
     deepLinkRouteId,
+    deepLinkStopId,
     isMyRouteLocalizationLoading,
     localizedMyRoutes,
     myRoutesQuery.isError,
@@ -923,9 +931,13 @@ function MyRoutePage() {
       dayId: deepLinkedRouteDay.day.id,
     });
     const source = searchParams.get("source")?.trim();
+    const stopId = searchParams.get("stopId")?.trim();
 
     if (source) {
       historySearchParams.set("source", source);
+    }
+    if (stopId) {
+      historySearchParams.set("stopId", stopId);
     }
 
     navigate(`/me/routes?${historySearchParams.toString()}`, {
@@ -962,6 +974,7 @@ function MyRoutePage() {
       ? {
           route,
           day,
+          focusedStopId: null,
         }
       : null;
   }, [
@@ -982,6 +995,12 @@ function MyRoutePage() {
     selectDayRoute(selectedRoute.id, day.id);
   const handleCloseSelectedDayRoute = () => {
     setSelectedDayRoute(null);
+
+    if (deepLinkSource === "notification-inbox") {
+      navigate(-1);
+      return;
+    }
+
     clearRouteDeepLinkSearchParams();
   };
   const handleRequestAppendDay = (route: MyRoute) => {
@@ -1549,6 +1568,7 @@ function MyRoutePage() {
         <DayRoutePopup
           route={selectedRouteDay.route}
           day={selectedRouteDay.day}
+          focusedStopId={selectedRouteDay.focusedStopId}
           onClose={handleCloseSelectedDayRoute}
           onRequestStartRoute={handleRequestStartRoute}
           isRouteStartPending={isRouteStartPending}

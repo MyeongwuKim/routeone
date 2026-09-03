@@ -6,6 +6,7 @@ import type { MyRoute, MyRouteDay } from "../types";
 export type DayRoutePopupProps = {
   route: MyRoute;
   day: MyRouteDay;
+  focusedStopId?: string | null;
   onClose: () => void;
   isReadOnly?: boolean;
   allowVisitCompletion?: boolean;

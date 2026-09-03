@@ -34,7 +34,8 @@ type GpsTestLocationPopupProps = {
   isApplying: boolean;
   onApply: (
     target: VisitCompletionTarget,
-    position: TestLocation
+    position: TestLocation,
+    options?: { showSuccessToast?: boolean }
   ) => Promise<NativeArrivalTestLocationResult | null>;
   onClear: () => Promise<NativeArrivalTestLocationResult | null>;
   onClose: () => void;
@@ -453,7 +454,9 @@ function GpsTestLocationPopup({
         setAutoWalkDistanceMeters(step.distanceMeters);
         updateDraftLocation(step.position, { pan: true });
 
-        const result = await onApply(target, step.position);
+        const result = await onApply(target, step.position, {
+          showSuccessToast: index === steps.length - 1,
+        });
 
         if (!result || autoWalkRunIdRef.current !== runId) {
           return;

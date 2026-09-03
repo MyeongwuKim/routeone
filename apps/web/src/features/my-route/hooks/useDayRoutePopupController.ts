@@ -63,6 +63,7 @@ import {
 export function useDayRoutePopupController({
   route,
   day,
+  focusedStopId = null,
   onClose,
   isReadOnly = false,
   allowVisitCompletion = false,
@@ -919,7 +920,8 @@ export function useDayRoutePopupController({
 
   const handleApplyGpsTestLocation = async (
     target: VisitCompletionTarget,
-    position: { lat: number; lng: number }
+    position: { lat: number; lng: number },
+    options: { showSuccessToast?: boolean } = {}
   ) => {
     if (!isGpsTestEnabled || isGpsTestApplying) {
       return null;
@@ -958,6 +960,15 @@ export function useDayRoutePopupController({
           ? { lat: result.lat, lng: result.lng }
           : null
       );
+      if (options.showSuccessToast !== false) {
+        showToast(
+          result.notificationScheduled
+            ? text.dayRoute.gpsTestAppliedWithNotification
+            : result.withinRadius
+              ? text.dayRoute.gpsTestAppliedInsideWithoutNotification
+              : text.dayRoute.gpsTestAppliedWithoutNotification
+        );
+      }
       return result;
     } catch (error) {
       showToast(
@@ -1041,6 +1052,7 @@ export function useDayRoutePopupController({
     schedule: {
       sortedDays: visibleDays,
       activeDay,
+      focusedStopId,
       expandedDayIds,
       stopsByDayId: displayedStopsByDayId,
       routeStartLocation: route.startLocation,

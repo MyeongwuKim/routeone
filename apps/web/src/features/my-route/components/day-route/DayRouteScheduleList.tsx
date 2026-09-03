@@ -14,6 +14,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
   const todayKey = getTodayDateKey();
   const {
     sortedDays,
+    focusedStopId,
     expandedDayIds,
     stopsByDayId,
     routeStartLocation,
@@ -136,6 +137,7 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               }
               isGpsTestEnabled={isGpsTestEnabled}
               gpsTestLocationStopId={gpsTestLocationStopId}
+              focusedStopId={focusedStopId}
               travelSegmentByKey={travelSegmentByKey}
               canDeleteDay={isOrderEditing && sortedDays.length > 1}
               previousDay={previousDay}

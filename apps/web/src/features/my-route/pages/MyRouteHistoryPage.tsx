@@ -374,6 +374,8 @@ function MyRouteHistoryPage() {
   const [selectedHistoryRoute, setSelectedHistoryRoute] = useState<{
     routeId: string;
     dayId: string;
+    focusedStopId?: string | null;
+    returnToNotificationInbox?: boolean;
   } | null>(null);
   const [posterGeneratingRouteId, setPosterGeneratingRouteId] = useState<
     string | null
@@ -485,6 +487,7 @@ function MyRouteHistoryPage() {
       ? {
           route,
           day,
+          focusedStopId: selectedHistoryRoute.focusedStopId ?? null,
         }
       : null;
   }, [historyRoutes, selectedHistoryRoute]);
@@ -495,6 +498,8 @@ function MyRouteHistoryPage() {
   useEffect(() => {
     const routeId = searchParams.get("routeId")?.trim() ?? "";
     const dayId = searchParams.get("dayId")?.trim() ?? "";
+    const stopId = searchParams.get("stopId")?.trim() ?? "";
+    const source = searchParams.get("source")?.trim() ?? "";
 
     if (
       !routeId ||
@@ -516,11 +521,18 @@ function MyRouteHistoryPage() {
       setSelectedHistoryRoute({
         routeId,
         dayId,
+        focusedStopId: day.stops.some(
+          (candidateStop) => candidateStop.id === stopId
+        )
+          ? stopId
+          : null,
+        returnToNotificationInbox: source === "notification-inbox",
       });
 
       const nextSearchParams = new URLSearchParams(searchParams);
       nextSearchParams.delete("routeId");
       nextSearchParams.delete("dayId");
+      nextSearchParams.delete("stopId");
       nextSearchParams.delete("source");
       setSearchParams(nextSearchParams, { replace: true });
     });
@@ -585,6 +597,16 @@ function MyRouteHistoryPage() {
       routeId: route.id,
       dayId: day.id,
     });
+  };
+  const handleCloseSelectedHistoryRoute = () => {
+    const shouldReturnToNotificationInbox =
+      selectedHistoryRoute?.returnToNotificationInbox === true;
+
+    setSelectedHistoryRoute(null);
+
+    if (shouldReturnToNotificationInbox) {
+      navigate(-1);
+    }
   };
   const handleRequestNotVisited = (route: MyRoute) => {
     if (deleteRouteMutation.isPending) {
@@ -909,7 +931,8 @@ function MyRouteHistoryPage() {
         <DayRoutePopup
           route={selectedRouteDay.route}
           day={selectedRouteDay.day}
-          onClose={() => setSelectedHistoryRoute(null)}
+          focusedStopId={selectedRouteDay.focusedStopId}
+          onClose={handleCloseSelectedHistoryRoute}
           isReadOnly
           allowVisitCompletion={canCompleteSelectedHistoryRoute}
           visitCompletionMode="retrospective"

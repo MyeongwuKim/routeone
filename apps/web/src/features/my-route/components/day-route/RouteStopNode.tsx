@@ -1,4 +1,8 @@
-import type { PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   MdAccessTime,
   MdArrowBack,
@@ -90,6 +94,7 @@ type RouteStopNodeProps = {
   enableVerificationPhotoPreview: boolean;
   isGpsTestEnabled: boolean;
   isGpsTestLocationActive: boolean;
+  isNotificationFocused: boolean;
   travelSegmentToNext: TravelSegmentState | null;
   scheduleLabel: string | null;
   canEditVisitTimes: boolean;
@@ -124,6 +129,7 @@ function RouteStopNode({
   enableVerificationPhotoPreview,
   isGpsTestEnabled,
   isGpsTestLocationActive,
+  isNotificationFocused,
   travelSegmentToNext,
   scheduleLabel,
   canEditVisitTimes,
@@ -144,6 +150,7 @@ function RouteStopNode({
   onOpenVerificationPhoto,
 }: RouteStopNodeProps) {
   const text = useUiText();
+  const cardRef = useRef<HTMLDivElement>(null);
   const isVisited = isVisitedStop(stop);
   const isCheckedIn = !isVisited && Boolean(stop.checkedInAt);
   const stayMinutes = stop.stayMinutes ?? 60;
@@ -173,6 +180,22 @@ function RouteStopNode({
     canEditVerificationPhoto && isVisited && !stop.verificationPhotoUrl;
   const stayTimeClass =
     "inline-flex items-center justify-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 ring-1 ring-brand-100 disabled:opacity-45 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25";
+
+  useEffect(() => {
+    if (!isNotificationFocused) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      cardRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      cardRef.current?.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [isNotificationFocused]);
 
   return (
     <div className={`relative flex gap-3 ${isDragging ? "opacity-35" : ""}`}>
@@ -206,6 +229,7 @@ function RouteStopNode({
       </div>
       <div className="min-w-0 flex-1 pb-5">
         <div
+          ref={cardRef}
           role={isOrderEditing ? undefined : "button"}
           tabIndex={isOrderEditing ? undefined : 0}
           onClick={() => {
@@ -224,7 +248,7 @@ function RouteStopNode({
             event.preventDefault();
             onOpenPlace(stop);
           }}
-          className={`rounded-2xl border-2 px-4 py-3 transition ${
+          className={`scroll-m-24 rounded-2xl border-2 px-4 py-3 transition ${
             isOrderEditing
               ? "border-brand-200 bg-white shadow-sm dark:border-brand-400/30 dark:bg-slate-950"
               : isVisited
@@ -234,6 +258,10 @@ function RouteStopNode({
                   : isActiveDestination
                     ? "cursor-pointer border-brand-400 bg-brand-50 shadow-[0_12px_30px_rgba(20,184,166,0.16)] ring-2 ring-brand-200 active:scale-[0.99] dark:border-brand-300 dark:bg-brand-400/10 dark:ring-brand-400/25"
                 : "cursor-pointer border-slate-200 bg-white active:scale-[0.99] dark:border-slate-700 dark:bg-slate-950"
+          } ${
+            isNotificationFocused
+              ? "outline-4 outline-offset-2 outline-sky-300 dark:outline-sky-400"
+              : ""
           }`}
           aria-current={isActiveDestination ? "step" : undefined}
         >

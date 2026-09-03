@@ -184,6 +184,7 @@ type DayRouteAccordionItemProps = {
   enableVerificationPhotoPreview: boolean;
   isGpsTestEnabled: boolean;
   gpsTestLocationStopId: string | null;
+  focusedStopId: string | null;
   travelSegmentByKey: Record<string, TravelSegmentState>;
   canDeleteDay: boolean;
   previousDay: MyRouteDay | null;
@@ -234,6 +235,7 @@ function DayRouteAccordionItem({
   enableVerificationPhotoPreview,
   isGpsTestEnabled,
   gpsTestLocationStopId,
+  focusedStopId,
   travelSegmentByKey,
   canDeleteDay,
   previousDay,
@@ -618,6 +620,7 @@ function DayRouteAccordionItem({
                     isGpsTestLocationActive={
                       gpsTestLocationStopId === stop.id
                     }
+                    isNotificationFocused={focusedStopId === stop.id}
                     travelSegmentToNext={
                       getStoredTravelSegment(dayStops[index + 1]) ??
                       (dayStops[index + 1]
