@@ -603,8 +603,13 @@ function parsePresentedRouteArrivalNotification(
   presentedNotification: Notifications.Notification
 ): PresentedRouteArrivalNotification | null {
   const data = presentedNotification.request.content.data;
+  const notificationType = data?.type;
 
-  if (!data || data.type !== "route-arrival") {
+  if (
+    !data ||
+    (notificationType !== "route-arrival" &&
+      notificationType !== "route-arrival-test")
+  ) {
     return null;
   }
 

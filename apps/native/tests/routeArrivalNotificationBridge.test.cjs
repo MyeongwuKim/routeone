@@ -69,15 +69,18 @@ function createDeferred() {
   return { promise, resolve };
 }
 
-function createNotification() {
+function createNotification({
+  id = notificationId,
+  type = "route-arrival",
+} = {}) {
   return {
     date: Date.now(),
     request: {
-      identifier: notificationId,
+      identifier: id,
       content: {
         data: {
-          notificationId,
-          type: "route-arrival",
+          notificationId: id,
+          type,
           routeId: place.routeId,
           routeTitle: place.routeTitle,
           dayId: place.dayId,
@@ -1001,6 +1004,26 @@ test("알림 탭으로 저장된 수신 기록도 iOS 재등록에서 제외한�
 
   assert.equal(state.nativeSyncs.flat().length, 0);
   assert.equal(state.scheduled.length, 0);
+});
+
+test("GPS 강제 이동 테스트 알림도 서버 동기화용 수신 기록으로 저장한다", async () => {
+  const { bridge, state, inbox } = createHarness();
+  const testNotificationId = `arrival-test:${place.routeId}:${place.stopId}:${Date.now()}`;
+
+  await bridge.recordDeliveredRouteArrivalNotification(
+    createNotification({
+      id: testNotificationId,
+      type: "route-arrival-test",
+    })
+  );
+  await inbox();
+
+  assert.equal(state.responses.at(-1).ok, true);
+  assert.equal(state.responses.at(-1).notifications.length, 1);
+  assert.equal(
+    state.responses.at(-1).notifications[0].id,
+    testNotificationId
+  );
 });
 
 test("처리 기록 필드가 없는 구버전 iOS 모듈도 기존 수신 기록으로 중복을 막는다", async () => {
