@@ -919,6 +919,7 @@ export type UiText = {
     cancelChanges: string;
     applyChanges: string;
     saving: string;
+    saveRouteDescription: string;
     saveRouteSlowDescription: string;
     addDay: string;
     done: string;
@@ -2190,9 +2191,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       dragHandleAria: (title) => `${title} 순서 이동`,
       cancelChanges: "변경 취소",
       applyChanges: "변경 적용",
-      saving: "루트 저장 중...",
+      saving: "여행 일정을 저장하고 있어요",
+      saveRouteDescription:
+        "선택한 장소와 일정을 정리하는 중이에요.",
       saveRouteSlowDescription:
-        "서버 응답이 늦어지고 있어요. 완료될 때까지 이 화면에서 잠시 기다려 주세요.",
+        "저장에 조금 더 시간이 걸리고 있어요. 이 화면에서 잠시만 기다려 주세요.",
       addDay: "DAY 추가",
       done: "완료",
       addSegmentAria: "이 구간에 장소 추가",
@@ -3513,9 +3516,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       dragHandleAria: (title) => `Move ${title}`,
       cancelChanges: "Cancel changes",
       applyChanges: "Apply changes",
-      saving: "Saving route...",
+      saving: "Saving your itinerary",
+      saveRouteDescription:
+        "Organizing your selected places and schedule.",
       saveRouteSlowDescription:
-        "The server is taking longer to respond. Please stay on this screen until saving finishes.",
+        "Saving is taking a little longer. Please stay on this screen for a moment.",
       addDay: "Add DAY",
       done: "Done",
       addSegmentAria: "Add a place to this segment",

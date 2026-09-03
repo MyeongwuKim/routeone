@@ -68,8 +68,13 @@ function RouteCheckoutSavingOverlay({
       <div role="status" aria-live="polite" className="w-full max-w-sm">
         <PotatoLoadingCard
           title={text.cart.saving}
-          description={isSlow ? text.cart.saveRouteSlowDescription : undefined}
+          description={
+            isSlow
+              ? text.cart.saveRouteSlowDescription
+              : text.cart.saveRouteDescription
+          }
           animation="running"
+          layout="stacked"
         />
       </div>
     </div>,

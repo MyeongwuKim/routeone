@@ -7,6 +7,7 @@ type PotatoLoadingCardProps = {
   footerText?: string;
   animation?: AppLoadingAnimation;
   compact?: boolean;
+  layout?: "inline" | "stacked";
   className?: string;
 };
 
@@ -496,21 +497,42 @@ export function PotatoLoadingCard({
   footerText,
   animation = "generic",
   compact = false,
+  layout = "inline",
   className = "",
 }: PotatoLoadingCardProps) {
+  const isStacked = layout === "stacked";
+
   return (
     <div
       className={`w-full rounded-3xl border border-brand-200 bg-white/95 shadow-2xl backdrop-blur dark:border-brand-400/30 dark:bg-[#0b211f]/95 ${
-        compact ? "max-w-none px-4 py-4" : "max-w-sm px-5 py-5"
+        compact
+          ? "max-w-none px-4 py-4"
+          : isStacked
+            ? "max-w-sm px-6 py-7"
+            : "max-w-sm px-5 py-5"
       } ${className}`}
     >
       <PotatoLoadingStyles />
-      <div className="flex items-center gap-4">
+      <div
+        className={`flex gap-4 ${
+          isStacked
+            ? "flex-col items-center text-center"
+            : "items-center"
+        }`}
+      >
         <PotatoCharacter animation={animation} compact={compact} />
-        <div>
-          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</p>
+        <div className={isStacked ? "max-w-xs" : undefined}>
+          <p
+            className={`${
+              isStacked ? "text-base font-bold" : "text-sm font-semibold"
+            } text-slate-800 dark:text-slate-100`}
+          >
+            {title}
+          </p>
           {description ? (
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
+            <p
+              className={`${isStacked ? "mt-2 leading-5" : "mt-1"} text-xs text-slate-500 dark:text-slate-300`}
+            >
               {description}
             </p>
           ) : null}
