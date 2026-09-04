@@ -433,19 +433,24 @@ model PushDevice {
 }
 
 type PlaceSnapshot {
-  provider       PlaceProvider
-  externalId     String?
-  contentId      String?
-  contentTypeId  String?
-  title          String
-  address        String?
-  lat            Float
-  lng            Float
-  categoryLabel  String?
-  categoryName   String?
-  imageUrl       String?
-  regionCode     String?
-  regionLabelKey String?
+  provider                          PlaceProvider
+  externalId                        String?
+  contentId                         String?
+  contentTypeId                     String?
+  title                             String
+  address                           String?
+  lat                               Float
+  lng                               Float
+  categoryLabel                     String?
+  categoryName                      String?
+  categoryCode1                     String?
+  categoryCode2                     String?
+  categoryCode3                     String?
+  verificationRadiusMeters          Int?
+  extendedVerificationRequiresPhoto Boolean?
+  imageUrl                          String?
+  regionCode                        String?
+  regionLabelKey                    String?
 }
 
 type RouteStartLocation {

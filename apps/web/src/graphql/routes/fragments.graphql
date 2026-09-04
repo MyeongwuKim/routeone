@@ -9,6 +9,11 @@ fragment RoutePlaceFields on PlaceSnapshot {
   lng
   categoryLabel
   categoryName
+  categoryCode1
+  categoryCode2
+  categoryCode3
+  verificationRadiusMeters
+  extendedVerificationRequiresPhoto
   imageUrl
   regionCode
   regionLabelKey

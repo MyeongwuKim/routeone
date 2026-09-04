@@ -226,10 +226,12 @@ export function createMapSheetPlaceFromNearbyPlace({
 }: NearbyMapSheetPlaceInput): MapSheetPlace {
   const categoryLabel = getNearbyPlaceCategoryLabel(place);
   const categoryIcon = getNearbyPlaceCategoryIcon(place);
-  const categoryName = getReadablePlaceCategoryName(
-    [place.lclsSystm3, place.lclsSystm2, place.lclsSystm1],
-    categoryLabel
-  );
+  const categoryName =
+    place.categoryName?.trim() ||
+    getReadablePlaceCategoryName(
+      [place.lclsSystm3, place.lclsSystm2, place.lclsSystm1],
+      categoryLabel
+    );
 
   return {
     id: `${place.id}-${place.contentTypeId}`,
@@ -245,6 +247,9 @@ export function createMapSheetPlaceFromNearbyPlace({
     lng: place.lng,
     contentTypeLabel: categoryLabel,
     categoryName,
+    categoryCode1: place.lclsSystm1,
+    categoryCode2: place.lclsSystm2,
+    categoryCode3: place.lclsSystm3,
     icon: categoryIcon,
     images: dedupePlaceImageUrls([place.firstImage, place.secondImage]),
   };

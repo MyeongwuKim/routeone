@@ -14,6 +14,9 @@ export type PlaceSnapshotInput = {
   lng: number;
   categoryLabel?: string | null;
   categoryName?: string | null;
+  categoryCode1?: string | null;
+  categoryCode2?: string | null;
+  categoryCode3?: string | null;
   imageUrl?: string | null;
   regionCode?: string | null;
   regionLabelKey?: string | null;

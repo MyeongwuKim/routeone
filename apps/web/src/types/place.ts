@@ -12,6 +12,11 @@ export type MapSheetPlace = {
   lng: number;
   contentTypeLabel: string;
   categoryName: string;
+  categoryCode1?: string;
+  categoryCode2?: string;
+  categoryCode3?: string;
+  verificationRadiusMeters?: number | null;
+  extendedVerificationRequiresPhoto?: boolean | null;
   icon: string;
   images: string[];
   eventStartDate?: string;

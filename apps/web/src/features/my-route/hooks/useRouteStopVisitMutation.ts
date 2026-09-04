@@ -762,7 +762,10 @@ export function useRouteStopVisitMutation({
       );
       const position =
         verificationStatus === "GPS_PHOTO"
-          ? await requestVisitVerificationPosition(target.stop.place)
+          ? await requestVisitVerificationPosition(
+              target.stop.place,
+              "GPS_PHOTO"
+            )
           : null;
 
       const photo = await requestVisitPhoto(source);
@@ -831,7 +834,10 @@ export function useRouteStopVisitMutation({
   });
   const gpsMutation = useMutation({
     mutationFn: async (target: VisitCompletionTarget) => {
-      const position = await requestVisitVerificationPosition(target.stop.place);
+      const position = await requestVisitVerificationPosition(
+        target.stop.place,
+        "GPS"
+      );
 
       return {
         ...target,

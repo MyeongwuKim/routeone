@@ -650,6 +650,9 @@ export type UiText = {
     gpsTestCloseAria: string;
     gpsTestPlaceLegend: string;
     gpsTestLocationLegend: string;
+    gpsTestArrivalRadiusLegend: (distance: string) => string;
+    gpsTestGpsRadiusLegend: (distance: string) => string;
+    gpsTestPhotoRadiusLegend: (distance: string) => string;
     gpsTestOutsidePreset: string;
     gpsTestArrivalPreset: string;
     gpsTestVisitPreset: string;
@@ -1843,6 +1846,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestCloseAria: "GPS 테스트 지도 닫기",
       gpsTestPlaceLegend: "장소",
       gpsTestLocationLegend: "테스트 위치",
+      gpsTestArrivalRadiusLegend: (distance) => `도착 알림 ${distance}`,
+      gpsTestGpsRadiusLegend: (distance) => `GPS 인증 ${distance}`,
+      gpsTestPhotoRadiusLegend: (distance) => `GPS+사진 인증 ${distance}`,
       gpsTestOutsidePreset: "반경 밖 450m",
       gpsTestArrivalPreset: "도착 알림 180m",
       gpsTestVisitPreset: "방문 인증 30m",
@@ -3157,6 +3163,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestCloseAria: "Close GPS test map",
       gpsTestPlaceLegend: "Place",
       gpsTestLocationLegend: "Test location",
+      gpsTestArrivalRadiusLegend: (distance) => `Arrival alert ${distance}`,
+      gpsTestGpsRadiusLegend: (distance) => `GPS verification ${distance}`,
+      gpsTestPhotoRadiusLegend: (distance) => `GPS + photo ${distance}`,
       gpsTestOutsidePreset: "Outside · 450 m",
       gpsTestArrivalPreset: "Arrival · 180 m",
       gpsTestVisitPreset: "Visit · 30 m",

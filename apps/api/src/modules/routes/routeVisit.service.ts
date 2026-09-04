@@ -31,6 +31,10 @@ import type {
   UpdateRouteDayStartInput,
   UpdateRouteStopVisitTimesInput,
 } from "./route.types.js";
+import {
+  DEFAULT_GPS_VERIFICATION_RADIUS_METERS,
+  resolvePlaceVerificationPolicy,
+} from "./routePlaceVerificationPolicy.js";
 
 type RouteServicePrisma = PrismaClient | Prisma.TransactionClient;
 
@@ -46,7 +50,6 @@ type RouteStopStayContribution = {
   visitedAt: Date | null;
 };
 
-const GPS_VERIFICATION_MAX_DISTANCE_METERS = 100;
 const GPS_VERIFICATION_MAX_ACCURACY_METERS = 100;
 
 const BYPASS_GPS_LOCATION_VERIFICATION = false;
@@ -300,13 +303,34 @@ function assertRouteStopGpsVerification(
     },
     placeCoordinates
   );
+  const verificationPolicy = resolvePlaceVerificationPolicy(
+    stop.place as Record<string, unknown>
+  );
 
-  if (distanceMeters > GPS_VERIFICATION_MAX_DISTANCE_METERS) {
+  if (distanceMeters > verificationPolicy.verificationRadiusMeters) {
     throw new UserFacingError(
       `장소 근처에서만 인증할 수 있어요. 현재 위치가 약 ${Math.round(
         distanceMeters
-      )}m 떨어져 있어요.`
+      )}m 떨어져 있고, 이 장소의 인증 범위는 ${verificationPolicy.verificationRadiusMeters}m예요.`
     );
+  }
+
+  if (
+    verificationStatus === "GPS" &&
+    verificationPolicy.extendedVerificationRequiresPhoto &&
+    distanceMeters > DEFAULT_GPS_VERIFICATION_RADIUS_METERS
+  ) {
+    throw new UserFacingError(
+      `장소에서 100m보다 떨어진 위치는 GPS + 카메라 인증이 필요해요. 사진 인증은 ${verificationPolicy.verificationRadiusMeters}m까지 가능해요.`
+    );
+  }
+
+  if (
+    verificationStatus === "GPS_PHOTO" &&
+    (!nullableString(verification?.photoImageId) ||
+      !nullableString(verification?.photoUrl))
+  ) {
+    throw new UserFacingError("GPS + 카메라 인증 사진을 확인하지 못했어요.");
   }
 }
 

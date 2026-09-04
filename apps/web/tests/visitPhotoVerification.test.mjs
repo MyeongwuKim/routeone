@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
 
 let getVisitPhotoVerificationStatus;
+let assertVisitPositionNearPlace;
+let derivePlaceVerificationPolicy;
 let VisitCompletionPopup;
 let server;
 
@@ -20,6 +22,12 @@ before(async () => {
   });
   ({ getVisitPhotoVerificationStatus } = await server.ssrLoadModule(
     "/src/features/my-route/services/visitPhotoVerification.ts"
+  ));
+  ({ assertVisitPositionNearPlace } = await server.ssrLoadModule(
+    "/src/features/my-route/services/visitPhotoService.ts"
+  ));
+  ({ derivePlaceVerificationPolicy } = await server.ssrLoadModule(
+    "/src/lib/placeVerificationPolicy.ts"
   ));
   ({ VisitCompletionPopup } = await server.ssrLoadModule(
     "/src/features/my-route/components/day-route/DayRouteDialogs.tsx"
@@ -38,6 +46,51 @@ test("여행 중 카메라 촬영만 GPS 사진 인증으로 처리한다", () =
 test("지난 일정의 사진은 촬영 경로와 관계없이 일반 완료로 처리한다", () => {
   assert.equal(getVisitPhotoVerificationStatus("camera", true), "MANUAL");
   assert.equal(getVisitPhotoVerificationStatus("library", true), "MANUAL");
+});
+
+test("대형 야외 장소는 500m까지 사진 인증 정책을 적용한다", () => {
+  assert.deepEqual(
+    derivePlaceVerificationPolicy({
+      contentTypeId: "12",
+      categoryName: "국립공원",
+    }),
+    {
+      verificationRadiusMeters: 500,
+      extendedVerificationRequiresPhoto: true,
+    }
+  );
+});
+
+test("확장 반경에서는 GPS 단독을 막고 GPS 사진 인증만 허용한다", () => {
+  const place = {
+    lat: 37,
+    lng: 127,
+    contentTypeId: "12",
+    categoryName: "공원",
+    verificationRadiusMeters: 500,
+    extendedVerificationRequiresPhoto: true,
+  };
+  const positionAbout150MetersAway = {
+    lat: 37.00135,
+    lng: 127,
+  };
+
+  assert.throws(
+    () =>
+      assertVisitPositionNearPlace(
+        positionAbout150MetersAway,
+        place,
+        "GPS"
+      ),
+    /GPS \+ 카메라 인증/
+  );
+  assert.doesNotThrow(() =>
+    assertVisitPositionNearPlace(
+      positionAbout150MetersAway,
+      place,
+      "GPS_PHOTO"
+    )
+  );
 });
 
 test("도착 인증 버튼을 GPS, GPS 카메라, 앨범·일반 인증 순서로 배치한다", () => {

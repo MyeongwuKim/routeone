@@ -7,6 +7,7 @@ import type {
 } from "@prisma/client";
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import type { PlaceSnapshotInput } from "./route.types.js";
+import { resolvePlaceVerificationPolicy } from "./routePlaceVerificationPolicy.js";
 
 type RouteSharedPrisma = PrismaClient | Prisma.TransactionClient;
 
@@ -168,6 +169,8 @@ export function normalizePlaceSnapshot(place: PlaceSnapshotInput) {
     throw new UserFacingError("장소 좌표가 올바르지 않습니다.");
   }
 
+  const verificationPolicy = resolvePlaceVerificationPolicy(place);
+
   return {
     provider: place.provider,
     externalId: nullableString(place.externalId),
@@ -179,6 +182,10 @@ export function normalizePlaceSnapshot(place: PlaceSnapshotInput) {
     lng: place.lng,
     categoryLabel: nullableString(place.categoryLabel),
     categoryName: nullableString(place.categoryName),
+    categoryCode1: nullableString(place.categoryCode1),
+    categoryCode2: nullableString(place.categoryCode2),
+    categoryCode3: nullableString(place.categoryCode3),
+    ...verificationPolicy,
     imageUrl: nullableString(place.imageUrl),
     regionCode: nullableString(place.regionCode),
     regionLabelKey: nullableString(place.regionLabelKey),

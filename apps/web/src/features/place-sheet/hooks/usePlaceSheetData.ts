@@ -13,9 +13,9 @@ import {
 import type { UiText } from "@/lib/uiText";
 import {
   fetchNearbyTouristPlaces,
+  fetchLclsSystemNameMap,
   fetchTourPlaceDetail,
   fetchTouristConcentrationPoints,
-  type NearbyTouristPlace,
 } from "@/lib/visitKoreaTourApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import type { MapSheetPlace } from "@/types/place";
@@ -367,19 +367,33 @@ export function usePlaceSheetData({
         throw new Error(text.placeSheet.selectedPlaceMissing);
       }
 
-      const nearbyPlaces = await fetchNearbyTouristPlaces(
-        TOUR_API_SERVICE_KEY,
-        {
-          lat: selectedPlace.lat,
-          lng: selectedPlace.lng,
-          radiusM: 6000,
-          numOfRows: 12,
-          contentTypeIds: ["12", "39"],
-          excludeContentId: selectedPlace.contentId,
-        },
-        "ko"
-      );
-      return localizeTourPlaces(nearbyPlaces, appLanguage, {
+      const [nearbyPlaces, lclsNameByCode] = await Promise.all([
+        fetchNearbyTouristPlaces(
+          TOUR_API_SERVICE_KEY,
+          {
+            lat: selectedPlace.lat,
+            lng: selectedPlace.lng,
+            radiusM: 6000,
+            numOfRows: 12,
+            contentTypeIds: ["12", "39"],
+            excludeContentId: selectedPlace.contentId,
+          },
+          "ko"
+        ),
+        fetchLclsSystemNameMap(TOUR_API_SERVICE_KEY, "ko").catch(
+          (): Record<string, string> => ({})
+        ),
+      ]);
+      const categorizedNearbyPlaces = nearbyPlaces.map((place) => ({
+        ...place,
+        categoryName:
+          lclsNameByCode[place.lclsSystm3] ||
+          lclsNameByCode[place.lclsSystm2] ||
+          lclsNameByCode[place.lclsSystm1] ||
+          getNearbyPlaceCategoryLabel(place),
+      }));
+
+      return localizeTourPlaces(categorizedNearbyPlaces, appLanguage, {
         retryUncached: true,
         retryAttempts: LOCALIZATION_RETRY_ATTEMPTS,
         retryDelayMs: LOCALIZATION_RETRY_DELAY_MS,
@@ -468,8 +482,7 @@ export function usePlaceSheetData({
     () =>
       (nearbyTouristQuery.data ?? [])
         .filter(
-          (item): item is NearbyTouristPlace =>
-            item.title.trim().toLowerCase() !== selectedPlaceTitle
+          (item) => item.title.trim().toLowerCase() !== selectedPlaceTitle
         )
         .filter((item) => getNearbyPlaceCategoryLabel(item) !== "장소")
         .filter((item) => !isExcludedNearbyPlace(item.title))

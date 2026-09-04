@@ -5,13 +5,24 @@ import {
   type NativeVisitPhoto,
   type NativeVisitPhotoSource,
 } from "@/native-bridge";
+import type { RouteStopVerificationStatus } from "@/generated/graphql";
+import {
+  DEFAULT_GPS_VERIFICATION_RADIUS_METERS,
+  resolvePlaceVerificationPolicy,
+  type PlaceVerificationPolicySource,
+} from "@/lib/placeVerificationPolicy";
 
 export type VisitPhotoSource = NativeVisitPhotoSource;
 
-type VisitPlaceCoordinates = {
+type VisitPlaceCoordinates = PlaceVerificationPolicySource & {
   lat: number;
   lng: number;
 };
+
+type GpsVerificationStatus = Extract<
+  RouteStopVerificationStatus,
+  "GPS" | "GPS_PHOTO"
+>;
 
 type CloudflareImageUploadResponse = {
   success?: boolean;
@@ -24,7 +35,6 @@ type CloudflareImageUploadResponse = {
   }>;
 };
 
-const VISIT_GPS_VERIFICATION_MAX_DISTANCE_METERS = 100;
 const VISIT_GPS_VERIFICATION_MAX_ACCURACY_METERS = 100;
 const VISIT_GPS_VERIFICATION_MAX_POSITION_AGE_MS = 15_000;
 const VISIT_GPS_VERIFICATION_FUTURE_TOLERANCE_MS = 5_000;
@@ -81,7 +91,8 @@ function calculateDistanceMeters(
 
 export function assertVisitPositionNearPlace(
   position: VisitPlaceCoordinates,
-  place: VisitPlaceCoordinates
+  place: VisitPlaceCoordinates,
+  verificationStatus: GpsVerificationStatus = "GPS"
 ) {
   if (
     !Number.isFinite(position.lat) ||
@@ -102,12 +113,23 @@ export function assertVisitPositionNearPlace(
   }
 
   const distanceMeters = calculateDistanceMeters(position, place);
+  const verificationPolicy = resolvePlaceVerificationPolicy(place);
 
-  if (distanceMeters > VISIT_GPS_VERIFICATION_MAX_DISTANCE_METERS) {
+  if (distanceMeters > verificationPolicy.verificationRadiusMeters) {
     throw new Error(
       `장소 근처에서만 인증할 수 있어요. 현재 위치가 약 ${Math.round(
         distanceMeters
-      )}m 떨어져 있어요.`
+      )}m 떨어져 있고, 이 장소의 인증 범위는 ${verificationPolicy.verificationRadiusMeters}m예요.`
+    );
+  }
+
+  if (
+    verificationStatus === "GPS" &&
+    verificationPolicy.extendedVerificationRequiresPhoto &&
+    distanceMeters > DEFAULT_GPS_VERIFICATION_RADIUS_METERS
+  ) {
+    throw new Error(
+      `장소에서 100m보다 떨어진 위치는 GPS + 카메라 인증이 필요해요. 사진 인증은 ${verificationPolicy.verificationRadiusMeters}m까지 가능해요.`
     );
   }
 
@@ -161,7 +183,8 @@ export async function requestCurrentPosition() {
 }
 
 export async function requestVisitVerificationPosition(
-  place: VisitPlaceCoordinates
+  place: VisitPlaceCoordinates,
+  verificationStatus: GpsVerificationStatus = "GPS"
 ) {
   if (
     isVisitVerificationBypassEnabled() &&
@@ -179,7 +202,7 @@ export async function requestVisitVerificationPosition(
 
   assertVisitPositionFreshness(position);
   assertVisitPositionAccuracy(position);
-  assertVisitPositionNearPlace(position, place);
+  assertVisitPositionNearPlace(position, place, verificationStatus);
 
   return position;
 }

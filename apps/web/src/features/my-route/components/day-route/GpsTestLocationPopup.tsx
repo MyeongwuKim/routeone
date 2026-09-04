@@ -16,6 +16,10 @@ import NaverMapView, {
   type NaverMarkerInstance,
 } from "@/components/map/NaverMapView";
 import { calculateDistanceMeters } from "@/lib/gangwonBoundaryUtils";
+import {
+  DEFAULT_GPS_VERIFICATION_RADIUS_METERS,
+  resolvePlaceVerificationPolicy,
+} from "@/lib/placeVerificationPolicy";
 import { useUiText } from "@/lib/uiText";
 import {
   nativeBridge,
@@ -138,9 +142,13 @@ function getInitialTestLocation(
     return activeLocation;
   }
 
+  const { verificationRadiusMeters } = resolvePlaceVerificationPolicy(
+    target.stop.place
+  );
+
   return getOffsetTestLocation(
     target.stop.place,
-    OUTSIDE_ARRIVAL_PRESET_METERS
+    Math.max(OUTSIDE_ARRIVAL_PRESET_METERS, verificationRadiusMeters + 100)
   );
 }
 
@@ -247,7 +255,11 @@ function GpsTestLocationPopup({
   >(null);
   const autoWalkRunIdRef = useRef(0);
   const placeLocation = target.stop.place;
-  const mapResetKey = `${target.stop.id}:${initialLocation.lat}:${initialLocation.lng}`;
+  const verificationPolicy = useMemo(
+    () => resolvePlaceVerificationPolicy(placeLocation),
+    [placeLocation]
+  );
+  const mapResetKey = `${target.stop.id}:${initialLocation.lat}:${initialLocation.lng}:${verificationPolicy.verificationRadiusMeters}`;
   const isBusy = isApplying || isAutoWalking || isResolvingRealStart;
 
   useEffect(() => {
@@ -339,7 +351,35 @@ function GpsTestLocationPopup({
       bounds.extend(placePosition);
       bounds.extend(testPosition);
 
-      const radiusCircle = new naverMaps.Circle({
+      const visibleRadiusMeters = Math.max(
+        ARRIVAL_RADIUS_METERS,
+        verificationPolicy.verificationRadiusMeters
+      );
+      const westEdge = getOffsetTestLocation(
+        placeLocation,
+        -visibleRadiusMeters
+      );
+      const eastEdge = getOffsetTestLocation(
+        placeLocation,
+        visibleRadiusMeters
+      );
+      bounds.extend(new naverMaps.LatLng(westEdge.lat, westEdge.lng));
+      bounds.extend(new naverMaps.LatLng(eastEdge.lat, eastEdge.lng));
+
+      const verificationCircle = new naverMaps.Circle({
+        map,
+        center: placePosition,
+        radius: verificationPolicy.verificationRadiusMeters,
+        fillColor: "#8b5cf6",
+        fillOpacity: 0.12,
+        strokeColor: "#7c3aed",
+        strokeOpacity: 0.9,
+        strokeWeight: 2,
+        zIndex: 450,
+      }) as NaverMarkerInstance;
+      overlays.push(verificationCircle);
+
+      const arrivalCircle = new naverMaps.Circle({
         map,
         center: placePosition,
         radius: ARRIVAL_RADIUS_METERS,
@@ -348,9 +388,24 @@ function GpsTestLocationPopup({
         strokeColor: "#0f766e",
         strokeOpacity: 0.8,
         strokeWeight: 2,
-        zIndex: 500,
+        zIndex: 400,
       }) as NaverMarkerInstance;
-      overlays.push(radiusCircle);
+      overlays.push(arrivalCircle);
+
+      if (verificationPolicy.extendedVerificationRequiresPhoto) {
+        const gpsOnlyCircle = new naverMaps.Circle({
+          map,
+          center: placePosition,
+          radius: DEFAULT_GPS_VERIFICATION_RADIUS_METERS,
+          fillColor: "#4f46e5",
+          fillOpacity: 0.16,
+          strokeColor: "#4338ca",
+          strokeOpacity: 0.95,
+          strokeWeight: 2,
+          zIndex: 550,
+        }) as NaverMarkerInstance;
+        overlays.push(gpsOnlyCircle);
+      }
 
       const placeMarker = new naverMaps.Marker({
         map,
@@ -430,7 +485,12 @@ function GpsTestLocationPopup({
         testMarkerRef.current = null;
         mapInstanceRef.current = null;
       };
-    }, [initialLocation, placeLocation, updateDraftLocation]
+    }, [
+      initialLocation,
+      placeLocation,
+      updateDraftLocation,
+      verificationPolicy,
+    ]
   );
 
   const handleAutoWalk = async () => {
@@ -512,7 +572,37 @@ function GpsTestLocationPopup({
           resetKey={mapResetKey}
           className="relative min-h-0 flex-1 bg-violet-50 dark:bg-slate-900"
           onReady={handleMapReady}
-        />
+        >
+          <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1.5">
+            <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-700 shadow ring-1 ring-teal-200 dark:bg-slate-950/95 dark:text-teal-200 dark:ring-teal-400/30">
+              {text.dayRoute.gpsTestArrivalRadiusLegend(
+                formatDistance(ARRIVAL_RADIUS_METERS)
+              )}
+            </span>
+            {verificationPolicy.extendedVerificationRequiresPhoto ? (
+              <>
+                <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-black text-indigo-700 shadow ring-1 ring-indigo-200 dark:bg-slate-950/95 dark:text-indigo-200 dark:ring-indigo-400/30">
+                  {text.dayRoute.gpsTestGpsRadiusLegend(
+                    formatDistance(DEFAULT_GPS_VERIFICATION_RADIUS_METERS)
+                  )}
+                </span>
+                <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-black text-violet-700 shadow ring-1 ring-violet-200 dark:bg-slate-950/95 dark:text-violet-200 dark:ring-violet-400/30">
+                  {text.dayRoute.gpsTestPhotoRadiusLegend(
+                    formatDistance(
+                      verificationPolicy.verificationRadiusMeters
+                    )
+                  )}
+                </span>
+              </>
+            ) : (
+              <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-black text-violet-700 shadow ring-1 ring-violet-200 dark:bg-slate-950/95 dark:text-violet-200 dark:ring-violet-400/30">
+                {text.dayRoute.gpsTestGpsRadiusLegend(
+                  formatDistance(verificationPolicy.verificationRadiusMeters)
+                )}
+              </span>
+            )}
+          </div>
+        </NaverMapView>
 
         <footer className="app-safe-area-footer shrink-0 border-t border-violet-100 bg-white px-4 py-3 dark:border-violet-400/20 dark:bg-slate-950">
           <p className="mb-3 rounded-xl bg-violet-50 px-3 py-2 text-xs font-bold leading-relaxed text-violet-700 dark:bg-violet-400/10 dark:text-violet-100">

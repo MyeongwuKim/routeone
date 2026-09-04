@@ -131,6 +131,9 @@ function createPlace(id, offset = 0) {
     lng: 128.88 + offset,
     contentTypeLabel: "관광지",
     categoryName: "자연관광",
+    categoryCode1: "TEST_L1",
+    categoryCode2: "TEST_L2",
+    categoryCode3: "TEST_L3",
     icon: "📍",
     images: [],
   };
@@ -180,6 +183,24 @@ test("입력 빌더는 동기적으로 빈 날짜를 정리하고 이동시간 0
   assert.deepEqual(result.stops.map((stop) => stop.dayIndex), [1, 1, 2]);
   assert.deepEqual(result.stops.map((stop) => stop.order), [1, 2, 3]);
   assert.deepEqual(result.stops.map((stop) => stop.travelMinutesFromPrevious), [null, null, 0]);
+  assert.deepEqual(result.stops[0].place, {
+    provider: "TOUR_API",
+    externalId: "null",
+    contentId: "null",
+    contentTypeId: "12",
+    title: "null",
+    address: "강원 강릉시 테스트 주소",
+    lat: 37.78,
+    lng: 128.88,
+    categoryLabel: "관광지",
+    categoryName: "자연관광",
+    categoryCode1: "TEST_L1",
+    categoryCode2: "TEST_L2",
+    categoryCode3: "TEST_L3",
+    imageUrl: null,
+    regionCode: "1",
+    regionLabelKey: "32:1",
+  });
   assert.deepEqual(result.dayStartLocations, [
     { dayIndex: 1, startLocation: { lat: 35.2, lng: 129.1 } },
     { dayIndex: 2, startLocation: { lat: 0, lng: 0 } },

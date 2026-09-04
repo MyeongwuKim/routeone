@@ -108,6 +108,11 @@ export const routeTypeDefs = gql`
     lng: Float!
     categoryLabel: String
     categoryName: String
+    categoryCode1: String
+    categoryCode2: String
+    categoryCode3: String
+    verificationRadiusMeters: Int
+    extendedVerificationRequiresPhoto: Boolean
     imageUrl: String
     regionCode: String
     regionLabelKey: String
@@ -256,6 +261,9 @@ export const routeTypeDefs = gql`
     lng: Float!
     categoryLabel: String
     categoryName: String
+    categoryCode1: String
+    categoryCode2: String
+    categoryCode3: String
     imageUrl: String
     regionCode: String
     regionLabelKey: String

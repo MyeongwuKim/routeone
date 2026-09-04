@@ -46,6 +46,12 @@ function createMapSheetPlace(stop: MyRouteStop): MapSheetPlace {
     lng: stop.place.lng,
     contentTypeLabel,
     categoryName: stop.place.categoryName ?? contentTypeLabel,
+    categoryCode1: stop.place.categoryCode1 ?? undefined,
+    categoryCode2: stop.place.categoryCode2 ?? undefined,
+    categoryCode3: stop.place.categoryCode3 ?? undefined,
+    verificationRadiusMeters: stop.place.verificationRadiusMeters,
+    extendedVerificationRequiresPhoto:
+      stop.place.extendedVerificationRequiresPhoto,
     icon: getPlaceCategoryIcon(contentTypeLabel),
     images: stop.place.imageUrl ? [stop.place.imageUrl] : [],
   };

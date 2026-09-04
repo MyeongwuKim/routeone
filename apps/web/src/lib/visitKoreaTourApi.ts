@@ -150,6 +150,7 @@ export type NearbyTouristPlace = {
   lclsSystm1: string;
   lclsSystm2: string;
   lclsSystm3: string;
+  categoryName?: string;
   firstImage: string;
   secondImage: string;
   distanceM: number | null;
