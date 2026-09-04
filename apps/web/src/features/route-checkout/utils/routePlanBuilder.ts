@@ -93,6 +93,13 @@ function estimateTravelMinutes(
   return Math.max(8, Math.round((distanceKm / 35) * 60));
 }
 
+function estimateTravelScoreMinutes(
+  from: RouteStartLocation,
+  to: RouteStartLocation
+) {
+  return (calculateDistanceKm(from, to) / 35) * 60;
+}
+
 function isWithinTimeWindow(
   value: number,
   startMinutes: number,
@@ -302,6 +309,9 @@ function appendPlaceToRouteState(options: {
   const travelMinutes = travelStart
     ? estimateTravelMinutes(travelStart, candidate.place)
     : 0;
+  const travelScoreMinutes = travelStart
+    ? estimateTravelScoreMinutes(travelStart, candidate.place)
+    : 0;
   const startMinutes = baseMinutes + travelMinutes;
   const endMinutes = startMinutes + candidate.stayMinutes;
   const overMinutes = Math.max(0, endMinutes - dailyEndMinutes);
@@ -327,7 +337,7 @@ function appendPlaceToRouteState(options: {
   const score =
     state.score +
     dayBreakPenalty +
-    travelMinutes * getTempoTravelWeight(tempo) +
+    travelScoreMinutes * getTempoTravelWeight(tempo) +
     getCategoryTimeScore({
       category: candidate.category,
       startMinutes,

@@ -79,6 +79,31 @@ function createPlan() {
   }));
 }
 
+function createSavedFoodPlace(id, lng) {
+  return {
+    id,
+    thumbnailUrl: "",
+    savedAt: 0,
+    place: {
+      id,
+      contentId: id,
+      contentTypeId: "39",
+      areaCode: "1",
+      signguCode: "1",
+      touristTrendName: "",
+      topRank: null,
+      title: id,
+      address: "테스트 주소",
+      lat: commonStart.lat,
+      lng,
+      contentTypeLabel: "음식점",
+      categoryName: "음식점",
+      icon: "🍽",
+      images: [],
+    },
+  };
+}
+
 function loadHook(code, modules) {
   const exports = {};
   new Function("require", "exports", code)((specifier) => {
@@ -183,6 +208,28 @@ test("처음 선택한 공통 출발지는 모든 DAY의 기본값이다", async
   const result = await harness.settle();
   assert.equal(result.routePlan.length, 2);
   for (const day of result.routePlan) assert.deepEqual(day.startLocation, commonStart);
+});
+
+test("가까운 장소가 모두 최소 이동시간이어도 실제 거리로 방문 순서를 정한다", () => {
+  const routePlan = routePlanBuilder.buildRoutePlan({
+    savedPlaces: [
+      createSavedFoodPlace("far-place", commonStart.lng + 0.02),
+      createSavedFoodPlace("near-place", commonStart.lng + 0.001),
+    ],
+    travelStartDate: "2026-09-04",
+    tripDays: 1,
+    dailyStartMinutes: 540,
+    dailyEndMinutes: 1080,
+    tempo: "balanced",
+    stayOverrides: {},
+    currentLocation: commonStart,
+  });
+
+  assert.deepEqual(
+    routePlan[0].items.map((item) => item.id),
+    ["near-place", "far-place"]
+  );
+  assert.equal(routePlan[0].items[0].travelMinutesFromPrevious, 8);
 });
 
 test("공유 루트의 초기 DAY별 출발지와 원본 입력을 보존한다", async (t) => {
