@@ -48,48 +48,43 @@ test("지난 일정의 사진은 촬영 경로와 관계없이 일반 완료로 
   assert.equal(getVisitPhotoVerificationStatus("library", true), "MANUAL");
 });
 
-test("대형 야외 장소는 500m까지 사진 인증 정책을 적용한다", () => {
+test("넓은 야외 장소는 알림 500m, 방문 인증 300m 정책을 적용한다", () => {
   assert.deepEqual(
     derivePlaceVerificationPolicy({
       contentTypeId: "12",
       categoryName: "국립공원",
     }),
     {
-      verificationRadiusMeters: 500,
-      extendedVerificationRequiresPhoto: true,
+      notificationRadiusMeters: 500,
+      verificationRadiusMeters: 300,
     }
   );
 });
 
-test("확장 반경에서는 GPS 단독을 막고 GPS 사진 인증만 허용한다", () => {
+test("GPS와 GPS 사진 인증에 같은 장소 반경을 적용한다", () => {
   const place = {
     lat: 37,
     lng: 127,
     contentTypeId: "12",
     categoryName: "공원",
-    verificationRadiusMeters: 500,
-    extendedVerificationRequiresPhoto: true,
+    notificationRadiusMeters: 500,
+    verificationRadiusMeters: 300,
   };
   const positionAbout150MetersAway = {
     lat: 37.00135,
     lng: 127,
   };
 
+  assert.doesNotThrow(() =>
+    assertVisitPositionNearPlace(positionAbout150MetersAway, place)
+  );
   assert.throws(
     () =>
       assertVisitPositionNearPlace(
-        positionAbout150MetersAway,
-        place,
-        "GPS"
+        { lat: 37.00315, lng: 127 },
+        place
       ),
-    /GPS \+ 카메라 인증/
-  );
-  assert.doesNotThrow(() =>
-    assertVisitPositionNearPlace(
-      positionAbout150MetersAway,
-      place,
-      "GPS_PHOTO"
-    )
+    /인증 범위는 300m/
   );
 });
 

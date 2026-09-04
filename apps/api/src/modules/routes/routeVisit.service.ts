@@ -32,7 +32,6 @@ import type {
   UpdateRouteStopVisitTimesInput,
 } from "./route.types.js";
 import {
-  DEFAULT_GPS_VERIFICATION_RADIUS_METERS,
   resolvePlaceVerificationPolicy,
 } from "./routePlaceVerificationPolicy.js";
 
@@ -312,16 +311,6 @@ function assertRouteStopGpsVerification(
       `장소 근처에서만 인증할 수 있어요. 현재 위치가 약 ${Math.round(
         distanceMeters
       )}m 떨어져 있고, 이 장소의 인증 범위는 ${verificationPolicy.verificationRadiusMeters}m예요.`
-    );
-  }
-
-  if (
-    verificationStatus === "GPS" &&
-    verificationPolicy.extendedVerificationRequiresPhoto &&
-    distanceMeters > DEFAULT_GPS_VERIFICATION_RADIUS_METERS
-  ) {
-    throw new UserFacingError(
-      `장소에서 100m보다 떨어진 위치는 GPS + 카메라 인증이 필요해요. 사진 인증은 ${verificationPolicy.verificationRadiusMeters}m까지 가능해요.`
     );
   }
 

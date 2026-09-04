@@ -100,6 +100,7 @@ export type NativeRouteArrivalNotificationPlace = {
   title: string;
   lat: number;
   lng: number;
+  radiusMeters?: number | null;
 };
 
 export type NativeRouteArrivalNotificationSyncRequest = {

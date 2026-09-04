@@ -16,10 +16,7 @@ import NaverMapView, {
   type NaverMarkerInstance,
 } from "@/components/map/NaverMapView";
 import { calculateDistanceMeters } from "@/lib/gangwonBoundaryUtils";
-import {
-  DEFAULT_GPS_VERIFICATION_RADIUS_METERS,
-  resolvePlaceVerificationPolicy,
-} from "@/lib/placeVerificationPolicy";
+import { resolvePlaceVerificationPolicy } from "@/lib/placeVerificationPolicy";
 import { useUiText } from "@/lib/uiText";
 import {
   nativeBridge,
@@ -48,7 +45,6 @@ type GpsTestLocationPopupProps = {
   onClose: () => void;
 };
 
-const ARRIVAL_RADIUS_METERS = 300;
 const OUTSIDE_ARRIVAL_PRESET_METERS = 450;
 const AUTO_WALK_FINAL_DISTANCE_METERS = 30;
 const NEARBY_AUTO_WALK_DISTANCES_METERS = [
@@ -142,13 +138,13 @@ function getInitialTestLocation(
     return activeLocation;
   }
 
-  const { verificationRadiusMeters } = resolvePlaceVerificationPolicy(
+  const { notificationRadiusMeters } = resolvePlaceVerificationPolicy(
     target.stop.place
   );
 
   return getOffsetTestLocation(
     target.stop.place,
-    Math.max(OUTSIDE_ARRIVAL_PRESET_METERS, verificationRadiusMeters + 100)
+    Math.max(OUTSIDE_ARRIVAL_PRESET_METERS, notificationRadiusMeters + 100)
   );
 }
 
@@ -259,7 +255,7 @@ function GpsTestLocationPopup({
     () => resolvePlaceVerificationPolicy(placeLocation),
     [placeLocation]
   );
-  const mapResetKey = `${target.stop.id}:${initialLocation.lat}:${initialLocation.lng}:${verificationPolicy.verificationRadiusMeters}`;
+  const mapResetKey = `${target.stop.id}:${initialLocation.lat}:${initialLocation.lng}:${verificationPolicy.notificationRadiusMeters}:${verificationPolicy.verificationRadiusMeters}`;
   const isBusy = isApplying || isAutoWalking || isResolvingRealStart;
 
   useEffect(() => {
@@ -352,7 +348,7 @@ function GpsTestLocationPopup({
       bounds.extend(testPosition);
 
       const visibleRadiusMeters = Math.max(
-        ARRIVAL_RADIUS_METERS,
+        verificationPolicy.notificationRadiusMeters,
         verificationPolicy.verificationRadiusMeters
       );
       const westEdge = getOffsetTestLocation(
@@ -382,7 +378,7 @@ function GpsTestLocationPopup({
       const arrivalCircle = new naverMaps.Circle({
         map,
         center: placePosition,
-        radius: ARRIVAL_RADIUS_METERS,
+        radius: verificationPolicy.notificationRadiusMeters,
         fillColor: "#14b8a6",
         fillOpacity: 0.13,
         strokeColor: "#0f766e",
@@ -391,21 +387,6 @@ function GpsTestLocationPopup({
         zIndex: 400,
       }) as NaverMarkerInstance;
       overlays.push(arrivalCircle);
-
-      if (verificationPolicy.extendedVerificationRequiresPhoto) {
-        const gpsOnlyCircle = new naverMaps.Circle({
-          map,
-          center: placePosition,
-          radius: DEFAULT_GPS_VERIFICATION_RADIUS_METERS,
-          fillColor: "#4f46e5",
-          fillOpacity: 0.16,
-          strokeColor: "#4338ca",
-          strokeOpacity: 0.95,
-          strokeWeight: 2,
-          zIndex: 550,
-        }) as NaverMarkerInstance;
-        overlays.push(gpsOnlyCircle);
-      }
 
       const placeMarker = new naverMaps.Marker({
         map,
@@ -576,31 +557,14 @@ function GpsTestLocationPopup({
           <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-1.5">
             <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-black text-teal-700 shadow ring-1 ring-teal-200 dark:bg-slate-950/95 dark:text-teal-200 dark:ring-teal-400/30">
               {text.dayRoute.gpsTestArrivalRadiusLegend(
-                formatDistance(ARRIVAL_RADIUS_METERS)
+                formatDistance(verificationPolicy.notificationRadiusMeters)
               )}
             </span>
-            {verificationPolicy.extendedVerificationRequiresPhoto ? (
-              <>
-                <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-black text-indigo-700 shadow ring-1 ring-indigo-200 dark:bg-slate-950/95 dark:text-indigo-200 dark:ring-indigo-400/30">
-                  {text.dayRoute.gpsTestGpsRadiusLegend(
-                    formatDistance(DEFAULT_GPS_VERIFICATION_RADIUS_METERS)
-                  )}
-                </span>
-                <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-black text-violet-700 shadow ring-1 ring-violet-200 dark:bg-slate-950/95 dark:text-violet-200 dark:ring-violet-400/30">
-                  {text.dayRoute.gpsTestPhotoRadiusLegend(
-                    formatDistance(
-                      verificationPolicy.verificationRadiusMeters
-                    )
-                  )}
-                </span>
-              </>
-            ) : (
-              <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-black text-violet-700 shadow ring-1 ring-violet-200 dark:bg-slate-950/95 dark:text-violet-200 dark:ring-violet-400/30">
-                {text.dayRoute.gpsTestGpsRadiusLegend(
-                  formatDistance(verificationPolicy.verificationRadiusMeters)
-                )}
-              </span>
-            )}
+            <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-black text-violet-700 shadow ring-1 ring-violet-200 dark:bg-slate-950/95 dark:text-violet-200 dark:ring-violet-400/30">
+              {text.dayRoute.gpsTestVerificationRadiusLegend(
+                formatDistance(verificationPolicy.verificationRadiusMeters)
+              )}
+            </span>
           </div>
         </NaverMapView>
 

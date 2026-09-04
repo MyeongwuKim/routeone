@@ -55,7 +55,11 @@ type RouteArrivalTaskBody = {
   error?: unknown;
 };
 
-type StoredRouteArrivalPlace = NativeRouteArrivalNotificationPlace & {
+type StoredRouteArrivalPlace = Omit<
+  NativeRouteArrivalNotificationPlace,
+  "radiusMeters"
+> & {
+  radiusMeters: number;
   language: NativeAppLanguage;
   notificationTitle: string;
   notificationBody: string;
@@ -329,10 +333,14 @@ function calculateDistanceMeters(
 
 function createStoredRouteArrivalPlace(
   place: NativeRouteArrivalNotificationPlace,
-  language: NativeAppLanguage
+  language: NativeAppLanguage,
+  fallbackRadiusMeters = DEFAULT_GEOFENCE_RADIUS_METERS
 ): StoredRouteArrivalPlace {
   return {
     ...place,
+    radiusMeters: clampGeofenceRadiusMeters(
+      place.radiusMeters ?? fallbackRadiusMeters
+    ),
     language,
     syncedDateKey: getTodayDateKey(),
     notificationTitle:
@@ -348,7 +356,8 @@ function createStoredRouteArrivalPlace(
 
 function getUniqueStoredPlaces(
   places: NativeRouteArrivalNotificationPlace[],
-  language: NativeAppLanguage
+  language: NativeAppLanguage,
+  fallbackRadiusMeters = DEFAULT_GEOFENCE_RADIUS_METERS
 ) {
   const storedPlaceByRegionId = new Map<string, StoredRouteArrivalPlace>();
 
@@ -362,7 +371,7 @@ function getUniqueStoredPlaces(
     if (!storedPlaceByRegionId.has(regionId)) {
       storedPlaceByRegionId.set(
         regionId,
-        createStoredRouteArrivalPlace(place, language)
+        createStoredRouteArrivalPlace(place, language, fallbackRadiusMeters)
       );
     }
   }
@@ -386,7 +395,12 @@ async function readStoredRouteArrivalPlaces() {
     if (!Array.isArray(parsedPlaces)) {
       return new Map<string, StoredRouteArrivalPlace>();
     }
-    places = parsedPlaces as StoredRouteArrivalPlace[];
+    places = (parsedPlaces as NativeRouteArrivalNotificationPlace[]).map(
+      (place) => createStoredRouteArrivalPlace(
+        place,
+        "language" in place && place.language === "en" ? "en" : "ko"
+      )
+    );
   } catch {
     return new Map<string, StoredRouteArrivalPlace>();
   }
@@ -420,7 +434,8 @@ function haveSameRouteArrivalTargets(
       getRouteArrivalRegionId(currentPlace) ===
         getRouteArrivalRegionId(nextPlace) &&
       getRouteArrivalDateKey(currentPlace) ===
-        getRouteArrivalDateKey(nextPlace)
+        getRouteArrivalDateKey(nextPlace) &&
+      currentPlace.radiusMeters === nextPlace.radiusMeters
     );
   });
 }
@@ -814,8 +829,8 @@ async function ensureRouteArrivalPermissions(language: NativeAppLanguage) {
   ) {
     throw new Error(
       language === "en"
-        ? "Enable Precise Location in iPhone Settings for 300 m arrival alerts."
-        : "300m 도착 알림을 받으려면 iPhone 설정에서 정확한 위치를 켜 주세요."
+        ? "Enable Precise Location in iPhone Settings for place arrival alerts."
+        : "장소 도착 알림을 받으려면 iPhone 설정에서 정확한 위치를 켜 주세요."
     );
   }
 
@@ -1059,6 +1074,7 @@ function syncIosRouteArrivalPlaces(
         dateKey: getRouteArrivalDateKey(place),
         latitude: place.lat,
         longitude: place.lng,
+        radiusMeters: place.radiusMeters,
       })),
       radiusMeters
     );
@@ -1073,6 +1089,10 @@ async function reconcileRouteArrivalAtPosition(
   currentPosition: RouteArrivalPosition
 ): Promise<RouteArrivalPositionReconciliation> {
   const todayKey = getTodayDateKey();
+  const maximumRadiusMeters = Math.max(
+    radiusMeters,
+    ...places.map((place) => place.radiusMeters)
+  );
 
   const accuracyMeters = currentPosition.coords.accuracy;
 
@@ -1080,7 +1100,7 @@ async function reconcileRouteArrivalAtPosition(
     typeof accuracyMeters !== "number" ||
     !Number.isFinite(accuracyMeters) ||
     accuracyMeters < 0 ||
-    accuracyMeters > radiusMeters ||
+    accuracyMeters > maximumRadiusMeters ||
     !Number.isFinite(currentPosition.coords.latitude) ||
     !Number.isFinite(currentPosition.coords.longitude)
   ) {
@@ -1098,7 +1118,11 @@ async function reconcileRouteArrivalAtPosition(
       distanceMeters: calculateDistanceMeters(currentCoordinates, place),
       place,
     }))
-    .filter(({ distanceMeters }) => distanceMeters <= radiusMeters)
+    .filter(
+      ({ distanceMeters, place }) =>
+        accuracyMeters <= place.radiusMeters &&
+        distanceMeters <= place.radiusMeters
+    )
     .sort((left, right) => left.distanceMeters - right.distanceMeters)[0]
     ?.place;
 
@@ -1233,7 +1257,7 @@ async function reconcileStoredRouteArrivalNotificationsInternal() {
         longitude: place.lng,
         notifyOnEnter: true,
         notifyOnExit: false,
-        radius: DEFAULT_GEOFENCE_RADIUS_METERS,
+        radius: place.radiusMeters,
       }))
     );
 
@@ -1510,7 +1534,12 @@ async function syncNativeRouteArrivalNotifications(
       );
     }
 
-    const places = getUniqueStoredPlaces(message.places, message.language);
+    const fallbackRadius = clampGeofenceRadiusMeters(message.radiusMeters);
+    const places = getUniqueStoredPlaces(
+      message.places,
+      message.language,
+      fallbackRadius
+    );
 
     if (places.length === 0) {
       await clearNativeRouteArrivalNotificationTargets();
@@ -1536,9 +1565,8 @@ async function syncNativeRouteArrivalNotifications(
 
     // Persist the desired target before permission prompts or OS registration.
     // A force-quit during either step can then recover the intended target.
-    const radius = clampGeofenceRadiusMeters(message.radiusMeters);
     const shouldRequestPermissions = message.requestPermissions !== false;
-    await persistDesiredRouteArrivalPlaces(places, radius, {
+    await persistDesiredRouteArrivalPlaces(places, fallbackRadius, {
       clearExistingMonitors: !shouldRequestPermissions,
     });
 
@@ -1584,7 +1612,7 @@ async function syncNativeRouteArrivalNotifications(
 
     if (Platform.OS === "ios") {
       await stopRouteArrivalGeofencingIfStarted().catch(() => undefined);
-      activeCount = await syncIosRouteArrivalPlaces(places, radius);
+      activeCount = await syncIosRouteArrivalPlaces(places, fallbackRadius);
     } else {
       await Location.startGeofencingAsync(
         ROUTE_ARRIVAL_GEOFENCE_TASK,
@@ -1594,7 +1622,7 @@ async function syncNativeRouteArrivalNotifications(
           longitude: place.lng,
           notifyOnEnter: true,
           notifyOnExit: false,
-          radius,
+          radius: place.radiusMeters,
         }))
       );
 
@@ -1626,7 +1654,7 @@ async function syncNativeRouteArrivalNotifications(
     if (shouldCheckCurrentPosition) {
       try {
         lastKnownPositionReconciliation =
-          await reconcileLastKnownRouteArrival(places, radius);
+          await reconcileLastKnownRouteArrival(places, fallbackRadius);
 
         // A location trigger only reacts to an entry transition. When the
         // request is registered while the user is already inside the region,
@@ -1635,7 +1663,7 @@ async function syncNativeRouteArrivalNotifications(
         // failure must not turn a valid registration into a sync failure.
         if (lastKnownPositionReconciliation !== "inside") {
           const freshPositionReconciliation =
-            await reconcileFreshRouteArrival(places, radius);
+            await reconcileFreshRouteArrival(places, fallbackRadius);
 
           if (freshPositionReconciliation === "unverified") {
             warnRouteArrivalError(
@@ -1760,8 +1788,7 @@ export async function handleNativeRouteArrivalTestLocationRequest(
       lng: place.lng,
     };
     const distanceMeters = calculateDistanceMeters(testPosition, place);
-    const withinRadius =
-      distanceMeters <= DEFAULT_GEOFENCE_RADIUS_METERS;
+    const withinRadius = distanceMeters <= place.radiusMeters;
     const didEnterArrivalRadius =
       withinRadius &&
       (routeArrivalTestState?.stopId !== place.stopId ||

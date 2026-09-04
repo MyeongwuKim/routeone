@@ -248,6 +248,30 @@ test("서버 시작 전에는 오늘 첫 장소만 사전 등록한다", async (
     capturedNativeSyncOptions.places.map(({ stopId }) => stopId),
     ["day-1-stop-1"]
   );
+  assert.equal(capturedNativeSyncOptions.places[0].radiusMeters, 300);
+  assert.equal(capturedNativeSyncOptions.radiusMeters, 300);
+});
+
+test("넓은 야외 장소는 네이티브 도착 알림 반경을 500m로 전달한다", async () => {
+  capturedNativeSyncOptions = null;
+  const route = createRoute();
+  const currentDateKey = getCurrentDateKey();
+  const firstStop = route.days
+    .find((routeDay) => routeDay.dayIndex === 1)
+    .stops.find((stop) => stop.order === 1);
+  firstStop.place.categoryName = "국립공원";
+
+  await arrivalService.prepareRouteArrivalNotificationsForStart(
+    [route],
+    route,
+    currentDateKey,
+    `${currentDateKey}T01:30:00.000Z`,
+    "ko",
+    true
+  );
+
+  assert.equal(capturedNativeSyncOptions.places[0].radiusMeters, 500);
+  assert.equal(capturedNativeSyncOptions.radiusMeters, 500);
 });
 
 test("위치 권한 없이 진행해도 서버 시작 전에 desired target을 저장한다", async () => {

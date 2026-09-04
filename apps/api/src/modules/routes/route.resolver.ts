@@ -111,8 +111,8 @@ export const routeTypeDefs = gql`
     categoryCode1: String
     categoryCode2: String
     categoryCode3: String
+    notificationRadiusMeters: Int
     verificationRadiusMeters: Int
-    extendedVerificationRequiresPhoto: Boolean
     imageUrl: String
     regionCode: String
     regionLabelKey: String

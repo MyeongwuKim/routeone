@@ -17,6 +17,8 @@ export type PlaceSnapshotInput = {
   categoryCode1?: string | null;
   categoryCode2?: string | null;
   categoryCode3?: string | null;
+  notificationRadiusMeters?: number | null;
+  verificationRadiusMeters?: number | null;
   imageUrl?: string | null;
   regionCode?: string | null;
   regionLabelKey?: string | null;

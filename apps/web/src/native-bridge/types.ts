@@ -78,6 +78,7 @@ export type NativeArrivalNotificationPlace = {
   title: string;
   lat: number;
   lng: number;
+  radiusMeters: number;
 };
 
 export type NativeArrivalNotificationSyncResult = {

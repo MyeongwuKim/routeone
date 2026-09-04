@@ -13,6 +13,7 @@ export type IosRouteArrivalNotification = {
   dateKey: string;
   latitude: number;
   longitude: number;
+  radiusMeters: number;
 };
 
 export type IosRouteArrivalNotificationStatus = {

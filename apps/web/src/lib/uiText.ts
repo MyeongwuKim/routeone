@@ -651,8 +651,7 @@ export type UiText = {
     gpsTestPlaceLegend: string;
     gpsTestLocationLegend: string;
     gpsTestArrivalRadiusLegend: (distance: string) => string;
-    gpsTestGpsRadiusLegend: (distance: string) => string;
-    gpsTestPhotoRadiusLegend: (distance: string) => string;
+    gpsTestVerificationRadiusLegend: (distance: string) => string;
     gpsTestOutsidePreset: string;
     gpsTestArrivalPreset: string;
     gpsTestVisitPreset: string;
@@ -1283,7 +1282,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "루트 종료 후 7일 안에 방문 기록을 확인·정리하도록 보내는 리마인더",
       routeArrivalTitle: "장소 도착 알림",
       routeArrivalDescription:
-        "앱이 닫혀 있어도 다음 장소 300m 근처에서 인증 사진 알림",
+        "앱이 닫혀 있어도 다음 장소 유형에 맞는 거리에서 도착 알림",
       regionSectionTitle: "축제 알림 지역",
       regionSectionDescription:
         "최대 2곳까지 선택할 수 있어요. 선택하지 않으면 알림이 꺼져요.",
@@ -1847,8 +1846,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestPlaceLegend: "장소",
       gpsTestLocationLegend: "테스트 위치",
       gpsTestArrivalRadiusLegend: (distance) => `도착 알림 ${distance}`,
-      gpsTestGpsRadiusLegend: (distance) => `GPS 인증 ${distance}`,
-      gpsTestPhotoRadiusLegend: (distance) => `GPS+사진 인증 ${distance}`,
+      gpsTestVerificationRadiusLegend: (distance) => `방문 인증 ${distance}`,
       gpsTestOutsidePreset: "반경 밖 450m",
       gpsTestArrivalPreset: "도착 알림 180m",
       gpsTestVisitPreset: "방문 인증 30m",
@@ -2579,7 +2577,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "A reminder to review and organize visit records within 7 days after a route ends",
       routeArrivalTitle: "Place Arrival Alerts",
       routeArrivalDescription:
-        "Photo reminders within 300m of the next stop, even when the app is closed",
+        "Arrival alerts near the next stop, adjusted for the place type",
       regionSectionTitle: "Festival Alert Areas",
       regionSectionDescription:
         "Choose up to two areas. Leave all unselected to turn alerts off.",
@@ -3164,8 +3162,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestPlaceLegend: "Place",
       gpsTestLocationLegend: "Test location",
       gpsTestArrivalRadiusLegend: (distance) => `Arrival alert ${distance}`,
-      gpsTestGpsRadiusLegend: (distance) => `GPS verification ${distance}`,
-      gpsTestPhotoRadiusLegend: (distance) => `GPS + photo ${distance}`,
+      gpsTestVerificationRadiusLegend: (distance) =>
+        `Visit verification ${distance}`,
       gpsTestOutsidePreset: "Outside · 450 m",
       gpsTestArrivalPreset: "Arrival · 180 m",
       gpsTestVisitPreset: "Visit · 30 m",

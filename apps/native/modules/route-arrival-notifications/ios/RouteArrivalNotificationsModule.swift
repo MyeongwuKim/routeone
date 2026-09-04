@@ -45,6 +45,9 @@ private struct RouteArrivalNotificationRecord: Record {
 
   @Field
   var longitude: Double
+
+  @Field
+  var radiusMeters: Double?
 }
 
 private struct RouteArrivalNotificationStatusRecord: Record {
@@ -100,10 +103,6 @@ public final class RouteArrivalNotificationsModule: Module {
     radiusMeters: Double
   ) async throws -> Int {
     let center = UNUserNotificationCenter.current()
-    let monitoredRadius = max(
-      minimumRouteArrivalMonitoringRadiusMeters,
-      min(maximumRouteArrivalMonitoringRadiusMeters, radiusMeters.rounded())
-    )
     let snapshot = await notificationSnapshot(center)
     var ledger = try reconciledLedger(for: snapshot)
     let locationPendingRequests = snapshot.pendingRequests.filter {
@@ -126,9 +125,20 @@ public final class RouteArrivalNotificationsModule: Module {
       locationPendingRequests.compactMap { request in
         guard
           ledger.canPreservePending(request.identifier),
-          let notification = notificationsByIdentifier[request.identifier],
-          matches(request, notification: notification, monitoredRadius: monitoredRadius)
+          let notification = notificationsByIdentifier[request.identifier]
         else {
+          return nil
+        }
+
+        let monitoredRadius = self.monitoredRadius(
+          for: notification,
+          fallback: radiusMeters
+        )
+        guard matches(
+          request,
+          notification: notification,
+          monitoredRadius: monitoredRadius
+        ) else {
           return nil
         }
 
@@ -156,7 +166,10 @@ public final class RouteArrivalNotificationsModule: Module {
         continue
       }
 
-      let request = notificationRequest(notification, monitoredRadius: monitoredRadius)
+      let request = notificationRequest(
+        notification,
+        monitoredRadius: monitoredRadius(for: notification, fallback: radiusMeters)
+      )
       try await center.add(request)
       ledger.recordSuccessfulRegistration(identifier)
       try saveLedger(ledger)
@@ -186,6 +199,18 @@ public final class RouteArrivalNotificationsModule: Module {
     }
 
     return expectedIdentifiers.count
+  }
+
+  private func monitoredRadius(
+    for notification: RouteArrivalNotificationRecord,
+    fallback: Double
+  ) -> Double {
+    let requestedRadius = notification.radiusMeters ?? fallback
+
+    return max(
+      minimumRouteArrivalMonitoringRadiusMeters,
+      min(maximumRouteArrivalMonitoringRadiusMeters, requestedRadius.rounded())
+    )
   }
 
   private func notificationRequest(

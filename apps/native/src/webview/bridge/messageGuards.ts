@@ -182,7 +182,10 @@ function isNativeRouteArrivalNotificationPlace(
     typeof maybePlace.lat === "number" &&
     Number.isFinite(maybePlace.lat) &&
     typeof maybePlace.lng === "number" &&
-    Number.isFinite(maybePlace.lng)
+    Number.isFinite(maybePlace.lng) &&
+    (maybePlace.radiusMeters == null ||
+      (typeof maybePlace.radiusMeters === "number" &&
+        Number.isFinite(maybePlace.radiusMeters)))
   );
 }
 

@@ -19,8 +19,7 @@ import {
 } from "@/native-bridge";
 import { notificationApi } from "@/api/notificationApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
-
-const ROUTE_ARRIVAL_NOTIFICATION_RADIUS_METERS = 300;
+import { resolvePlaceVerificationPolicy } from "@/lib/placeVerificationPolicy";
 
 export type RouteArrivalVisitTransitionPreparation = {
   requestPermissions: boolean;
@@ -105,6 +104,8 @@ function getNativeRouteArrivalNotificationPlaces(
         title: activeDestination.place.title,
         lat: activeDestination.place.lat,
         lng: activeDestination.place.lng,
+        radiusMeters: resolvePlaceVerificationPolicy(activeDestination.place)
+          .notificationRadiusMeters,
       },
     ];
   });
@@ -120,7 +121,8 @@ function syncNativeRouteArrivalNotificationPlaces(
 ) {
   return nativeBridge.notifications.syncRouteArrivals({
     places,
-    radiusMeters: ROUTE_ARRIVAL_NOTIFICATION_RADIUS_METERS,
+    // 구버전 네이티브 앱은 장소별 반경을 읽지 못하므로 현재 대상 반경을 함께 전달한다.
+    radiusMeters: places[0]?.radiusMeters,
     language,
     checkCurrentPosition: options.checkCurrentPosition,
     requestPermissions: options.requestPermissions,

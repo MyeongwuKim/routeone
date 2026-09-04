@@ -15,8 +15,8 @@ export type MapSheetPlace = {
   categoryCode1?: string;
   categoryCode2?: string;
   categoryCode3?: string;
+  notificationRadiusMeters?: number | null;
   verificationRadiusMeters?: number | null;
-  extendedVerificationRequiresPhoto?: boolean | null;
   icon: string;
   images: string[];
   eventStartDate?: string;

@@ -7,6 +7,7 @@ import { useUiToastStore } from "@/stores/uiToastStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useCurrentPositionStore } from "@/stores/currentPositionStore";
 import { useUiText } from "@/lib/uiText";
+import { resolvePlaceVerificationPolicy } from "@/lib/placeVerificationPolicy";
 import { nativeBridge } from "@/native-bridge";
 import {
   addDaysToDateKey,
@@ -943,6 +944,8 @@ export function useDayRoutePopupController({
         title: target.stop.place.title,
         lat: target.stop.place.lat,
         lng: target.stop.place.lng,
+        radiusMeters: resolvePlaceVerificationPolicy(target.stop.place)
+          .notificationRadiusMeters,
       },
       position,
       language: appLanguage,

@@ -12,8 +12,8 @@ fragment RoutePlaceFields on PlaceSnapshot {
   categoryCode1
   categoryCode2
   categoryCode3
+  notificationRadiusMeters
   verificationRadiusMeters
-  extendedVerificationRequiresPhoto
   imageUrl
   regionCode
   regionLabelKey

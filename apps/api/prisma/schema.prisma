@@ -446,8 +446,8 @@ type PlaceSnapshot {
   categoryCode1                     String?
   categoryCode2                     String?
   categoryCode3                     String?
-  verificationRadiusMeters          Int?
-  extendedVerificationRequiresPhoto Boolean?
+  notificationRadiusMeters Int?
+  verificationRadiusMeters Int?
   imageUrl                          String?
   regionCode                        String?
   regionLabelKey                    String?
