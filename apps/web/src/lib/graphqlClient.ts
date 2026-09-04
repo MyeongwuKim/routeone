@@ -1,6 +1,7 @@
 import { Kind, print, type DocumentNode } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 import { getAuthToken } from "./authToken";
+import { reportHandledWebError } from "@/monitoring/sentry";
 
 const GRAPHQL_REQUEST_TIMEOUT_MS = getPositiveNumberEnv(
   import.meta.env.VITE_GRAPHQL_REQUEST_TIMEOUT_MS,
@@ -157,6 +158,52 @@ function isMutationDocument(document: DocumentNode) {
   );
 }
 
+function getGraphQLOperation(document: DocumentNode) {
+  const definition = document.definitions.find(
+    (candidate) => candidate.kind === Kind.OPERATION_DEFINITION
+  );
+
+  return {
+    name:
+      definition?.kind === Kind.OPERATION_DEFINITION
+        ? (definition.name?.value ?? "anonymous")
+        : "unknown",
+    type:
+      definition?.kind === Kind.OPERATION_DEFINITION
+        ? definition.operation
+        : "unknown",
+  };
+}
+
+function reportFinalGraphQLRequestError(
+  error: unknown,
+  document: DocumentNode,
+  retryCount: number
+) {
+  if (
+    error instanceof GraphQLRequestError &&
+    error.code === "USER_FACING_ERROR"
+  ) {
+    return;
+  }
+
+  const operation = getGraphQLOperation(document);
+  const requestError =
+    error instanceof GraphQLRequestError ? error : undefined;
+
+  reportHandledWebError(error, {
+    source: "graphql-client",
+    level: requestError?.retryable ? "warning" : "error",
+    tags: {
+      "graphql.operation.name": operation.name,
+      "graphql.operation.type": operation.type,
+      "graphql.retry_count": retryCount,
+      "http.status_code": requestError?.status,
+      "routeone.retryable": requestError?.retryable,
+    },
+  });
+}
+
 async function readGraphQLPayload<TResult>(response: Response) {
   try {
     return (await response.json()) as GraphQLResponse<TResult>;
@@ -280,6 +327,7 @@ export async function requestGraphQL<TResult, TVariables>(
         isRetryableGraphQLError(requestError);
 
       if (!canRetry) {
+        reportFinalGraphQLRequestError(requestError, document, retryCount);
         throw requestError;
       }
 

@@ -23,6 +23,18 @@ pnpm dev:api
 
 기본 서버 주소는 `http://localhost:4000`입니다.
 
+## API 오류 모니터링
+
+Fastify 요청과 GraphQL Resolver에서 발생한 내부 서버 오류는 `routeone-api` Sentry 프로젝트로 전송합니다. 사용자 식별에는 내부 사용자 ID만 사용하며 요청 본문, URL 쿼리, 쿠키와 요청 헤더는 전송 전에 제거합니다.
+
+| 환경변수 | 필요 조건 | 설명 |
+| --- | --- | --- |
+| `SENTRY_DSN` | Sentry 수집 사용 시 | `routeone-api` 프로젝트의 DSN입니다. |
+| `SENTRY_ENVIRONMENT` | 선택 | 환경 이름을 직접 지정합니다. 미설정 시 로컬은 `local`, `NODE_ENV=production`은 `prod`가 적용됩니다. |
+| `SENTRY_RELEASE` | 선택 | 릴리스 이름을 직접 지정합니다. Cloud Run에서는 revision을 이용해 자동 생성합니다. |
+
+별도 테스트 API를 배포할 때는 기존 `ROUTEONE_ENV=dev`를 설정하면 Sentry 환경도 `dev`로 구분됩니다. 성능 추적과 로그 수집은 활성화하지 않습니다.
+
 ## 라우팅 구조
 
 | 메서드 | 경로 | 설명 | 인증 |

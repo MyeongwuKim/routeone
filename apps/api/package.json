@@ -20,6 +20,7 @@
     "@as-integrations/fastify": "^2.1.1",
     "@fastify/cors": "^9.0.1",
     "@prisma/client": "^6.19.0",
+    "@sentry/node": "^10.73.0",
     "dotenv": "^16.4.7",
     "fastify": "^4.29.1",
     "graphql": "^16.10.0",

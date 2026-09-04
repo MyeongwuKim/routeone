@@ -24,3 +24,15 @@ RouteOne의 지도 탐색, 여행 루트 관리, 공유 루트 탐색 화면을 
 | `/me/app-info` | 버전 및 권한 | 앱과 웹 버전, 위치·알림·카메라·앨범 권한 상태를 확인합니다. |
 
 웹 브라우저에서는 `BrowserRouter`를 사용하고, 네이티브 WebView에서 런타임 설정의 `routerMode`가 `hash`이면 `HashRouter`를 사용합니다.
+
+## 웹 오류 모니터링
+
+웹 화면 오류와 최종 실패한 GraphQL 요청은 `routeone-web` Sentry 프로젝트로 전송합니다. 사용자 식별에는 내부 사용자 ID만 사용하며 요청 본문, URL 쿼리, 쿠키와 인증 헤더는 전송 전에 제거합니다.
+
+| 환경변수 | 필요 조건 | 설명 |
+| --- | --- | --- |
+| `VITE_SENTRY_DSN` | Sentry 수집 사용 시 | `routeone-web` 프로젝트의 Client DSN입니다. |
+| `VITE_SENTRY_ENVIRONMENT` | 선택 | 이벤트 환경을 구분합니다. 로컬은 기본 `local`, 배포 번들은 채널에 따라 `dev` 또는 `prod`가 자동 적용됩니다. |
+| `VITE_SENTRY_RELEASE` | 선택 | 오류와 배포 버전을 연결할 `routeone-web@버전` 형식의 릴리스 이름입니다. |
+
+DSN이 비어 있으면 Sentry SDK를 초기화하지 않습니다. Session Replay, 로그, 성능 추적은 개인정보 및 수집량 정책을 정한 뒤 별도로 활성화합니다.

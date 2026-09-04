@@ -3,11 +3,11 @@ import { readFileSync } from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { parse as parseDotenv } from "dotenv";
-import { buildApp } from "./app.js";
 import {
   DEV_VERIFICATION_BYPASS_ENV,
   isDevVerificationBypassEnabled,
 } from "./lib/devVerification.js";
+import { initializeApiMonitoring } from "./monitoring/sentry.js";
 
 function loadLocalFestivalServiceKey() {
   if (
@@ -35,6 +35,9 @@ function loadLocalFestivalServiceKey() {
 }
 
 loadLocalFestivalServiceKey();
+initializeApiMonitoring();
+
+const { buildApp } = await import("./app.js");
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
 const app = await buildApp();

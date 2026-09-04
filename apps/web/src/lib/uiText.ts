@@ -696,6 +696,11 @@ export type UiText = {
     checkInAria: (title: string) => string;
     finishVisitAria: (title: string) => string;
     cancelVisitTitle: string;
+    cancelVisitConfirmTitle: (title: string) => string;
+    cancelVisitConfirmDescription: string;
+    cancelVisitConfirmDetail: string;
+    cancelCompletedRouteVisitConfirmDetail: string;
+    cancelVisitConfirmAction: string;
     markVisitTitle: string;
     checkInTitle: string;
     finishVisitTitle: string;
@@ -1896,7 +1901,16 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       markVisitAria: (title) => `${title} 완료 처리`,
       checkInAria: (title) => `${title} 도착 인증`,
       finishVisitAria: (title) => `${title} 방문 완료`,
-      cancelVisitTitle: "완료 취소",
+      cancelVisitTitle: "방문 완료 취소",
+      cancelVisitConfirmTitle: (title) =>
+        `${title} 방문 완료를 취소할까요?`,
+      cancelVisitConfirmDescription:
+        "이 장소의 도착 인증, GPS·사진 인증, 방문 시간 기록이 모두 삭제돼요.",
+      cancelVisitConfirmDetail:
+        "취소한 장소는 방문 전 상태로 돌아가며 다시 인증해야 해요.",
+      cancelCompletedRouteVisitConfirmDetail:
+        "루트가 완료 기록에서 빠지고 진행 중인 내 루트로 이동해요. 오늘 일정이라면 도착 알림도 다시 등록될 수 있어요.",
+      cancelVisitConfirmAction: "방문 완료 취소",
       markVisitTitle: "완료 처리",
       checkInTitle: "도착 인증",
       finishVisitTitle: "방문 완료",
@@ -3213,7 +3227,16 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       markVisitAria: (title) => `Mark ${title} complete`,
       checkInAria: (title) => `Verify arrival at ${title}`,
       finishVisitAria: (title) => `Complete visit to ${title}`,
-      cancelVisitTitle: "Mark incomplete",
+      cancelVisitTitle: "Undo visit completion",
+      cancelVisitConfirmTitle: (title) =>
+        `Undo the completed visit to ${title}?`,
+      cancelVisitConfirmDescription:
+        "Arrival verification, GPS or photo verification, and visit-time records for this place will be deleted.",
+      cancelVisitConfirmDetail:
+        "This place will return to Not visited and must be verified again.",
+      cancelCompletedRouteVisitConfirmDetail:
+        "This route will leave your completed history and return to active routes. Today's arrival alert may also be registered again.",
+      cancelVisitConfirmAction: "Undo completion",
       markVisitTitle: "Mark complete",
       checkInTitle: "Verify arrival",
       finishVisitTitle: "Complete visit",

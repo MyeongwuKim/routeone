@@ -120,6 +120,7 @@ jobs:
           SELECTED_NCP_MAPS_KEY_ID: ${{ secrets.VITE_NCP_MAPS_KEY_ID || vars.VITE_NCP_MAPS_KEY_ID }}
           SELECTED_NCP_MAPS_KEY: ${{ secrets.VITE_NCP_MAPS_KEY || vars.VITE_NCP_MAPS_KEY }}
           SELECTED_NCP_MAPS_DARK_STYLE_ID: ${{ vars.VITE_NCP_MAPS_DARK_STYLE_ID }}
+          SELECTED_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
         run: |
           if [[ -z "${SELECTED_VISITKOREA_SERVICE_KEY}" ]]; then
             echo "VITE_VISITKOREA_SERVICE_KEY is required for the web bundle build." >&2
@@ -140,6 +141,12 @@ jobs:
 
           if [[ -n "${SELECTED_NCP_MAPS_DARK_STYLE_ID}" ]]; then
             echo "VITE_NCP_MAPS_DARK_STYLE_ID=${SELECTED_NCP_MAPS_DARK_STYLE_ID}" >> "${GITHUB_ENV}"
+          fi
+
+          if [[ -n "${SELECTED_SENTRY_DSN}" ]]; then
+            echo "VITE_SENTRY_DSN=${SELECTED_SENTRY_DSN}" >> "${GITHUB_ENV}"
+            echo "VITE_SENTRY_ENVIRONMENT=${APP_VARIANT}" >> "${GITHUB_ENV}"
+            echo "VITE_SENTRY_RELEASE=routeone-web@${ROUTEONE_WEB_BUNDLE_VERSION}" >> "${GITHUB_ENV}"
           fi
 
       - name: Build web

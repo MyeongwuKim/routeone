@@ -626,7 +626,27 @@ export function useDayRoutePopupController({
       return;
     }
 
-    void persistStopVisit(routeDay, stop, false);
+    openModal({
+      title: text.dayRoute.cancelVisitConfirmTitle(stop.place.title),
+      description: text.dayRoute.cancelVisitConfirmDescription,
+      detail:
+        route.status === "COMPLETED"
+          ? text.dayRoute.cancelCompletedRouteVisitConfirmDetail
+          : text.dayRoute.cancelVisitConfirmDetail,
+      actions: [
+        {
+          label: text.common.cancel,
+          variant: "secondary",
+        },
+        {
+          label: text.dayRoute.cancelVisitConfirmAction,
+          variant: "danger",
+          onClick: () => {
+            void persistStopVisit(routeDay, stop, false);
+          },
+        },
+      ],
+    });
   };
 
   const handleCompleteStopVisitManually = (

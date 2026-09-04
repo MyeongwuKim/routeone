@@ -7,6 +7,8 @@ import Fastify from "fastify";
 import { createContext } from "./context.js";
 import { formatRouteOneGraphQLError } from "./graphql/userFacingError.js";
 import type { GraphQLContext } from "./context.js";
+import { createApiSentryApolloPlugin } from "./monitoring/apolloSentryPlugin.js";
+import { setupApiFastifyMonitoring } from "./monitoring/sentry.js";
 import { registerNotificationSchedulerRoutes } from "./modules/notifications/notificationScheduler.route.js";
 import { resolvers, typeDefs } from "./schema.js";
 
@@ -14,6 +16,8 @@ export async function buildApp() {
   const app = Fastify({
     logger: true,
   });
+
+  setupApiFastifyMonitoring(app);
 
   await app.register(cors, {
     origin: true,
@@ -29,7 +33,10 @@ export async function buildApp() {
     typeDefs,
     resolvers,
     formatError: formatRouteOneGraphQLError,
-    plugins: [fastifyApolloDrainPlugin(app)],
+    plugins: [
+      fastifyApolloDrainPlugin(app),
+      createApiSentryApolloPlugin(),
+    ],
   });
 
   await server.start();

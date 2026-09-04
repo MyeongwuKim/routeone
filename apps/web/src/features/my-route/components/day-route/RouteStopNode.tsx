@@ -9,7 +9,6 @@ import {
   MdArrowForward,
   MdCheck,
   MdCheckCircle,
-  MdClose,
   MdDirectionsCar,
   MdDragIndicator,
   MdDeleteOutline,
@@ -22,6 +21,7 @@ import {
   MdMap,
   MdOutlinePlace,
   MdPublic,
+  MdUndo,
 } from "react-icons/md";
 import {
   localizePlaceCategoryLabel,
@@ -322,7 +322,7 @@ function RouteStopNode({
               >
                 {stop.place.title}
               </p>
-              <div className="mt-1 flex items-center">
+              <div className="mt-1 flex min-h-6 flex-wrap items-center gap-1.5">
                 <span
                   className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
                     isVisited
@@ -341,8 +341,6 @@ function RouteStopNode({
                   )}
                   {statusLabel}
                 </span>
-              </div>
-              <div className="mt-1.5 flex min-h-6 flex-wrap items-center gap-1.5">
                 {verificationBadge ? (
                   canOpenVerificationPhoto ? (
                     <button
@@ -643,7 +641,7 @@ function RouteStopNode({
                     {isVisitSaving ? (
                       <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                     ) : isVisited ? (
-                      <MdClose />
+                      <MdUndo />
                     ) : isCheckedIn ? (
                       <MdCheck />
                     ) : (
