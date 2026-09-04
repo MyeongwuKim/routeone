@@ -4,8 +4,8 @@
  *
  * 동작 방식:
  * 방문 완료 전에 현재·다음 도착 알림을 함께 사전 등록하고,
- * API 성공을 화면에 먼저 반영한 뒤 다음 대상만 남긴다. 확정 실패만 기존
- * 타깃으로 되돌리고, 결과가 불명확하면 재조회로 확정될 때까지 두 대상을 유지한다.
+ * API 성공을 화면에 먼저 반영한 뒤 다음 대상의 현재 위치를 다시 확인한다.
+ * 확정 실패만 기존 타깃으로 되돌리고, 결과가 불명확하면 재조회로 확정될 때까지 두 대상을 유지한다.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SetStateAction } from "react";
@@ -36,6 +36,7 @@ import { getVisitPhotoVerificationStatus } from "../services/visitPhotoVerificat
 import {
   prepareRouteArrivalNotificationsForVisitTransition,
   RouteArrivalVisitTransitionPreparationError,
+  syncRouteArrivalNotificationsAfterVisitChange,
   syncTodayRouteArrivalNotifications,
   type RouteArrivalVisitTransitionPreparation,
 } from "../services/routeArrivalNotificationService";
@@ -249,7 +250,6 @@ export function useRouteStopVisitMutation({
         );
       }
     }
-
     try {
       const preparation =
         await prepareRouteArrivalNotificationsForVisitTransition(
@@ -385,13 +385,12 @@ export function useRouteStopVisitMutation({
       [nextRoute];
 
     try {
-      const result = await syncTodayRouteArrivalNotifications(
+      const result = await syncRouteArrivalNotificationsAfterVisitChange(
         nextRoutes,
         appLanguage,
         nextRoute.id,
         {
           routeArrivalEnabled: getRouteArrivalEnabled(),
-          checkCurrentPosition: false,
           requestPermissions: preparation?.requestPermissions,
           requireConfirmedRegistration:
             preparation?.requestPermissions === true,

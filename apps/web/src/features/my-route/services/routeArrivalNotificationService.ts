@@ -27,6 +27,13 @@ export type RouteArrivalVisitTransitionPreparation = {
   rollbackRequired: boolean;
 };
 
+type RouteArrivalNotificationSyncOptions = {
+  routeArrivalEnabled?: boolean;
+  checkCurrentPosition?: boolean;
+  requestPermissions?: boolean;
+  requireConfirmedRegistration?: boolean;
+};
+
 export class RouteArrivalVisitTransitionPreparationError extends Error {
   readonly requestPermissions: boolean;
   readonly originalError: unknown;
@@ -161,12 +168,7 @@ export async function syncTodayRouteArrivalNotifications(
   routes: MyRoute[],
   language: AppLanguage,
   preferredRouteId?: string,
-  options: {
-    routeArrivalEnabled?: boolean;
-    checkCurrentPosition?: boolean;
-    requestPermissions?: boolean;
-    requireConfirmedRegistration?: boolean;
-  } = {}
+  options: RouteArrivalNotificationSyncOptions = {}
 ) {
   try {
     const routeArrivalEnabled =
@@ -209,6 +211,28 @@ export async function syncTodayRouteArrivalNotifications(
     );
     throw error;
   }
+}
+
+export function syncRouteArrivalNotificationsAfterVisitChange(
+  routes: MyRoute[],
+  language: AppLanguage,
+  preferredRouteId: string,
+  options: Omit<
+    RouteArrivalNotificationSyncOptions,
+    "checkCurrentPosition"
+  > = {}
+) {
+  return syncTodayRouteArrivalNotifications(
+    routes,
+    language,
+    preferredRouteId,
+    {
+      ...options,
+      // 등록 시점에 이미 다음 장소 반경 안이면 OS 진입 이벤트가 없으므로
+      // 현재 위치를 확인해 즉시 도착 알림을 보낸다.
+      checkCurrentPosition: true,
+    }
+  );
 }
 
 export async function prepareRouteArrivalNotificationsForVisitTransition(

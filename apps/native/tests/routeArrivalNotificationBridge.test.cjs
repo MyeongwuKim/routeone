@@ -822,6 +822,38 @@ test("사전등록은 현재 위치를 판정하거나 도착 완료로 기록�
   assert.equal(state.storage.has(NOTIFIED_KEY), false);
 });
 
+test("가까운 다음 장소는 방문 전환 후 현재 반경 안에서 즉시 알린다", async () => {
+  const nextPlace = {
+    ...createPlace(2),
+    lat: place.lat + 0.001,
+    lng: place.lng,
+  };
+  const nextNotificationId = getNotificationId(nextPlace);
+  const { state, sync } = createHarness();
+
+  await sync([place], { checkCurrentPosition: false });
+  simulateBackgroundDelivery(state.nativeState, { dismissed: true });
+
+  await sync([place, nextPlace], { checkCurrentPosition: false });
+  assert.equal(state.scheduled.length, 0);
+
+  state.lastKnownPosition = createLastKnownPosition({
+    latitude: place.lat,
+    longitude: place.lng,
+  });
+  await sync([nextPlace], { checkCurrentPosition: true });
+
+  assert.equal(state.currentPositionRequests.length, 0);
+  assert.deepEqual(
+    state.scheduled.map(({ identifier }) => identifier),
+    [nextNotificationId]
+  );
+  assert.equal(
+    JSON.parse(state.storage.get(NOTIFIED_KEY))[nextPlace.id],
+    dateKey
+  );
+});
+
 test("마지막 위치로 도착을 확인하지 못하면 fresh GPS 처리를 마친 뒤 응답한다", { timeout: 1000 }, async () => {
   const { state, sync } = createHarness();
   state.lastKnownPosition = null;

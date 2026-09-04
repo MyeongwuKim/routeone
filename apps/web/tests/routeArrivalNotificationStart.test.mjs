@@ -348,6 +348,38 @@ test("방문 완료 전에는 현재 장소와 예상 다음 장소를 함께 �
   });
 });
 
+test("방문 완료 후에는 다음 장소 반경의 현재 위치를 즉시 확인한다", async () => {
+  capturedNativeSyncOptions = null;
+  const currentDateKey = getCurrentDateKey();
+  const currentRoute = arrivalTarget.createRouteArrivalStartPreview(
+    createRoute(),
+    currentDateKey,
+    `${currentDateKey}T01:30:00.000Z`
+  );
+  const nextRoute = arrivalTarget.createRouteArrivalVisitPreview(
+    currentRoute,
+    "day-1-stop-1",
+    `${currentDateKey}T02:00:00.000Z`
+  );
+
+  await arrivalService.syncRouteArrivalNotificationsAfterVisitChange(
+    [nextRoute],
+    "ko",
+    nextRoute.id,
+    {
+      routeArrivalEnabled: true,
+      requestPermissions: true,
+      requireConfirmedRegistration: true,
+    }
+  );
+
+  assert.equal(capturedNativeSyncOptions.checkCurrentPosition, true);
+  assert.deepEqual(
+    capturedNativeSyncOptions.places.map(({ stopId }) => stopId),
+    ["day-1-stop-2"]
+  );
+});
+
 test("방문 완료 전환 lock은 중첩된 작업이 모두 끝날 때까지 전역 동기화를 막는다", () => {
   const releaseFirst =
     transitionLock.acquireRouteArrivalTransitionLock("route-1");
