@@ -1186,10 +1186,9 @@ export function useDayRoutePopupController({
       handleReplaceVerificationPhoto,
       handleKeepPhotoPrivate,
       gpsTestTarget,
-      gpsTestLocation:
-        gpsTestTarget?.stop.id === gpsTestLocationStopId
-          ? gpsTestLocation
-          : null,
+      // 테스트 좌표는 장소가 아니라 기기의 가상 현재 위치이므로
+      // 다른 장소 테스트를 열어도 마지막으로 적용한 위치를 이어서 사용한다.
+      gpsTestLocation,
       isGpsTestApplying,
       setGpsTestTarget,
       handleApplyGpsTestLocation,

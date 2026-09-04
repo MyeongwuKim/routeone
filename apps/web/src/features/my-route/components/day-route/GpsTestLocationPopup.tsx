@@ -515,6 +515,9 @@ function GpsTestLocationPopup({
         />
 
         <footer className="app-safe-area-footer shrink-0 border-t border-violet-100 bg-white px-4 py-3 dark:border-violet-400/20 dark:bg-slate-950">
+          <p className="mb-3 rounded-xl bg-violet-50 px-3 py-2 text-xs font-bold leading-relaxed text-violet-700 dark:bg-violet-400/10 dark:text-violet-100">
+            {text.dayRoute.gpsTestDescription}
+          </p>
           <button
             type="button"
             onClick={() => {

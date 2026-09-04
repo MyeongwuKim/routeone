@@ -1836,7 +1836,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       indoorTestAction: "다음 장소로 가상 이동",
       gpsTestTitle: (title) => `${title} GPS 테스트`,
       gpsTestDescription:
-        "실제 현재 위치에서 출발해 목적지까지 가상으로 이동해요. 초록색 원은 300m 도착 반경이며, 종료 상태 알림 등록 여부는 아래에 따로 표시돼요.",
+        "적용한 테스트 위치는 다른 장소에서도 내 위치로 유지돼요. 실제 위치로 돌아가려면 ‘실제 GPS로 복귀’를 눌러 주세요.",
       gpsTestButton: "테스트",
       gpsTestActiveButton: "테스트 중",
       gpsTestOpenAria: (title) => `${title} GPS 테스트 지도 열기`,
@@ -3150,7 +3150,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       indoorTestAction: "Move toward next place",
       gpsTestTitle: (title) => `${title} GPS test`,
       gpsTestDescription:
-        "Start from your real current location and move virtually toward the destination. The green circle is the 300 m arrival radius; closed-app registration appears below.",
+        "Your test location remains your current location when testing other places. Select ‘Use real GPS’ to return to your actual location.",
       gpsTestButton: "Test",
       gpsTestActiveButton: "Testing",
       gpsTestOpenAria: (title) => `Open the GPS test map for ${title}`,
