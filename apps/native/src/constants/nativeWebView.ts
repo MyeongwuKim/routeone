@@ -43,7 +43,10 @@ export const WEB_VIEW_TEXT = {
     },
     ready: "준비가 끝났어요.",
     reloadingRouteOne: "RouteOne을 다시 불러오고 있어요.",
+    retry: "다시 시도",
     restoringPrevious: "이전 버전으로 복구하고 있어요.",
+    webViewReadyTimeout:
+      "웹 화면이 응답하지 않아 자동 복구하지 못했어요. 다시 시도해 주세요.",
     waitingReadySignal: "웹 화면 준비 신호를 기다리고 있어요."
   },
   en: {
@@ -72,7 +75,10 @@ export const WEB_VIEW_TEXT = {
     },
     ready: "Ready.",
     reloadingRouteOne: "Loading RouteOne again.",
+    retry: "Try again",
     restoringPrevious: "Restoring the previous version.",
+    webViewReadyTimeout:
+      "The web screen did not respond after automatic recovery. Please try again.",
     waitingReadySignal: "Waiting for the web screen to be ready."
   }
 } as const;

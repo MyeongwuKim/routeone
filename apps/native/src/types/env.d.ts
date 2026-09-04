@@ -1,6 +1,8 @@
 declare namespace NodeJS {
   interface ProcessEnv {
     APP_VARIANT?: "none" | "dev" | "prod";
+    EXPO_PUBLIC_SENTRY_DSN?: string;
+    EXPO_PUBLIC_SENTRY_ENVIRONMENT?: string;
     EXPO_PUBLIC_NCP_MAPS_KEY_ID?: string;
     EXPO_PUBLIC_NCP_MAPS_KEY?: string;
     EXPO_PUBLIC_NAVER_MAP_API_KEY_ID?: string;
@@ -17,5 +19,9 @@ declare namespace NodeJS {
     EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV?: string;
     EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD?: string;
     R2_PUBLIC_BASE_URL?: string;
+    SENTRY_AUTH_TOKEN?: string;
+    SENTRY_ORG?: string;
+    SENTRY_PROJECT?: string;
+    SENTRY_URL?: string;
   }
 }

@@ -186,6 +186,18 @@ const googleIosUrlScheme =
     : "");
 const plugins: unknown[] = [
   [
+    "@sentry/react-native",
+    {
+      ...(process.env.SENTRY_ORG?.trim()
+        ? { organization: process.env.SENTRY_ORG.trim() }
+        : {}),
+      ...(process.env.SENTRY_PROJECT?.trim()
+        ? { project: process.env.SENTRY_PROJECT.trim() }
+        : {}),
+      url: process.env.SENTRY_URL?.trim() || "https://sentry.io/"
+    }
+  ],
+  [
     "expo-splash-screen",
     {
       backgroundColor: "#0f766e",

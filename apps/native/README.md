@@ -461,6 +461,19 @@ R2 버킷과 API Token은 dev/prod용으로 각각 만들고, 각 Token의 `Obje
 | `EXPO_PUBLIC_EAS_PROJECT_ID` | 선택 | Expo Push Token을 발급할 EAS Project ID를 기본 설정과 다르게 사용할 때 지정합니다. |
 | `EXPO_PUBLIC_ROUTEONE_DEV_VERIFICATION_BYPASS` | dev 테스트 전용 | 실제 GPS 대신 방문 장소 좌표를 사용하는 방문 인증 테스트를 활성화합니다. |
 | `EXPO_PUBLIC_ROUTEONE_ARRIVAL_NOTIFICATION_TEST_MODE` | dev 테스트 전용 | DAY 상세에 도착 알림 테스트 위치 버튼을 표시합니다. |
+| `EXPO_PUBLIC_SENTRY_DSN` | Sentry 수집 사용 시 | 네이티브 앱용 Sentry 프로젝트의 Client DSN입니다. 값이 없으면 네이티브 Sentry를 초기화하지 않습니다. |
+| `EXPO_PUBLIC_SENTRY_ENVIRONMENT` | 선택 | Sentry 환경 이름을 직접 지정합니다. 미설정 시 개발 서버는 `local`, 설치 빌드는 앱 variant에 따라 `dev` 또는 `prod`가 적용됩니다. |
+
+네이티브 Sentry는 앱의 JavaScript 예외와 iOS·Android 크래시를 자동 수집하고, 도착 알림 등록·복구, 백그라운드 위치 작업, WebView 프로세스와 웹 번들 처리 중 잡힌 오류도 직접 기록합니다. 요청 본문, URL 쿼리, 쿠키와 요청 헤더는 전송 전에 제거하며 성능 추적은 비활성화합니다.
+
+오류의 원본 파일과 줄 번호를 확인하려면 EAS 빌드 환경에 아래 빌드 전용 값을 추가해 소스맵과 네이티브 심볼을 업로드해야 합니다. `SENTRY_AUTH_TOKEN`은 앱 번들에 포함되는 `EXPO_PUBLIC_` 변수로 만들지 않습니다.
+
+| 환경변수 | 필요 조건 | 설명 |
+| --- | --- | --- |
+| `SENTRY_ORG` | 소스맵 업로드 시 | Sentry organization slug입니다. |
+| `SENTRY_PROJECT` | 소스맵 업로드 시 | Sentry 네이티브 프로젝트 slug입니다. |
+| `SENTRY_AUTH_TOKEN` | 소스맵 업로드 시 | 릴리스와 소스맵 업로드 권한을 가진 Sentry 인증 토큰입니다. |
+| `SENTRY_URL` | 선택 | 자체 호스팅 Sentry를 사용할 때 서버 주소를 지정합니다. 기본값은 `https://sentry.io/`입니다. |
 
 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`는 실행 기기에 따라 주소가 달라집니다.
 

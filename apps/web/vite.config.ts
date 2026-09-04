@@ -68,6 +68,11 @@ export default defineConfig(({ mode }) => {
                 priority: 40,
               },
               {
+                name: 'sentry-vendor',
+                test: nodeModulePattern(String.raw`@sentry[\\/][^\\/]+`),
+                priority: 40,
+              },
+              {
                 name: 'chart-vendor',
                 test: nodeModulePattern(
                   String.raw`(?:chart\.js|react-chartjs-2)`

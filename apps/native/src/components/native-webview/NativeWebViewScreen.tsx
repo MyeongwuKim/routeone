@@ -5,6 +5,7 @@ import {
   Alert,
   AppState,
   BackHandler,
+  Pressable,
   StatusBar,
   StyleSheet,
   Text,
@@ -27,6 +28,10 @@ import {
   rollbackResolvedWebBundle,
   type ResolvedWebBundle
 } from "@/webBundle/webBundleLoader";
+import {
+  createWebViewReadyRecoveryController,
+  type WebViewReadyRecoveryController
+} from "@/webBundle/webViewReadyRecovery";
 import type { WebBundleProgress } from "@/webBundle/webBundleTypes";
 import {
   handleNativeBridgeMessage,
@@ -35,6 +40,7 @@ import {
 import type { NativeAuthRole } from "@/auth/nativeAuthStorage";
 import { isNativeTestFeatureEnabled } from "@/auth/testFeatureAccess";
 import { WEB_BUNDLE_UPDATE_CONFIG } from "@/config/webBundleUpdateConfig";
+import { reportHandledNativeError } from "@/monitoring/sentry";
 import {
   openNativeExternalUrl,
   shouldKeepUrlInWebView
@@ -313,6 +319,8 @@ export default function NativeWebViewScreen({
   const fatalExitAlertShownRef = useRef(false);
   const rollbackInProgressRef = useRef(false);
   const readyBundleKeyRef = useRef<string | null>(null);
+  const readyRecoveryFailureRef = useRef<() => void>(() => undefined);
+  const readyRecoveryRef = useRef<WebViewReadyRecoveryController | null>(null);
   const [resolvedBundle, setResolvedBundle] =
     useState<ResolvedWebBundle | null>(null);
   const resolvedBundleRef = useRef<ResolvedWebBundle | null>(resolvedBundle);
@@ -322,6 +330,74 @@ export default function NativeWebViewScreen({
   const [bundleProgress, setBundleProgress] = useState<WebBundleProgress>(
     INITIAL_WEB_BUNDLE_PROGRESS
   );
+  const textRef = useRef(text);
+  textRef.current = text;
+
+  if (!readyRecoveryRef.current) {
+    readyRecoveryRef.current = createWebViewReadyRecoveryController({
+      initialAppActive: AppState.currentState === "active",
+      requestReadySignal: () => {
+        webViewRef.current?.injectJavaScript(
+          REQUEST_WEB_BUNDLE_READY_SCRIPT
+        );
+      },
+      reloadWebView: ({ attempt, bundleKey, reason }) => {
+        const currentBundle = resolvedBundleRef.current;
+
+        if (!currentBundle || currentBundle.key !== bundleKey) {
+          return;
+        }
+
+        if (reason === "ready-timeout") {
+          reportHandledNativeError(
+            new Error("WebView ready signal timed out; reloading"),
+            {
+              source: "webview-readiness",
+              level: "warning",
+              tags: {
+                "routeone.bundle_kind": currentBundle.kind,
+                "routeone.bundle_version":
+                  currentBundle.version ?? "embedded",
+                "routeone.recovery_attempt": attempt,
+                "routeone.recovery_reason": reason
+              }
+            }
+          );
+        }
+
+        readyBundleKeyRef.current = null;
+        setLoadError(null);
+        setIsLoading(true);
+        setBundleProgress({
+          stage: "loading",
+          progress: 0.94,
+          message: textRef.current.reloadingRouteOne
+        });
+        webViewRef.current?.reload();
+      },
+      onRecoveryFailed: ({ attempts, bundleKey }) => {
+        const currentBundle = resolvedBundleRef.current;
+
+        if (!currentBundle || currentBundle.key !== bundleKey) {
+          return;
+        }
+
+        reportHandledNativeError(
+          new Error("WebView ready signal unavailable after recovery"),
+          {
+            source: "webview-readiness",
+            tags: {
+              "routeone.bundle_kind": currentBundle.kind,
+              "routeone.bundle_version":
+                currentBundle.version ?? "embedded",
+              "routeone.recovery_attempts": attempts
+            }
+          }
+        );
+        readyRecoveryFailureRef.current();
+      }
+    });
+  }
   const allowedWebBundleOrigins = useMemo(
     () => readWebBundleAllowedOrigins(resolvedBundle),
     [resolvedBundle]
@@ -397,8 +473,26 @@ export default function NativeWebViewScreen({
     [text]
   );
 
+  const flushPendingNavigationPath = useCallback(() => {
+    if (AppState.currentState !== "active") {
+      return;
+    }
+
+    const path = pendingNavigationPathRef.current;
+
+    if (!path) {
+      return;
+    }
+
+    pendingNavigationPathRef.current = null;
+    webViewRef.current?.injectJavaScript(createWebViewNavigationScript(path));
+  }, []);
+
   const completeWebBundleLoad = useCallback(
     (bundle: ResolvedWebBundle) => {
+      readyRecoveryRef.current?.markReady(bundle.key);
+      flushPendingNavigationPath();
+
       if (readyBundleKeyRef.current === bundle.key) {
         return;
       }
@@ -413,9 +507,13 @@ export default function NativeWebViewScreen({
       setIsLoading(false);
       void markResolvedWebBundleReady(bundle).catch((error) => {
         console.warn("[web-bundle] failed to confirm ready bundle", error);
+        reportHandledNativeError(error, {
+          source: "web-bundle-ready",
+          level: "warning"
+        });
       });
     },
-    [text]
+    [flushPendingNavigationPath, text]
   );
 
   const handleMessage = useCallback(
@@ -432,6 +530,9 @@ export default function NativeWebViewScreen({
         }
 
         if (message.type === "routeone:web-runtime-error") {
+          if (currentBundle) {
+            readyRecoveryRef.current?.stopWaiting(currentBundle.key);
+          }
           setLoadError(readRuntimeErrorMessage(message, text));
           setIsLoading(false);
         }
@@ -451,7 +552,11 @@ export default function NativeWebViewScreen({
           onAppLanguageChange,
           onAuthSessionChange
         }
-      );
+      ).catch((error) => {
+        reportHandledNativeError(error, {
+          source: "webview-bridge"
+        });
+      });
     },
     [
       completeWebBundleLoad,
@@ -463,43 +568,56 @@ export default function NativeWebViewScreen({
   );
 
   const handleWebViewProcessTerminated = useCallback(() => {
-    console.warn("[web-bundle] webview content process terminated; reloading");
-    readyBundleKeyRef.current = null;
-    setLoadError(null);
-    setIsLoading(true);
-    setBundleProgress({
-      stage: "loading",
-      progress: 0.94,
-      message: text.reloadingRouteOne
-    });
-    webViewRef.current?.reload();
-  }, [text]);
+    const currentBundle = resolvedBundleRef.current;
 
-  const injectNavigationPath = useCallback((path: string) => {
-    webViewRef.current?.injectJavaScript(createWebViewNavigationScript(path));
+    console.warn("[web-bundle] webview content process terminated; reloading");
+    reportHandledNativeError(
+      new Error("WebView content process terminated"),
+      {
+        source: "webview-process",
+        level: "warning",
+        tags: {
+          "routeone.bundle_kind": currentBundle?.kind ?? "unknown",
+          "routeone.bundle_version":
+            currentBundle?.version ?? "embedded"
+        }
+      }
+    );
+
+    if (currentBundle) {
+      readyRecoveryRef.current?.handleProcessTerminated(currentBundle.key);
+    }
   }, []);
 
   const navigateWebViewToPath = useCallback(
     (path: string) => {
       pendingNavigationPathRef.current = path;
+      const currentBundle = resolvedBundleRef.current;
 
-      if (!isLoading) {
-        pendingNavigationPathRef.current = null;
-        injectNavigationPath(path);
+      if (
+        !isLoading &&
+        currentBundle &&
+        readyBundleKeyRef.current === currentBundle.key
+      ) {
+        flushPendingNavigationPath();
       }
     },
-    [injectNavigationPath, isLoading]
+    [flushPendingNavigationPath, isLoading]
   );
 
   useEffect(() => {
-    if (isLoading || !pendingNavigationPathRef.current) {
+    const currentBundle = resolvedBundleRef.current;
+
+    if (
+      isLoading ||
+      !currentBundle ||
+      readyBundleKeyRef.current !== currentBundle.key
+    ) {
       return;
     }
 
-    const path = pendingNavigationPathRef.current;
-    pendingNavigationPathRef.current = null;
-    injectNavigationPath(path);
-  }, [injectNavigationPath, isLoading]);
+    flushPendingNavigationPath();
+  }, [flushPendingNavigationPath, isLoading]);
 
   useEffect(() => {
     let previousAppState = AppState.currentState;
@@ -510,19 +628,29 @@ export default function NativeWebViewScreen({
           previousAppState === "inactive");
 
       previousAppState = nextAppState;
+      readyRecoveryRef.current?.setAppActive(nextAppState === "active");
 
       if (isReturningToActive) {
+        const currentBundle = resolvedBundleRef.current;
+
         void reconcileStoredRouteArrivalNotifications().catch(
           () => undefined
         );
         webViewRef.current?.injectJavaScript(APP_ACTIVE_EVENT_SCRIPT);
+
+        if (currentBundle?.readySignalRequired) {
+          readyBundleKeyRef.current = null;
+          readyRecoveryRef.current?.waitForReady(currentBundle.key);
+        } else {
+          flushPendingNavigationPath();
+        }
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, [flushPendingNavigationPath]);
 
   useEffect(() => {
     void reconcileStoredRouteArrivalNotifications().catch(() => undefined);
@@ -612,6 +740,7 @@ export default function NativeWebViewScreen({
           if (resolvedBundleRef.current?.key !== bundle.key) {
             readyBundleKeyRef.current = null;
           }
+          readyRecoveryRef.current?.prepareBundle(bundle.key);
           resolvedBundleRef.current = bundle;
           setBundleProgress({
             stage: "loading",
@@ -623,6 +752,9 @@ export default function NativeWebViewScreen({
       })
       .catch((error) => {
         if (!cancelled) {
+          reportHandledNativeError(error, {
+            source: "web-bundle-resolve"
+          });
           const errorMessage = getLoadErrorMessage(error, text);
 
           setLoadError(errorMessage);
@@ -641,6 +773,10 @@ export default function NativeWebViewScreen({
 
   const handleLoadError = useCallback(
     (description: string) => {
+      if (resolvedBundle) {
+        readyRecoveryRef.current?.stopWaiting(resolvedBundle.key);
+      }
+
       if (
         !resolvedBundle ||
         resolvedBundle.kind !== "installed" ||
@@ -660,6 +796,7 @@ export default function NativeWebViewScreen({
       void rollbackResolvedWebBundle(resolvedBundle)
         .then((fallbackBundle) => {
           readyBundleKeyRef.current = null;
+          readyRecoveryRef.current?.prepareBundle(fallbackBundle.key);
           resolvedBundleRef.current = fallbackBundle;
           setLoadError(null);
           setIsLoading(true);
@@ -671,6 +808,9 @@ export default function NativeWebViewScreen({
           setResolvedBundle(fallbackBundle);
         })
         .catch((error) => {
+          reportHandledNativeError(error, {
+            source: "web-bundle-rollback"
+          });
           setLoadError(
             error instanceof Error ? error.message : description
           );
@@ -682,6 +822,29 @@ export default function NativeWebViewScreen({
     },
     [resolvedBundle, text]
   );
+
+  readyRecoveryFailureRef.current = () => {
+    handleLoadError(text.webViewReadyTimeout);
+  };
+
+  const retryWebViewLoad = useCallback(() => {
+    const currentBundle = resolvedBundleRef.current;
+
+    if (!currentBundle) {
+      return;
+    }
+
+    rollbackInProgressRef.current = false;
+    readyRecoveryRef.current?.retryManually(currentBundle.key);
+  }, []);
+
+  useEffect(() => {
+    const recovery = readyRecoveryRef.current;
+
+    return () => {
+      recovery?.dispose();
+    };
+  }, []);
 
   const displayBundleProgress = readDisplayBundleProgress(
     bundleProgress,
@@ -756,9 +919,7 @@ export default function NativeWebViewScreen({
                 progress: 0.98,
                 message: text.waitingReadySignal
               });
-              webViewRef.current?.injectJavaScript(
-                REQUEST_WEB_BUNDLE_READY_SCRIPT
-              );
+              readyRecoveryRef.current?.waitForReady(resolvedBundle.key);
               return;
             }
 
@@ -785,6 +946,18 @@ export default function NativeWebViewScreen({
         <View style={styles.errorPanel}>
           <Text style={styles.errorTitle}>{text.loadErrorTitle}</Text>
           <Text style={styles.errorMessage}>{loadError}</Text>
+          {resolvedBundle ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={retryWebViewLoad}
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.retryButtonPressed
+              ]}
+            >
+              <Text style={styles.retryButtonText}>{text.retry}</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
       <NativeDevBuildBadge />
@@ -830,5 +1003,23 @@ const styles = StyleSheet.create({
     color: "#be123c",
     fontSize: 12,
     lineHeight: 18
+  },
+  retryButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    justifyContent: "center",
+    minHeight: 40,
+    marginTop: 14,
+    borderRadius: 10,
+    backgroundColor: "#9f1239",
+    paddingHorizontal: 18
+  },
+  retryButtonPressed: {
+    opacity: 0.82
+  },
+  retryButtonText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "800"
   }
 });

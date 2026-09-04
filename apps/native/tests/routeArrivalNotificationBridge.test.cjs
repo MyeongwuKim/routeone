@@ -147,6 +147,7 @@ function createHarness({
     locationTrackingStarted: platform === "android",
     locationTrackingStarts: [],
     events: [],
+    monitoringErrors: [],
     warnings: [],
     lastKnownPosition: createLastKnownPosition(),
     lastKnownPositionRequests: [],
@@ -196,6 +197,11 @@ function createHarness({
         role: "USER",
         sessionId: state.authSessionId,
       }),
+    },
+    "@/monitoring/sentry": {
+      reportHandledNativeError: (error, context) => {
+        state.monitoringErrors.push({ error, context });
+      },
     },
     "@react-native-async-storage/async-storage": {
       getItem: async (key) => {
@@ -943,6 +949,14 @@ test("fresh GPS 조회 실패는 등록을 유지하고 백그라운드 작업 �
   assert.ok(
     state.warnings.some(([message]) =>
       message.includes("background location reconcile failed")
+    )
+  );
+  assert.ok(
+    state.monitoringErrors.some(
+      ({ context }) =>
+        context.source === "route-arrival-notifications" &&
+        context.tags["routeone.operation"] ===
+          "background location reconcile failed"
     )
   );
 });

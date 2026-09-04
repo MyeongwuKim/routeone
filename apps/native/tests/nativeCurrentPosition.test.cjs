@@ -83,6 +83,12 @@ function createHarness(globals = {}) {
 
 function createVisitService(harness, getCurrentPosition) {
   return loadModule("../../web/src/features/my-route/services/visitPhotoService.ts", {
+    "@/lib/placeVerificationPolicy": {
+      resolvePlaceVerificationPolicy: () => ({
+        notificationRadiusMeters: 300,
+        verificationRadiusMeters: 100,
+      }),
+    },
     "@/native-bridge": {
       nativeBridge: {
         runtime: { isAvailable: () => true },

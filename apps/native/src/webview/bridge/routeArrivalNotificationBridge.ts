@@ -19,6 +19,7 @@ import {
   readStoredNativeAuthSession,
 } from "@/auth/nativeAuthStorage";
 import { prepareNativeCurrentPosition } from "@/location/nativeCurrentPosition";
+import { reportHandledNativeError } from "@/monitoring/sentry";
 import {
   getIosRouteArrivalNotificationStatus,
   syncIosRouteArrivalNotifications,
@@ -132,6 +133,14 @@ export function resetNativeRouteArrivalTestState() {
 
 function warnRouteArrivalError(context: string, error: unknown) {
   console.warn(`[route-arrival-notifications] ${context}`, error);
+  reportHandledNativeError(error, {
+    source: "route-arrival-notifications",
+    level: "warning",
+    tags: {
+      "routeone.operation": context,
+      "routeone.platform": Platform.OS
+    }
+  });
 }
 
 // Keep receipt persistence, inbox dismissal and registration in the same queue.

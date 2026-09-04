@@ -4,5 +4,6 @@ allowBuilds:
   '@apollo/protobufjs': set this to true or false
   '@prisma/client': set this to true or false
   '@prisma/engines': set this to true or false
+  '@sentry/cli': true
   esbuild: set this to true or false
   prisma: set this to true or false
