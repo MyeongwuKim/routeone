@@ -9,6 +9,7 @@ function findExpoModulesJsiPackageRoot() {
   const directPackageRoots = [
     path.join(nativeRoot, "node_modules/expo-modules-jsi"),
     path.join(workspaceRoot, "node_modules/expo-modules-jsi"),
+    path.join(workspaceRoot, "node_modules/.pnpm/node_modules/expo-modules-jsi"),
   ];
 
   const directPackageRoot = directPackageRoots.find((candidate) =>

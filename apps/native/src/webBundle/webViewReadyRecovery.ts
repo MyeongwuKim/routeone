@@ -52,8 +52,8 @@ export type WebViewReadyRecoveryController = {
   waitForReady: (bundleKey: string) => void;
 };
 
-const DEFAULT_READY_TIMEOUT_MS = 8_000;
-const DEFAULT_RETRY_DELAYS_MS = [1_000, 3_000] as const;
+const DEFAULT_READY_TIMEOUT_MS = 20_000;
+const DEFAULT_RETRY_DELAYS_MS = [1_000, 3_000, 8_000, 15_000] as const;
 const DEFAULT_MAX_AUTOMATIC_RELOADS = 1;
 
 const DEFAULT_SCHEDULER: RecoveryScheduler = {

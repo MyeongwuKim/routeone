@@ -15,6 +15,8 @@ export default function NativeWebBundleReadySignal() {
       nativeBridge.lifecycle.postWebBundleReady();
     };
 
+    postReadySignal();
+
     if (typeof window.requestAnimationFrame === "function") {
       firstFrameId = window.requestAnimationFrame(() => {
         secondFrameId = window.requestAnimationFrame(postReadySignal);

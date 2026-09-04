@@ -325,6 +325,7 @@ export default function NativeWebViewScreen({
     useState<ResolvedWebBundle | null>(null);
   const resolvedBundleRef = useRef<ResolvedWebBundle | null>(resolvedBundle);
   resolvedBundleRef.current = resolvedBundle;
+  const [webViewReloadVersion, setWebViewReloadVersion] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [bundleProgress, setBundleProgress] = useState<WebBundleProgress>(
@@ -373,7 +374,7 @@ export default function NativeWebViewScreen({
           progress: 0.94,
           message: textRef.current.reloadingRouteOne
         });
-        webViewRef.current?.reload();
+        setWebViewReloadVersion((version) => version + 1);
       },
       onRecoveryFailed: ({ attempts, bundleKey }) => {
         const currentBundle = resolvedBundleRef.current;
@@ -856,7 +857,7 @@ export default function NativeWebViewScreen({
       <StatusBar barStyle="dark-content" />
       {resolvedBundle ? (
         <WebView
-          key={`${resolvedBundle.key}:${nativeAuthSessionId ?? "no-session"}`}
+          key={`${resolvedBundle.key}:${nativeAuthSessionId ?? "no-session"}:${webViewReloadVersion}`}
           ref={webViewRef}
           source={resolvedBundle.source}
           allowingReadAccessToURL={resolvedBundle.allowingReadAccessToUrl}

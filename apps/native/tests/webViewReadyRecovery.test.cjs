@@ -9,6 +9,20 @@ const sourcePath = path.join(
   __dirname,
   "../src/webBundle/webViewReadyRecovery.ts"
 );
+const screenSource = readFileSync(
+  path.join(
+    __dirname,
+    "../src/components/native-webview/NativeWebViewScreen.tsx"
+  ),
+  "utf8"
+);
+const webReadySignalSource = readFileSync(
+  path.join(
+    __dirname,
+    "../../web/src/components/NativeWebBundleReadySignal.tsx"
+  ),
+  "utf8"
+);
 const compiledSource = ts.transpileModule(readFileSync(sourcePath, "utf8"), {
   reportDiagnostics: true,
   compilerOptions: {
@@ -60,15 +74,22 @@ function createScheduler() {
   };
 }
 
-function createHarness({ initialAppActive = true } = {}) {
+function createHarness({
+  initialAppActive = true,
+  useDefaultTimings = false,
+} = {}) {
   const events = [];
   const scheduler = createScheduler();
   const controller =
     recoveryModule.createWebViewReadyRecoveryController({
       initialAppActive,
       maxAutomaticReloads: 1,
-      readyTimeoutMs: 8_000,
-      retryDelaysMs: [1_000, 3_000],
+      ...(useDefaultTimings
+        ? {}
+        : {
+            readyTimeoutMs: 8_000,
+            retryDelaysMs: [1_000, 3_000],
+          }),
       scheduler,
       requestReadySignal: (bundleKey) => {
         events.push({ type: "request", bundleKey });
@@ -109,6 +130,25 @@ test("준비 신호가 없으면 재요청 후 WebView를 한 번 자동 재로�
       bundleKey: "embedded",
       reason: "ready-timeout",
     }
+  );
+});
+
+test("느린 내장 번들은 충분히 기다리며 준비 신호를 계속 요청한다", () => {
+  const harness = createHarness({ useDefaultTimings: true });
+
+  harness.controller.waitForReady("embedded");
+
+  assert.deepEqual(
+    [...harness.scheduler.timers.values()]
+      .map(({ delayMs }) => delayMs)
+      .sort((left, right) => left - right),
+    [1_000, 3_000, 8_000, 15_000, 20_000]
+  );
+
+  harness.scheduler.runByDelay(15_000);
+  assert.equal(
+    harness.events.some(({ type }) => type === "reload"),
+    false
   );
 });
 
@@ -182,4 +222,29 @@ test("준비 완료 신호가 오면 예약된 복구 작업을 모두 취소한
     harness.events.some(({ type }) => type === "reload"),
     false
   );
+});
+
+test("WebView 복구 시 인라인 번들의 기준 URL을 직접 재로딩하지 않는다", () => {
+  assert.doesNotMatch(screenSource, /webViewRef\.current\?\.reload\(\)/);
+  assert.match(
+    screenSource,
+    /setWebViewReloadVersion\(\(version\) => version \+ 1\)/
+  );
+  assert.match(
+    screenSource,
+    /nativeAuthSessionId \?\? "no-session"\}:\$\{webViewReloadVersion\}/
+  );
+});
+
+test("웹 화면은 React 마운트 직후 준비 신호를 즉시 보낸다", () => {
+  const immediateSignalIndex = webReadySignalSource.indexOf(
+    "    postReadySignal();"
+  );
+  const deferredSignalIndex = webReadySignalSource.indexOf(
+    '    if (typeof window.requestAnimationFrame === "function")'
+  );
+
+  assert.notEqual(immediateSignalIndex, -1);
+  assert.notEqual(deferredSignalIndex, -1);
+  assert.ok(immediateSignalIndex < deferredSignalIndex);
 });
