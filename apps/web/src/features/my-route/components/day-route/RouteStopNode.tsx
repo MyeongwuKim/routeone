@@ -1,3 +1,10 @@
+/**
+ * 사용 위치: 내 루트 → DAY 상세 → 장소별 일정 카드
+ *
+ * 용도:
+ * 장소의 방문·인증 상태와 체류 시간을 보여주고 방문 처리와 일정 편집을 연결한다.
+ * 방문 버튼은 장소명 옆에, 지도와 GPS 테스트 버튼은 카드 하단에 모아 둔다.
+ */
 import {
   useEffect,
   useRef,
@@ -276,7 +283,7 @@ function RouteStopNode({
           }`}
           aria-current={isActiveDestination ? "step" : undefined}
         >
-          <div className="relative flex items-start gap-3">
+          <div className="flex items-start gap-3">
             <div
               className={`relative size-12 shrink-0 overflow-hidden rounded-xl ${
                 isVisited || isCheckedIn || isActiveDestination
@@ -309,19 +316,86 @@ function RouteStopNode({
               ) : null}
             </div>
             <div className="min-w-0 flex-1">
-              {isActiveDestination ? (
-                <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
-                  <MdFlag className="text-xs" />
-                  {text.dayRoute.currentDestination}
-                </span>
-              ) : null}
-              <p
-                className={`truncate text-sm font-black text-slate-900 dark:text-white ${
-                  isOrderEditing ? "pr-20" : "pr-10"
-                }`}
-              >
-                {stop.place.title}
-              </p>
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  {isActiveDestination ? (
+                    <span className="mb-1 inline-flex max-w-full items-center gap-1 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-black text-white shadow-sm">
+                      <MdFlag className="shrink-0 text-xs" />
+                      {text.dayRoute.currentDestination}
+                    </span>
+                  ) : null}
+                  <p className="truncate text-sm font-black text-slate-900 dark:text-white">
+                    {stop.place.title}
+                  </p>
+                </div>
+                {isOrderEditing ? (
+                  <div className="ml-auto flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label={`${stop.place.title} 삭제`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onRemoveFromRoute();
+                      }}
+                      className="flex size-8 shrink-0 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600"
+                    >
+                      <MdDeleteOutline />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={text.dayRoute.moveOrderAria(stop.place.title)}
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
+                        onStartDrag(event);
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                      className="flex size-9 shrink-0 touch-none items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 active:cursor-grabbing"
+                    >
+                      <MdDragIndicator />
+                    </button>
+                  </div>
+                ) : canToggleVisited ? (
+                  <button
+                    type="button"
+                    aria-label={
+                      isVisited
+                        ? text.dayRoute.cancelVisitAria(stop.place.title)
+                        : isCheckedIn
+                          ? text.dayRoute.finishVisitAria(stop.place.title)
+                          : text.dayRoute.checkInAria(stop.place.title)
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleVisited(stop);
+                    }}
+                    disabled={isVisitSaving}
+                    title={
+                      isVisited
+                        ? text.dayRoute.cancelVisitTitle
+                        : isCheckedIn
+                          ? text.dayRoute.finishVisitTitle
+                          : text.dayRoute.checkInTitle
+                    }
+                    className={`flex size-8 shrink-0 items-center justify-center rounded-full border text-base transition active:scale-95 disabled:opacity-40 ${
+                      isVisited
+                        ? "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                        : isCheckedIn
+                          ? "border-brand-500 bg-brand-600 text-white"
+                          : "border-brand-300 bg-brand-50 text-brand-700"
+                    }`}
+                  >
+                    {isVisitSaving ? (
+                      <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : isVisited ? (
+                      <MdUndo />
+                    ) : isCheckedIn ? (
+                      <MdCheck />
+                    ) : (
+                      <MdMyLocation />
+                    )}
+                  </button>
+                ) : null}
+              </div>
               <div className="mt-1 flex min-h-6 flex-wrap items-center gap-1.5">
                 <span
                   className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black ${
@@ -537,121 +611,53 @@ function RouteStopNode({
                     <MdArrowForward />
                   </button>
                 </div>
-              ) : (
+              ) : null}
+            </div>
+          </div>
+          {!isOrderEditing ? (
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                aria-label={text.dayRoute.openPlaceDirectionsAria(
+                  stop.place.title
+                )}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenDirections(stop);
+                }}
+                className={`inline-flex min-h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-black transition active:scale-[0.99] ${
+                  isActiveDestination
+                    ? "bg-brand-600 text-white shadow-sm"
+                    : "border border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-100"
+                }`}
+              >
+                <MdMap className="shrink-0 text-base" />
+                {text.dayRoute.placeDirections}
+              </button>
+              {isGpsTestEnabled ? (
                 <button
                   type="button"
-                  aria-label={text.dayRoute.openPlaceDirectionsAria(
+                  aria-label={text.dayRoute.gpsTestOpenAria(
                     stop.place.title
                   )}
                   onClick={(event) => {
                     event.stopPropagation();
-                    onOpenDirections(stop);
+                    onOpenGpsTest(stop);
                   }}
-                  className={`mt-2 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition active:scale-[0.99] ${
-                    isActiveDestination
-                      ? "bg-brand-600 text-white shadow-sm"
-                      : "border border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-100"
+                  className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-black ring-1 transition active:scale-95 ${
+                    isGpsTestLocationActive
+                      ? "bg-violet-600 text-white ring-violet-600"
+                      : "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-400/10 dark:text-violet-100 dark:ring-violet-400/30"
                   }`}
                 >
-                  <MdMap className="text-base" />
-                  {text.dayRoute.placeDirections}
+                  <MdGpsFixed className="text-sm" />
+                  {isGpsTestLocationActive
+                    ? text.dayRoute.gpsTestActiveButton
+                    : text.dayRoute.gpsTestButton}
                 </button>
-              )}
+              ) : null}
             </div>
-            {isOrderEditing ? (
-              <div className="absolute right-0 top-0 flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label={`${stop.place.title} 삭제`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onRemoveFromRoute();
-                  }}
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600"
-                >
-                  <MdDeleteOutline />
-                </button>
-                <button
-                  type="button"
-                  aria-label={text.dayRoute.moveOrderAria(stop.place.title)}
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                    onStartDrag(event);
-                  }}
-                  onClick={(event) => event.stopPropagation()}
-                  className="flex size-9 shrink-0 touch-none items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 active:cursor-grabbing"
-                >
-                  <MdDragIndicator />
-                </button>
-              </div>
-            ) : (
-              <div className="absolute right-0 top-0 flex shrink-0 flex-col items-end gap-2">
-                {isGpsTestEnabled ? (
-                  <button
-                    type="button"
-                    aria-label={text.dayRoute.gpsTestOpenAria(
-                      stop.place.title
-                    )}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onOpenGpsTest(stop);
-                    }}
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-black ring-1 transition active:scale-95 ${
-                      isGpsTestLocationActive
-                        ? "bg-violet-600 text-white ring-violet-600"
-                        : "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-400/10 dark:text-violet-100 dark:ring-violet-400/30"
-                    }`}
-                  >
-                    <MdGpsFixed className="text-sm" />
-                    {isGpsTestLocationActive
-                      ? text.dayRoute.gpsTestActiveButton
-                      : text.dayRoute.gpsTestButton}
-                  </button>
-                ) : null}
-                {canToggleVisited ? (
-                  <button
-                    type="button"
-                    aria-label={
-                      isVisited
-                        ? text.dayRoute.cancelVisitAria(stop.place.title)
-                        : isCheckedIn
-                          ? text.dayRoute.finishVisitAria(stop.place.title)
-                          : text.dayRoute.checkInAria(stop.place.title)
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onToggleVisited(stop);
-                    }}
-                    disabled={isVisitSaving}
-                    title={
-                      isVisited
-                        ? text.dayRoute.cancelVisitTitle
-                        : isCheckedIn
-                          ? text.dayRoute.finishVisitTitle
-                          : text.dayRoute.checkInTitle
-                    }
-                    className={`flex size-8 shrink-0 items-center justify-center rounded-full border text-base transition active:scale-95 disabled:opacity-40 ${
-                      isVisited
-                        ? "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                        : isCheckedIn
-                          ? "border-brand-500 bg-brand-600 text-white"
-                          : "border-brand-300 bg-brand-50 text-brand-700"
-                    }`}
-                  >
-                    {isVisitSaving ? (
-                      <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    ) : isVisited ? (
-                      <MdUndo />
-                    ) : isCheckedIn ? (
-                      <MdCheck />
-                    ) : (
-                      <MdMyLocation />
-                    )}
-                  </button>
-                ) : null}
-              </div>
-            )}
-          </div>
+          ) : null}
         </div>
         {!isLast ? (
           <div className="ml-1 mt-2 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700 dark:bg-brand-400/10 dark:text-brand-100">

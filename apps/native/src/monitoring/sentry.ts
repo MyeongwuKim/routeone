@@ -5,6 +5,7 @@
  * 동작 방식:
  * 앱 진입 시 SDK를 초기화하고 자동 크래시와 직접 전달받은 예외를 수집한다.
  * 요청 본문, URL 쿼리, 쿠키와 인증 헤더는 전송 전에 제거한다.
+ * Tour API가 거부하는 추적 헤더는 네트워크 요청에 추가하지 않는다.
  */
 import * as Sentry from "@sentry/react-native";
 import Constants from "expo-constants";
@@ -165,6 +166,8 @@ export function initializeNativeMonitoring() {
     environment: resolveNativeSentryEnvironment(),
     sendDefaultPii: false,
     tracesSampleRate: 0,
+    // 샘플링을 0으로 설정해도 baggage 헤더는 붙으므로 전파 대상도 비워 둔다.
+    tracePropagationTargets: [],
     beforeBreadcrumb(breadcrumb) {
       if (breadcrumb.category === "console") {
         return null;

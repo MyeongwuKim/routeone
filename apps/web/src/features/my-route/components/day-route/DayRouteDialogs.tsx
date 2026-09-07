@@ -13,6 +13,7 @@ import {
   MdRemove,
 } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
+import { resolvePlaceVerificationPolicy } from "@/lib/placeVerificationPolicy";
 import { TimeWheelPicker } from "@/components/inputs";
 import {
   clampStayMinutes,
@@ -1063,6 +1064,9 @@ export function VisitCompletionPopup({
   const text = useUiText();
   const photoActionDisabled = isSaving;
   const isRetrospective = mode === "retrospective";
+  const { verificationRadiusMeters } = resolvePlaceVerificationPolicy(
+    target.stop.place
+  );
 
   return (
     <div className="center-modal-backdrop-enter fixed inset-0 z-[3100] flex items-center justify-center bg-slate-950/35 px-4">
@@ -1097,7 +1101,7 @@ export function VisitCompletionPopup({
         <p className="mt-1 text-balance text-xs font-semibold leading-5 text-slate-500">
           {isRetrospective
             ? text.dayRoute.retrospectiveCompletionDescription
-            : text.dayRoute.arrivalCheckDescription}
+            : text.dayRoute.arrivalCheckDescription(verificationRadiusMeters)}
         </p>
 
         <div className="mt-5 grid gap-2">

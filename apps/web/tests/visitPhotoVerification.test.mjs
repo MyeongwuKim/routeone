@@ -114,3 +114,46 @@ test("도착 인증 버튼을 GPS, GPS 카메라, 앨범·일반 인증 순서�
   assert.ok(albumIndex < manualIndex);
   assert.match(markup, /grid grid-cols-2 gap-2/);
 });
+
+for (const { name, place, radius } of [
+  { name: "일반 장소", place: { categoryName: "음식점" }, radius: 100 },
+  { name: "넓은 야외 장소", place: { categoryName: "국립공원" }, radius: 300 },
+  {
+    name: "저장된 100m 정책이 있는 야외 장소",
+    place: {
+      categoryName: "국립공원",
+      notificationRadiusMeters: 300,
+      verificationRadiusMeters: 100,
+    },
+    radius: 100,
+  },
+  {
+    name: "저장된 300m 정책이 있는 장소",
+    place: {
+      categoryName: "음식점",
+      notificationRadiusMeters: 500,
+      verificationRadiusMeters: 300,
+    },
+    radius: 300,
+  },
+]) {
+  test(`${name}의 인증 팝업에 실제 방문 인증 반경을 안내한다`, () => {
+    const markup = renderToStaticMarkup(
+      createElement(VisitCompletionPopup, {
+        target: {
+          routeDay: { id: "day-1", dayIndex: 1 },
+          stop: { id: "stop-1", place: { title: "테스트 장소", ...place } },
+        },
+        isSaving: false,
+        mode: "live",
+        onClose() {},
+        onCompleteWithGps() {},
+        onCompleteWithPhoto() {},
+        onCompleteManually() {},
+      })
+    );
+
+    assert.match(markup, new RegExp(`이 장소 반경 ${radius}m 안에서 가능해요`));
+    assert.match(markup, /앨범 인증은 위치를 확인하지 않아요/);
+  });
+}

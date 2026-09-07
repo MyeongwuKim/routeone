@@ -705,7 +705,7 @@ export type UiText = {
     checkInTitle: string;
     finishVisitTitle: string;
     arrivalCheckTitle: string;
-    arrivalCheckDescription: string;
+    arrivalCheckDescription: (radiusMeters: number) => string;
     gpsCheckIn: string;
     gpsCameraCheckIn: string;
     albumVisitCompletion: string;
@@ -1915,8 +1915,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       checkInTitle: "도착 인증",
       finishVisitTitle: "방문 완료",
       arrivalCheckTitle: "도착을 인증할까요?",
-      arrivalCheckDescription:
-        "GPS 인증과 GPS + 카메라 인증은 장소 반경 100m 안에서 가능해요. 앨범 인증은 위치를 확인하지 않아요.",
+      arrivalCheckDescription: (radiusMeters) =>
+        `GPS 인증과 GPS + 카메라 인증은 이 장소 반경 ${radiusMeters}m 안에서 가능해요. 앨범 인증은 위치를 확인하지 않아요.`,
       gpsCheckIn: "GPS 인증",
       gpsCameraCheckIn: "GPS + 카메라 인증",
       albumVisitCompletion: "앨범 인증",
@@ -3241,8 +3241,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       checkInTitle: "Verify arrival",
       finishVisitTitle: "Complete visit",
       arrivalCheckTitle: "Verify your arrival?",
-      arrivalCheckDescription:
-        "GPS and GPS + Camera are available within 100 m. Album verification does not use your location.",
+      arrivalCheckDescription: (radiusMeters) =>
+        `GPS and GPS + Camera are available within ${radiusMeters} m of this place. Album verification does not use your location.`,
       gpsCheckIn: "GPS Verification",
       gpsCameraCheckIn: "GPS + Camera",
       albumVisitCompletion: "Album Verification",
