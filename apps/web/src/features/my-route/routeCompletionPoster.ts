@@ -1,5 +1,13 @@
+/**
+ * 용도: 여행 기록의 사진을 불러오고 DAY 포토카드를 PNG로 생성·저장한다.
+ * 동작 방식: 방문 기록을 테마 렌더러에 전달하며, 사진은 원본 데이터를 그대로 사용한다.
+ */
 import { routeApi } from "@/api/routeApi";
 import { nativeBridge } from "@/native-bridge";
+import type { RoutePosterThemeId } from "./models/routePosterTheme";
+import { renderRoutePosterTheme } from "./utils/poster/renderRoutePosterTheme";
+import { buildRoutePosterPages } from "./utils/poster/routePosterPages";
+import { renderPosterPng } from "./utils/poster/renderPosterPng";
 import {
   formatRouteDate,
   getRouteSubtitle,
@@ -43,69 +51,6 @@ export type RouteCompletionPosterBackgroundId =
   | (typeof ROUTE_COMPLETION_POSTER_BACKGROUNDS)[number]["id"]
   | "custom";
 
-type PosterBackgroundColors = {
-  start: string;
-  middle: string;
-  end: string;
-  grainPrimary: string;
-  grainSecondary: string;
-  grainTertiary: string;
-};
-
-const POSTER_BACKGROUND_COLORS: Record<
-  Exclude<RouteCompletionPosterBackgroundId, "custom">,
-  PosterBackgroundColors
-> = {
-  paper: {
-    start: "#fffaf0",
-    middle: "#f8edd8",
-    end: "#e5f4df",
-    grainPrimary: "#7c5c2a",
-    grainSecondary: "#0f766e",
-    grainTertiary: "#b45309",
-  },
-  sunset: {
-    start: "#fff1e6",
-    middle: "#ffd9c2",
-    end: "#fbcfe8",
-    grainPrimary: "#c2410c",
-    grainSecondary: "#be123c",
-    grainTertiary: "#f59e0b",
-  },
-  ocean: {
-    start: "#ecfeff",
-    middle: "#cffafe",
-    end: "#dbeafe",
-    grainPrimary: "#0369a1",
-    grainSecondary: "#0f766e",
-    grainTertiary: "#2563eb",
-  },
-  forest: {
-    start: "#f0fdf4",
-    middle: "#dcfce7",
-    end: "#fef3c7",
-    grainPrimary: "#166534",
-    grainSecondary: "#0f766e",
-    grainTertiary: "#a16207",
-  },
-  lavender: {
-    start: "#faf5ff",
-    middle: "#ede9fe",
-    end: "#fce7f3",
-    grainPrimary: "#7e22ce",
-    grainSecondary: "#6d28d9",
-    grainTertiary: "#be185d",
-  },
-  dawn: {
-    start: "#eef2ff",
-    middle: "#dbeafe",
-    end: "#e0e7ff",
-    grainPrimary: "#3730a3",
-    grainSecondary: "#0369a1",
-    grainTertiary: "#6366f1",
-  },
-};
-
 type PosterStop = MyRouteStop & {
   dayIndex: number;
 };
@@ -134,6 +79,8 @@ const MAX_POSTER_IMAGE_CACHE_ENTRIES = 24;
 
 export type RouteCompletionPosterCard = {
   dayIndex: number;
+  pageIndex: number;
+  pageCount: number;
   label: string;
   dataUrl: string;
   fileName: string;
@@ -330,6 +277,7 @@ function getCompletedPosterDayGroups(route: MyRoute) {
 
   if (days.length > 0) {
     return days
+      .filter((day) => day.stops.length > 0 && day.stops.every(isVisitedStop))
       .map((day) => {
         const stops = [...day.stops]
           .sort((left, right) => left.order - right.order)
@@ -350,6 +298,7 @@ function getCompletedPosterDayGroups(route: MyRoute) {
       .filter((day) => day.stops.length > 0);
   }
 
+  if (!route.stops.length || !route.stops.every(isVisitedStop)) return [];
   const groupedStops = new Map<number, PosterStop[]>();
 
   getCompletedPosterStops(route).forEach((stop) => {
@@ -380,7 +329,7 @@ export function getRouteCompletionPosterStats(route: MyRoute) {
   );
 
   return {
-    canCreate: totalStopCount > 0 && completedStopCount >= totalStopCount,
+    canCreate: getCompletedPosterDayGroups(route).length > 0,
     completedStopCount,
     totalStopCount,
     photoVerifiedStopCount,
@@ -922,34 +871,6 @@ function renderPosterSvg({
 `.trim();
 }
 
-type DayMemoryItem = {
-  index: number;
-  stopId?: string;
-  title: string;
-  subtitle: string;
-  verificationStatus: PosterTile["verificationStatus"];
-  isSummary?: boolean;
-};
-
-type PolaroidLayout = {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  rotation: number;
-  rowIndex: number;
-};
-
-const DAY_MEMORY_MAX_POLAROIDS = 6;
-
-function getStopMemoryImageUrl(stop: PosterStop) {
-  if (stop.verificationPhotoUrl) {
-    return stop.verificationPhotoUrl;
-  }
-
-  return stop.place.imageUrl;
-}
-
 export function cacheRouteStopVerificationPhotoDataUrl({
   stopId,
   photoUrl,
@@ -980,369 +901,6 @@ function getCachedRouteStopVerificationPhotoDataUrl(stop: PosterStop) {
   return stop.verificationPhotoUrl
     ? routeStopVerificationPhotoUrlCache.get(stop.verificationPhotoUrl) ?? null
     : null;
-}
-
-function buildDayMemoryItems(stops: PosterStop[]) {
-  const visibleStops =
-    stops.length > DAY_MEMORY_MAX_POLAROIDS
-      ? stops.slice(0, DAY_MEMORY_MAX_POLAROIDS - 1)
-      : stops;
-  const items = visibleStops.map(
-    (stop, index): DayMemoryItem => ({
-      index: index + 1,
-      stopId: stop.id,
-      title: stop.place.title,
-      subtitle: stop.place.categoryLabel ?? `DAY ${stop.dayIndex}`,
-      verificationStatus: stop.verificationPhotoUrl
-        ? "GPS_PHOTO"
-        : stop.verificationStatus,
-    })
-  );
-
-  if (stops.length > DAY_MEMORY_MAX_POLAROIDS) {
-    items.push({
-      index: DAY_MEMORY_MAX_POLAROIDS,
-      title: `외 ${stops.length - DAY_MEMORY_MAX_POLAROIDS + 1}곳`,
-      subtitle: "추가 방문지",
-      verificationStatus: "SUMMARY",
-      isSummary: true,
-    });
-  }
-
-  return items;
-}
-
-function getPolaroidLayouts(count: number): PolaroidLayout[] {
-  const cardWidth = 254;
-  const cardHeight = 326;
-  const gap = 42;
-  const rotations = [-5, 3, -2, 4, -4, 2];
-  const rowCounts =
-    count <= 3 ? [count] : count === 4 ? [2, 2] : count === 5 ? [3, 2] : [3, 3];
-  const rowYs = rowCounts.length === 1 ? [432] : [336, 728];
-
-  return rowCounts.flatMap((rowCount, rowIndex) => {
-    const rowWidth = rowCount * cardWidth + Math.max(0, rowCount - 1) * gap;
-    const startX = Math.round((ROUTE_COMPLETION_POSTER_WIDTH - rowWidth) / 2);
-
-    return Array.from({ length: rowCount }, (_, index) => {
-      const absoluteIndex =
-        rowCounts.slice(0, rowIndex).reduce((sum, value) => sum + value, 0) +
-        index;
-
-      return {
-        x: startX + index * (cardWidth + gap),
-        y: rowYs[rowIndex] ?? rowYs[0],
-        w: cardWidth,
-        h: cardHeight,
-        rotation: rotations[absoluteIndex % rotations.length] ?? 0,
-        rowIndex,
-      };
-    });
-  });
-}
-
-function renderWashiTape({
-  x,
-  y,
-  rotation,
-}: {
-  x: number;
-  y: number;
-  rotation: number;
-}) {
-  return `
-    <g transform="translate(${x} ${y}) rotate(${rotation} 34 12)" opacity="0.82">
-      <rect x="0" y="0" width="68" height="24" rx="4" fill="#8b7ab8"/>
-      <path d="M8 2 L20 22 M28 2 L40 22 M48 2 L60 22" stroke="#ffffff" stroke-width="3" opacity="0.22"/>
-    </g>
-  `;
-}
-
-function renderMemoryLine(y: number) {
-  return `
-    <path d="M92 ${y} C250 ${y - 30} 370 ${y + 30} 528 ${y} C690 ${
-      y - 28
-    } 820 ${y + 30} 990 ${y - 4}" fill="none" stroke="#b08a55" stroke-width="6" stroke-linecap="round" opacity="0.46"/>
-    <path d="M92 ${y + 6} C250 ${y - 24} 370 ${y + 36} 528 ${
-      y + 6
-    } C690 ${y - 22} 820 ${y + 36} 990 ${
-      y + 2
-    }" fill="none" stroke="#fef3c7" stroke-width="2" stroke-linecap="round" opacity="0.45"/>
-  `;
-}
-
-function renderPolaroidCard({
-  item,
-  layout,
-  imageData,
-}: {
-  item: DayMemoryItem;
-  layout: PolaroidLayout;
-  imageData: EmbeddedStopImage[];
-}) {
-  const imageX = 22;
-  const imageY = 26;
-  const imageWidth = layout.w - 44;
-  const imageHeight = 196;
-  const clipId = `routeone-day-polaroid-${item.stopId ?? "summary"}-${
-    item.index
-  }`;
-  const dataUrl = item.stopId
-    ? imageData.find((image) => image.stopId === item.stopId)?.dataUrl
-    : null;
-  const titleLines = wrapText(item.title, item.isSummary ? 8 : 10, 2);
-  const statusLabel = getVerificationLabel(item.verificationStatus);
-  const isPhoto = item.verificationStatus === "GPS_PHOTO";
-  const stampColor = isPhoto ? "#be123c" : "#0f766e";
-  const stampFill = isPhoto ? "#fff1c2" : "#dff9ef";
-
-  return `
-    <g transform="translate(${layout.x} ${layout.y}) rotate(${layout.rotation} ${
-      layout.w / 2
-    } ${layout.h / 2})">
-      <rect x="8" y="10" width="${layout.w}" height="${
-        layout.h
-      }" rx="10" fill="#6b4f1d" opacity="0.16"/>
-      <rect x="0" y="0" width="${layout.w}" height="${
-        layout.h
-      }" rx="10" fill="#fffdf7" stroke="#f2e6cc" stroke-width="3"/>
-      <clipPath id="${clipId}">
-        <rect x="${imageX}" y="${imageY}" width="${imageWidth}" height="${imageHeight}" rx="4"/>
-      </clipPath>
-      <rect x="${imageX}" y="${imageY}" width="${imageWidth}" height="${imageHeight}" rx="4" fill="#efe7d4"/>
-      ${
-        dataUrl
-          ? `<image href="${escapeXml(
-              dataUrl
-            )}" x="${imageX}" y="${imageY}" width="${imageWidth}" height="${imageHeight}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"/>`
-          : `<g clip-path="url(#${clipId})">
-              <rect x="${imageX}" y="${imageY}" width="${imageWidth}" height="${imageHeight}" fill="#dbeafe"/>
-              <path d="M${imageX} ${imageY + 156} C${
-                imageX + 50
-              } ${imageY + 104} ${imageX + 88} ${imageY + 132} ${
-                imageX + 126
-              } ${imageY + 86} C${imageX + 160} ${imageY + 134} ${
-                imageX + 186
-              } ${imageY + 110} ${imageX + imageWidth} ${
-                imageY + 148
-              } L${imageX + imageWidth} ${imageY + imageHeight} L${imageX} ${
-                imageY + imageHeight
-              } Z" fill="#bfdbfe"/>
-              <circle cx="${imageX + imageWidth - 38}" cy="${
-                imageY + 38
-              }" r="18" fill="#facc15"/>
-            </g>`
-      }
-      ${
-        item.isSummary
-          ? `<g>
-              <rect x="${imageX + 18}" y="${imageY + 34}" width="${
-                imageWidth - 36
-              }" height="${imageHeight - 68}" rx="18" fill="#ffffff" opacity="0.74"/>
-              <text x="${layout.w / 2}" y="${
-                imageY + 104
-              }" class="memorySummaryValue" text-anchor="middle">${escapeXml(
-                item.title
-              )}</text>
-              <text x="${layout.w / 2}" y="${
-                imageY + 142
-              }" class="memorySummaryLabel" text-anchor="middle">MORE PLACES</text>
-            </g>`
-          : ""
-      }
-      <g transform="translate(${layout.w - 58} ${
-        imageY + imageHeight - 4
-      }) rotate(-8)">
-        <rect x="-46" y="-17" width="92" height="30" rx="15" fill="${stampFill}" stroke="${stampColor}" stroke-width="3"/>
-        <text x="0" y="6" class="memoryStamp" fill="${stampColor}" text-anchor="middle">${statusLabel}</text>
-      </g>
-      ${renderTextLines({
-        lines: titleLines,
-        x: layout.w / 2,
-        y: 260,
-        lineHeight: 29,
-        className: "memoryPlaceTitle",
-        textAnchor: "middle",
-      })}
-      <text x="${layout.w / 2}" y="314" class="memoryPlaceMeta" text-anchor="middle">${escapeXml(
-        item.subtitle
-      )}</text>
-      <g transform="translate(${layout.w / 2 - 29} -24) rotate(${
-        -layout.rotation * 0.45
-      } 29 36)">
-        <ellipse cx="29" cy="62" rx="32" ry="7" fill="#6b4f1d" opacity="0.13"/>
-        <rect x="6" y="0" width="46" height="66" rx="7" fill="#d7ad76" stroke="#9a6b3a" stroke-width="2"/>
-        <rect x="12" y="6" width="34" height="54" rx="5" fill="#f1cf9b" opacity="0.72"/>
-        <line x1="29" y1="5" x2="29" y2="61" stroke="#9a6b3a" stroke-width="2" opacity="0.44"/>
-        <rect x="18" y="22" width="22" height="18" rx="7" fill="#b98d58" opacity="0.42"/>
-        <circle cx="29" cy="31" r="7" fill="#d7d9de" stroke="#8b8f97" stroke-width="2" opacity="0.86"/>
-        <path d="M12 18 L46 15" stroke="#fff3d8" stroke-width="2" opacity="0.45"/>
-        <path d="M12 48 L46 45" stroke="#8a6236" stroke-width="2" opacity="0.22"/>
-        <rect x="18" y="62" width="22" height="16" rx="4" fill="#c79a62" stroke="#9a6b3a" stroke-width="2"/>
-      </g>
-    </g>
-  `;
-}
-
-function renderDayMemoryBadge({
-  dayIndex,
-  photoCount,
-  stopCount,
-}: {
-  dayIndex: number;
-  photoCount: number;
-  stopCount: number;
-}) {
-  return `
-    <g opacity="0.46" transform="rotate(-7 848 170)">
-      <circle cx="848" cy="170" r="104" fill="none" stroke="#b45309" stroke-width="6" stroke-dasharray="16 12"/>
-      <circle cx="848" cy="170" r="78" fill="none" stroke="#0f766e" stroke-width="5" opacity="0.5"/>
-      <circle cx="848" cy="170" r="52" fill="none" stroke="#b45309" stroke-width="3" opacity="0.18"/>
-      ${renderEmbossedText({
-        x: 848,
-        y: 146,
-        text: `DAY ${dayIndex}`,
-        className: "memoryBadgeTitle",
-      })}
-      ${renderEmbossedText({
-        x: 848,
-        y: 186,
-        text: "MEMORY",
-        className: "memoryBadgeLabel",
-      })}
-      ${renderEmbossedText({
-        x: 848,
-        y: 222,
-        text: `${stopCount} VISITED · ${photoCount} PHOTO`,
-        className: "memoryBadgeMeta",
-      })}
-    </g>
-  `;
-}
-
-function renderDayMemorySvg({
-  route,
-  day,
-  imageData,
-  backgroundId,
-  backgroundImageDataUrl,
-}: {
-  route: MyRoute;
-  day: ReturnType<typeof getCompletedPosterDayGroups>[number];
-  imageData: EmbeddedStopImage[];
-  backgroundId: RouteCompletionPosterBackgroundId;
-  backgroundImageDataUrl?: string | null;
-}) {
-  const items = buildDayMemoryItems(day.stops);
-  const layouts = getPolaroidLayouts(items.length);
-  const rowIndexes = [...new Set(layouts.map((layout) => layout.rowIndex))];
-  const lineYs = rowIndexes.map((rowIndex) => {
-    const rowLayout = layouts.find((layout) => layout.rowIndex === rowIndex);
-
-    return (rowLayout?.y ?? 336) + 16;
-  });
-  const photoCount = day.stops.filter((stop) => stop.verificationPhotoUrl)
-    .length;
-  const subtitle = day.dateLabel
-    ? `${day.dateLabel} · ${day.stops.length}곳`
-    : `${day.stops.length}곳`;
-  const backgroundColors =
-    POSTER_BACKGROUND_COLORS[
-      backgroundId === "custom" ? "paper" : backgroundId
-    ];
-  const customBackground =
-    backgroundId === "custom" && backgroundImageDataUrl
-      ? `<image href="${escapeXml(
-          backgroundImageDataUrl
-        )}" x="-24" y="-24" width="1128" height="1398" preserveAspectRatio="xMidYMid slice" filter="url(#memoryBackgroundBlur)" opacity="0.82"/>
-  <rect width="1080" height="1350" fill="#fffaf0" opacity="0.42"/>`
-      : "";
-
-  return `
-<svg xmlns="http://www.w3.org/2000/svg" width="${ROUTE_COMPLETION_POSTER_WIDTH}" height="${ROUTE_COMPLETION_POSTER_HEIGHT}" viewBox="0 0 ${ROUTE_COMPLETION_POSTER_WIDTH} ${ROUTE_COMPLETION_POSTER_HEIGHT}">
-  <defs>
-    <linearGradient id="memoryPaper" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="${backgroundColors.start}"/>
-      <stop offset="54%" stop-color="${backgroundColors.middle}"/>
-      <stop offset="100%" stop-color="${backgroundColors.end}"/>
-    </linearGradient>
-    <pattern id="memoryGrain" width="36" height="36" patternUnits="userSpaceOnUse">
-      <circle cx="5" cy="8" r="1.4" fill="${backgroundColors.grainPrimary}" opacity="0.08"/>
-      <circle cx="26" cy="19" r="1.1" fill="${backgroundColors.grainSecondary}" opacity="0.06"/>
-      <circle cx="15" cy="31" r="1.2" fill="${backgroundColors.grainTertiary}" opacity="0.05"/>
-    </pattern>
-    <filter id="memoryBackgroundBlur" x="-10%" y="-10%" width="120%" height="120%">
-      <feGaussianBlur stdDeviation="10"/>
-    </filter>
-    <style>
-      text { font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
-      .memoryKicker { font-size: 25px; font-weight: 950; fill: #0f766e; letter-spacing: 4px; }
-      .memoryTitle { font-size: 78px; font-weight: 950; fill: #111827; }
-      .memorySubtitle { font-size: 28px; font-weight: 900; fill: #64748b; }
-      .memoryRoute { font-size: 24px; font-weight: 900; fill: #b45309; letter-spacing: 1px; }
-      .memoryPlaceTitle { font-size: 27px; font-weight: 950; fill: #111827; }
-      .memoryPlaceMeta { font-size: 18px; font-weight: 900; fill: #64748b; }
-      .memoryStamp { font-size: 18px; font-weight: 950; }
-      .memorySummaryValue { font-size: 34px; font-weight: 950; fill: #111827; }
-      .memorySummaryLabel { font-size: 19px; font-weight: 950; fill: #64748b; letter-spacing: 2px; }
-      .memoryBadgeTitle { font-size: 42px; font-weight: 950; letter-spacing: 1px; }
-      .memoryBadgeLabel { font-size: 30px; font-weight: 950; letter-spacing: 3px; }
-      .memoryBadgeMeta { font-size: 17px; font-weight: 900; letter-spacing: 0.5px; }
-      .embossHighlight { fill: #fffefa; opacity: 0.74; }
-      .embossShadow { fill: #6b4f1d; opacity: 0.19; }
-      .embossBase { fill: #6b5b37; opacity: 0.28; }
-      .memoryStatValue { font-size: 46px; font-weight: 950; fill: #111827; }
-      .memoryStatLabel { font-size: 20px; font-weight: 900; fill: #64748b; }
-      .memoryFooter { font-size: 22px; font-weight: 950; fill: #334155; letter-spacing: 3px; }
-    </style>
-  </defs>
-  <rect width="1080" height="1350" fill="url(#memoryPaper)"/>
-  ${customBackground}
-  <rect width="1080" height="1350" fill="url(#memoryGrain)"/>
-  <rect x="36" y="36" width="1008" height="1278" rx="42" fill="none" stroke="#111827" stroke-width="7" opacity="0.9"/>
-  <rect x="56" y="56" width="968" height="1238" rx="32" fill="none" stroke="#ffffff" stroke-width="5" opacity="0.8"/>
-  ${renderWashiTape({ x: 70, y: 152, rotation: -18 })}
-  ${renderWashiTape({ x: 918, y: 274, rotation: 16 })}
-  ${renderWashiTape({ x: 106, y: 1122, rotation: 14 })}
-  ${renderWashiTape({ x: 882, y: 1116, rotation: -12 })}
-
-  <text x="88" y="128" class="memoryKicker">ROUTEONE DAY MEMORY</text>
-  <text x="88" y="204" class="memoryTitle">DAY ${day.dayIndex}</text>
-  <text x="88" y="252" class="memorySubtitle">${escapeXml(subtitle)}</text>
-  <text x="88" y="292" class="memoryRoute">${escapeXml(getRouteTitle(route))}</text>
-  ${renderDayMemoryBadge({
-    dayIndex: day.dayIndex,
-    photoCount,
-    stopCount: day.stops.length,
-  })}
-
-  ${lineYs.map(renderMemoryLine).join("")}
-  ${items
-    .map((item, index) =>
-      renderPolaroidCard({
-        item,
-        layout: layouts[index],
-        imageData,
-      })
-    )
-    .join("")}
-
-  <g>
-    <rect x="170" y="1136" width="740" height="76" rx="24" fill="#fffdf7" stroke="#111827" stroke-width="4" opacity="0.94"/>
-    <line x1="416" y1="1152" x2="416" y2="1196" stroke="#e2e8f0" stroke-width="3"/>
-    <line x1="664" y1="1152" x2="664" y2="1196" stroke="#e2e8f0" stroke-width="3"/>
-    <text x="290" y="1187" class="memoryStatValue" text-anchor="middle">${day.stops.length}</text>
-    <text x="354" y="1185" class="memoryStatLabel" text-anchor="middle">VISITED</text>
-    <text x="538" y="1187" class="memoryStatValue" text-anchor="middle">${photoCount}</text>
-    <text x="604" y="1185" class="memoryStatLabel" text-anchor="middle">PHOTO</text>
-    <text x="784" y="1187" class="memoryStatValue" text-anchor="middle">${day.dayIndex}</text>
-    <text x="834" y="1185" class="memoryStatLabel" text-anchor="middle">DAY</text>
-  </g>
-
-  <text x="540" y="1270" class="memoryFooter" text-anchor="middle">ROUTEONE · MY TRAVEL MEMORY</text>
-</svg>
-`.trim();
 }
 
 function blobToDataUrl(blob: Blob) {
@@ -1567,13 +1125,13 @@ async function getEmbeddedPlaceImageData(route: MyRoute) {
 }
 
 async function getEmbeddedDayMemoryImageData(route: MyRoute) {
-  const stops = getCompletedPosterStops(route);
+  const stops = getCompletedPosterDayGroups(route).flatMap((day) => day.stops);
 
   return Promise.all(
     stops
-      .filter((stop) => getStopMemoryImageUrl(stop))
+      .filter((stop) => Boolean(stop.verificationPhotoUrl))
       .map(async (stop): Promise<EmbeddedStopImage> => {
-        const imageUrl = getStopMemoryImageUrl(stop);
+        const imageUrl = stop.verificationPhotoUrl;
         const cachedDataUrl =
           stop.verificationPhotoUrl
             ? getCachedRouteStopVerificationPhotoDataUrl(stop)
@@ -1590,48 +1148,11 @@ async function getEmbeddedDayMemoryImageData(route: MyRoute) {
 }
 
 function svgToPngDataUrl(svg: string) {
-  return new Promise<string>((resolve, reject) => {
-    const image = new Image();
-    const blob = new Blob([svg], {
-      type: "image/svg+xml;charset=utf-8",
-    });
-    const imageUrl = URL.createObjectURL(blob);
-
-    image.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = ROUTE_COMPLETION_POSTER_WIDTH;
-        canvas.height = ROUTE_COMPLETION_POSTER_HEIGHT;
-
-        const context = canvas.getContext("2d");
-
-        if (!context) {
-          reject(new Error("Canvas context is not available."));
-          return;
-        }
-
-        context.drawImage(
-          image,
-          0,
-          0,
-          ROUTE_COMPLETION_POSTER_WIDTH,
-          ROUTE_COMPLETION_POSTER_HEIGHT
-        );
-        resolve(canvas.toDataURL("image/png"));
-      } catch (error) {
-        reject(error);
-      } finally {
-        URL.revokeObjectURL(imageUrl);
-      }
-    };
-
-    image.onerror = () => {
-      URL.revokeObjectURL(imageUrl);
-      reject(new Error("Poster image could not be rendered."));
-    };
-
-    image.src = imageUrl;
-  });
+  return renderPosterPng(
+    svg,
+    ROUTE_COMPLETION_POSTER_WIDTH,
+    ROUTE_COMPLETION_POSTER_HEIGHT
+  );
 }
 
 export function prepareRouteCompletionPosterBackgroundImage(dataUrl: string) {
@@ -1708,47 +1229,44 @@ export async function createRouteCompletionPosterDataUrl(route: MyRoute) {
 export async function createRouteCompletionPosterCards(
   route: MyRoute,
   backgroundId: RouteCompletionPosterBackgroundId = "paper",
-  backgroundImageDataUrl?: string | null
+  backgroundImageDataUrl?: string | null,
+  themeId: RoutePosterThemeId = "journal"
 ) {
-  const [dayGroups, imageData] = await Promise.all([
-    Promise.resolve(getCompletedPosterDayGroups(route)),
-    getEmbeddedDayMemoryImageData(route),
-  ]);
+  const dayGroups = getCompletedPosterDayGroups(route);
+  const imageData = await getEmbeddedDayMemoryImageData(route);
+  const imagesByStopId = new Map(imageData.map((image) => [image.stopId, image.dataUrl]));
+  const cards: RouteCompletionPosterCard[] = [];
 
-  return Promise.all(
-    dayGroups.map(async (day): Promise<RouteCompletionPosterCard> => {
-      const photoStopIds = new Set(
-        day.stops
-          .filter((stop) => stop.verificationPhotoUrl)
-          .map((stop) => stop.id)
-      );
-      const embeddedPhotoCount = imageData.filter(
-        (image) => photoStopIds.has(image.stopId) && image.dataUrl
-      ).length;
-      const missingPhotoCount = Math.max(
-        0,
-        photoStopIds.size - embeddedPhotoCount
-      );
-      const dataUrl = await svgToPngDataUrl(
-        renderDayMemorySvg({
-          route,
-          day,
-          imageData,
-          backgroundId,
-          backgroundImageDataUrl,
-        })
-      );
-
-      return {
-        dayIndex: day.dayIndex,
-        label: `DAY ${day.dayIndex}`,
-        dataUrl,
-        fileName: getRouteCompletionPosterFileName(route, day.dayIndex),
-        embeddedPhotoCount,
-        missingPhotoCount,
-      };
-    })
-  );
+  // 여러 날의 고해상도 이미지를 한꺼번에 그려 모바일 메모리를 차지하지 않도록 순서대로 만든다.
+  for (const day of dayGroups) {
+    const stops = day.stops.map((stop, index) => ({
+      stopId: stop.id,
+      order: index + 1,
+      title: stop.place.title,
+      subtitle: stop.place.categoryLabel ?? "",
+      verificationLabel: "",
+      imageDataUrl: imagesByStopId.get(stop.id) ?? null,
+    }));
+    const embeddedPhotoCount = stops.filter((stop) => stop.imageDataUrl).length;
+    const missingPhotoCount = day.stops.filter((stop) => stop.verificationPhotoUrl && !imagesByStopId.get(stop.id)).length;
+    for (const page of buildRoutePosterPages(stops)) {
+      const svg = renderRoutePosterTheme({
+        ...page, themeId, backgroundId, backgroundImageDataUrl,
+        title: getRouteTitle(route), dayIndex: day.dayIndex, dateLabel: day.dateLabel,
+        stopCount: day.stops.length, photoCount: embeddedPhotoCount,
+      });
+      const suffix = page.pageCount > 1 ? `-${page.pageIndex}` : "";
+      cards.push({
+        dayIndex: day.dayIndex, pageIndex: page.pageIndex, pageCount: page.pageCount,
+        label: `DAY ${day.dayIndex}${page.pageCount > 1 ? ` · ${page.pageIndex}/${page.pageCount}` : ""}`,
+        dataUrl: await svgToPngDataUrl(svg),
+        fileName: getRouteCompletionPosterFileName(route, day.dayIndex).replace(/\.png$/, `-${themeId}${suffix}.png`),
+        embeddedPhotoCount: page.items.length,
+        missingPhotoCount: page.pageIndex === 1 ? missingPhotoCount : 0,
+      });
+    }
+  }
+  return cards;
 }
 
 export function getRouteCompletionPosterFileName(

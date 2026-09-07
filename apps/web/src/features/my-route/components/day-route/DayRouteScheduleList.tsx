@@ -1,3 +1,9 @@
+/**
+ * 사용 위치: DAY 일정 팝업의 스크롤 영역
+ * 용도: 날짜별 방문 목록과 방문을 마친 날의 여행 카드 진입부를 조합한다.
+ */
+import { Fragment, type ReactNode } from "react";
+import type { MyRouteDay } from "../../types";
 import { MdDirectionsWalk } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
 import DayRouteAccordionItem from "./DayRouteAccordionItem";
@@ -7,9 +13,10 @@ import { getDayRouteStartLocation } from "../../utils/dayRouteStartLocation";
 
 type DayRouteScheduleListProps = {
   controller: DayRoutePopupController["schedule"];
+  renderDayMemory?: (day: MyRouteDay) => ReactNode;
 };
 
-function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
+function DayRouteScheduleList({ controller, renderDayMemory }: DayRouteScheduleListProps) {
   const text = useUiText();
   const todayKey = getTodayDateKey();
   const {
@@ -92,8 +99,8 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
           const nextDay = sortedDays[dayPosition + 1] ?? null;
 
           return (
+            <Fragment key={routeDay.id}>
             <DayRouteAccordionItem
-              key={routeDay.id}
               routeDay={routeDay}
               isExpanded={expandedDayIds.has(routeDay.id)}
               orderedStops={routeDayStops}
@@ -197,6 +204,8 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
               }
               onOpenVerificationPhoto={setVerificationPhotoPreviewTarget}
             />
+            {!isOrderEditing && !visitSavingStopId && expandedDayIds.has(routeDay.id) ? renderDayMemory?.({ ...routeDay, stops: routeDayStops }) : null}
+            </Fragment>
           );
         })}
       </div>

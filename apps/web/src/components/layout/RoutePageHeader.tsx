@@ -1,19 +1,24 @@
+/**
+ * 사용 위치: 내 루트·공유 루트·내 정보 상단
+ * 화면 제목과 설명을 보여주고, 필요한 화면에서는 오른쪽 보조 버튼을 함께 배치한다.
+ */
 import type { ReactNode } from "react";
 
 type RoutePageHeaderProps = {
   icon: ReactNode;
   title: string;
   description?: string;
+  action?: ReactNode;
 };
 
-function RoutePageHeader({ icon, title, description }: RoutePageHeaderProps) {
+function RoutePageHeader({ icon, title, description, action }: RoutePageHeaderProps) {
   return (
     <div className="rounded-2xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40">
       <div className="flex items-center gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
           {icon}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-sm font-bold text-slate-900 dark:text-white">
             {title}
           </h1>
@@ -23,6 +28,7 @@ function RoutePageHeader({ icon, title, description }: RoutePageHeaderProps) {
             </p>
           ) : null}
         </div>
+        {action}
       </div>
     </div>
   );

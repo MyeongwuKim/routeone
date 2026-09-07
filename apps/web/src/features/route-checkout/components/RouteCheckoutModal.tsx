@@ -1,3 +1,7 @@
+/**
+ * 진입 경로: 지도에서 담은 장소 또는 공유 루트 담기 → 일정 만들기
+ * 장소·날짜·템포·출발지·추천 일정 단계를 연결하고, 단계별 안내와 저장 상태를 관리한다.
+ */
 import { useRef, useState, type SyntheticEvent } from "react";
 import { IoArrowBack, IoTrashOutline } from "react-icons/io5";
 import {
@@ -6,6 +10,7 @@ import {
 import { useRouteCheckout } from "../hooks/useRouteCheckout";
 import TodayStartScheduleConfirmDialog from "./TodayStartScheduleConfirmDialog";
 import RouteCheckoutSavingOverlay from "./RouteCheckoutSavingOverlay";
+import RouteCheckoutHelpButton from "./RouteCheckoutHelpButton";
 import PlaceCartItemsStep from "./cart-steps/PlaceCartItemsStep";
 import PlaceCartRouteResultStep from "./cart-steps/PlaceCartRouteResultStep";
 import PlaceCartScheduleStep from "./cart-steps/PlaceCartScheduleStep";
@@ -197,8 +202,8 @@ function RouteCheckoutModalContent({
         onKeyDownCapture={blockInteractionWhileSaving}
         className="flex h-full min-h-0 flex-col"
       >
-        <header className="app-safe-area-header flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3">
-          <div className="flex items-center">
+        <header className="app-safe-area-header flex shrink-0 items-center justify-between gap-2 border-b border-brand-100 px-4 py-3">
+          <div className="flex min-w-0 items-center">
             <button
               type="button"
               aria-label={text.cart.backAria}
@@ -208,36 +213,39 @@ function RouteCheckoutModalContent({
             >
               <IoArrowBack />
             </button>
-            <div className="ml-3">
-              <p className="font-trip text-sm text-brand-700">ROUTE CHECKOUT</p>
+            <div className="ml-3 min-w-0">
+              <p className="font-trip truncate text-sm text-brand-700">ROUTE CHECKOUT</p>
               <p className="text-base font-semibold text-slate-900">
                 {stepIndex} / {totalStepCount}
               </p>
             </div>
           </div>
 
-          {step === "cart" ? (
-                <button
-                  type="button"
-                  onClick={onClearPlaces}
-                  disabled={savedPlaces.length === 0}
-                  aria-label={text.common.clearAll}
-                  title={text.common.clearAll}
-                  className="inline-flex size-9 items-center justify-center rounded-full border border-slate-200 bg-white text-base text-slate-500 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:border-brand-400/20 dark:bg-[#0b211f] dark:text-slate-300 dark:hover:border-rose-400/30 dark:hover:bg-rose-400/10 dark:hover:text-rose-300"
-                >
-                  <IoTrashOutline aria-hidden="true" />
-                </button>
-          ) : canRestartCheckout ? (
-            <button
-              type="button"
-              aria-label={text.cart.restartCheckoutAria}
-              onClick={handleRestartCheckout}
-              disabled={isSavingRoute}
-              className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
-            >
-              {text.cart.restartCheckout}
-            </button>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-2">
+            {step === "cart" ? (
+              <button
+                type="button"
+                onClick={onClearPlaces}
+                disabled={savedPlaces.length === 0}
+                aria-label={text.common.clearAll}
+                title={text.common.clearAll}
+                className="inline-flex size-9 items-center justify-center rounded-full border border-slate-200 bg-white text-base text-slate-500 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:border-brand-400/20 dark:bg-[#0b211f] dark:text-slate-300 dark:hover:border-rose-400/30 dark:hover:bg-rose-400/10 dark:hover:text-rose-300"
+              >
+                <IoTrashOutline aria-hidden="true" />
+              </button>
+            ) : canRestartCheckout ? (
+              <button
+                type="button"
+                aria-label={text.cart.restartCheckoutAria}
+                onClick={handleRestartCheckout}
+                disabled={isSavingRoute}
+                className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
+              >
+                {text.cart.restartCheckout}
+              </button>
+            ) : null}
+            <RouteCheckoutHelpButton step={step} disabled={isSavingRoute} />
+          </div>
         </header>
 
         {appendRouteTitle ? (

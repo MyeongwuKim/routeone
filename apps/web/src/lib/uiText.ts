@@ -1,10 +1,18 @@
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import type { NativeFestivalNotificationKind } from "@/native-bridge";
 import type { AuthProvider } from "@/generated/graphql";
+import type { CartFlowStep } from "@/features/route-checkout/models/routeCheckoutFlow";
 import {
   useAppLanguageStore,
   type AppLanguage,
 } from "@/stores/appLanguageStore";
+
+export type UiHelpGuide = {
+  title: string;
+  description: string;
+  steps: { title: string; description: string }[];
+  note: string;
+};
 
 export type UiText = {
   common: {
@@ -48,6 +56,14 @@ export type UiText = {
     myRoute: string;
     sharedRoute: string;
     myInfo: string;
+  };
+  tabHelp: {
+    label: string;
+    guides: Record<"home" | "myRoute" | "sharedRoute", UiHelpGuide>;
+  };
+  checkoutHelp: {
+    label: string;
+    guides: Record<CartFlowStep, UiHelpGuide>;
   };
   routeShell: {
     defaultLoadingTitle: string;
@@ -404,6 +420,17 @@ export type UiText = {
     posterAlt: (label: string) => string;
     share: string;
     save: string;
+    themeTitle: string;
+    themeJournal: string;
+    dayMemoryReady: (day: number) => string;
+    dayMemoryDescription: string;
+    openDayMemory: string;
+    themePolaroid: string;
+    themeBlocks: string;
+    themePixel: string;
+    themeFantasy: string;
+    applyingStyle: string;
+    styleChangeErrorToast: string;
     backgroundTitle: string;
     backgroundPaper: string;
     backgroundSunset: string;
@@ -1149,6 +1176,192 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       sharedRoute: "공유 루트",
       myInfo: "내 정보",
     },
+    tabHelp: {
+      label: "사용법",
+      guides: {
+        home: {
+          title: "지도 사용법",
+          description: "가고 싶은 장소를 모아 나만의 여행을 준비해요.",
+          steps: [
+            {
+              title: "가고 싶은 장소 찾기",
+              description:
+                "지역과 카테고리를 고르거나 검색창에서 장소를 찾아보세요. 지도 위 핀을 누르면 장소 정보를 볼 수 있어요.",
+            },
+            {
+              title: "마음에 드는 장소 담기",
+              description:
+                "장소 상세에서 담기 버튼을 눌러보세요. 모아둔 장소는 상단 가방 버튼에서 확인할 수 있어요.",
+            },
+            {
+              title: "여행 일정 만들기",
+              description:
+                "담은 장소를 확인한 뒤 여행 날짜, 출발지와 여행 템포를 정해요. 추천된 방문 순서와 시간도 조정할 수 있어요.",
+            },
+            {
+              title: "내 루트에서 이어가기",
+              description:
+                "저장한 일정은 ‘내 루트’에 모여요. 여행 당일에는 일정과 길찾기를 확인하며 방문을 기록해보세요.",
+            },
+          ],
+          note: "장소를 어디서부터 고를지 고민된다면 ‘공유 루트’에서 다른 사람의 여행을 참고해보세요.",
+        },
+        myRoute: {
+          title: "내 루트 사용법",
+          description: "여행 준비부터 방문 기록까지, 하루씩 따라가보세요.",
+          steps: [
+            {
+              title: "DAY별 일정 확인하기",
+              description:
+                "루트에서 원하는 DAY를 열어 장소 순서와 시간을 확인해요. 여행을 시작할 때는 시작 버튼을 눌러주세요.",
+            },
+            {
+              title: "장소에 도착하면 인증하기",
+              description:
+                "장소 옆 위치 아이콘을 눌러 도착을 인증해요. 인증하면 ‘머무는 중’으로 바뀌고 도착시간이 기록돼요.",
+            },
+            {
+              title: "둘러본 뒤 방문 완료하기",
+              description:
+                "이곳에서의 방문을 마쳤다면 체크 버튼을 눌러주세요. 완료시간과 머문 시간이 남고 다음 장소로 이어갈 수 있어요.",
+            },
+            {
+              title: "하루의 여행 카드 남기기",
+              description:
+                "DAY의 모든 장소를 완료하면 ‘여행 카드 보기’를 눌러보세요. 사진과 방문 장소를 모아 꾸미고 저장하거나 공유할 수 있어요.",
+            },
+          ],
+          note: "인증 가능한 거리는 장소마다 달라요. 도착 인증 팝업에 표시된 기준을 확인해주세요. 지난 일정은 사진과 함께 또는 사진 없이 완료 기록을 남길 수 있어요.",
+        },
+        sharedRoute: {
+          title: "공유 루트 사용법",
+          description: "다른 사람의 여행에서 다음 여행의 아이디어를 찾아요.",
+          steps: [
+            {
+              title: "원하는 여행 찾아보기",
+              description:
+                "지역·태그·장소 필터로 루트를 좁혀보세요. 정렬을 바꾸면 최근 공유된 여행이나 인기 있는 여행을 볼 수 있어요.",
+            },
+            {
+              title: "DAY별 장소와 동선 살펴보기",
+              description:
+                "루트를 열면 여행 날짜별 장소와 기록을 볼 수 있어요. ‘루트 지도’에서 방문 순서와 이동 경로도 확인해보세요.",
+            },
+            {
+              title: "마음에 들면 하트 남기기",
+              description:
+                "다시 보고 싶은 루트에 하트를 눌러주세요. ‘내 정보 → 좋아요한 공유 루트’에서 모아볼 수 있어요.",
+            },
+            {
+              title: "원하는 DAY를 내 여행으로 담기",
+              description:
+                "‘담기’를 눌러 가져올 DAY를 선택해요. 담은 장소로 내 여행 날짜와 조건에 맞는 일정을 만들 수 있어요.",
+            },
+          ],
+          note: "내 여행도 모든 방문을 완료한 뒤 ‘공유하기’로 공유 루트에 올릴 수 있어요.",
+        },
+      },
+    },
+    checkoutHelp: {
+      label: "일정 만들기 안내",
+      guides: {
+        cart: {
+          title: "담은 장소 안내",
+          description: "이번 여행에 넣을 장소를 먼저 확인해요.",
+          steps: [
+            {
+              title: "장소 정보 살펴보기",
+              description: "담은 장소를 누르면 상세 정보를 볼 수 있어요. 이번 여행에서 가고 싶은 곳인지 확인해보세요.",
+            },
+            {
+              title: "필요한 장소만 남기기",
+              description: "장소 옆 휴지통은 해당 장소만, 상단 휴지통은 담은 장소 전체를 비워요.",
+            },
+            {
+              title: "장소를 확인했으면 다음으로",
+              description: "장소가 한 곳 이상 있으면 ‘다음’으로 여행 날짜와 시간을 정할 수 있어요. 방문 순서는 추천 일정에서 조정해요.",
+            },
+          ],
+          note: "담은 장소가 없다면 뒤로 돌아가 지도에서 장소를 담아주세요.",
+        },
+        schedule: {
+          title: "날짜·시간 안내",
+          description: "여행 기간과 하루에 사용할 시간을 정해요.",
+          steps: [
+            {
+              title: "시작일과 여행 일수",
+              description: "여행 시작일과 며칠 동안 여행할지 선택해요. 1일은 당일치기이며, 선택한 일수에 맞춰 종료 날짜가 정해져요.",
+            },
+            {
+              title: "매일 시작 시간",
+              description: "각 DAY의 일정을 시작할 기준 시간이에요. 오늘 바로 여행한다면 현재 시간보다 이전으로 잡혀 있지 않은지 확인해주세요.",
+            },
+            {
+              title: "일정 종료 희망시간",
+              description: "하루를 마무리하고 싶은 시각이에요. 장소가 많거나 체류시간이 길면 이 시간을 넘을 수 있으니 추천 일정에서 확인해주세요.",
+            },
+          ],
+          note: "종료 희망시간은 시작 시간보다 늦어야 해요. 추천 일정이 너무 길면 여행 일수나 장소별 체류시간을 조정해보세요.",
+        },
+        tempo: {
+          title: "여행 템포 안내",
+          description: "한 장소에서 얼마나 머물지 정하는 기준이에요.",
+          steps: [
+            {
+              title: "여유롭게",
+              description: "한 장소에서 더 오래 머무는 일정이에요. 천천히 둘러보거나 쉬는 시간을 넉넉히 두고 싶을 때 골라보세요.",
+            },
+            {
+              title: "보통",
+              description: "장소별 기본 체류시간으로 일정을 만들어요. 어느 정도 머물지 아직 정하지 않았다면 이 설정으로 시작해보세요.",
+            },
+            {
+              title: "촘촘하게",
+              description: "장소별 체류시간을 짧게 잡아요. 여러 곳을 둘러보고 싶을 때 선택하고, 꼭 오래 머물 곳은 나중에 시간을 늘려주세요.",
+            },
+          ],
+          note: "템포는 이동 속도가 아니라 머무는 시간을 바꿔요. 추천 일정에서 장소별 체류시간을 직접 조정할 수 있어요.",
+        },
+        "start-location": {
+          title: "출발 위치 안내",
+          description: "실제로 여행을 시작할 지점을 기준으로 루트를 계산해요.",
+          steps: [
+            {
+              title: "출발 마커 위치 확인하기",
+              description: "지도의 S 마커가 출발 위치예요. 여행지의 숙소나 역처럼 실제로 출발할 곳에 있는지 확인해주세요.",
+            },
+            {
+              title: "지도에서 위치 바꾸기",
+              description: "원하는 곳을 탭하거나 S 마커를 드래그해 옮겨요. ‘장소 근처’를 누르면 담은 장소 주변으로 이동해요.",
+            },
+            {
+              title: "출발지를 정했으면 루트 짜기",
+              description: "‘루트 짜기’를 누르면 선택한 출발지와 여행 조건을 바탕으로 추천 일정을 만들어요.",
+            },
+          ],
+          note: "현재 위치와 여행을 시작할 곳이 다를 수 있어요. 출발지가 여행지에서 멀면 이동시간도 길어질 수 있어요.",
+        },
+        result: {
+          title: "추천 일정 안내",
+          description: "방문 순서와 시간을 확인하고 내 여행으로 저장해요.",
+          steps: [
+            {
+              title: "DAY별 일정 확인하기",
+              description: "장소 순서, 이동시간과 체류시간을 확인해요. 종료 희망시간을 넘는 날이 있다면 일정을 조정해주세요.",
+            },
+            {
+              title: "원하는 일정으로 조정하기",
+              description: "‘일정 편집’으로 방문 순서를 바꾸고 장소별 체류시간도 조정할 수 있어요. 수정 후 ‘변경 적용’을 눌러 결과를 확인해요.",
+            },
+            {
+              title: "확인한 일정 저장하기",
+              description: "마지막 저장 버튼을 누르면 내 루트에 일정이 남아요. 기존 루트에 DAY를 추가하는 중이라면 해당 루트에 이어 붙여져요.",
+            },
+          ],
+          note: "이동·체류시간은 예상값이에요. 실제 교통 상황이나 현장 여건을 고려해 여유를 두고 확인해주세요.",
+        },
+      },
+    },
     routeShell: {
       defaultLoadingTitle: "화면 준비 중",
       defaultLoadingDescription: "감자가 화면 조각을 맞추고 있어요.",
@@ -1578,6 +1791,17 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       posterAlt: (label) => `${label} 포스터 미리보기`,
       share: "공유",
       save: "저장",
+      themeTitle: "테마 선택",
+      themeJournal: "여행 기록",
+      dayMemoryReady: (day) => `DAY ${day}의 기록이 모였어요`,
+      dayMemoryDescription: "사진과 다녀온 장소를 한 장씩 남겨보세요.",
+      openDayMemory: "여행 카드 보기",
+      themePolaroid: "폴라로이드",
+      themeBlocks: "블록",
+      themePixel: "픽셀",
+      themeFantasy: "판타지",
+      applyingStyle: "스타일 적용 중...",
+      styleChangeErrorToast: "포토카드 스타일을 바꾸지 못했어요.",
       backgroundTitle: "배경 선택",
       backgroundPaper: "종이",
       backgroundSunset: "노을",
@@ -1587,8 +1811,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       backgroundDawn: "새벽",
       backgroundAlbum: "앨범",
       backgroundChangeErrorToast: "포토카드 배경을 바꾸지 못했어요.",
-      generatingTitle: "감자가 DAY 카드를 변환 중...",
-      generatingDescription: "폴라로이드 사진을 PNG로 굽고 있어요.",
+      generatingTitle: "감자가 DAY 카드를 만드는 중...",
+      generatingDescription: "사진과 여행 기록을 카드에 담고 있어요.",
       generatingFooter: "잠시만 기다려주세요",
       missingPhotoToast: (count) => `사진 ${count}장을 카드에 넣지 못했어요.`,
       createErrorToast: "DAY 포스터를 만들지 못했어요.",
@@ -2448,6 +2672,192 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       sharedRoute: "Shared",
       myInfo: "My Info",
     },
+    tabHelp: {
+      label: "How to use",
+      guides: {
+        home: {
+          title: "Using the map",
+          description: "Collect places you want to visit and plan your trip.",
+          steps: [
+            {
+              title: "Find places to visit",
+              description:
+                "Choose a region and category, or use search. Tap a pin on the map to see details about a place.",
+            },
+            {
+              title: "Add your favorite places",
+              description:
+                "Use the add button in a place’s details. Tap the bag at the top to see the places you’ve collected.",
+            },
+            {
+              title: "Build your itinerary",
+              description:
+                "Review your places, then choose your dates, starting point and travel pace. You can adjust the suggested order and times.",
+            },
+            {
+              title: "Continue in My Routes",
+              description:
+                "Your saved itinerary appears in My Routes. When you travel, follow your schedule and directions, and record your visits.",
+            },
+          ],
+          note: "Need ideas for where to go? Explore other people’s trips in Shared Routes.",
+        },
+        myRoute: {
+          title: "Using My Routes",
+          description: "Follow each day, from planning to recording your visits.",
+          steps: [
+            {
+              title: "Review each DAY",
+              description:
+                "Open a DAY to check your places, order and times. Tap the start button when you’re ready to begin your trip.",
+            },
+            {
+              title: "Check in when you arrive",
+              description:
+                "Tap the location icon beside a place to verify your arrival. Its status changes to Staying, and your arrival time is recorded.",
+            },
+            {
+              title: "Finish your visit",
+              description:
+                "Tap the checkmark when you’re done visiting. Your finish time and stay duration are saved, so you can move on to the next place.",
+            },
+            {
+              title: "Keep a travel card",
+              description:
+                "Complete every place in a DAY, then open its travel cards. Customize your photos and visited places, and save or share the result.",
+            },
+          ],
+          note: "The verification distance varies by place. Check the requirement in the arrival dialog. For past trips, you can record completion with or without a photo.",
+        },
+        sharedRoute: {
+          title: "Using Shared Routes",
+          description: "Find ideas for your next trip in other people’s travels.",
+          steps: [
+            {
+              title: "Find a trip you like",
+              description:
+                "Filter routes by region, tag or place. Change the sort order to browse recent or popular trips.",
+            },
+            {
+              title: "Explore the places and route",
+              description:
+                "Open a trip to see its places and records by DAY. Use Route Map to view the visit order and directions.",
+            },
+            {
+              title: "Tap the heart to keep it",
+              description:
+                "Like routes you’d like to see again. Find them under My Info → Liked Shared Routes.",
+            },
+            {
+              title: "Add a DAY to your own trip",
+              description:
+                "Tap Add and select the DAYs you want. Use those places to build an itinerary for your own dates and preferences.",
+            },
+          ],
+          note: "Once you’ve completed every visit in your own trip, you can post it to Shared Routes with Share.",
+        },
+      },
+    },
+    checkoutHelp: {
+      label: "Building your itinerary",
+      guides: {
+        cart: {
+          title: "Help with saved places",
+          description: "Check which places you want to include in this trip.",
+          steps: [
+            {
+              title: "Review each place",
+              description: "Tap a saved place to open its details and decide whether you want to visit it on this trip.",
+            },
+            {
+              title: "Keep the places you need",
+              description: "The bin beside a place removes that place. The bin in the header clears all saved places.",
+            },
+            {
+              title: "Continue to your travel dates",
+              description: "With at least one place saved, tap Next to set your dates and times. You can adjust the visit order in the recommended itinerary.",
+            },
+          ],
+          note: "If your list is empty, go back to the map and add places first.",
+        },
+        schedule: {
+          title: "Help with dates and times",
+          description: "Set your trip length and the time available each day.",
+          steps: [
+            {
+              title: "Start date and trip length",
+              description: "Choose when your trip begins and how many days it lasts. One day means a day trip; your end date follows from the number of days.",
+            },
+            {
+              title: "Daily start time",
+              description: "This is the starting time used for each DAY. If you’re traveling today, check that it isn’t earlier than the current time.",
+            },
+            {
+              title: "Preferred end time",
+              description: "Choose when you’d like to finish each day. Many places or longer stays can extend the day beyond this time, so review the recommended itinerary.",
+            },
+          ],
+          note: "Your preferred end time must be later than your start time. If the itinerary is too long, adjust the trip length or stay durations.",
+        },
+        tempo: {
+          title: "Help with travel tempo",
+          description: "Your tempo sets how long you stay at each place.",
+          steps: [
+            {
+              title: "Relaxed",
+              description: "Spend longer at each place. Choose this for a slower visit or more time to rest.",
+            },
+            {
+              title: "Balanced",
+              description: "Use the default stay duration for each place. This is a starting point if you’re unsure how long you’ll need.",
+            },
+            {
+              title: "Packed",
+              description: "Plan shorter stays to visit more places. You can later add time at the places you want to explore longer.",
+            },
+          ],
+          note: "Tempo changes stay durations, not travel speed. You can adjust individual stays in the recommended itinerary.",
+        },
+        "start-location": {
+          title: "Help with your start point",
+          description: "The route is calculated from where you’ll actually begin.",
+          steps: [
+            {
+              title: "Check the start marker",
+              description: "The S marker shows your start point. Place it where your trip begins, such as your hotel or a station.",
+            },
+            {
+              title: "Adjust it on the map",
+              description: "Tap a point or drag the S marker to move it. Near places moves it closer to the places you’ve collected.",
+            },
+            {
+              title: "Build your route",
+              description: "Tap Build route to create a recommended itinerary using this start point and your travel preferences.",
+            },
+          ],
+          note: "Your current location may differ from your trip’s start point. Starting far from your destinations can mean longer travel times.",
+        },
+        result: {
+          title: "Help with your itinerary",
+          description: "Review the order and times, then save your trip.",
+          steps: [
+            {
+              title: "Review each DAY",
+              description: "Check the visit order, travel times and stay durations. Adjust any day that runs beyond your preferred end time.",
+            },
+            {
+              title: "Make adjustments",
+              description: "Use Edit itinerary to change the visit order and adjust individual stays. Apply your changes to review the updated result.",
+            },
+            {
+              title: "Save your itinerary",
+              description: "Use the final save button to keep the itinerary in My Routes. If you’re adding DAYs to an existing route, they’ll be appended to that route.",
+            },
+          ],
+          note: "Travel and stay times are estimates. Allow extra time for traffic and conditions at each place.",
+        },
+      },
+    },
     routeShell: {
       defaultLoadingTitle: "Preparing screen",
       defaultLoadingDescription: "Putting the screen together.",
@@ -2902,6 +3312,17 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       posterAlt: (label) => `${label} poster preview`,
       share: "Share",
       save: "Save",
+      themeTitle: "Choose theme",
+      themeJournal: "Journal",
+      dayMemoryReady: (day) => `Your DAY ${day} memories are ready`,
+      dayMemoryDescription: "Keep your photos and visited places in travel cards.",
+      openDayMemory: "View travel cards",
+      themePolaroid: "Polaroid",
+      themeBlocks: "Blocks",
+      themePixel: "Pixel",
+      themeFantasy: "Fantasy",
+      applyingStyle: "Applying style...",
+      styleChangeErrorToast: "Could not change the photo card style.",
       backgroundTitle: "Choose background",
       backgroundPaper: "Paper",
       backgroundSunset: "Sunset",
@@ -2912,7 +3333,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       backgroundAlbum: "Album",
       backgroundChangeErrorToast: "Could not change the photo card background.",
       generatingTitle: "Creating DAY card...",
-      generatingDescription: "Converting polaroid photos into PNG.",
+      generatingDescription: "Putting your photos and travel memories into a card.",
       generatingFooter: "Please wait a moment",
       missingPhotoToast: (count) => `${count} photos could not be added to the card.`,
       createErrorToast: "Could not create the DAY poster.",

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ko">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>포토카드 이미지 렌더링 회귀 검증</title>
+  <style>
+    body { margin: 16px; font: 14px system-ui; background: #eef2ef; }
+    #cards { display: flex; flex-wrap: wrap; gap: 12px; }
+    figure { margin: 0; width: 240px; }
+    img { width: 100%; }
+    pre { white-space: pre-wrap; }
+  </style>
+  <h1>포토카드 이미지 렌더링 검증</h1>
+  <pre id="result">새 이미지로 검증 중...</pre>
+  <div id="cards"></div>
+  <script type="module">
+    // Vite에서 이 페이지를 열어 실제 PNG의 배경·사진 픽셀을 확인한다.
+    // 매 실행마다 다른 이미지로 만들어 iOS 이미지 캐시가 누락 현상을 숨기지 못하게 한다.
+    import {
+      createRouteCompletionPosterCards,
+      prepareRouteCompletionPosterBackgroundImage,
+    } from "/src/features/my-route/routeCompletionPoster.ts";
+    import { getRoutePosterPhotoLayout } from "/src/features/my-route/utils/poster/routePosterLayout.ts";
+
+    const photoColor = [34, 107, 211];
+    const backgroundColor = [225, 28, 138];
+    const baseColors = { journal: [241, 228, 200], polaroid: [241, 228, 200], blocks: [184, 213, 215], pixel: [32, 43, 65], fantasy: [241, 228, 200] };
+    const tints = { journal: 0.6, polaroid: 0.6, blocks: 0.76, pixel: 0.88, fantasy: 0.6 };
+    const runId = crypto.randomUUID();
+    const results = [];
+
+    function makeImage(color) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1080;
+      canvas.height = 1350;
+      const context = canvas.getContext("2d");
+      context.fillStyle = `rgb(${color.join(",")})`;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = `hsl(${Math.random() * 360} 100% 50%)`;
+      context.fillRect(0, 0, 40, 40);
+      context.fillStyle = "white";
+      context.font = "20px sans-serif";
+      context.fillText(crypto.randomUUID(), 50, 30);
+      return canvas.toDataURL("image/png");
+    }
+
+    function makeRoute(count, photoCount = count) {
+      const id = `${runId}-${count}-${crypto.randomUUID()}`;
+      const days = [1, 2].map(dayIndex => ({
+        id: `${id}-day-${dayIndex}`, routeId: id, dayIndex, date: `2026-09-0${6 + dayIndex}`,
+        stops: Array.from({ length: count }, (_, index) => ({
+          id: `${id}-${dayIndex}-${index}`, routeId: id, order: index,
+          dayId: `${id}-day-${dayIndex}`, visitStatus: "VISITED", verificationStatus: "GPS_PHOTO",
+          visitedAt: "2026-09-07T01:00:00Z", verificationPhotoUrl: index < photoCount ? makeImage(photoColor) : null,
+          place: { title: `방문지 ${index + 1}`, categoryLabel: "여행지", lat: 37, lng: 127 },
+        })),
+      }));
+      return { id, status: "COMPLETED", tripDays: 2, travelStartDate: "2026-09-07", travelEndDate: "2026-09-08",
+        completedStopCount: count * 2, totalStopCount: count * 2, days, stops: days.flatMap(day => day.stops) };
+    }
+
+    async function readPixels(dataUrl) {
+      const image = new Image();
+      image.src = dataUrl;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0);
+      return { width: canvas.width, height: canvas.height,
+        at: (x, y) => [...context.getImageData(Math.round(x), Math.round(y), 1, 1).data].slice(0, 3) };
+    }
+
+    const matches = (actual, expected) => actual.every((channel, index) => Math.abs(channel - expected[index]) <= 4);
+    try {
+      for (const theme of ["journal", "polaroid", "fantasy", "blocks", "pixel"]) {
+        for (const [count, photoCount] of [[4, 0], [4, 1], [4, 4], [6, 6]]) {
+          const background = await prepareRouteCompletionPosterBackgroundImage(makeImage(backgroundColor));
+          const cards = await createRouteCompletionPosterCards(makeRoute(count, photoCount), "custom", background, theme);
+          for (const card of cards) {
+            const pixels = await readPixels(card.dataUrl);
+            const expectedBackground = baseColors[theme].map((channel, index) =>
+              Math.round(channel * tints[theme] + backgroundColor[index] * (1 - tints[theme])));
+            const backgroundPixel = pixels.at(20, 430);
+            const visibleVisits = Math.min(6, Math.max(0, count - photoCount - (card.pageIndex - 1) * 6));
+            const visitHeight = visibleVisits ? 94 + Math.ceil(visibleVisits / 2) * 64 : 0;
+            const photoArea = { x: 84, y: 326, width: 912, height: 766 - (visitHeight ? visitHeight + 24 : 0) };
+            const photoPixels = getRoutePosterPhotoLayout(card.embeddedPhotoCount, theme, photoArea).map(rect =>
+              pixels.at(rect.x + rect.width / 2, rect.y + rect.height / 2));
+            const passed = pixels.width === 1080 && pixels.height === 1350
+              && matches(backgroundPixel, expectedBackground)
+              && photoPixels.every(pixel => matches(pixel, photoColor));
+            results.push({ theme, count, photoCount, day: card.dayIndex, passed, backgroundPixel, photoPixels });
+            if (theme === "journal" && count === 4 && photoCount <= 1 && card.dayIndex === 1) {
+              const figure = document.createElement("figure");
+              const caption = document.createElement("figcaption");
+              caption.textContent = `여행 기록 · 방문 4곳 · 사진 ${photoCount}장`;
+              const image = new Image();
+              image.src = card.dataUrl;
+              image.alt = caption.textContent;
+              figure.append(caption, image);
+              document.getElementById("cards").append(figure);
+            }
+          }
+        }
+      }
+      const report = { userAgent: navigator.userAgent, passed: results.every(result => result.passed),
+        checkedCards: results.length, failures: results.filter(result => !result.passed) };
+      document.getElementById("result").textContent = JSON.stringify(report, null, 2);
+      if (new URLSearchParams(location.search).has("report")) {
+        await fetch("/__results", { method: "POST", body: JSON.stringify(report) });
+      }
+    } catch (error) {
+      const report = { error: String(error), checkedCards: results.length };
+      document.getElementById("result").textContent = JSON.stringify(report, null, 2);
+      if (new URLSearchParams(location.search).has("report")) {
+        await fetch("/__results", { method: "POST", body: JSON.stringify(report) });
+      }
+    }
+  </script>
+</html>

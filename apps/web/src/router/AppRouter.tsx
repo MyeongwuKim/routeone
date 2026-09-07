@@ -32,6 +32,7 @@ import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import NotificationSettingsSkeleton from "@/components/feedback/NotificationSettingsSkeleton";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import RoutePageHeader from "@/components/layout/RoutePageHeader";
+import TabHelpButton from "@/components/help/TabHelpButton";
 import NativeNotificationInboxSync from "@/features/notifications/NativeNotificationInboxSync";
 import RouteArrivalNotificationCoordinator from "@/features/my-route/components/RouteArrivalNotificationCoordinator";
 import RouteStartAttemptRecoveryCoordinator from "@/features/my-route/components/RouteStartAttemptRecoveryCoordinator";
@@ -104,6 +105,7 @@ type RoutePageShellProps = {
   icon: ReactNode;
   title: string;
   description?: string;
+  action?: ReactNode;
   children: ReactNode;
 };
 
@@ -111,6 +113,7 @@ function RoutePageShell({
   icon,
   title,
   description,
+  action,
   children,
 }: RoutePageShellProps) {
   return (
@@ -119,6 +122,7 @@ function RoutePageShell({
         icon={icon}
         title={title}
         description={description}
+        action={action}
       />
       <div className="min-h-0 flex-1">
         {children}
@@ -673,6 +677,7 @@ function AppRouter() {
                 icon={<MdOutlineRoute />}
                 title={text.routeShell.myRouteTitle}
                 description={text.routeShell.myRouteDescription}
+                action={<TabHelpButton topic="myRoute" />}
               >
                 {withRouteSuspense(
                   <MyRoutePage />,
@@ -692,6 +697,7 @@ function AppRouter() {
                 icon={<MdOutlineHub />}
                 title={text.routeShell.sharedRouteTitle}
                 description={text.routeShell.sharedRouteDescription}
+                action={<TabHelpButton topic="sharedRoute" />}
               >
                 {withRouteSuspense(
                   <SharedRoutePage />,

@@ -1,3 +1,7 @@
+/**
+ * 사용 위치: 지도 탭의 지도 위 조작 영역
+ * 검색·알림·담은 장소·사용법 버튼과 지역·카테고리 필터, 현재 위치 이동을 제공한다.
+ */
 import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   IoBagHandleOutline,
@@ -10,6 +14,7 @@ import {
 } from "react-icons/io5";
 import { MdCelebration, MdMyLocation } from "react-icons/md";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
+import TabHelpButton from "@/components/help/TabHelpButton";
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import { useUiText } from "@/lib/uiText";
 import { useHomeExploreStore } from "@/stores/homeExploreStore";
@@ -163,9 +168,9 @@ function HomeMapControls({
           type="button"
           aria-label={text.home.openSearchAria}
           onClick={onOpenSearch}
-          className="pointer-events-auto flex h-12 flex-1 items-center rounded-full border border-brand-200 bg-white/95 px-4 text-left shadow-md backdrop-blur"
+          className="pointer-events-auto flex h-12 min-w-0 flex-1 items-center rounded-full border border-brand-200 bg-white/95 px-3 text-left shadow-md backdrop-blur"
         >
-          <span className="text-base text-brand-500">
+          <span className="shrink-0 text-base text-brand-500">
             <IoSearch />
           </span>
           <span className="ml-2 w-full truncate text-sm font-semibold text-slate-400">
@@ -196,6 +201,7 @@ function HomeMapControls({
           <IoBagHandleOutline className="text-sm" />
           <span>{isSavedPlaceCountLoading ? "…" : savedPlaceCount}</span>
         </button>
+        <TabHelpButton topic="home" className="pointer-events-auto ml-2" />
       </div>
 
       <div
