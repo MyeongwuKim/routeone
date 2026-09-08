@@ -342,7 +342,7 @@ export type UiText = {
     plannedStartDiffTitle: string;
     plannedPeriodDescription: (start: string, end: string) => string;
     plannedStartDescription: (start: string, today: string) => string;
-    startTodayDetail: string;
+    startTodayDetail: (startsEarlier: boolean) => string;
     startToday: string;
     startPlannedDate: string;
     chooseDate: string;
@@ -1370,7 +1370,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loginLoadingTitle: "로그인 화면 준비 중",
       loginLoadingDescription: "계정 화면을 맞추고 있어요.",
       myRouteTitle: "나의 여행 루트",
-      myRouteDescription: "현재 루트와 다가오는 일정을 한곳에서 확인해요",
+      myRouteDescription: "진행 중·예정된 여행",
       myRouteLoadingTitle: "감자가 내 루트 확인 중",
       myRouteLoadingDescription: "여행 일정을 정리하고 있어요.",
       sharedRouteTitle: "공유 루트",
@@ -1711,8 +1711,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `예정 기간은 ${start} ~ ${end}였어요.`,
       plannedStartDescription: (start) =>
         `설정된 시작일은 ${start}이에요.`,
-      startTodayDetail:
-        "지금 시작하면 DAY 1 일정만 오늘과 현재 시간 기준으로 다시 계산돼요.",
+      startTodayDetail: (startsEarlier) =>
+        `전체 여행 날짜가 오늘 시작에 맞춰 함께 ${startsEarlier ? "앞당겨져요" : "뒤로 옮겨져요"}. DAY 1은 현재 시간부터 시작하고, 이후 DAY의 계획 시작 시간은 유지돼요.`,
       startToday: "지금 시작하기",
       startPlannedDate: "예정일로 시작",
       chooseDate: "다른 날짜 선택",
@@ -1737,7 +1737,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startTimeReviewDescription: (scheduledLabel, currentLabel) =>
         `계획 시작 시각은 ${scheduledLabel}, 현재 시간은 ${currentLabel}예요.`,
       startTimeReviewDetail:
-        "지금 시작하면 DAY 1 일정만 현재 시간 기준으로 다시 계산돼요.",
+        "DAY 1은 현재 시간부터 시작해요. 이후 DAY의 계획 시작 시간은 유지돼요.",
       emptyTitle: "아직 만든 루트가 없어요",
       emptyDescription: "감자가 빈 여행 가방을 보고 있어요.",
       emptyFooter: "지도에서 장소를 담고 루트를 만들어 보세요.",
@@ -2866,7 +2866,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loginLoadingTitle: "Preparing login",
       loginLoadingDescription: "Getting the account screen ready.",
       myRouteTitle: "My Travel Routes",
-      myRouteDescription: "Check current and upcoming trips in one place",
+      myRouteDescription: "Current & upcoming trips",
       myRouteLoadingTitle: "Checking your routes",
       myRouteLoadingDescription: "Organizing your travel schedule.",
       sharedRouteTitle: "Shared Routes",
@@ -3231,8 +3231,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `The planned period was ${start} - ${end}.`,
       plannedStartDescription: (start) =>
         `The configured start date is ${start}.`,
-      startTodayDetail:
-        "Starting now recalculates only DAY 1 from today and the current time.",
+      startTodayDetail: (startsEarlier) =>
+        `All trip dates move ${startsEarlier ? "earlier" : "later"} together so the trip starts today. DAY 1 starts now; later days keep their planned start times.`,
       startToday: "Start today",
       startPlannedDate: "Start on planned date",
       chooseDate: "Choose another date",
@@ -3257,7 +3257,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startTimeReviewDescription: (scheduledLabel, currentLabel) =>
         `The planned start time is ${scheduledLabel}, and the current time is ${currentLabel}.`,
       startTimeReviewDetail:
-        "Starting now recalculates only DAY 1 from the current time.",
+        "DAY 1 starts now. Later days keep their planned start times.",
       emptyTitle: "No routes yet",
       emptyDescription: "Your travel bag is still empty.",
       emptyFooter: "Save places on the map and create a route.",

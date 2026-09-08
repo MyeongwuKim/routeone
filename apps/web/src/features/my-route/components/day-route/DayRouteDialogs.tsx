@@ -1,3 +1,5 @@
+import RouteVisitProgressNotice from "./RouteVisitProgressNotice";
+import type { RouteVisitProgress } from "../../hooks/useRouteVisitProgress";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import {
   MdAdd,
@@ -850,12 +852,14 @@ export function StayMinutesPopup({
 export function ActualStayMinutesPopup({
   target,
   isSaving,
+  visitProgress,
   onClose,
   onCancelCheckIn,
   onApply,
 }: {
   target: ActualStayMinutesTarget;
   isSaving: boolean;
+  visitProgress: RouteVisitProgress | null;
   onClose: () => void;
   onCancelCheckIn: (target: ActualStayMinutesTarget) => void;
   onApply: (
@@ -908,7 +912,7 @@ export function ActualStayMinutesPopup({
         disabled={isSaving}
         onClick={onClose}
       />
-      <section className="center-modal-panel-enter relative w-full max-w-[340px] rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
+      <section className="center-modal-panel-enter relative max-h-[calc(100dvh-2rem)] w-full max-w-[340px] overflow-y-auto rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="font-trip text-sm text-brand-700">
@@ -984,6 +988,10 @@ export function ActualStayMinutesPopup({
         <p className="mt-3 text-center text-sm font-black text-brand-700">
           {draftMinutes ? formatStayMinutes(draftMinutes, text) : "\u00a0"}
         </p>
+
+        {isSaving && visitProgress ? (
+          <RouteVisitProgressNotice progress={visitProgress} />
+        ) : null}
 
         <div className="mt-5 grid grid-cols-2 gap-2">
           <button

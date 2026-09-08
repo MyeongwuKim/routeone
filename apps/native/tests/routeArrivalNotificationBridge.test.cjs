@@ -23,6 +23,10 @@ assert.equal(compiledBridge.diagnostics.length, 0,
   ).join("\n")
 );
 const bridgeCode = compiledBridge.outputText;
+const timingPath = path.join(__dirname, "../src/webview/bridge/routeVisitTiming.ts");
+const timingCode = ts.transpileModule(readFileSync(timingPath, "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
 const PLACES_KEY = "routeone:native-route-arrival-places:v1";
 const NOTIFIED_KEY = "routeone:native-route-arrival-notified:v2";
 const HISTORY_KEY = "routeone:native-delivered-notification-history:v1";
@@ -140,6 +144,7 @@ function createHarness({
     nativeSyncs: [],
     scheduled: [],
     responses: [],
+    progress: [],
     tasks: new Map(),
     geofenceStarts: [],
     geofencingStatusChecks: 0,
@@ -186,7 +191,14 @@ function createHarness({
     };
   };
   const respond = (_ref, id, payload) => state.responses.push({ id, ...payload });
+  const timingExports = {};
+  vm.runInNewContext(timingCode, {
+    exports: timingExports,
+    __DEV__: false,
+    console,
+  }, { filename: timingPath });
   const mocks = {
+    "./routeVisitTiming": timingExports,
     "@/auth/nativeAuthStorage": {
       isNativeSessionCleanupPending: async () =>
         state.sessionCleanupPending,
@@ -327,6 +339,7 @@ function createHarness({
     "./responses": {
       postNativeDeliveredNotificationHistoryResponse: respond,
       postNativeRouteArrivalNotificationSyncResponse: respond,
+      postNativeRouteArrivalNotificationProgress: (_ref, id, stage) => state.progress.push({ id, stage }),
       postNativeRouteArrivalTestLocationResponse: respond,
     },
     "./locationBridge": {
@@ -1382,4 +1395,30 @@ test("Android 지오펜스와 앱 복귀가 겹쳐도 한 번만 발송한다", 
 
   assert.equal(state.scheduled.length, 1);
   assert.equal(JSON.parse(state.storage.get(HISTORY_KEY)).length, 1);
+});
+
+test("현재 위치 안내는 OS 등록 후 실제 새 위치 조회를 기다릴 때만 보낸다", async () => {
+  const { state, sync } = createHarness();
+  await sync([place], { id: "prepare", checkCurrentPosition: false });
+  assert.deepEqual(state.progress, [
+    { id: "prepare", stage: "queued" },
+    { id: "prepare", stage: "registering" },
+  ]);
+  assert.equal(state.currentPositionRequests.length, 0);
+
+  state.lastKnownPosition = null;
+  const started = createDeferred();
+  const release = createDeferred();
+  state.onPosition = async () => { started.resolve(); await release.promise; };
+  const request = sync([place], { id: "after-save" });
+  await started.promise;
+  assert.equal(state.pending.size, 1);
+  assert.deepEqual(state.progress.at(-1), { id: "after-save", stage: "locating" });
+  assert.equal(state.responses.some(({ id }) => id === "after-save"), false);
+
+  const queuedRequest = sync([place], { id: "next-prepare", checkCurrentPosition: false });
+  assert.deepEqual(state.progress.at(-1), { id: "next-prepare", stage: "queued" });
+  release.resolve();
+  await Promise.all([request, queuedRequest]);
+  assert.deepEqual(state.progress.filter(({ id }) => id === "next-prepare").map(({ stage }) => stage), ["queued", "registering"]);
 });

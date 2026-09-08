@@ -16,6 +16,7 @@ import { canRequireRouteArrivalRegistration } from "./routeStartLocationPermissi
 import {
   nativeBridge,
   type NativeArrivalNotificationPlace,
+  type NativeArrivalNotificationProgress,
 } from "@/native-bridge";
 import { notificationApi } from "@/api/notificationApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
@@ -26,7 +27,10 @@ export type RouteArrivalVisitTransitionPreparation = {
   rollbackRequired: boolean;
 };
 
+type RouteArrivalProgressHandler = (stage: NativeArrivalNotificationProgress) => void;
+
 type RouteArrivalNotificationSyncOptions = {
+  onProgress?: RouteArrivalProgressHandler;
   routeArrivalEnabled?: boolean;
   checkCurrentPosition?: boolean;
   requestPermissions?: boolean;
@@ -115,6 +119,7 @@ function syncNativeRouteArrivalNotificationPlaces(
   places: NativeArrivalNotificationPlace[],
   language: AppLanguage,
   options: {
+    onProgress?: RouteArrivalProgressHandler;
     checkCurrentPosition?: boolean;
     requestPermissions?: boolean;
   } = {}
@@ -124,6 +129,7 @@ function syncNativeRouteArrivalNotificationPlaces(
     // 구버전 네이티브 앱은 장소별 반경을 읽지 못하므로 현재 대상 반경을 함께 전달한다.
     radiusMeters: places[0]?.radiusMeters,
     language,
+    onProgress: options.onProgress,
     checkCurrentPosition: options.checkCurrentPosition,
     requestPermissions: options.requestPermissions,
   });
@@ -189,6 +195,7 @@ export async function syncTodayRouteArrivalNotifications(
       places,
       language,
       {
+        onProgress: options.onProgress,
         checkCurrentPosition: options.checkCurrentPosition,
         requestPermissions: options.requestPermissions,
       }
@@ -244,6 +251,7 @@ export async function prepareRouteArrivalNotificationsForVisitTransition(
   preferredRouteId: string,
   options: {
     routeArrivalEnabled?: boolean;
+    onProgress?: RouteArrivalProgressHandler;
   } = {}
 ): Promise<RouteArrivalVisitTransitionPreparation> {
   if (!nativeBridge.runtime.isAvailable()) {
@@ -290,6 +298,7 @@ export async function prepareRouteArrivalNotificationsForVisitTransition(
         {
           checkCurrentPosition: false,
           requestPermissions: false,
+          onProgress: options.onProgress,
         }
       );
     } catch (error) {
@@ -327,6 +336,7 @@ export async function prepareRouteArrivalNotificationsForVisitTransition(
       language,
       {
         checkCurrentPosition: false,
+        onProgress: options.onProgress,
       }
     );
   } catch (error) {

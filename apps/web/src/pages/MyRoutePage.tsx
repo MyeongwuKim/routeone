@@ -1275,7 +1275,7 @@ function MyRoutePage() {
               formatDateKeyLabel(plannedStartKey, text),
               formatDateKeyLabel(todayKey, text)
             ),
-        detail: text.myRoute.startTodayDetail,
+        detail: text.myRoute.startTodayDetail(todayKey < plannedStartKey),
         actions: [
           {
             label: text.myRoute.startToday,

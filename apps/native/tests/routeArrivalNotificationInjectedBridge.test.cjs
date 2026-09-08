@@ -159,3 +159,44 @@ test("장소 도착 등록 bridge가 권한 요청 생략 옵션을 네이티브
     false
   );
 });
+
+test("진행 안내는 해당 요청에만 전달하고 종료·시간 초과 뒤의 늦은 안내는 무시한다", async () => {
+  const messages = [];
+  const timers = new Map();
+  let timerId = 0;
+  const window = {
+    __ROUTEONE_NATIVE_AUTH_SESSION_ID__: "native-session-1",
+    ReactNativeWebView: { postMessage: (message) => messages.push(JSON.parse(message)) },
+    addEventListener: () => {},
+    setTimeout: (callback, delay) => { timers.set(++timerId, { callback, delay }); return timerId; },
+    clearTimeout: (id) => timers.delete(id),
+    fetch: () => Promise.reject(new Error("Unexpected network access")),
+  };
+  vm.runInNewContext(loadInjectedBridgeScript(), { window, document: createDocument(), URL, Date });
+  const stages = [];
+  const request = window.RouteOneNative.syncRouteArrivalNotifications({
+    places: [],
+    onProgress: (stage) => { stages.push(stage); if (stage === "registering") throw new Error("UI failure"); },
+  });
+  const id = messages.at(-1).id;
+  const progress = window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_PROGRESS__;
+  progress("another-request", "locating");
+  progress(id, "unknown-stage");
+  progress(id, "registering");
+  progress(id, "locating");
+  assert.deepEqual(stages, ["registering", "locating"]);
+  assert.equal([...timers.values()].some(({ delay }) => delay === 60_000), true);
+  window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_SYNC_RESPONSE__(id, {
+    ok: true, activeCount: 0, pendingCount: 0, registrationStatus: "inactive",
+  });
+  await request;
+  progress(id, "queued");
+  assert.deepEqual(stages, ["registering", "locating"]);
+
+  const timedOutRequest = window.RouteOneNative.syncRouteArrivalNotifications({ places: [], onProgress: (stage) => stages.push(stage) });
+  const timedOutId = messages.at(-1).id;
+  [...timers.values()].find(({ delay }) => delay === 60_000).callback();
+  await assert.rejects(timedOutRequest, /응답하지 않았어요/);
+  progress(timedOutId, "locating");
+  assert.deepEqual(stages, ["registering", "locating"]);
+});

@@ -180,6 +180,8 @@ export type NativeRouteReviewNotificationSyncResult = {
 
 export type NativeAuthSessionEndReason = "logout" | "expired";
 
+export type NativeArrivalNotificationProgress = "queued" | "registering" | "locating";
+
 export type NativeBridgeApi = {
   getAppInfo?: () => Promise<NativeAppInfo>;
   getCurrentPosition?: (options?: {
@@ -200,6 +202,7 @@ export type NativeBridgeApi = {
     language?: "ko" | "en";
     checkCurrentPosition?: boolean;
     requestPermissions?: boolean;
+    onProgress?: (stage: NativeArrivalNotificationProgress) => void;
   }) => Promise<NativeArrivalNotificationSyncResult>;
   setRouteArrivalTestLocation?: (options: {
     place: NativeArrivalNotificationPlace | null;

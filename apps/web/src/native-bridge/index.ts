@@ -81,6 +81,7 @@ export type {
 export type {
   NativeAppInfo,
   NativeArrivalNotificationPlace,
+  NativeArrivalNotificationProgress,
   NativeArrivalNotificationSyncResult,
   NativeArrivalTestLocationResult,
   NativeAuthSessionEndReason,

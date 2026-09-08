@@ -1,6 +1,7 @@
 import { getNativeBridgeApi } from "./runtime";
 import type {
   NativeArrivalNotificationPlace,
+  NativeArrivalNotificationProgress,
   NativeFestivalNotification,
   NativeRouteReviewNotification,
 } from "./types";
@@ -11,12 +12,14 @@ export function syncNativeRouteArrivalNotifications({
   language,
   checkCurrentPosition,
   requestPermissions,
+  onProgress,
 }: {
   places: NativeArrivalNotificationPlace[];
   radiusMeters?: number;
   language?: "ko" | "en";
   checkCurrentPosition?: boolean;
   requestPermissions?: boolean;
+  onProgress?: (stage: NativeArrivalNotificationProgress) => void;
 }) {
   const syncNotifications =
     getNativeBridgeApi()?.syncRouteArrivalNotifications;
@@ -28,6 +31,7 @@ export function syncNativeRouteArrivalNotifications({
         language,
         checkCurrentPosition,
         requestPermissions,
+        onProgress,
       })
     : null;
 }

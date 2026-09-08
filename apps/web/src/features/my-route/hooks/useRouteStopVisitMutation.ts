@@ -5,6 +5,7 @@
  * 동작 방식:
  * 방문 완료 전에 현재·다음 도착 알림을 함께 사전 등록하고,
  * API 성공을 화면에 먼저 반영한 뒤 다음 대상의 현재 위치를 다시 확인한다.
+ * 저장 여부와 네이티브가 알려준 진행 단계를 입력창과 장소 카드에 전달한다.
  * 확정 실패만 기존 타깃으로 되돌리고, 결과가 불명확하면 재조회로 확정될 때까지 두 대상을 유지한다.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -62,6 +63,10 @@ import type {
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
 import { isVisitedStop } from "../routeDisplay";
 import { nativeBridge } from "@/native-bridge";
+import {
+  useRouteVisitProgress,
+  type RouteVisitProgressReporter,
+} from "./useRouteVisitProgress";
 
 type UseRouteStopVisitMutationOptions = {
   route: MyRoute;
@@ -90,6 +95,7 @@ type VisitArrivalTransition = {
   isApiOutcomeUnresolved: boolean;
   journalGeneration: number | null;
   releaseLock: () => void;
+  progress: RouteVisitProgressReporter;
 };
 
 type PersistVisitVariables = {
@@ -155,6 +161,8 @@ export function useRouteStopVisitMutation({
   setVisitTimesEditTarget,
 }: UseRouteStopVisitMutationOptions) {
   const queryClient = useQueryClient();
+  const { progress: visitProgress, begin: beginVisitProgress } =
+    useRouteVisitProgress();
   const appLanguage = useAppLanguageStore((state) => state.language);
   const showToast = useUiToastStore((state) => state.showToast);
   const getRouteArrivalEnabled = () =>
@@ -188,6 +196,7 @@ export function useRouteStopVisitMutation({
       isApiOutcomeUnresolved: false,
       journalGeneration: null,
       releaseLock: acquireRouteArrivalTransitionLock(routeId),
+      progress: beginVisitProgress(stopId, !nextVisited),
     };
   };
   const rollbackVisitArrivalTransition = async (
@@ -257,7 +266,7 @@ export function useRouteStopVisitMutation({
         transition.nextRoutes,
         appLanguage,
         routeId,
-        { routeArrivalEnabled }
+        { routeArrivalEnabled, onProgress: transition.progress.onNativeProgress }
       );
 
       if (!preparation.rollbackRequired) {
@@ -312,6 +321,7 @@ export function useRouteStopVisitMutation({
   const markVisitArrivalTransitionRequestDispatched = (
     transition: VisitArrivalTransition
   ) => {
+    transition.progress.setStage("saving");
     if (transition.journalGeneration === null) {
       return;
     }
@@ -337,6 +347,7 @@ export function useRouteStopVisitMutation({
     nextVisited: boolean,
     error: unknown
   ) => {
+    transition.progress.setStage("recovering");
     if (isDefinitiveRouteMutationFailure(error)) {
       const didRollback = await rollbackPreparedVisitArrivalTransition(
         transition,
@@ -378,7 +389,8 @@ export function useRouteStopVisitMutation({
   };
   const syncUpdatedRouteArrivalTarget = async (
     nextRoute: MyRoute,
-    preparation?: RouteArrivalVisitTransitionPreparation | null
+    preparation?: RouteArrivalVisitTransitionPreparation | null,
+    progress?: RouteVisitProgressReporter
   ) => {
     const nextRoutes =
       queryClient.getQueryData<MyRoutesQuery>(MY_ROUTES_QUERY_KEY)?.myRoutes ??
@@ -392,6 +404,7 @@ export function useRouteStopVisitMutation({
         {
           routeArrivalEnabled: getRouteArrivalEnabled(),
           requestPermissions: preparation?.requestPermissions,
+          onProgress: progress?.onNativeProgress,
           requireConfirmedRegistration:
             preparation?.requestPermissions === true,
         }
@@ -517,6 +530,7 @@ export function useRouteStopVisitMutation({
       }
     },
     onSuccess: async ({ data, preparation }, variables) => {
+      variables.arrivalTransition.progress.markSaved();
       const previousStops =
         variables.target.routeDay.id === activeDayId
           ? orderedStops
@@ -541,7 +555,8 @@ export function useRouteStopVisitMutation({
 
       const arrivalSyncError = await syncUpdatedRouteArrivalTarget(
         data.completeRouteStopVisit,
-        preparation
+        preparation,
+        variables.arrivalTransition.progress
       );
 
       if (!arrivalSyncError) {
@@ -572,6 +587,7 @@ export function useRouteStopVisitMutation({
       );
     },
     onSettled: (_data, _error, variables) => {
+      variables.arrivalTransition.progress.finish();
       variables.arrivalTransition.releaseLock();
     },
   });
@@ -661,6 +677,7 @@ export function useRouteStopVisitMutation({
       return { previousRoutes };
     },
     onSuccess: async ({ data, preparation }, variables) => {
+      variables.arrivalTransition?.progress.markSaved();
       const nextDay = data.markRouteStopVisited.days.find(
         (candidateDay) => candidateDay.id === variables.routeDay.id
       );
@@ -698,7 +715,8 @@ export function useRouteStopVisitMutation({
 
       const arrivalSyncError = await syncUpdatedRouteArrivalTarget(
         data.markRouteStopVisited,
-        preparation
+        preparation,
+        variables.arrivalTransition?.progress
       );
 
       if (!arrivalSyncError && variables.arrivalTransition) {
@@ -751,6 +769,7 @@ export function useRouteStopVisitMutation({
       );
     },
     onSettled: (_data, _error, variables) => {
+      variables.arrivalTransition?.progress.finish();
       variables.arrivalTransition?.releaseLock();
     },
   });
@@ -1239,5 +1258,6 @@ export function useRouteStopVisitMutation({
     replaceVerificationPhoto,
     updateVisitTimes,
     visitSavingStopId,
+    visitProgress,
   };
 }

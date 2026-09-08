@@ -459,6 +459,17 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     });
   };
 
+  window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_PROGRESS__ = function handleNativeRouteArrivalNotificationsProgress(id, stage) {
+    var handlers = pendingRouteArrivalNotificationSyncRequests[id];
+    if (!handlers || typeof handlers.onProgress !== "function") return;
+    if (stage !== "queued" && stage !== "registering" && stage !== "locating") return;
+    try {
+      handlers.onProgress(stage);
+    } catch (_) {
+      // 화면의 진행 표시 오류가 알림 등록 요청을 중단하지 않도록 한다.
+    }
+  };
+
   window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_SYNC_RESPONSE__ = function handleNativeRouteArrivalNotificationsSyncResponse(id, payload) {
     var handlers = pendingRouteArrivalNotificationSyncRequests[id];
 
@@ -723,7 +734,8 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
         pendingRouteArrivalNotificationSyncRequests[requestId] = {
           resolve: resolve,
           reject: reject,
-          timeoutId: timeoutId
+          timeoutId: timeoutId,
+          onProgress: options && options.onProgress
         };
 
         window.ReactNativeWebView.postMessage(

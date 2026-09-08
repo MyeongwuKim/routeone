@@ -8,6 +8,7 @@
  * 동작 방식:
  * 전체 desired 목록을 먼저 저장한 뒤 OS 등록 상태와 차이만 반영하고,
  * 권한 없이 시작하거나 빈 목록을 받을 때만 기존 모니터를 해제한다.
+ * 진행 단계는 요청한 화면에 전달하고, 개발 앱에서는 단계별 시간을 기록한다.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
@@ -27,9 +28,11 @@ import {
 import {
   postNativeDeliveredNotificationHistoryResponse,
   postNativeRouteArrivalNotificationSyncResponse,
+  postNativeRouteArrivalNotificationProgress,
   postNativeRouteArrivalTestLocationResponse,
 } from "./responses";
 import { setNativeRouteArrivalTestPosition } from "./locationBridge";
+import { createRouteVisitTiming, type RouteVisitTiming } from "./routeVisitTiming";
 import type {
   NativeAppLanguage,
   NativeDeliveredNotificationHistoryRequest,
@@ -1174,10 +1177,13 @@ async function reconcileLastKnownRouteArrival(
 
 async function reconcileFreshRouteArrival(
   places: StoredRouteArrivalPlace[],
-  radiusMeters: number
+  radiusMeters: number,
+  timing?: RouteVisitTiming
 ) {
   // Do not hold the operation queue while a fresh GPS request is pending.
-  const currentPosition = await getCurrentRouteArrivalPosition();
+  const currentPosition = await (timing
+    ? timing.measure("position.fresh", getCurrentRouteArrivalPosition)
+    : getCurrentRouteArrivalPosition());
   const expectedDateByRegionId = new Map(
     places.map((place) => [
       getRouteArrivalRegionId(place),
@@ -1215,7 +1221,10 @@ async function reconcileKnownRouteArrivalPosition(
   );
 }
 
-async function reconcileStoredRouteArrivalNotificationsInternal() {
+async function reconcileStoredRouteArrivalNotificationsInternal(
+  timing: RouteVisitTiming
+) {
+  const endPreparation = timing.start("recovery.permissions-and-storage");
   const [
     locationPermission,
     backgroundLocationPermission,
@@ -1228,6 +1237,7 @@ async function reconcileStoredRouteArrivalNotificationsInternal() {
       Notifications.getPermissionsAsync(),
       readStoredRouteArrivalPlaces(),
     ]);
+  endPreparation();
 
   if (
     locationPermission.status !== "granted" ||
@@ -1253,6 +1263,7 @@ async function reconcileStoredRouteArrivalNotificationsInternal() {
   }
 
   const places = [...placeByRegionId.values()];
+  const endRegistration = timing.start("os.registration");
 
   if (Platform.OS === "ios") {
     await syncIosRouteArrivalPlaces(places, DEFAULT_GEOFENCE_RADIUS_METERS);
@@ -1280,11 +1291,11 @@ async function reconcileStoredRouteArrivalNotificationsInternal() {
 
     await startRouteArrivalLocationTracking(places[0]?.language ?? "ko");
   }
+  endRegistration();
 
-  const lastKnownPositionReconciliation =
-    await reconcileLastKnownRouteArrival(
-    places,
-    DEFAULT_GEOFENCE_RADIUS_METERS
+  const lastKnownPositionReconciliation = await timing.measure(
+    "position.last-known-and-arrival-check",
+    () => reconcileLastKnownRouteArrival(places, DEFAULT_GEOFENCE_RADIUS_METERS)
   );
 
   if (lastKnownPositionReconciliation !== "inside") {
@@ -1293,7 +1304,8 @@ async function reconcileStoredRouteArrivalNotificationsInternal() {
     try {
       freshPositionReconciliation = await reconcileFreshRouteArrival(
         places,
-        DEFAULT_GEOFENCE_RADIUS_METERS
+        DEFAULT_GEOFENCE_RADIUS_METERS,
+        timing
       );
     } catch (error) {
       if (Platform.OS === "ios") {
@@ -1321,9 +1333,17 @@ async function reconcileStoredRouteArrivalNotificationsInternal() {
 }
 
 export function reconcileStoredRouteArrivalNotifications() {
-  return enqueueRouteArrivalSync(
-    reconcileStoredRouteArrivalNotificationsInternal
-  ).catch((error) => {
+  const timing = createRouteVisitTiming(
+    "arrival.recovery",
+    `recovery-${Date.now()}`
+  );
+  const endQueueWait = timing.start("queue.wait");
+  return enqueueRouteArrivalSync(async () => {
+    endQueueWait();
+    await reconcileStoredRouteArrivalNotificationsInternal(timing);
+    timing.finish();
+  }).catch((error) => {
+    timing.finish("error");
     warnRouteArrivalError("stored targets reconcile failed", error);
     throw error;
   });
@@ -1522,14 +1542,17 @@ export function clearNativeRouteArrivalNotificationsForSession() {
 
 async function syncNativeRouteArrivalNotifications(
   message: NativeRouteArrivalNotificationSyncRequest,
-  webViewRef: WebViewRef
+  webViewRef: WebViewRef,
+  timing: RouteVisitTiming
 ) {
   try {
     const [storedAuthSession, hasPendingSessionCleanup] =
-      await Promise.all([
-        readStoredNativeAuthSession(),
-        isNativeSessionCleanupPending(),
-      ]);
+      await timing.measure("session.read", () =>
+        Promise.all([
+          readStoredNativeAuthSession(),
+          isNativeSessionCleanupPending(),
+        ])
+      );
 
     if (
       hasPendingSessionCleanup ||
@@ -1551,7 +1574,10 @@ async function syncNativeRouteArrivalNotifications(
     );
 
     if (places.length === 0) {
-      await clearNativeRouteArrivalNotificationTargets();
+      await timing.measure(
+        "targets.clear",
+        clearNativeRouteArrivalNotificationTargets
+      );
       console.log(
         "[route-arrival-notifications] sync complete",
         JSON.stringify({
@@ -1569,15 +1595,18 @@ async function syncNativeRouteArrivalNotifications(
         backgroundLocationStatus: "unused",
         notificationStatus: "unused",
       });
+      timing.finish();
       return;
     }
 
     // Persist the desired target before permission prompts or OS registration.
     // A force-quit during either step can then recover the intended target.
     const shouldRequestPermissions = message.requestPermissions !== false;
-    await persistDesiredRouteArrivalPlaces(places, fallbackRadius, {
-      clearExistingMonitors: !shouldRequestPermissions,
-    });
+    await timing.measure("targets.persist", () =>
+      persistDesiredRouteArrivalPlaces(places, fallbackRadius, {
+        clearExistingMonitors: !shouldRequestPermissions,
+      })
+    );
 
     if (!shouldRequestPermissions) {
       console.log(
@@ -1599,11 +1628,12 @@ async function syncNativeRouteArrivalNotifications(
         backgroundLocationStatus: "unused",
         notificationStatus: "unused",
       });
+      timing.finish();
       return;
     }
 
-    const permissionStatus = await ensureRouteArrivalPermissions(
-      message.language
+    const permissionStatus = await timing.measure("permissions.check", () =>
+      ensureRouteArrivalPermissions(message.language)
     );
 
     let activeCount = places.length;
@@ -1618,6 +1648,7 @@ async function syncNativeRouteArrivalNotifications(
     let lastKnownPositionReconciliation:
       | RouteArrivalPositionReconciliation
       | null = null;
+    const endRegistration = timing.start("os.registration");
 
     if (Platform.OS === "ios") {
       await stopRouteArrivalGeofencingIfStarted().catch(() => undefined);
@@ -1659,11 +1690,14 @@ async function syncNativeRouteArrivalNotifications(
       pendingCount = registrationSummary.pendingCount;
       registrationStatus = registrationSummary.registrationStatus;
     }
+    endRegistration();
 
     if (shouldCheckCurrentPosition) {
       try {
         lastKnownPositionReconciliation =
-          await reconcileLastKnownRouteArrival(places, fallbackRadius);
+          await timing.measure("position.last-known-and-arrival-check", () =>
+            reconcileLastKnownRouteArrival(places, fallbackRadius)
+          );
 
         // A location trigger only reacts to an entry transition. When the
         // request is registered while the user is already inside the region,
@@ -1671,8 +1705,9 @@ async function syncNativeRouteArrivalNotifications(
         // This is an optimization after OS registration, so a temporary GPS
         // failure must not turn a valid registration into a sync failure.
         if (lastKnownPositionReconciliation !== "inside") {
+          postNativeRouteArrivalNotificationProgress(webViewRef, message.id, "locating");
           const freshPositionReconciliation =
-            await reconcileFreshRouteArrival(places, fallbackRadius);
+            await reconcileFreshRouteArrival(places, fallbackRadius, timing);
 
           if (freshPositionReconciliation === "unverified") {
             warnRouteArrivalError(
@@ -1719,7 +1754,9 @@ async function syncNativeRouteArrivalNotifications(
       registrationStatus,
       ...permissionStatus,
     });
+    timing.finish();
   } catch (error) {
+    timing.finish("error");
     warnRouteArrivalError("sync failed", error);
     postNativeRouteArrivalNotificationSyncResponse(webViewRef, message.id, {
       ok: false,
@@ -1735,6 +1772,11 @@ export function handleNativeRouteArrivalNotificationSyncRequest(
   message: NativeRouteArrivalNotificationSyncRequest,
   webViewRef: WebViewRef
 ) {
+  const timing = createRouteVisitTiming(
+    message.checkCurrentPosition === false ? "arrival.register-only" : "arrival.sync",
+    message.id
+  );
+  const endQueueWait = timing.start("queue.wait");
   console.log(
     "[route-arrival-notifications] sync request queued",
     JSON.stringify({
@@ -1747,9 +1789,12 @@ export function handleNativeRouteArrivalNotificationSyncRequest(
     })
   );
 
-  return enqueueRouteArrivalSync(() =>
-    syncNativeRouteArrivalNotifications(message, webViewRef)
-  );
+  postNativeRouteArrivalNotificationProgress(webViewRef, message.id, "queued");
+  return enqueueRouteArrivalSync(() => {
+    endQueueWait();
+    postNativeRouteArrivalNotificationProgress(webViewRef, message.id, "registering");
+    return syncNativeRouteArrivalNotifications(message, webViewRef, timing);
+  });
 }
 
 export async function handleNativeRouteArrivalTestLocationRequest(

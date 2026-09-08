@@ -272,6 +272,7 @@ export function useDayRoutePopupController({
     setPhotoPublication: handleSetPhotoPublication,
     updateVisitTimes: handleUpdateVisitTimes,
     visitSavingStopId,
+    visitProgress,
   } = useRouteStopVisitMutation({
     route,
     routeId: route.id,
@@ -1088,6 +1089,7 @@ export function useDayRoutePopupController({
       activeDropTarget,
       draggedStopId: draggedStop?.stop.id ?? null,
       visitSavingStopId,
+      visitProgress: actualStayMinutesTarget ? null : visitProgress,
       staySavingStopId,
       isReadOnly,
       canEditVisitTimes:
@@ -1187,6 +1189,7 @@ export function useDayRoutePopupController({
       visitCompletionTarget,
       visitTimesEditTarget,
       visitSavingStopId,
+      visitProgress,
       visitCompletionMode,
       setVisitCompletionTarget,
       setVisitTimesEditTarget,

@@ -8,6 +8,7 @@ import type {
   NativePhotoResponse,
   NativePushTokenResponse,
   NativeRouteArrivalNotificationSyncResponse,
+  NativeRouteArrivalNotificationProgress,
   NativeRouteArrivalTestLocationResponse,
   NativeRouteReviewNotificationSyncResponse,
   NativeSaveImageResponse,
@@ -89,6 +90,17 @@ export function postNativePhotoUploadResponse(
     "__ROUTEONE_NATIVE_PHOTO_UPLOAD_RESPONSE__",
     id,
     payload
+  );
+}
+
+// 진행 알림은 최종 응답과 분리하며, 이전 WebView에는 전달하지 않는다.
+export function postNativeRouteArrivalNotificationProgress(
+  webViewRef: WebViewRef,
+  id: string,
+  stage: NativeRouteArrivalNotificationProgress
+) {
+  webViewRef.current?.injectJavaScript(
+    `window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_PROGRESS__?.(${JSON.stringify(id)}, ${JSON.stringify(stage)}); true;`
   );
 }
 

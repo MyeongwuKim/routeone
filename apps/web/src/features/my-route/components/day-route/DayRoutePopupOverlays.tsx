@@ -54,6 +54,7 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
     visitCompletionTarget,
     visitTimesEditTarget,
     visitSavingStopId,
+    visitProgress,
     visitCompletionMode,
     setVisitCompletionTarget,
     setVisitTimesEditTarget,
@@ -216,6 +217,7 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
           key={actualStayMinutesTarget.stop.id}
           target={actualStayMinutesTarget}
           isSaving={visitSavingStopId === actualStayMinutesTarget.stop.id}
+          visitProgress={visitProgress?.stopId === actualStayMinutesTarget.stop.id ? visitProgress : null}
           onClose={() => setActualStayMinutesTarget(null)}
           onCancelCheckIn={(target) => {
             void handleCancelStopCheckIn(target);

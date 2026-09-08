@@ -351,13 +351,14 @@ test("방문 완료 전에는 현재 장소와 예상 다음 장소를 함께 �
     `${currentDateKey}T02:00:00.000Z`
   );
 
+  const onProgress = () => {};
   const preparation =
     await arrivalService.prepareRouteArrivalNotificationsForVisitTransition(
       [currentRoute],
       [nextRoute],
       "ko",
       currentRoute.id,
-      { routeArrivalEnabled: true }
+      { routeArrivalEnabled: true, onProgress }
     );
 
   assert.deepEqual(
@@ -365,6 +366,7 @@ test("방문 완료 전에는 현재 장소와 예상 다음 장소를 함께 �
     ["day-1-stop-1", "day-1-stop-2"]
   );
   assert.equal(capturedNativeSyncOptions.checkCurrentPosition, false);
+  assert.equal(capturedNativeSyncOptions.onProgress, onProgress);
   assert.notEqual(capturedNativeSyncOptions.requestPermissions, false);
   assert.deepEqual(preparation, {
     requestPermissions: true,
@@ -386,18 +388,21 @@ test("방문 완료 후에는 다음 장소 반경의 현재 위치를 즉시 �
     `${currentDateKey}T02:00:00.000Z`
   );
 
+  const onProgress = () => {};
   await arrivalService.syncRouteArrivalNotificationsAfterVisitChange(
     [nextRoute],
     "ko",
     nextRoute.id,
     {
       routeArrivalEnabled: true,
+      onProgress,
       requestPermissions: true,
       requireConfirmedRegistration: true,
     }
   );
 
   assert.equal(capturedNativeSyncOptions.checkCurrentPosition, true);
+  assert.equal(capturedNativeSyncOptions.onProgress, onProgress);
   assert.deepEqual(
     capturedNativeSyncOptions.places.map(({ stopId }) => stopId),
     ["day-1-stop-2"]

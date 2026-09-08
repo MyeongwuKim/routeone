@@ -267,6 +267,11 @@ export type NativePhotoUploadResponse =
       error: string;
     };
 
+export type NativeRouteArrivalNotificationProgress =
+  | "queued"
+  | "registering"
+  | "locating";
+
 export type NativeRouteArrivalNotificationSyncResponse =
   | {
       ok: true;

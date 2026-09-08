@@ -3,7 +3,8 @@
  *
  * 용도:
  * 장소의 방문·인증 상태와 체류 시간을 보여주고 방문 처리와 일정 편집을 연결한다.
- * 방문 버튼은 장소명 옆에, 지도와 GPS 테스트 버튼은 카드 하단에 모아 둔다.
+ * 방문 버튼 옆의 로딩과 함께 저장·알림 처리 단계를 카드 안에 안내한다.
+ * 지도와 GPS 테스트 버튼은 카드 하단에 모아 둔다.
  */
 import {
   useEffect,
@@ -41,6 +42,8 @@ import {
   formatStayMinutes,
   getTravelSegmentLabel,
 } from "../../utils/dayRouteFormatting";
+import RouteVisitProgressNotice from "./RouteVisitProgressNotice";
+import type { RouteVisitProgress } from "../../hooks/useRouteVisitProgress";
 import type { TravelSegmentState } from "../../hooks/useDayRouteTravelSegments";
 
 const NOTIFICATION_FOCUS_SCROLL_DELAY_MS = 320;
@@ -96,6 +99,7 @@ type RouteStopNodeProps = {
   isOrderEditing: boolean;
   isDragging: boolean;
   isVisitSaving: boolean;
+  visitProgress: RouteVisitProgress | null;
   isStaySaving: boolean;
   isReadOnly: boolean;
   isActiveDestination: boolean;
@@ -131,6 +135,7 @@ function RouteStopNode({
   isOrderEditing,
   isDragging,
   isVisitSaving,
+  visitProgress,
   isStaySaving,
   isReadOnly,
   isActiveDestination,
@@ -614,6 +619,9 @@ function RouteStopNode({
               ) : null}
             </div>
           </div>
+          {isVisitSaving && visitProgress ? (
+            <RouteVisitProgressNotice progress={visitProgress} />
+          ) : null}
           {!isOrderEditing ? (
             <div className="mt-3 flex items-center gap-2">
               <button

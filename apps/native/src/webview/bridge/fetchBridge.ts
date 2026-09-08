@@ -1,5 +1,11 @@
+/**
+ * 용도:
+ * WebView의 API 요청을 네이티브 네트워크로 전달하고 관광 데이터 캐시를 관리한다.
+ * 개발 앱에서는 GraphQL 작업 이름과 응답 시간을 기록해 저장 지연을 구분한다.
+ */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { postNativeFetchResponse } from "./responses";
+import { createRouteVisitTiming, type RouteVisitTiming } from "./routeVisitTiming";
 import type {
   NativeFetchRequest,
   NativeFetchSuccessResponse,
@@ -290,11 +296,26 @@ export async function handleNativeFetchRequest(
   message: NativeFetchRequest,
   webViewRef: WebViewRef
 ) {
+  let timing: RouteVisitTiming | undefined;
   try {
     const target = resolveNativeFetchTarget(message.url);
 
     if (!target) {
       throw new Error(`Unsupported native fetch url: ${message.url}`);
+    }
+
+    if (__DEV__ && target.url === NATIVE_GRAPHQL_ENDPOINT) {
+      let operation = "anonymous";
+      try {
+        const body: unknown = JSON.parse(message.init?.body ?? "{}");
+        if (isRecord(body) && typeof body.query === "string") {
+          operation =
+            body.query.match(/\b(?:query|mutation)\s+(\w+)/)?.[1] ?? operation;
+        }
+      } catch {
+        // 진단용 이름을 읽지 못해도 원래 요청은 그대로 전송한다.
+      }
+      timing = createRouteVisitTiming(`graphql.${operation}`, message.id);
     }
 
     console.log(
@@ -344,10 +365,14 @@ export async function handleNativeFetchRequest(
       return;
     }
 
-    const response = await fetchNativeTarget(message, target);
+    const response = await (timing
+      ? timing.measure("server.response", () => fetchNativeTarget(message, target))
+      : fetchNativeTarget(message, target));
     console.log(`[routeone-native-fetch] ${response.status} ${target.url}`);
     postNativeFetchResponse(webViewRef, message.id, response);
+    timing?.finish();
   } catch (error) {
+    timing?.finish("error");
     console.warn(
       `[routeone-native-fetch] failed ${message.url}`,
       error instanceof Error ? error.message : error
