@@ -11,7 +11,6 @@ import {
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import { useUiText, type UiText } from "@/lib/uiText";
 import { isVisitedStop } from "../../routeDisplay";
-import type { RouteVisitProgress } from "../../hooks/useRouteVisitProgress";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../../types";
 import type { VerificationPhotoPreviewTarget } from "../../models/dayRouteDialogTypes";
 import {
@@ -172,7 +171,6 @@ type DayRouteAccordionItemProps = {
   activeDropIndex: number | null;
   draggedStopId: string | null;
   visitSavingStopId: string | null;
-  visitProgress: RouteVisitProgress | null;
   staySavingStopId: string | null;
   isReadOnly: boolean;
   canEditVisitTimes: boolean;
@@ -224,7 +222,6 @@ function DayRouteAccordionItem({
   activeDropIndex,
   draggedStopId,
   visitSavingStopId,
-  visitProgress,
   staySavingStopId,
   isReadOnly,
   canEditVisitTimes,
@@ -607,7 +604,6 @@ function DayRouteAccordionItem({
                     isOrderEditing={isOrderEditing}
                     isDragging={draggedStopId === stop.id}
                     isVisitSaving={visitSavingStopId === stop.id}
-                    visitProgress={visitProgress?.stopId === stop.id ? visitProgress : null}
                     isStaySaving={staySavingStopId === stop.id}
                     isReadOnly={isReadOnly}
                     isActiveDestination={activeDestinationStopId === stop.id}

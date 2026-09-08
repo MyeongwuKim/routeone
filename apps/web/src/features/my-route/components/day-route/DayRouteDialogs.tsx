@@ -1,5 +1,3 @@
-import RouteVisitProgressNotice from "./RouteVisitProgressNotice";
-import type { RouteVisitProgress } from "../../hooks/useRouteVisitProgress";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import {
   MdAdd,
@@ -852,14 +850,12 @@ export function StayMinutesPopup({
 export function ActualStayMinutesPopup({
   target,
   isSaving,
-  visitProgress,
   onClose,
   onCancelCheckIn,
   onApply,
 }: {
   target: ActualStayMinutesTarget;
   isSaving: boolean;
-  visitProgress: RouteVisitProgress | null;
   onClose: () => void;
   onCancelCheckIn: (target: ActualStayMinutesTarget) => void;
   onApply: (
@@ -904,7 +900,8 @@ export function ActualStayMinutesPopup({
   };
 
   return (
-    <div className="center-modal-backdrop-enter fixed inset-0 z-[3100] flex items-center justify-center bg-slate-950/35 px-4">
+    <div className="center-modal-backdrop-enter fixed inset-0 z-[3100] bg-slate-950/35">
+      {/* 처리 시작 전부터 하단 안내 공간을 확보해 팝업 위치가 움직이지 않도록 한다. */}
       <button
         type="button"
         aria-label={text.common.close}
@@ -912,139 +909,139 @@ export function ActualStayMinutesPopup({
         disabled={isSaving}
         onClick={onClose}
       />
-      <section className="center-modal-panel-enter relative max-h-[calc(100dvh-2rem)] w-full max-w-[340px] overflow-y-auto rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-trip text-sm text-brand-700">
-              {isCheckedIn ? "STAY CHECK" : "ACTUAL STAY"}
-            </p>
-            <h3 className="mt-1 truncate text-lg font-bold text-slate-900">
-              {isCheckedIn
-                ? text.dayRoute.visitFinishQuestion
-                : text.dayRoute.actualStayQuestion}
-            </h3>
-            <p className="mt-1 truncate text-xs font-bold text-slate-700">
-              {target.stop.place.title}
-            </p>
-            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-              {isCheckedIn && elapsedMinutes
-                ? text.dayRoute.elapsedSinceArrival(
-                    formatStayMinutes(elapsedMinutes, text)
-                  )
-                : text.dayRoute.actualStayDescription}
-            </p>
-          </div>
-          <button
-            type="button"
-            aria-label={text.common.close}
-            disabled={isSaving}
-            onClick={onClose}
-            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 disabled:opacity-40"
-          >
-            <MdClose />
-          </button>
-        </div>
-
-        <div className="mt-5 flex items-center justify-center gap-3">
-          <button
-            type="button"
-            aria-label="머문 시간 줄이기"
-            disabled={isSaving}
-            onClick={() => updateDraftMinutes((draftMinutes ?? 11) - 10)}
-            className="flex size-11 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 disabled:opacity-40"
-          >
-            <MdRemove />
-          </button>
-          <label className="flex min-w-[132px] items-center justify-center gap-1 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3">
-            <input
-              aria-label={text.cart.stayMinuteInputAria}
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={3}
-              value={draftMinutesInput}
+      <div className="pointer-events-none absolute inset-x-4 bottom-[calc(11rem+var(--app-safe-area-bottom))] top-[max(1rem,var(--app-safe-area-top))] flex items-center justify-center">
+        <section className="center-modal-panel-enter pointer-events-auto relative max-h-full w-full max-w-[340px] overflow-y-auto rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-trip text-sm text-brand-700">
+                {isCheckedIn ? "STAY CHECK" : "ACTUAL STAY"}
+              </p>
+              <h3 className="mt-1 truncate text-lg font-bold text-slate-900">
+                {isCheckedIn
+                  ? text.dayRoute.visitFinishQuestion
+                  : text.dayRoute.actualStayQuestion}
+              </h3>
+              <p className="mt-1 truncate text-xs font-bold text-slate-700">
+                {target.stop.place.title}
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                {isCheckedIn && elapsedMinutes
+                  ? text.dayRoute.elapsedSinceArrival(
+                      formatStayMinutes(elapsedMinutes, text)
+                    )
+                  : text.dayRoute.actualStayDescription}
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label={text.common.close}
               disabled={isSaving}
-              onFocus={(event) => event.currentTarget.select()}
-              onChange={(event) =>
-                handleDraftMinutesInputChange(event.target.value)
-              }
-              className="w-16 bg-transparent text-center text-2xl font-black text-slate-900 outline-none disabled:opacity-60"
-            />
-            <span className="text-sm font-bold text-slate-500">
-              {text.cart.minuteUnit}
-            </span>
-          </label>
-          <button
-            type="button"
-            aria-label="머문 시간 늘리기"
-            disabled={isSaving}
-            onClick={() => updateDraftMinutes((draftMinutes ?? 0) + 10)}
-            className="flex size-11 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 disabled:opacity-40"
-          >
-            <MdAdd />
-          </button>
-        </div>
+              onClick={onClose}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 disabled:opacity-40"
+            >
+              <MdClose />
+            </button>
+          </div>
 
-        <p className="mt-3 text-center text-sm font-black text-brand-700">
-          {draftMinutes ? formatStayMinutes(draftMinutes, text) : "\u00a0"}
-        </p>
+          <div className="mt-5 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              aria-label="머문 시간 줄이기"
+              disabled={isSaving}
+              onClick={() => updateDraftMinutes((draftMinutes ?? 11) - 10)}
+              className="flex size-11 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 disabled:opacity-40"
+            >
+              <MdRemove />
+            </button>
+            <label className="flex min-w-[132px] items-center justify-center gap-1 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3">
+              <input
+                aria-label={text.cart.stayMinuteInputAria}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={3}
+                value={draftMinutesInput}
+                disabled={isSaving}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) =>
+                  handleDraftMinutesInputChange(event.target.value)
+                }
+                className="w-16 bg-transparent text-center text-2xl font-black text-slate-900 outline-none disabled:opacity-60"
+              />
+              <span className="text-sm font-bold text-slate-500">
+                {text.cart.minuteUnit}
+              </span>
+            </label>
+            <button
+              type="button"
+              aria-label="머문 시간 늘리기"
+              disabled={isSaving}
+              onClick={() => updateDraftMinutes((draftMinutes ?? 0) + 10)}
+              className="flex size-11 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-700 disabled:opacity-40"
+            >
+              <MdAdd />
+            </button>
+          </div>
 
-        {isSaving && visitProgress ? (
-          <RouteVisitProgressNotice progress={visitProgress} />
-        ) : null}
+          <p className="mt-3 text-center text-sm font-black text-brand-700">
+            {draftMinutes ? formatStayMinutes(draftMinutes, text) : "\u00a0"}
+          </p>
 
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={() => {
-              if (isCheckedIn) {
-                onClose();
-                return;
-              }
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => {
+                if (isCheckedIn) {
+                  onClose();
+                  return;
+                }
 
-              onApply(target, null);
-            }}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
-          >
-            {isCheckedIn
-              ? text.dayRoute.continueStay
-              : text.dayRoute.skipActualStay}
-          </button>
-          <button
-            type="button"
-            disabled={isSaving || !draftMinutes}
-            onClick={() => {
-              if (!draftMinutes) {
-                return;
-              }
+                onApply(target, null);
+              }}
+              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-60"
+            >
+              {isCheckedIn
+                ? text.dayRoute.continueStay
+                : text.dayRoute.skipActualStay}
+            </button>
+            <button
+              type="button"
+              disabled={isSaving || !draftMinutes}
+              onClick={() => {
+                if (!draftMinutes) {
+                  return;
+                }
 
-              onApply(
-                target,
-                isCheckedIn && !isEdited ? null : draftMinutes
-              );
-            }}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
-          >
-            {isSaving ? (
-              <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            ) : null}
-            {isCheckedIn
-              ? text.dayRoute.completeVisit
-              : text.dayRoute.saveActualStay}
-          </button>
-        </div>
-        {isCheckedIn ? (
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={() => onCancelCheckIn(target)}
-            className="mt-3 w-full text-center text-xs font-bold text-slate-400 underline-offset-4 hover:underline disabled:opacity-40"
-          >
-            {text.dayRoute.cancelCheckIn}
-          </button>
-        ) : null}
-      </section>
+                onApply(
+                  target,
+                  isCheckedIn && !isEdited ? null : draftMinutes
+                );
+              }}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+            >
+              {isSaving ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : null}
+              {isSaving
+                ? text.dayRoute.visitProcessing
+                : isCheckedIn
+                  ? text.dayRoute.completeVisit
+                  : text.dayRoute.saveActualStay}
+            </button>
+          </div>
+          {isCheckedIn ? (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => onCancelCheckIn(target)}
+              className="mt-3 w-full text-center text-xs font-bold text-slate-400 underline-offset-4 hover:underline disabled:opacity-40"
+            >
+              {text.dayRoute.cancelCheckIn}
+            </button>
+          ) : null}
+        </section>
+      </div>
     </div>
   );
 }

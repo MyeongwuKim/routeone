@@ -743,6 +743,7 @@ export type UiText = {
     actualStayDescription: string;
     continueStay: string;
     completeVisit: string;
+    visitProcessing: string;
     cancelCheckIn: string;
     skipActualStay: string;
     saveActualStay: string;
@@ -2152,6 +2153,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       actualStayDescription: "실제로 머문 시간을 입력해 주세요.",
       continueStay: "계속 머물기",
       completeVisit: "방문 완료",
+      visitProcessing: "처리 중",
       cancelCheckIn: "도착 인증 취소",
       skipActualStay: "기록 안 함",
       saveActualStay: "저장",
@@ -3675,6 +3677,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       actualStayDescription: "Enter the time you actually spent here.",
       continueStay: "Keep visiting",
       completeVisit: "Complete visit",
+      visitProcessing: "Working…",
       cancelCheckIn: "Cancel arrival",
       skipActualStay: "Skip",
       saveActualStay: "Save",

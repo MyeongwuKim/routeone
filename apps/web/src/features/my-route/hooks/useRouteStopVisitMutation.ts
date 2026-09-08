@@ -65,6 +65,7 @@ import { isVisitedStop } from "../routeDisplay";
 import { nativeBridge } from "@/native-bridge";
 import {
   useRouteVisitProgress,
+  type RouteVisitProgressOperation,
   type RouteVisitProgressReporter,
 } from "./useRouteVisitProgress";
 
@@ -172,7 +173,8 @@ export function useRouteStopVisitMutation({
   const createVisitArrivalTransition = (
     stopId: string,
     visitedAt: string,
-    nextVisited: boolean
+    nextVisited: boolean,
+    operation: RouteVisitProgressOperation
   ): VisitArrivalTransition => {
     const cachedRoutes = queryClient.getQueryData<MyRoutesQuery>(
       MY_ROUTES_QUERY_KEY
@@ -196,7 +198,7 @@ export function useRouteStopVisitMutation({
       isApiOutcomeUnresolved: false,
       journalGeneration: null,
       releaseLock: acquireRouteArrivalTransitionLock(routeId),
-      progress: beginVisitProgress(stopId, !nextVisited),
+      progress: beginVisitProgress(stopId, operation),
     };
   };
   const rollbackVisitArrivalTransition = async (
@@ -694,17 +696,19 @@ export function useRouteStopVisitMutation({
       const successMessage =
         !variables.wasDayCompleted && nextIsDayCompleted
           ? `DAY ${variables.routeDay.dayIndex} 클리어`
-          : variables.nextVisited
-            ? variables.isGpsPhotoVerified
+            : variables.nextVisited
+              ? variables.isGpsPhotoVerified
               ? "사진 인증 완료 처리했어요."
               : variables.isGpsVerified
                 ? "GPS 인증 완료 처리했어요."
                 : variables.hasPhotoRecord
                   ? "사진 기록으로 완료 처리했어요."
                   : "장소를 완료 처리했어요."
-            : variables.stop.checkedInAt
-              ? "도착 인증을 취소했어요."
-              : "완료를 취소했어요.";
+            : isVisitedStop(variables.stop)
+              ? "방문 완료를 취소했어요."
+              : variables.stop.checkedInAt
+                ? "도착 인증을 취소했어요."
+                : "완료를 취소했어요.";
 
       queryClient.setQueryData<MyRoutesQuery>(
         MY_ROUTES_QUERY_KEY,
@@ -761,7 +765,11 @@ export function useRouteStopVisitMutation({
       }
       showToast(
         variables.arrivalTransition?.isApiOutcomeUnresolved
-          ? "완료 여부를 확인 중이에요. 현재·다음 장소 알림은 그대로 유지돼요."
+          ? variables.nextVisited
+            ? "방문 완료 여부를 확인 중이에요. 현재·다음 장소 알림은 그대로 유지돼요."
+            : isVisitedStop(variables.stop)
+              ? "방문 완료 취소 여부를 확인 중이에요. 도착 알림은 그대로 유지돼요."
+              : "도착 인증 취소 여부를 확인 중이에요. 도착 알림은 그대로 유지돼요."
           : error instanceof Error
             ? error.message
             : "완료 상태를 바꾸지 못했어요.",
@@ -1083,7 +1091,12 @@ export function useRouteStopVisitMutation({
         arrivalTransition: createVisitArrivalTransition(
           stop.id,
           visitedAt,
+          nextVisited,
           nextVisited
+            ? "complete"
+            : isVisitedStop(stop)
+              ? "cancel-completion"
+              : "cancel-arrival"
         ),
         routeDay,
         stop,
@@ -1155,7 +1168,8 @@ export function useRouteStopVisitMutation({
           arrivalTransition: createVisitArrivalTransition(
             target.stop.id,
             visitedAt,
-            true
+            true,
+            "complete"
           ),
           target,
           actualStayMinutes,

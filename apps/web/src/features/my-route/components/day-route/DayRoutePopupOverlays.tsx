@@ -1,3 +1,4 @@
+import RouteVisitProgressToast from "./RouteVisitProgressToast";
 import { MdDragIndicator } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
 import PlaceCartRouteMapPopup from "@/features/route-checkout/components/cart-steps/PlaceCartRouteMapPopup";
@@ -85,6 +86,9 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
 
   return (
     <>
+      {visitProgress && visitSavingStopId === visitProgress.stopId ? (
+        <RouteVisitProgressToast key={visitProgress.stopId} progress={visitProgress} />
+      ) : null}
       {mapTargetRouteDay ? (
         <PlaceCartRouteMapPopup
           day={mapTargetRouteDay}
@@ -217,7 +221,6 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
           key={actualStayMinutesTarget.stop.id}
           target={actualStayMinutesTarget}
           isSaving={visitSavingStopId === actualStayMinutesTarget.stop.id}
-          visitProgress={visitProgress?.stopId === actualStayMinutesTarget.stop.id ? visitProgress : null}
           onClose={() => setActualStayMinutesTarget(null)}
           onCancelCheckIn={(target) => {
             void handleCancelStopCheckIn(target);

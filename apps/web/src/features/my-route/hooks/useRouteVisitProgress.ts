@@ -17,11 +17,16 @@ export type RouteVisitProgressStage =
   | "locating"
   | "recovering";
 
+export type RouteVisitProgressOperation =
+  | "complete"
+  | "cancel-completion"
+  | "cancel-arrival";
+
 export type RouteVisitProgress = {
   stopId: string;
   stage: RouteVisitProgressStage;
   isSaved: boolean;
-  isCancellation: boolean;
+  operation: RouteVisitProgressOperation;
 };
 
 export type RouteVisitProgressReporter = {
@@ -37,11 +42,11 @@ export function useRouteVisitProgress() {
 
   const begin = (
     stopId: string,
-    isCancellation: boolean
+    operation: RouteVisitProgressOperation
   ): RouteVisitProgressReporter => {
     const request = Symbol();
     activeRequest.current = request;
-    setProgress({ stopId, stage: "preparing", isSaved: false, isCancellation });
+    setProgress({ stopId, stage: "preparing", isSaved: false, operation });
 
     const update = (
       change: (current: RouteVisitProgress) => RouteVisitProgress

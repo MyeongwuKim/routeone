@@ -1089,7 +1089,6 @@ export function useDayRoutePopupController({
       activeDropTarget,
       draggedStopId: draggedStop?.stop.id ?? null,
       visitSavingStopId,
-      visitProgress: actualStayMinutesTarget ? null : visitProgress,
       staySavingStopId,
       isReadOnly,
       canEditVisitTimes:

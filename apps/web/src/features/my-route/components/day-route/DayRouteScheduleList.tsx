@@ -30,7 +30,6 @@ function DayRouteScheduleList({ controller, renderDayMemory }: DayRouteScheduleL
     activeDropTarget,
     draggedStopId,
     visitSavingStopId,
-    visitProgress,
     staySavingStopId,
     isReadOnly,
     canEditVisitTimes,
@@ -115,7 +114,6 @@ function DayRouteScheduleList({ controller, renderDayMemory }: DayRouteScheduleL
               }
               draggedStopId={draggedStopId}
               visitSavingStopId={visitSavingStopId}
-              visitProgress={visitProgress}
               staySavingStopId={staySavingStopId}
               isReadOnly={isReadOnly}
               canEditVisitTimes={canEditVisitTimes}
