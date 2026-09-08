@@ -873,7 +873,7 @@ test("가까운 다음 장소는 방문 전환 후 현재 반경 안에서 즉�
   );
 });
 
-test("마지막 위치로 도착을 확인하지 못하면 fresh GPS 처리를 마친 뒤 응답한다", { timeout: 1000 }, async () => {
+test("마지막 위치로 도착을 확인하지 못해도 등록 응답 후 fresh GPS를 이어간다", { timeout: 1000 }, async () => {
   const { state, sync } = createHarness();
   state.lastKnownPosition = null;
   const freshPositionStarted = createDeferred();
@@ -887,13 +887,13 @@ test("마지막 위치로 도착을 확인하지 못하면 fresh GPS 처리를 �
 
   const request = sync();
   await freshPositionStarted.promise;
-  assert.equal(state.responses.length, 0);
+  await request;
+  assert.equal(state.responses.at(-1).ok, true);
+  assert.equal(state.scheduled.length, 0);
 
   releaseFreshPosition.resolve();
-  await request;
   await notificationScheduled.promise;
 
-  assert.equal(state.responses.at(-1).ok, true);
   assert.equal(state.currentPositionRequests.length, 1);
   assert.equal(state.scheduled.length, 1);
 });
@@ -921,13 +921,20 @@ for (const [name, createInvalidLastKnownPosition] of [
 
 test("fresh GPS 오차가 반경보다 커도 등록 성공 ACK를 반환한다", async () => {
   const { state, sync } = createHarness();
+  const warningReceived = createDeferred();
   state.lastKnownPosition = null;
   state.currentPosition = {
     ...state.currentPosition,
     accuracyMeters: 301,
   };
+  state.onWarning = (message) => {
+    if (message.includes("current position reconciliation deferred")) {
+      warningReceived.resolve();
+    }
+  };
 
   await sync();
+  await warningReceived.promise;
 
   assert.equal(state.currentPositionRequests.length, 1);
   assert.equal(state.scheduled.length, 0);
@@ -1194,17 +1201,26 @@ for (const duringPositionLookup of [false, true]) {
   test(`iOS 처리 기록 조회가 ${duringPositionLookup ? "GPS 조회 이후" : "등록 전에"} 실패하면 재발송을 보류한다`, async () => {
     const { state, sync } = createHarness();
     const nativeStatusError = new Error("native notification status unavailable");
+    const warningReceived = createDeferred();
     if (duringPositionLookup) {
       state.lastKnownPosition = null;
       state.onPosition = () => { state.nativeStatusError = nativeStatusError; };
+      state.onWarning = (message) => {
+        if (message.includes("current position reconciliation deferred")) {
+          warningReceived.resolve();
+        }
+      };
     } else {
       state.nativeStatusError = nativeStatusError;
     }
     await sync();
+    if (duringPositionLookup) {
+      await warningReceived.promise;
+    }
 
     assert.equal(state.scheduled.length, 0);
     assert.equal(state.storage.has(NOTIFIED_KEY), false);
-    assert.equal(state.responses.at(-1).ok, false);
+    assert.equal(state.responses.at(-1).ok, duringPositionLookup);
 
     state.nativeStatusError = null;
     state.onPosition = null;
@@ -1326,7 +1342,7 @@ test("Android 복구 시 저장된 타깃으로 geofence와 location tracking을
   );
   assert.equal(state.geofenceStarts[0].regions.length, 1);
   assert.equal(state.geofenceStarts[0].regions[0].identifier, place.id);
-  assert.equal(state.geofenceStarts[0].regions[0].radius, 300);
+  assert.equal(state.geofenceStarts[0].regions[0].radius, 150);
   assert.equal(state.geofencingStatusChecks, 1);
   assert.equal(state.geofencingStarted, true);
   assert.equal(state.locationTrackingStarts.length, 1);
@@ -1397,7 +1413,7 @@ test("Android 지오펜스와 앱 복귀가 겹쳐도 한 번만 발송한다", 
   assert.equal(JSON.parse(state.storage.get(HISTORY_KEY)).length, 1);
 });
 
-test("현재 위치 안내는 OS 등록 후 실제 새 위치 조회를 기다릴 때만 보낸다", async () => {
+test("OS 등록은 새 위치 조회를 기다리지 않고 응답한다", async () => {
   const { state, sync } = createHarness();
   await sync([place], { id: "prepare", checkCurrentPosition: false });
   assert.deepEqual(state.progress, [
@@ -1413,12 +1429,11 @@ test("현재 위치 안내는 OS 등록 후 실제 새 위치 조회를 기다�
   const request = sync([place], { id: "after-save" });
   await started.promise;
   assert.equal(state.pending.size, 1);
-  assert.deepEqual(state.progress.at(-1), { id: "after-save", stage: "locating" });
-  assert.equal(state.responses.some(({ id }) => id === "after-save"), false);
+  await request;
+  assert.equal(state.responses.some(({ id }) => id === "after-save"), true);
 
   const queuedRequest = sync([place], { id: "next-prepare", checkCurrentPosition: false });
-  assert.deepEqual(state.progress.at(-1), { id: "next-prepare", stage: "queued" });
-  release.resolve();
-  await Promise.all([request, queuedRequest]);
+  await queuedRequest;
   assert.deepEqual(state.progress.filter(({ id }) => id === "next-prepare").map(({ stage }) => stage), ["queued", "registering"]);
+  release.resolve();
 });

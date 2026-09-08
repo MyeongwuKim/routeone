@@ -4,7 +4,7 @@ import Foundation
 import UserNotifications
 
 private let routeArrivalNotificationType = "route-arrival"
-private let minimumRouteArrivalMonitoringRadiusMeters = 300.0
+private let minimumRouteArrivalMonitoringRadiusMeters = 150.0
 private let maximumRouteArrivalMonitoringRadiusMeters = 700.0
 private let routeArrivalNotificationLedgerKey = "routeone:arrival-notification-ledger:v1"
 private let routeArrivalNotificationOperationGate = RouteArrivalNotificationOperationGate()

@@ -122,7 +122,7 @@ for (const { name, place, radius } of [
     name: "저장된 100m 정책이 있는 야외 장소",
     place: {
       categoryName: "국립공원",
-      notificationRadiusMeters: 300,
+      notificationRadiusMeters: 150,
       verificationRadiusMeters: 100,
     },
     radius: 100,

@@ -248,8 +248,8 @@ test("서버 시작 전에는 오늘 첫 장소만 사전 등록한다", async (
     capturedNativeSyncOptions.places.map(({ stopId }) => stopId),
     ["day-1-stop-1"]
   );
-  assert.equal(capturedNativeSyncOptions.places[0].radiusMeters, 300);
-  assert.equal(capturedNativeSyncOptions.radiusMeters, 300);
+  assert.equal(capturedNativeSyncOptions.places[0].radiusMeters, 150);
+  assert.equal(capturedNativeSyncOptions.radiusMeters, 150);
 });
 
 test("넓은 야외 장소는 네이티브 도착 알림 반경을 500m로 전달한다", async () => {

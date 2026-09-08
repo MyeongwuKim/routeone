@@ -19,14 +19,14 @@ test("공원과 해변 같은 넓은 야외 장소는 알림 500m, 인증 300m�
   );
 });
 
-test("일반 관광지와 음식점은 알림 300m, 인증 100m로 계산한다", () => {
+test("일반 관광지와 음식점은 알림 150m, 인증 100m로 계산한다", () => {
   assert.deepEqual(
     derivePlaceVerificationPolicy({
       contentTypeId: "14",
       categoryName: "미술관",
     }),
     {
-      notificationRadiusMeters: 300,
+      notificationRadiusMeters: 150,
       verificationRadiusMeters: 100,
     }
   );
@@ -36,7 +36,7 @@ test("일반 관광지와 음식점은 알림 300m, 인증 100m로 계산한다"
       categoryName: "음식점",
     }),
     {
-      notificationRadiusMeters: 300,
+      notificationRadiusMeters: 150,
       verificationRadiusMeters: 100,
     }
   );
@@ -47,11 +47,11 @@ test("저장된 루트는 현재 분류 계산보다 스냅샷 인증 정책을 
     resolvePlaceVerificationPolicy({
       contentTypeId: "12",
       categoryName: "공원",
-      notificationRadiusMeters: 300,
+      notificationRadiusMeters: 150,
       verificationRadiusMeters: 100,
     }),
     {
-      notificationRadiusMeters: 300,
+      notificationRadiusMeters: 150,
       verificationRadiusMeters: 100,
     }
   );
@@ -77,7 +77,7 @@ test("루트 장소 스냅샷에 세부 분류 코드와 계산된 인증 정책
   assert.equal(snapshot.verificationRadiusMeters, 300);
 });
 
-test("기존 장소 스냅샷을 복제할 때 저장 당시 인증 정책을 유지한다", () => {
+test("현재 장소 스냅샷을 복제할 때 저장 당시 인증 정책을 유지한다", () => {
   const snapshot = normalizePlaceSnapshot({
     provider: "TOUR_API",
     contentTypeId: "12",
@@ -85,12 +85,27 @@ test("기존 장소 스냅샷을 복제할 때 저장 당시 인증 정책을 �
     lat: 37,
     lng: 127,
     categoryName: "공원",
-    notificationRadiusMeters: 300,
+    notificationRadiusMeters: 150,
     verificationRadiusMeters: 100,
   });
 
-  assert.equal(snapshot.notificationRadiusMeters, 300);
+  assert.equal(snapshot.notificationRadiusMeters, 150);
   assert.equal(snapshot.verificationRadiusMeters, 100);
+});
+
+test("기존 일반 장소의 300m 알림 반경은 현재 150m 정책으로 보정한다", () => {
+  assert.deepEqual(
+    resolvePlaceVerificationPolicy({
+      contentTypeId: "39",
+      categoryName: "음식점",
+      notificationRadiusMeters: 300,
+      verificationRadiusMeters: 100,
+    }),
+    {
+      notificationRadiusMeters: 150,
+      verificationRadiusMeters: 100,
+    }
+  );
 });
 
 test("이전 500m 인증 스냅샷은 현재 장소 분류 정책으로 보정한다", () => {

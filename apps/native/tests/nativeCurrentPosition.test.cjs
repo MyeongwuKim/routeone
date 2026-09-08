@@ -85,7 +85,7 @@ function createVisitService(harness, getCurrentPosition) {
   return loadModule("../../web/src/features/my-route/services/visitPhotoService.ts", {
     "@/lib/placeVerificationPolicy": {
       resolvePlaceVerificationPolicy: () => ({
-        notificationRadiusMeters: 300,
+        notificationRadiusMeters: 150,
         verificationRadiusMeters: 100,
       }),
     },

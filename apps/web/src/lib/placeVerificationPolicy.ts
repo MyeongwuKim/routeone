@@ -3,11 +3,11 @@
  * 루트 장소에 저장된 도착 알림·방문 인증 반경을 함께 사용한다.
  *
  * 동작 방식:
- * 저장된 정책이 있으면 그대로 사용하고,
- * 기존 루트는 세부 카테고리명으로 동일한 기본값을 계산한다.
+ * 현재 정책으로 저장된 값은 유지하고,
+ * 이전 정책 값은 세부 카테고리명으로 현재 기본값을 다시 계산한다.
  */
 
-export const DEFAULT_NOTIFICATION_RADIUS_METERS = 300;
+export const DEFAULT_NOTIFICATION_RADIUS_METERS = 150;
 export const DEFAULT_GPS_VERIFICATION_RADIUS_METERS = 100;
 export const LARGE_OUTDOOR_NOTIFICATION_RADIUS_METERS = 500;
 export const LARGE_OUTDOOR_GPS_VERIFICATION_RADIUS_METERS = 300;
@@ -62,6 +62,7 @@ export function resolvePlaceVerificationPolicy(
   const storedNotificationRadius = normalizeStoredRadius(
     place.notificationRadiusMeters,
     [
+      // 이전 일반 장소 기본값 300m는 제외해 기존 루트도 150m로 보정한다.
       DEFAULT_NOTIFICATION_RADIUS_METERS,
       LARGE_OUTDOOR_NOTIFICATION_RADIUS_METERS,
     ]

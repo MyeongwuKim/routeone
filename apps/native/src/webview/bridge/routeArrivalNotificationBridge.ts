@@ -83,8 +83,8 @@ const MAX_IOS_GEOFENCE_REGION_COUNT = 20;
 const MAX_DELIVERED_NOTIFICATION_HISTORY_COUNT = 120;
 const DELIVERED_NOTIFICATION_HISTORY_TTL_MS =
   1000 * 60 * 60 * 24 * 180;
-const DEFAULT_GEOFENCE_RADIUS_METERS = 300;
-const MIN_GEOFENCE_RADIUS_METERS = 300;
+const DEFAULT_GEOFENCE_RADIUS_METERS = 150;
+const MIN_GEOFENCE_RADIUS_METERS = 150;
 const MAX_GEOFENCE_RADIUS_METERS = 500;
 const ROUTE_ARRIVAL_LAST_KNOWN_MAX_AGE_MS = 15_000;
 const ROUTE_ARRIVAL_LAST_KNOWN_REQUIRED_ACCURACY_METERS = 100;
@@ -1208,6 +1208,42 @@ async function reconcileFreshRouteArrival(
   );
 }
 
+function reconcileFreshRouteArrivalInBackground(
+  places: StoredRouteArrivalPlace[],
+  radiusMeters: number,
+  requestId: string
+) {
+  const timing = createRouteVisitTiming(
+    "arrival.position-reconcile",
+    requestId
+  );
+
+  void reconcileFreshRouteArrival(places, radiusMeters, timing)
+    .then((result) => {
+      if (result !== "unverified") {
+        timing.finish();
+        return;
+      }
+
+      const error = new Error(
+        places[0]?.language === "en"
+          ? "The device could not verify its current position accurately enough."
+          : "현재 위치 정확도가 충분하지 않아요."
+      );
+      timing.finish("error");
+      warnRouteArrivalError("current position reconciliation deferred", error);
+    })
+    .catch((error) => {
+      timing.finish("error");
+      warnRouteArrivalError(
+        "current position reconciliation deferred",
+        error instanceof RouteArrivalCurrentPositionLookupError
+          ? error.originalError
+          : error
+      );
+    });
+}
+
 async function reconcileKnownRouteArrivalPosition(
   places: StoredRouteArrivalPlace[],
   radiusMeters: number,
@@ -1645,9 +1681,6 @@ async function syncNativeRouteArrivalNotifications(
       | "unsupported" = "registered";
     const shouldCheckCurrentPosition =
       message.checkCurrentPosition !== false;
-    let lastKnownPositionReconciliation:
-      | RouteArrivalPositionReconciliation
-      | null = null;
     const endRegistration = timing.start("os.registration");
 
     if (Platform.OS === "ios") {
@@ -1693,41 +1726,20 @@ async function syncNativeRouteArrivalNotifications(
     endRegistration();
 
     if (shouldCheckCurrentPosition) {
-      try {
-        lastKnownPositionReconciliation =
-          await timing.measure("position.last-known-and-arrival-check", () =>
-            reconcileLastKnownRouteArrival(places, fallbackRadius)
-          );
+      const lastKnownPositionReconciliation = await timing.measure(
+        "position.last-known-and-arrival-check",
+        () => reconcileLastKnownRouteArrival(places, fallbackRadius)
+      );
 
-        // A location trigger only reacts to an entry transition. When the
-        // request is registered while the user is already inside the region,
-        // try a fresh position so the alert can be delivered immediately.
-        // This is an optimization after OS registration, so a temporary GPS
-        // failure must not turn a valid registration into a sync failure.
-        if (lastKnownPositionReconciliation !== "inside") {
-          postNativeRouteArrivalNotificationProgress(webViewRef, message.id, "locating");
-          const freshPositionReconciliation =
-            await reconcileFreshRouteArrival(places, fallbackRadius, timing);
-
-          if (freshPositionReconciliation === "unverified") {
-            warnRouteArrivalError(
-              "current position reconciliation deferred",
-              new Error(
-                message.language === "en"
-                  ? "The device could not verify its current position accurately enough."
-                  : "현재 위치 정확도가 충분하지 않아요."
-              )
-            );
-          }
-        }
-      } catch (error) {
-        if (!(error instanceof RouteArrivalCurrentPositionLookupError)) {
-          throw error;
-        }
-
-        warnRouteArrivalError(
-          "current position reconciliation deferred",
-          error.originalError
+      // iOS location triggers only react to an entry transition. A fresh
+      // position still covers registration while already inside the region,
+      // but it is a best-effort check after OS registration and must not keep
+      // visit saving or the following arrival-target update waiting.
+      if (lastKnownPositionReconciliation !== "inside") {
+        reconcileFreshRouteArrivalInBackground(
+          places,
+          fallbackRadius,
+          `${message.id}:post-registration`
         );
       }
     }

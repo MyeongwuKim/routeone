@@ -4,10 +4,10 @@
  *
  * 동작 방식:
  * 새 장소는 세부 분류명으로 정책을 계산하고,
- * 저장된 루트는 스냅샷 정책을 우선 사용해 생성 당시 기준을 유지한다.
+ * 이전 정책으로 저장된 루트는 현재 분류 기준으로 반경을 보정한다.
  */
 
-export const DEFAULT_NOTIFICATION_RADIUS_METERS = 300;
+export const DEFAULT_NOTIFICATION_RADIUS_METERS = 150;
 export const DEFAULT_GPS_VERIFICATION_RADIUS_METERS = 100;
 export const LARGE_OUTDOOR_NOTIFICATION_RADIUS_METERS = 500;
 export const LARGE_OUTDOOR_GPS_VERIFICATION_RADIUS_METERS = 300;
@@ -65,6 +65,7 @@ export function resolvePlaceVerificationPolicy(
   const storedNotificationRadius = normalizeStoredRadius(
     place.notificationRadiusMeters,
     [
+      // 이전 일반 장소 기본값 300m는 제외해 기존 루트도 150m로 보정한다.
       DEFAULT_NOTIFICATION_RADIUS_METERS,
       LARGE_OUTDOOR_NOTIFICATION_RADIUS_METERS,
     ]
