@@ -4,7 +4,7 @@
  * 용도:
  * 장소의 방문·인증 상태와 체류 시간을 보여주고 방문 처리와 일정 편집을 연결한다.
  * 방문 처리 중에는 버튼을 잠그고, 자세한 진행 상태는 화면 하단에서 안내한다.
- * 지도와 GPS 테스트 버튼은 카드 하단에 모아 둔다.
+ * 상단에는 상태만 표시하고, 사진·지도·GPS 테스트는 카드 하단의 액션 영역에서 제공한다.
  */
 import {
   useEffect,
@@ -22,13 +22,9 @@ import {
   MdDeleteOutline,
   MdEdit,
   MdFlag,
-  MdGpsFixed,
   MdImage,
-  MdLockOutline,
   MdMyLocation,
-  MdMap,
   MdOutlinePlace,
-  MdPublic,
   MdUndo,
 } from "react-icons/md";
 import {
@@ -43,6 +39,8 @@ import {
   getTravelSegmentLabel,
 } from "../../utils/dayRouteFormatting";
 import type { TravelSegmentState } from "../../hooks/useDayRouteTravelSegments";
+
+import RouteStopActions, { type RouteStopPhotoAction } from "./RouteStopActions";
 
 const NOTIFICATION_FOCUS_SCROLL_DELAY_MS = 320;
 
@@ -188,6 +186,33 @@ function RouteStopNode({
     enableVerificationPhotoPreview && Boolean(stop.verificationPhotoUrl);
   const canAddVerificationPhoto =
     canEditVerificationPhoto && isVisited && !stop.verificationPhotoUrl;
+  const photoAction: RouteStopPhotoAction | null =
+    canOpenVerificationPhoto || canAddVerificationPhoto
+      ? {
+          label: canOpenVerificationPhoto
+            ? text.dayRoute.viewVisitPhoto
+            : text.dayRoute.addVisitPhoto,
+          ariaLabel: canOpenVerificationPhoto
+            ? text.dayRoute.viewVerificationPhotoAria(
+                stop.place.title,
+                verificationBadge?.previewLabel ?? text.dayRoute.photoRecord
+              )
+            : `${stop.place.title} ${text.dayRoute.addVisitPhoto}`,
+          photoUrl: canOpenVerificationPhoto
+            ? stop.verificationPhotoUrl ?? null
+            : null,
+          publicationStatus:
+            stop.verificationPhotoPublicationConsent === true ||
+            stop.verificationPhotoPublishedAt
+              ? "public"
+              : stop.verificationPhotoPublicationConsent === false
+                ? "private"
+                : null,
+          onClick: canOpenVerificationPhoto
+            ? () => onOpenVerificationPhoto(stop)
+            : () => onEditVerificationPhoto(stop),
+        }
+      : null;
   const stayTimeClass =
     "inline-flex items-center justify-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700 ring-1 ring-brand-100 disabled:opacity-45 dark:bg-slate-950 dark:text-brand-100 dark:ring-brand-400/25";
 
@@ -258,6 +283,7 @@ function RouteStopNode({
           }}
           onKeyDown={(event) => {
             if (
+              event.target !== event.currentTarget ||
               isOrderEditing ||
               (event.key !== "Enter" && event.key !== " ")
             ) {
@@ -417,80 +443,18 @@ function RouteStopNode({
                   {statusLabel}
                 </span>
                 {verificationBadge ? (
-                  canOpenVerificationPhoto ? (
-                    <button
-                      type="button"
-                      aria-label={text.dayRoute.viewVerificationPhotoAria(
-                        stop.place.title,
-                        verificationBadge.previewLabel
-                      )}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onOpenVerificationPhoto(stop);
-                      }}
-                      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full py-1 pl-1 pr-2.5 text-[11px] font-black ring-1 transition active:scale-95 ${verificationBadge.className}`}
-                    >
-                      <span className="relative size-5 shrink-0 rounded-full bg-white ring-1 ring-white/80">
-                        <img
-                          src={stop.verificationPhotoUrl ?? ""}
-                          alt=""
-                          className="h-full w-full rounded-full object-cover"
-                          loading="lazy"
-                        />
-                        {stop.verificationPhotoPublicationConsent === true ||
-                        stop.verificationPhotoPublishedAt ? (
-                          <span
-                            aria-label={text.dayRoute.photoPublished}
-                            className="absolute -bottom-0.5 -right-0.5 flex size-3 items-center justify-center rounded-full bg-emerald-700 text-[8px] text-white ring-1 ring-white dark:ring-[#0b211f]"
-                          >
-                            <MdPublic />
-                          </span>
-                        ) : stop.verificationPhotoPublicationConsent === false ? (
-                          <span
-                            aria-label={text.dayRoute.photoPrivate}
-                            className="absolute -bottom-0.5 -right-0.5 flex size-3 items-center justify-center rounded-full bg-slate-600 text-[8px] text-white ring-1 ring-white dark:ring-[#0b211f]"
-                          >
-                            <MdLockOutline />
-                          </span>
-                        ) : null}
-                      </span>
-                      {verificationBadge.kind === "gps-photo" ? (
-                        <MdMyLocation className="text-sm" />
-                      ) : null}
-                      {verificationBadge.label}
-                    </button>
-                  ) : (
-                    <span
-                      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${verificationBadge.className}`}
-                    >
-                      {verificationBadge.kind === "manual" ? (
-                        <MdCheckCircle className="text-sm" />
-                      ) : verificationBadge.kind === "photo-record" ? (
-                        <MdImage className="text-sm" />
-                      ) : (
-                        <MdMyLocation className="text-sm" />
-                      )}
-                      {verificationBadge.label}
-                    </span>
-                  )
-                ) : null}
-                {canAddVerificationPhoto ? (
-                  <button
-                    type="button"
-                    disabled={isVisitSaving}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onEditVerificationPhoto(stop);
-                    }}
-                    className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700 ring-1 ring-amber-200 transition active:scale-95 disabled:opacity-50 dark:bg-amber-400/10 dark:text-amber-100 dark:ring-amber-400/30"
+                  <span
+                    className={`inline-flex min-h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-black ring-1 ${verificationBadge.className}`}
                   >
-                    {isVisitSaving ? (
-                      <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    ) : (
+                    {verificationBadge.kind === "manual" ? (
+                      <MdCheckCircle className="text-sm" />
+                    ) : verificationBadge.kind === "photo-record" ? (
                       <MdImage className="text-sm" />
+                    ) : (
+                      <MdMyLocation className="text-sm" />
                     )}
-                    {text.dayRoute.addVisitPhoto}
-                  </button>
+                    {verificationBadge.label}
+                  </span>
                 ) : null}
               </div>
               <p className="mt-1 truncate text-xs font-semibold text-slate-500 dark:text-slate-300">
@@ -574,17 +538,15 @@ function RouteStopNode({
                   </button>
                 )}
               </div>
-              {stop.place.address ? (
-                <p
-                  className={`mt-1 line-clamp-2 text-[11px] leading-4 ${
-                    isVisited
-                      ? "text-slate-500 dark:text-slate-300"
-                      : "text-slate-400 dark:text-slate-500"
-                  }`}
-                >
-                  {stop.place.address}
-                </p>
-              ) : null}
+              <p
+                className={`mt-1 min-h-8 line-clamp-2 text-[11px] leading-4 ${
+                  isVisited
+                    ? "text-slate-500 dark:text-slate-300"
+                    : "text-slate-400 dark:text-slate-500"
+                }`}
+              >
+                {stop.place.address}
+              </p>
               {isOrderEditing ? (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button
@@ -616,48 +578,17 @@ function RouteStopNode({
             </div>
           </div>
           {!isOrderEditing ? (
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                aria-label={text.dayRoute.openPlaceDirectionsAria(
-                  stop.place.title
-                )}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenDirections(stop);
-                }}
-                className={`inline-flex min-h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-black transition active:scale-[0.99] ${
-                  isActiveDestination
-                    ? "bg-brand-600 text-white shadow-sm"
-                    : "border border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-400/30 dark:bg-brand-400/10 dark:text-brand-100"
-                }`}
-              >
-                <MdMap className="shrink-0 text-base" />
-                {text.dayRoute.placeDirections}
-              </button>
-              {isGpsTestEnabled ? (
-                <button
-                  type="button"
-                  aria-label={text.dayRoute.gpsTestOpenAria(
-                    stop.place.title
-                  )}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenGpsTest(stop);
-                  }}
-                  className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-black ring-1 transition active:scale-95 ${
-                    isGpsTestLocationActive
-                      ? "bg-violet-600 text-white ring-violet-600"
-                      : "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-400/10 dark:text-violet-100 dark:ring-violet-400/30"
-                  }`}
-                >
-                  <MdGpsFixed className="text-sm" />
-                  {isGpsTestLocationActive
-                    ? text.dayRoute.gpsTestActiveButton
-                    : text.dayRoute.gpsTestButton}
-                </button>
-              ) : null}
-            </div>
+            <RouteStopActions
+              placeTitle={stop.place.title}
+              photoAction={photoAction}
+              isPhotoSaving={isVisitSaving}
+              isActiveDestination={isActiveDestination}
+              isGpsTestLocationActive={isGpsTestLocationActive}
+              onOpenDirections={() => onOpenDirections(stop)}
+              onOpenGpsTest={
+                isGpsTestEnabled ? () => onOpenGpsTest(stop) : undefined
+              }
+            />
           ) : null}
         </div>
         {!isLast ? (

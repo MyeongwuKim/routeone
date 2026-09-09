@@ -1,4 +1,12 @@
+/**
+ * 사용 위치: 루트 체크아웃 → 여행 일정 설정
+ *
+ * 용도:
+ * 여행 시작일, 여행 일수와 매일의 시작·종료 시간을 정한다.
+ * 적용된 여행 일수는 직접 입력 여부와 관계없이 선택 영역 상단에 표시한다.
+ */
 import { useState } from "react";
+import { MdEdit } from "react-icons/md";
 import { DateInput, TimeWheelInput } from "@/components/inputs";
 import { useUiText } from "@/lib/uiText";
 import { useRouteCheckout } from "../../hooks/useRouteCheckout";
@@ -110,16 +118,22 @@ function PlaceCartScheduleStep() {
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-semibold text-slate-700">
-            {text.cart.tripDaysLabel}
-          </p>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-slate-700">
+              {text.cart.tripDaysLabel}
+            </p>
+            <span className="text-sm font-bold tabular-nums text-brand-700">
+              {text.cart.dayCount(tripDays)}
+            </span>
+          </div>
           <div className="grid grid-cols-4 gap-2">
             {[1, 2, 3, 4, 5, 6, 7].map((dayCount) => (
               <button
                 key={dayCount}
                 type="button"
+                aria-pressed={tripDays === dayCount}
                 onClick={() => setTripDays(dayCount)}
-                className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+                className={`min-w-0 whitespace-nowrap rounded-xl border px-3 py-2 text-sm font-semibold ${
                   tripDays === dayCount
                     ? "border-brand-500 bg-brand-600 text-white"
                     : "border-brand-200 bg-white text-slate-600"
@@ -130,17 +144,31 @@ function PlaceCartScheduleStep() {
             ))}
             <button
               type="button"
+              aria-pressed={tripDays > 7}
+              aria-label={tripDays > 7
+                ? `${text.cart.customTripDaysButton}: ${text.cart.dayCount(tripDays)}`
+                : text.cart.customTripDaysButton}
+              title={text.cart.customTripDaysButton}
               onClick={() => {
                 setCustomTripDaysInput(String(tripDays));
                 setIsCustomTripDaysOpen(true);
               }}
-              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${
+              className={`inline-flex min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-xl border px-2 py-2 text-sm font-semibold ${
                 tripDays > 7
                   ? "border-brand-500 bg-brand-600 text-white"
                   : "border-brand-200 bg-white text-slate-600"
               }`}
             >
-              {text.cart.customTripDaysButton}
+              {tripDays > 7 ? (
+                <>
+                  <span className="min-w-0 truncate tabular-nums">
+                    {text.cart.dayCount(tripDays)}
+                  </span>
+                  <MdEdit aria-hidden="true" className="shrink-0 text-xs" />
+                </>
+              ) : (
+                <span className="truncate">{text.cart.customTripDaysButton}</span>
+              )}
             </button>
           </div>
           {travelStartDate ? (

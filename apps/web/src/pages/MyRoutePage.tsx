@@ -42,6 +42,7 @@ import {
 } from "@/features/my-route/myRouteCache";
 import {
   formatRouteDate,
+  getDateKeyDiffInDays,
   getRouteEndDateKey,
   getSelectableRouteDay,
   getRouteStartDateKey,
@@ -1272,8 +1273,7 @@ function MyRoutePage() {
               formatDateKeyLabel(plannedEndKey, text)
             )
           : text.myRoute.plannedStartDescription(
-              formatDateKeyLabel(plannedStartKey, text),
-              formatDateKeyLabel(todayKey, text)
+              getDateKeyDiffInDays(plannedStartKey, todayKey)
             ),
         detail: text.myRoute.startTodayDetail(todayKey < plannedStartKey),
         actions: [

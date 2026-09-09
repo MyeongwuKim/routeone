@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+/**
+ * 진입 경로: 하단 홈 탭
+ *
+ * 용도:
+ * 지역별 장소를 지도에서 찾고 상세 정보와 여행 담기로 연결한다.
+ *
+ * 구조:
+ * 지도, 검색·필터, 장소 목록을 조합하고 현재 위치는 전역 저장소에서 구독한다.
+ */
+import { useCallback, useEffect, useMemo, useState } from "react";
 import MapLoadingSkeleton from "@/components/map/MapLoadingSkeleton";
+import LocationPermissionNotice from "@/components/map/LocationPermissionNotice";
+import { useLocationPermissionDenied } from "@/native-bridge/useLocationPermissionDenied";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -45,6 +56,7 @@ import { useUiToastStore } from "@/stores/uiToastStore";
 import { TOUR_API_SERVICE_KEY } from "@/pages/HomePage.constants";
 
 function HomePage() {
+  const isLocationPermissionDenied = useLocationPermissionDenied();
   const text = useUiText();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -120,8 +132,6 @@ function HomePage() {
       position: CurrentLocation;
       sigunguCode: string;
     } | null>(null);
-  const currentLocationRef = useRef<CurrentLocation | null>(null);
-  const isCurrentLocationLookupPendingRef = useRef(true);
   const notificationInboxQuery = useQuery({
     queryKey: NOTIFICATION_INBOX_FIRST_PAGE_QUERY_KEY,
     queryFn: () =>
@@ -158,8 +168,6 @@ function HomePage() {
       rank,
       mode = "bottom-sheet",
     }: OpenPlaceSheetFromAttractionOptions) => {
-      const currentLocationForOrigin =
-        activeTestRegionPosition ?? currentLocationRef.current;
       const selectedRegionForOrigin =
         serviceArea.regions.find(
           (region) => region.sigunguCode === selectedSigunguCode
@@ -178,21 +186,18 @@ function HomePage() {
           topRank: rank ?? null,
         }),
         {
-          directionOrigin: currentLocationForOrigin
+          directionOrigin: activeTestRegionPosition
             ? {
-                coordinates: currentLocationForOrigin,
+                coordinates: activeTestRegionPosition,
                 label: text.placeSheet.currentLocation,
                 isCurrentLocation: true,
               }
-            : isCurrentLocationLookupPendingRef.current
-              ? undefined
-              : {
-                  coordinates: selectedRegionForOrigin.center,
-                  label: text.placeSheet.referenceLocation(
-                    selectedRegionOriginLabel
-                  ),
-                  isCurrentLocation: false,
-                },
+            : undefined,
+          fallbackDirectionOrigin: {
+            coordinates: selectedRegionForOrigin.center,
+            label: text.placeSheet.referenceLocation(selectedRegionOriginLabel),
+            isCurrentLocation: false,
+          },
           mode,
         }
       );
@@ -238,15 +243,6 @@ function HomePage() {
       trendNameByAttractionId,
       visibleSearchResultCount,
     });
-
-  useEffect(() => {
-    currentLocationRef.current = currentLocation;
-  }, [currentLocation]);
-
-  useEffect(() => {
-    isCurrentLocationLookupPendingRef.current =
-      isCurrentLocationLookupPending;
-  }, [isCurrentLocationLookupPending]);
 
   useEffect(() => {
     if (
@@ -469,17 +465,11 @@ function HomePage() {
         lng: homeOriginLocation.lng,
       }
     : null;
-  const selectedRegionDirectionOrigin = homeOriginLocation
-    ? {
-        coordinates: homeOriginLocation,
-        label: text.placeSheet.currentLocation,
-        isCurrentLocation: true,
-      }
-    : {
-        coordinates: selectedRegion.center,
-        label: text.placeSheet.referenceLocation(selectedRegionLabel),
-        isCurrentLocation: false,
-      };
+  const selectedRegionDirectionOrigin = {
+    coordinates: selectedRegion.center,
+    label: text.placeSheet.referenceLocation(selectedRegionLabel),
+    isCurrentLocation: false,
+  };
   useEffect(() => {
     const festivalRegionCode = searchParams.get("festivalRegion");
     const festivalTitle = searchParams.get("festivalTitle")?.trim() ?? "";
@@ -623,6 +613,12 @@ function HomePage() {
       ) : null}
       {shouldShowMapSetupSkeleton ? <HomeMapControlsSkeleton /> : null}
 
+      {isLocationPermissionDenied ? (
+        <div className="absolute inset-x-3 bottom-[calc(max(1rem,env(safe-area-inset-bottom))+4rem)] z-20 mx-auto max-w-sm">
+          <LocationPermissionNotice text={text} />
+        </div>
+      ) : null}
+
       {shouldShowInteractiveMapUi ? (
         <HomeMapControls
           regions={orderedRegions}
@@ -704,10 +700,14 @@ function HomePage() {
         onClose={closeSavedList}
         onSelectPlace={(place) => {
           openSheet(place, {
-            directionOrigin:
-              isCurrentLocationLookupPending && !activeTestRegionPosition
-                ? undefined
-                : selectedRegionDirectionOrigin,
+            directionOrigin: activeTestRegionPosition
+              ? {
+                  coordinates: activeTestRegionPosition,
+                  label: text.placeSheet.currentLocation,
+                  isCurrentLocation: true,
+                }
+              : undefined,
+            fallbackDirectionOrigin: selectedRegionDirectionOrigin,
             mode: "full-popup",
           });
         }}

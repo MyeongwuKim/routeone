@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PlannedRouteDay } from "@/features/route-checkout/models/routePlanTypes";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
@@ -89,6 +89,10 @@ export function useDayRoutePopupController({
   const openModal = useUiModalStore((state) => state.openModal);
   const openSheet = useMapSheetStore((state) => state.openSheet);
   const showToast = useUiToastStore((state) => state.showToast);
+  const applyCurrentPosition = useCurrentPositionStore(
+    (state) => state.applyPosition
+  );
+  const gpsTestApplyingRef = useRef(false);
   const clearCurrentPosition = useCurrentPositionStore(
     (state) => state.clearPosition
   );
@@ -948,7 +952,7 @@ export function useDayRoutePopupController({
       notificationWasScheduledEarlier?: boolean;
     } = {}
   ) => {
-    if (!isGpsTestEnabled || isGpsTestApplying) {
+    if (!isGpsTestEnabled || gpsTestApplyingRef.current) {
       return null;
     }
 
@@ -977,16 +981,22 @@ export function useDayRoutePopupController({
       return null;
     }
 
+    gpsTestApplyingRef.current = true;
     setIsGpsTestApplying(true);
 
     try {
       const result = await request;
+      if (result.lat == null || result.lng == null) {
+        throw new Error(text.dayRoute.gpsTestMoveFailed);
+      }
+      applyCurrentPosition({
+        lat: result.lat,
+        lng: result.lng,
+        accuracyMeters: 1,
+        timestamp: Date.now(),
+      });
       setGpsTestLocationStopId(target.stop.id);
-      setGpsTestLocation(
-        result.lat != null && result.lng != null
-          ? { lat: result.lat, lng: result.lng }
-          : null
-      );
+      setGpsTestLocation({ lat: result.lat, lng: result.lng });
       if (options.showSuccessToast !== false) {
         showToast(
           result.notificationScheduled ||
@@ -1006,12 +1016,13 @@ export function useDayRoutePopupController({
       );
       return null;
     } finally {
+      gpsTestApplyingRef.current = false;
       setIsGpsTestApplying(false);
     }
   };
 
   const handleClearGpsTestLocation = async () => {
-    if (!isGpsTestEnabled || isGpsTestApplying) {
+    if (!isGpsTestEnabled || gpsTestApplyingRef.current) {
       return null;
     }
 
@@ -1025,6 +1036,7 @@ export function useDayRoutePopupController({
       return null;
     }
 
+    gpsTestApplyingRef.current = true;
     setIsGpsTestApplying(true);
 
     try {
@@ -1034,17 +1046,13 @@ export function useDayRoutePopupController({
       setGpsTestLocation(null);
       const realPosition = await requestCurrentPosition({
         forceRefresh: true,
-      }).catch(
-        () => null
-      );
+      });
       showToast(text.dayRoute.gpsTestCleared);
-      return realPosition
-        ? {
-            ...result,
-            lat: realPosition.lat,
-            lng: realPosition.lng,
-          }
-        : result;
+      return {
+        ...result,
+        lat: realPosition.lat,
+        lng: realPosition.lng,
+      };
     } catch (error) {
       showToast(
         error instanceof Error
@@ -1053,6 +1061,7 @@ export function useDayRoutePopupController({
       );
       return null;
     } finally {
+      gpsTestApplyingRef.current = false;
       setIsGpsTestApplying(false);
     }
   };

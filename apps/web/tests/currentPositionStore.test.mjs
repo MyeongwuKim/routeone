@@ -113,3 +113,24 @@ test("테스트 위치를 해제하면 캐시를 비우고 실제 GPS를 다시 
   );
   assert.deepEqual(useCurrentPositionStore.getState().position, realPosition);
 });
+
+test("테스트 GPS 적용 시 진행 중이던 실제 GPS 조회를 무효화하고 새 좌표를 바로 반환한다", async (t) => {
+  const store = useCurrentPositionStore.getState();
+  store.clearPosition();
+  let finishRealPosition;
+  t.mock.method(navigator.geolocation, "getCurrentPosition", (resolve) => {
+    finishRealPosition = resolve;
+  });
+  const pendingReal = store.requestCurrentPosition({ forceRefresh: true });
+  const cancelled = assert.rejects(pendingReal, /취소/);
+  const virtual = { lat: 37.1, lng: 127.1, accuracyMeters: 1, timestamp: Date.now() };
+  store.applyPosition(virtual);
+  assert.deepEqual(await store.requestCurrentPosition(), virtual);
+  finishRealPosition({
+    coords: { latitude: 38, longitude: 128, accuracy: 10 },
+    timestamp: Date.now(),
+  });
+  await cancelled;
+  assert.deepEqual(useCurrentPositionStore.getState().position, virtual);
+  assert.equal(useCurrentPositionStore.getState().status, "success");
+});

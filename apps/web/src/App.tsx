@@ -5,8 +5,7 @@ import PlaceLocalizationStatus from "./components/feedback/PlaceLocalizationStat
 import TopToast from "./components/feedback/TopToast";
 import PotatoLoadingOverlay from "./components/feedback/PotatoLoadingOverlay";
 import { usePlaceCartLanguageSync } from "./features/route-checkout/hooks/usePlaceCartLanguageSync";
-import { nativeBridge } from "./native-bridge";
-import { useCurrentPositionStore } from "./stores/currentPositionStore";
+import { startNativePermissionSync } from "./native-bridge/permissionSync";
 import { initializeUiTheme } from "./stores/uiThemeStore";
 
 const PlaceBottomSheet = lazy(
@@ -15,27 +14,12 @@ const PlaceBottomSheet = lazy(
 
 function App() {
   usePlaceCartLanguageSync();
-  const requestCurrentPosition = useCurrentPositionStore(
-    (state) => state.requestCurrentPosition
-  );
 
   useEffect(() => {
     initializeUiTheme();
   }, []);
 
-  useEffect(() => {
-    if (!nativeBridge.runtime.isAvailable()) {
-      return;
-    }
-
-    void requestCurrentPosition().catch(() => undefined);
-
-    return nativeBridge.events.subscribeAppActive(() => {
-      void requestCurrentPosition({ forceRefresh: true }).catch(
-        () => undefined
-      );
-    });
-  }, [requestCurrentPosition]);
+  useEffect(startNativePermissionSync, []);
 
   return (
     <>

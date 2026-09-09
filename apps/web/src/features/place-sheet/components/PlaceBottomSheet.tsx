@@ -1,6 +1,13 @@
+/**
+ * 사용 위치: 홈·여행 화면 → 장소 상세 및 길찾기
+ *
+ * 용도:
+ * 선택한 장소의 정보, 사진, 길찾기를 시트 또는 팝업으로 보여준다.
+ *
+ * 구조:
+ * 출발 위치와 데이터 조회는 전용 훅에 맡기고 상세 영역과 팝업을 조합한다.
+ */
 import { useEffect, useRef, useState } from "react";
-import { GANGWON_CENTER } from "@/data/gangwonRegions";
-import { SERVICE_AREAS } from "@/data/serviceAreas";
 import {
   IoBagAdd,
   IoBagAddOutline,
@@ -9,6 +16,7 @@ import {
   IoSearch,
 } from "react-icons/io5";
 import { usePlaceSheetLayout } from "../hooks/usePlaceSheetLayout";
+import { usePlaceDirectionOrigin } from "../hooks/usePlaceDirectionOrigin";
 import { usePlaceSheetData } from "../hooks/usePlaceSheetData";
 import {
   buildGoogleImageSearchUrl,
@@ -27,7 +35,6 @@ import { formatFestivalPeriod } from "@/lib/festivalDate";
 import type { NearbyTouristPlace } from "@/lib/visitKoreaTourApi";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
-import { useCurrentPositionStore } from "@/stores/currentPositionStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -51,15 +58,6 @@ function PlaceBottomSheet() {
     updateSelectedPlace,
     resetSheet,
   } = useMapSheetStore();
-  const storedCurrentPosition = useCurrentPositionStore(
-    (state) => state.position
-  );
-  const currentPositionStatus = useCurrentPositionStore(
-    (state) => state.status
-  );
-  const requestCurrentPosition = useCurrentPositionStore(
-    (state) => state.requestCurrentPosition
-  );
   const { savedPlaceIds, toggleSavedPlace } = usePlaceCartStore();
   const showToast = useUiToastStore((state) => state.showToast);
   const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
@@ -69,8 +67,6 @@ function PlaceBottomSheet() {
   const cartAddAnimationTimeoutRef = useRef<number | null>(null);
   const [imageViewerTarget, setImageViewerTarget] =
     useState<PlaceImageViewerTarget | null>(null);
-  const [completedLocationLookupVersion, setCompletedLocationLookupVersion] =
-    useState<number | null>(null);
   const contentScrollRef = useRef<HTMLDivElement | null>(null);
   const festivalPeriod = selectedPlace
     ? formatFestivalPeriod(
@@ -80,56 +76,19 @@ function PlaceBottomSheet() {
       )
     : null;
 
-  const fallbackDirectionArea = selectedPlace
-    ? Object.values(SERVICE_AREAS).find(
-        (area) => area.tatsAreaCode === selectedPlace.areaCode
-      )
-    : null;
-  const fallbackDirectionRegion = selectedPlace
-    ? fallbackDirectionArea?.regions.find(
-        (region) =>
-          region.sigunguCode === selectedPlace.signguCode ||
-          region.adminCode === selectedPlace.signguCode
-      ) ??
-      fallbackDirectionArea?.regions.find((region) =>
-        selectedPlace.address.includes(region.label)
-      )
-    : null;
-  const fallbackDirectionLabel = fallbackDirectionRegion
-    ? text.placeSheet.referenceLocation(
-        text.labels.regions[fallbackDirectionRegion.label] ??
-          fallbackDirectionRegion.label
-      )
-    : fallbackDirectionArea
-      ? text.placeSheet.referenceLocation(
-          text.labels.regions[fallbackDirectionArea.label] ??
-            fallbackDirectionArea.label
-        )
-      : text.placeSheet.gangwonReferenceLocation;
-  const resolvedDirectionOrigin =
-    directionOrigin ??
-    (storedCurrentPosition
-      ? {
-          coordinates: storedCurrentPosition,
-          label: text.placeSheet.currentLocation,
-          isCurrentLocation: true,
-        }
-      : {
-          coordinates:
-            fallbackDirectionOrigin?.coordinates ??
-            fallbackDirectionRegion?.center ??
-            fallbackDirectionArea?.center ??
-            GANGWON_CENTER,
-          label: fallbackDirectionOrigin?.label ?? fallbackDirectionLabel,
-          isCurrentLocation: false,
-        });
-  const currentLocation = resolvedDirectionOrigin.coordinates;
-  const isCurrentLocationLookupPending =
-    isOpen &&
-    !directionOrigin &&
-    !storedCurrentPosition &&
-    (currentPositionStatus === "loading" ||
-      completedLocationLookupVersion !== sheetResetVersion);
+  const {
+    currentLocation,
+    resolvedDirectionOrigin,
+    isCurrentLocationLookupPending,
+    isLocationPermissionDenied,
+  } = usePlaceDirectionOrigin({
+    isOpen,
+    sheetResetVersion,
+    directionOrigin,
+    fallbackDirectionOrigin,
+    selectedPlace,
+    text,
+  });
 
   const isFullPopupMode = sheetMode === "full-popup";
   const isDirectionsPopupMode = sheetMode === "directions-popup";
@@ -147,32 +106,6 @@ function PlaceBottomSheet() {
     },
     []
   );
-
-  useEffect(() => {
-    if (!isOpen || directionOrigin || storedCurrentPosition) {
-      return;
-    }
-
-    let isActive = true;
-
-    void requestCurrentPosition()
-      .catch(() => undefined)
-      .finally(() => {
-        if (isActive) {
-          setCompletedLocationLookupVersion(sheetResetVersion);
-        }
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [
-    directionOrigin,
-    isOpen,
-    requestCurrentPosition,
-    sheetResetVersion,
-    storedCurrentPosition,
-  ]);
 
   const {
     isSheetExpanded,
@@ -199,7 +132,9 @@ function PlaceBottomSheet() {
     selectedPlace,
     shouldLoadOverviewData: shouldShowOverviewPanel,
     shouldLoadRouteData:
-      shouldShowExpandedSection && !isCurrentLocationLookupPending,
+      shouldShowExpandedSection &&
+      !isCurrentLocationLookupPending &&
+      !isLocationPermissionDenied,
     text,
     updateSelectedPlace,
   });
@@ -287,7 +222,8 @@ function PlaceBottomSheet() {
         signguCode: selectedPlace.signguCode,
       }),
       {
-        directionOrigin: resolvedDirectionOrigin,
+        directionOrigin: directionOrigin ?? undefined,
+        fallbackDirectionOrigin: fallbackDirectionOrigin ?? undefined,
         contextAction: contextAction ?? undefined,
         mode: sheetMode,
       }

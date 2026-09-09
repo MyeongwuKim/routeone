@@ -1,4 +1,4 @@
-import { getNativeAppInfo } from "./appInfo";
+import { useNativeAppInfoStore } from "@/stores/nativeAppInfoStore";
 import { hasNativeCapability } from "./capabilities";
 import { updateNativeAuthSession } from "./auth";
 import {
@@ -35,7 +35,7 @@ export const nativeBridge = {
     isTestAccountMode: isNativeTestAccountMode,
   },
   appInfo: {
-    get: getNativeAppInfo,
+    get: () => useNativeAppInfoStore.getState().refresh(),
     hasCapability: hasNativeCapability,
   },
   permissions: {

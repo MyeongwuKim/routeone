@@ -9,6 +9,7 @@ import {
   MdLanguage,
   MdLightMode,
   MdLocationOn,
+  MdMailOutline,
   MdNotifications,
 } from "react-icons/md";
 import AccountSummaryCard from "@/components/account/AccountSummaryCard";
@@ -199,6 +200,15 @@ function MyInfoPage() {
           title={text.myInfo.appInfo}
           description={text.myInfo.appInfoDescription}
           onClick={() => navigate("/me/app-info")}
+        />
+
+        <div className="border-b border-brand-50" />
+
+        <MyInfoMenuRow
+          icon={<MdMailOutline />}
+          title={text.feedback.title}
+          description={text.feedback.menuDescription}
+          onClick={() => navigate("/me/feedback")}
         />
       </section>
     </section>

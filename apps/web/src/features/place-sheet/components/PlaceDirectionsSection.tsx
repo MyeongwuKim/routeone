@@ -1,3 +1,11 @@
+/**
+ * 사용 위치: 장소 상세 → 길찾기 영역
+ *
+ * 용도:
+ * 출발지별 경로를 미리 보여주고 네이버 지도 길찾기로 연결한다.
+ * 현재 위치 출발은 실행 시 권한을 다시 확인해 이전 좌표 사용을 막는다.
+ * 권한이 꺼지면 경로 영역을 설정 안내로 바꾸고 지도 컴포넌트를 정리한다.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   IoCarSportOutline,
@@ -6,13 +14,21 @@ import {
 } from "react-icons/io5";
 import { loadNaverMapSdk } from "@/lib/naverMapSdk";
 import MapLoadingSkeleton from "@/components/map/MapLoadingSkeleton";
+import LocationPermissionNotice from "@/components/map/LocationPermissionNotice";
 import {
   applyNaverMapTheme,
   getNaverMapThemeOptions,
 } from "@/lib/naverMapTheme";
 import type { UiText } from "@/lib/uiText";
 import type { AppLanguage } from "@/stores/appLanguageStore";
-import type { MapSheetDirectionOrigin } from "@/stores/mapSheetStore";
+import {
+  useMapSheetStore,
+  type MapSheetDirectionOrigin,
+} from "@/stores/mapSheetStore";
+import { useCurrentPositionStore } from "@/stores/currentPositionStore";
+import { useUiToastStore } from "@/stores/uiToastStore";
+import { isNativeTestAccountMode } from "@/native-bridge/runtime";
+import { useLocationPermissionDenied } from "@/native-bridge/useLocationPermissionDenied";
 import type { MapSheetPlace } from "@/types/place";
 import type { PlaceSheetCoordinates } from "../placeSheetModel";
 import { RouteInfoSkeleton } from "./PlaceSheetPrimitives";
@@ -69,7 +85,7 @@ function fitPreviewMapToBounds(
   }
 }
 
-function PlaceDirectionsSection({
+function PlaceDirectionsContent({
   appLanguage,
   currentLocation,
   directionOrigin,
@@ -84,6 +100,7 @@ function PlaceDirectionsSection({
   text,
 }: PlaceDirectionsSectionProps) {
   const [isPreviewMapSdkReady, setIsPreviewMapSdkReady] = useState(false);
+  const [isOpeningDirections, setIsOpeningDirections] = useState(false);
   const [previewMapError, setPreviewMapError] = useState<string | null>(null);
   const previewMapRef = useRef<HTMLDivElement | null>(null);
   const previewMapInstanceRef = useRef<PreviewMapInstance | null>(null);
@@ -287,18 +304,34 @@ function PlaceDirectionsSection({
     };
   }, [clearPreviewOverlays]);
 
-  const handleOpenDirections = () => {
-    const params = new URLSearchParams({
-      dlat: `${selectedPlace.lat}`,
-      dlng: `${selectedPlace.lng}`,
-      dname: selectedPlace.title,
-      slat: `${currentLocation.lat}`,
-      slng: `${currentLocation.lng}`,
-      sname: originLabel,
-      appname: NAVER_MAP_SCHEME_APP_NAME,
-    });
+  const handleOpenDirections = async () => {
+    if (isCurrentLocationLookupPending || isOpeningDirections) {
+      return;
+    }
+    setIsOpeningDirections(true);
+    try {
+      const origin =
+        directionOrigin.isCurrentLocation && !isNativeTestAccountMode()
+          ? await useCurrentPositionStore.getState().requestCurrentPosition()
+          : currentLocation;
+      const params = new URLSearchParams({
+        dlat: `${selectedPlace.lat}`,
+        dlng: `${selectedPlace.lng}`,
+        dname: selectedPlace.title,
+        slat: `${origin.lat}`,
+        slng: `${origin.lng}`,
+        sname: originLabel,
+        appname: NAVER_MAP_SCHEME_APP_NAME,
+      });
 
-    window.location.href = `nmap://route/car?${params.toString()}`;
+      window.location.href = `nmap://route/car?${params.toString()}`;
+    } catch {
+      useUiToastStore
+        .getState()
+        .showToast(text.placeSheet.currentLocationUnavailableTitle);
+    } finally {
+      setIsOpeningDirections(false);
+    }
   };
 
   return (
@@ -386,13 +419,34 @@ function PlaceDirectionsSection({
       <button
         type="button"
         onClick={handleOpenDirections}
-        className="mt-3 flex w-full items-center justify-center rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-sm"
+        disabled={isCurrentLocationLookupPending || isOpeningDirections}
+        className="mt-3 flex w-full items-center justify-center rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-sm disabled:opacity-50"
       >
         <IoNavigate className="mr-2 text-base" />
         {text.placeSheet.directions}
       </button>
     </section>
   );
+}
+
+function PlaceDirectionsSection(props: PlaceDirectionsSectionProps) {
+  const isPermissionDenied = useLocationPermissionDenied();
+  const explicitOrigin = useMapSheetStore((state) => state.directionOrigin);
+  const requiresCurrentLocation =
+    !explicitOrigin || explicitOrigin.isCurrentLocation;
+
+  if (isPermissionDenied && requiresCurrentLocation) {
+    return (
+      <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/30 dark:bg-slate-900/70">
+        <p className="mb-3 font-trip text-sm text-brand-700">
+          PLACE DIRECTIONS
+        </p>
+        <LocationPermissionNotice text={props.text} />
+      </section>
+    );
+  }
+
+  return <PlaceDirectionsContent {...props} />;
 }
 
 export default PlaceDirectionsSection;

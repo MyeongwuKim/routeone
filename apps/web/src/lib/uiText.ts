@@ -119,6 +119,25 @@ export type UiText = {
     logoutDescription: string;
     logoutToast: string;
   };
+  feedback: {
+    title: string;
+    menuDescription: string;
+    heading: string;
+    description: string;
+    detailsHint: string;
+    openEmail: string;
+    environmentNote: string;
+    openFailed: string;
+    fallbackTitle: string;
+    fallbackDescription: string;
+    recipientLabel: string;
+    copyEmail: string;
+    copied: string;
+    copyManually: string;
+    emailSubject: string;
+    emailBody: string;
+    environmentLabel: string;
+  };
   serviceArea: {
     selectAreaAria: string;
     optionDescription: (area: string) => string;
@@ -151,6 +170,12 @@ export type UiText = {
       undetermined: string;
       unavailable: string;
     };
+  };
+  locationPermission: {
+    title: string;
+    description: string;
+    openSettings: string;
+    settingsError: string;
   };
   account: {
     eyebrow: string;
@@ -341,7 +366,7 @@ export type UiText = {
     plannedPeriodPastTitle: string;
     plannedStartDiffTitle: string;
     plannedPeriodDescription: (start: string, end: string) => string;
-    plannedStartDescription: (start: string, today: string) => string;
+    plannedStartDescription: (daysUntilStart: number) => string;
     startTodayDetail: (startsEarlier: boolean) => string;
     startToday: string;
     startPlannedDate: string;
@@ -665,6 +690,7 @@ export type UiText = {
     deletePhotoDescription: string;
     cancelPhotoDelete: string;
     addVisitPhoto: string;
+    viewVisitPhoto: string;
     replaceVisitPhoto: string;
     indoorTestTitle: string;
     indoorTestDescription: (title: string) => string;
@@ -686,16 +712,15 @@ export type UiText = {
     gpsTestInsideArrivalRadius: (distance: string) => string;
     gpsTestOutsideArrivalRadius: (distance: string) => string;
     gpsTestAutoWalk: string;
-    gpsTestResolvingRealLocation: string;
+    gpsTestResolvingLocation: string;
     gpsTestRealLocationUnavailable: string;
-    gpsTestRealLocationStart: (distance: string) => string;
+    gpsTestLocationUnavailable: string;
     gpsTestWalkingStep: (
       current: number,
       total: number,
       distance: string
     ) => string;
     gpsTestApplying: string;
-    gpsTestApplyLocation: string;
     gpsTestAppliedWithNotification: string;
     gpsTestAppliedInsideWithoutNotification: string;
     gpsTestAppliedWithoutNotification: string;
@@ -1417,6 +1442,25 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       logoutDescription: "현재 계정에서 나가기",
       logoutToast: "로그아웃했어요.",
     },
+    feedback: {
+      title: "불편사항 보내기",
+      menuDescription: "불편한 점이나 개선 의견을 이메일로 보내기",
+      heading: "어떤 점이 불편하셨나요?",
+      description: "메일 앱에서 내용을 작성한 뒤 보내기를 눌러주세요. 화면 사진도 메일에 첨부할 수 있어요.",
+      detailsHint: "어느 화면에서, 무엇을 하다가 문제가 생겼는지 알려주시면 확인하는 데 도움이 돼요.",
+      openEmail: "메일 앱 열기",
+      environmentNote: "확인할 수 있는 앱·OS 버전이 메일에 함께 입력돼요.",
+      openFailed: "메일 앱을 열지 못했어요. 아래 이메일 주소로 보내주세요.",
+      fallbackTitle: "메일 앱이 열리지 않나요?",
+      fallbackDescription: "이메일 주소를 복사해 사용하는 메일에서 직접 보내주세요.",
+      recipientLabel: "문의 이메일 주소",
+      copyEmail: "이메일 주소 복사",
+      copied: "이메일 주소를 복사했어요.",
+      copyManually: "자동으로 복사하지 못했어요. 위 주소를 길게 누르거나 선택해 복사해주세요.",
+      emailSubject: "[RouteOne] 불편사항 및 개선 의견",
+      emailBody: "불편했던 점을 적어주세요.\r\n\r\n\r\n문제가 생긴 화면과 상황을 알려주세요.\r\n\r\n\r\n필요하면 화면 사진을 첨부해주세요.\r\n",
+      environmentLabel: "앱 환경 정보 (문의 확인용)",
+    },
     serviceArea: {
       selectAreaAria: "GPS 테스트 지역 선택",
       optionDescription: (area) =>
@@ -1451,6 +1495,13 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         undetermined: "미설정",
         unavailable: "확인 불가",
       },
+    },
+    locationPermission: {
+      title: "위치 권한이 꺼져 있습니다.",
+      description:
+        "현재 위치를 확인하고 내 위치에서 길찾기를 시작하려면 위치 권한을 켜 주세요.",
+      openSettings: "설정에서 위치 권한 켜기",
+      settingsError: "앱 설정을 열지 못했어요. 기기 설정에서 위치 권한을 확인해 주세요.",
     },
     account: {
       eyebrow: "내 정보",
@@ -1710,10 +1761,25 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       plannedStartDiffTitle: "여행을 오늘 시작할까요?",
       plannedPeriodDescription: (start, end) =>
         `예정 기간은 ${start} ~ ${end}였어요.`,
-      plannedStartDescription: (start) =>
-        `설정된 시작일은 ${start}이에요.`,
+      plannedStartDescription: (daysUntilStart) => {
+        if (daysUntilStart === 0) {
+          return "설정된 시작일은 오늘이에요.";
+        }
+        if (daysUntilStart === 1) {
+          return "설정된 시작일은 내일이에요.";
+        }
+        if (daysUntilStart === 2) {
+          return "설정된 시작일은 이틀 뒤예요.";
+        }
+        if (daysUntilStart === -1) {
+          return "설정된 시작일은 어제였어요.";
+        }
+        return daysUntilStart > 0
+          ? `설정된 시작일은 ${daysUntilStart}일 뒤예요.`
+          : `설정된 시작일은 ${Math.abs(daysUntilStart)}일 전이었어요.`;
+      },
       startTodayDetail: (startsEarlier) =>
-        `전체 여행 날짜가 오늘 시작에 맞춰 함께 ${startsEarlier ? "앞당겨져요" : "뒤로 옮겨져요"}. DAY 1은 현재 시간부터 시작하고, 이후 DAY의 계획 시작 시간은 유지돼요.`,
+        `오늘 시작하면 전체 일정이 오늘 기준으로 ${startsEarlier ? "앞당겨져요" : "미뤄져요"}.`,
       startToday: "지금 시작하기",
       startPlannedDate: "예정일로 시작",
       chooseDate: "다른 날짜 선택",
@@ -2061,6 +2127,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "사진은 완전히 삭제되지만 방문과 체류 기록은 유지돼요.",
       cancelPhotoDelete: "취소",
       addVisitPhoto: "사진 추가",
+      viewVisitPhoto: "사진 보기",
       replaceVisitPhoto: "사진 변경",
       indoorTestTitle: "실내 이동 테스트",
       indoorTestDescription: (title) =>
@@ -2068,7 +2135,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       indoorTestAction: "다음 장소로 가상 이동",
       gpsTestTitle: (title) => `${title} GPS 테스트`,
       gpsTestDescription:
-        "적용한 테스트 위치는 다른 장소에서도 내 위치로 유지돼요. 실제 위치로 돌아가려면 ‘실제 GPS로 복귀’를 눌러 주세요.",
+        "지도를 누르거나 마커를 옮기면 바로 테스트 GPS로 적용돼요. ‘지정한 GPS에서 출발’을 누르면 이 위치에서 해당 장소까지 가상으로 이동해요.",
       gpsTestButton: "테스트",
       gpsTestActiveButton: "테스트 중",
       gpsTestOpenAria: (title) => `${title} GPS 테스트 지도 열기`,
@@ -2086,16 +2153,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `장소까지 ${distance} · 도착 알림 성공, 방문 인증 실패 예상`,
       gpsTestOutsideArrivalRadius: (distance) =>
         `장소까지 ${distance} · 도착 알림과 방문 인증 실패 예상`,
-      gpsTestAutoWalk: "현재 위치에서 가상으로 출발",
-      gpsTestResolvingRealLocation: "실제 현재 위치 확인 중",
+      gpsTestAutoWalk: "지정한 GPS에서 출발",
+      gpsTestResolvingLocation: "적용된 GPS 확인 중",
       gpsTestRealLocationUnavailable:
-        "실제 현재 위치를 확인하지 못했어요. 위치 권한을 확인한 뒤 다시 열어 주세요.",
-      gpsTestRealLocationStart: (distance) =>
-        `현재 위치에서 출발 · 목적지까지 ${distance}`,
+        "원래 GPS를 확인하지 못했어요. 위치 권한을 확인한 뒤 다시 복귀해 주세요.",
+      gpsTestLocationUnavailable:
+        "적용된 GPS를 확인하지 못했어요. 지도에서 테스트할 위치를 지정해 주세요.",
       gpsTestWalkingStep: (current, total, distance) =>
         `가상 이동 ${current}/${total} · ${distance}`,
       gpsTestApplying: "적용 중",
-      gpsTestApplyLocation: "이 위치 적용",
       gpsTestAppliedWithNotification:
         "이 위치로 테스트 GPS를 적용했고 도착 알림도 보냈어요.",
       gpsTestAppliedInsideWithoutNotification:
@@ -2106,7 +2172,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestBackgroundDelivered: "종료 상태 알림 · 오늘 이미 발송됨",
       gpsTestBackgroundNotRegistered: "종료 상태 알림 · 등록 안 됨",
       gpsTestBackgroundUnsupported: "종료 상태 알림 · 확인 불가",
-      gpsTestUseRealLocation: "실제 GPS로 복귀",
+      gpsTestUseRealLocation: "원래 GPS로 복귀",
       gpsTestContinueVisit: "이 위치로 방문 인증 계속하기",
       gpsTestCleared: "테스트 위치를 해제하고 실제 GPS로 돌아왔어요.",
       gpsTestMoveFailed: "테스트 위치를 바꾸지 못했어요.",
@@ -2916,6 +2982,25 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       logoutDescription: "Leave the current account",
       logoutToast: "Logged out.",
     },
+    feedback: {
+      title: "Send Feedback",
+      menuDescription: "Email us about problems or ideas",
+      heading: "What could we improve?",
+      description: "Write your message in your email app, then tap Send. You can also attach screenshots there.",
+      detailsHint: "Tell us which screen you were on and what you were doing when the problem occurred.",
+      openEmail: "Open email app",
+      environmentNote: "Available app and OS versions will be included in the email.",
+      openFailed: "Couldn't open your email app. Please email the address below.",
+      fallbackTitle: "Email app didn't open?",
+      fallbackDescription: "Copy the address and send your feedback using your preferred email service.",
+      recipientLabel: "Feedback email address",
+      copyEmail: "Copy email address",
+      copied: "Email address copied.",
+      copyManually: "Couldn't copy automatically. Press and hold or select the address above to copy it.",
+      emailSubject: "[RouteOne] Feedback",
+      emailBody: "Tell us what went wrong or what could be improved.\r\n\r\n\r\nWhich screen were you on, and what were you doing?\r\n\r\n\r\nAttach screenshots if helpful.\r\n",
+      environmentLabel: "App environment (for troubleshooting)",
+    },
     serviceArea: {
       selectAreaAria: "Select a GPS test region",
       optionDescription: (area) =>
@@ -2950,6 +3035,13 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         undetermined: "Not Set",
         unavailable: "Unavailable",
       },
+    },
+    locationPermission: {
+      title: "Location access is turned off.",
+      description:
+        "Turn on location access in settings to see your current location and get directions from where you are.",
+      openSettings: "Open location settings",
+      settingsError: "Couldn't open app settings. Check location access in your device settings.",
     },
     account: {
       eyebrow: "My Info",
@@ -3231,10 +3323,25 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       plannedStartDiffTitle: "Start this trip today?",
       plannedPeriodDescription: (start, end) =>
         `The planned period was ${start} - ${end}.`,
-      plannedStartDescription: (start) =>
-        `The configured start date is ${start}.`,
+      plannedStartDescription: (daysUntilStart) => {
+        if (daysUntilStart === 0) {
+          return "Your trip is scheduled to start today.";
+        }
+        if (daysUntilStart === 1) {
+          return "Your trip is scheduled to start tomorrow.";
+        }
+        if (daysUntilStart === 2) {
+          return "Your trip is scheduled to start the day after tomorrow.";
+        }
+        if (daysUntilStart === -1) {
+          return "Your trip was scheduled to start yesterday.";
+        }
+        return daysUntilStart > 0
+          ? `Your trip is scheduled to start in ${daysUntilStart} days.`
+          : `Your trip was scheduled to start ${Math.abs(daysUntilStart)} days ago.`;
+      },
       startTodayDetail: (startsEarlier) =>
-        `All trip dates move ${startsEarlier ? "earlier" : "later"} together so the trip starts today. DAY 1 starts now; later days keep their planned start times.`,
+        `Starting today moves the entire schedule ${startsEarlier ? "earlier" : "later"} so it begins today.`,
       startToday: "Start today",
       startPlannedDate: "Start on planned date",
       chooseDate: "Choose another date",
@@ -3584,6 +3691,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "The photo will be permanently deleted, but your visit and stay record will remain.",
       cancelPhotoDelete: "Cancel",
       addVisitPhoto: "Add photo",
+      viewVisitPhoto: "View photo",
       replaceVisitPhoto: "Change photo",
       indoorTestTitle: "Indoor movement test",
       indoorTestDescription: (title) =>
@@ -3591,7 +3699,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       indoorTestAction: "Move toward next place",
       gpsTestTitle: (title) => `${title} GPS test`,
       gpsTestDescription:
-        "Your test location remains your current location when testing other places. Select ‘Use real GPS’ to return to your actual location.",
+        "Tap the map or move the marker to apply the test GPS immediately. Select ‘Start from selected GPS’ to move virtually from there to this place.",
       gpsTestButton: "Test",
       gpsTestActiveButton: "Testing",
       gpsTestOpenAria: (title) => `Open the GPS test map for ${title}`,
@@ -3610,16 +3718,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         `${distance} from place · Arrival should pass; visit should fail`,
       gpsTestOutsideArrivalRadius: (distance) =>
         `${distance} from place · Arrival and visit should fail`,
-      gpsTestAutoWalk: "Start virtually from current location",
-      gpsTestResolvingRealLocation: "Finding your real current location",
+      gpsTestAutoWalk: "Start from selected GPS",
+      gpsTestResolvingLocation: "Finding the active GPS location",
       gpsTestRealLocationUnavailable:
-        "Could not find your real current location. Check location permission and reopen this screen.",
-      gpsTestRealLocationStart: (distance) =>
-        `Starting at your current location · ${distance} to destination`,
+        "Could not find your real GPS location. Check location permission and try restoring it again.",
+      gpsTestLocationUnavailable:
+        "Could not find the active GPS location. Choose a test location on the map.",
       gpsTestWalkingStep: (current, total, distance) =>
         `Virtual movement ${current}/${total} · ${distance}`,
       gpsTestApplying: "Applying",
-      gpsTestApplyLocation: "Apply location",
       gpsTestAppliedWithNotification:
         "The test GPS was applied to this location and an arrival alert was sent.",
       gpsTestAppliedInsideWithoutNotification:
@@ -3630,7 +3737,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsTestBackgroundDelivered: "Closed-app alert · Already sent today",
       gpsTestBackgroundNotRegistered: "Closed-app alert · Not registered",
       gpsTestBackgroundUnsupported: "Closed-app alert · Unable to verify",
-      gpsTestUseRealLocation: "Use real GPS",
+      gpsTestUseRealLocation: "Restore real GPS",
       gpsTestContinueVisit: "Continue to visit verification",
       gpsTestCleared: "The test location was cleared. Using real GPS.",
       gpsTestMoveFailed: "Could not change the test location.",

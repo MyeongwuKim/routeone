@@ -394,6 +394,13 @@ test("웹 강제 갱신은 일반 진행 요청을 공유하지 않고 늦은 �
   const requests = [];
   const { useCurrentPositionStore } = loadModule("../../web/src/stores/currentPositionStore.ts", {
     zustand: webRequire("zustand"),
+    "@/native-bridge/runtime": {
+      isNativeRuntime: () => false,
+      isNativeTestAccountMode: () => false,
+    },
+    "./nativeAppInfoStore": {
+      useNativeAppInfoStore: { getState: () => ({ appInfoState: { info: null } }) },
+    },
     "@/lib/currentPosition": {
       getCurrentPosition: (options) => new Promise((resolve) => {
         requests.push({ options, resolve });
