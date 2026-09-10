@@ -177,7 +177,7 @@ export default function RoutePosterPreviewModal({
         <p className="mb-2 text-xs font-black text-slate-600">
           {text.routeHistory.backgroundTitle}
         </p>
-        <div className="flex gap-2 overflow-x-auto pb-0.5">
+        <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-0.5">
           {ROUTE_COMPLETION_POSTER_BACKGROUNDS.map((background) => {
             const isSelected = preview.backgroundId === background.id;
 
