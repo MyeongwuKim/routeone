@@ -1,3 +1,8 @@
+/**
+ * 사용 위치: 추천 루트 결과 화면 → DAY별 일정 카드
+ * 용도: 해당 날짜의 출발 위치와 장소 순서, 체류시간을 보여주고 편집한다.
+ * 계산 중 로딩 표시는 결과 화면에서 한 번만 담당한다.
+ */
 import { useState } from "react";
 import { IoLocationSharp, IoMapOutline } from "react-icons/io5";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
@@ -174,17 +179,7 @@ function PlaceCartRouteDayCard({
         </div>
       ) : null}
 
-      {isTravelTimeLoading ? (
-        <div className="m-4">
-          <PotatoLoadingCard
-            title={text.dayRoute.routeCalculating}
-            description={text.cart.routeTravelCalculatingDescription}
-            animation="running"
-            compact
-            className="shadow-sm"
-          />
-        </div>
-      ) : day.items.length > 0 ? (
+      {day.items.length > 0 ? (
         <div className="px-6 py-4">
           {isOrderEditing && previousDay ? (
             <div

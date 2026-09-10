@@ -1,3 +1,8 @@
+/**
+ * 진입 경로: 장소 담기 → 일정 설정 → 추천 루트 결과
+ * 용도: DAY별 추천 일정의 편집과 저장을 연결한다.
+ * 구조: 결과 안내, DAY 카드, 편집·저장 버튼과 화면 중앙의 계산 로딩으로 구성된다.
+ */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { IoReorderThreeOutline } from "react-icons/io5";
@@ -14,6 +19,7 @@ import { useUiText } from "@/lib/uiText";
 import { useRouteCheckout } from "../../hooks/useRouteCheckout";
 import { useRouteCheckoutSave } from "../../hooks/useRouteCheckoutSave";
 import PlaceCartRouteDayCard from "./PlaceCartRouteDayCard";
+import RouteCalculationOverlay from "../RouteCalculationOverlay";
 import StartLocationPickerPopup from "./StartLocationPickerPopup";
 import { useRouteResultEditor } from "../../hooks/useRouteResultEditor";
 import { formatRouteClock } from "../../models/routeDayCardModel";
@@ -329,7 +335,11 @@ function PlaceCartRouteResultStep({
             </div>
           ) : null}
 
-          <div className="space-y-4">
+          <div
+            className="space-y-4"
+            aria-busy={isRouteTravelLoading}
+            inert={isRouteTravelLoading}
+          >
             {routePlan.map((day) => (
               <PlaceCartRouteDayCard
                 key={day.day}
@@ -422,6 +432,8 @@ function PlaceCartRouteResultStep({
           </div>
         )}
       </footer>
+
+      {isRouteTravelLoading && !isSavingRoute ? <RouteCalculationOverlay /> : null}
 
       {startLocationDay && pickerStartLocation ? (
         <StartLocationPickerPopup
