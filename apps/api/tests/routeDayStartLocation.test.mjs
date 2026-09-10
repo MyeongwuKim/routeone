@@ -14,137 +14,7 @@ import {
   normalizeRouteStartLocation,
 } from "../src/modules/routes/routeDayInput.ts";
 
-const owner = { id: "owner" };
-const origin = { lat: 37, lng: 127 };
-const secondOrigin = { lat: 36, lng: 128 };
-const changedOrigin = { lat: 35, lng: 129 };
-
-function stopInput(dayIndex, title = `Place ${dayIndex}`) {
-  return { dayIndex, place: { provider: "CUSTOM", title, lat: 37, lng: 127 } };
-}
-
-function routeRow(overrides = {}) {
-  return {
-    id: "route",
-    ownerId: owner.id,
-    tripDays: 2,
-    status: "ACTIVE",
-    visibility: "PRIVATE",
-    countryCode: "KR",
-    travelStartDate: null,
-    travelEndDate: null,
-    dailyStartMinutes: null,
-    scheduleEndMinutes: null,
-    startLocation: origin,
-    startedAt: null,
-    completedAt: null,
-    ...overrides,
-  };
-}
-
-function dayRow(dayIndex, startLocation = origin, overrides = {}) {
-  return {
-    id: `day-${dayIndex}`,
-    routeId: "route",
-    dayIndex,
-    date: null,
-    plannedStartMinutes: null,
-    startedAt: null,
-    startLocation,
-    ...overrides,
-  };
-}
-
-function memoryDatabase(initial = {}) {
-  const state = structuredClone({ routes: [], days: [], stops: [], requests: [], ...initial });
-  const writes = [];
-  let nextId = 1;
-  let transactionDepth = 0;
-  const matches = (row, where = {}) =>
-    Object.entries(where).every(([key, value]) =>
-      value && typeof value === "object" && "in" in value
-        ? value.in.includes(row[key])
-        : row[key] === value
-    );
-  const recordWrite = (model, operation, data) => {
-    writes.push({ model, operation, data: structuredClone(data), inTransaction: transactionDepth > 0 });
-  };
-  const table = (name, defaults = {}) => ({
-    async findUnique({ where }) {
-      return structuredClone(state[name].find((row) => matches(row, where)) ?? null);
-    },
-    async findMany({ where, orderBy } = {}) {
-      const rows = state[name].filter((row) => matches(row, where));
-      const orderKey = Object.keys(orderBy ?? {})[0];
-      if (orderKey) rows.sort((left, right) => left[orderKey] - right[orderKey]);
-      return structuredClone(rows);
-    },
-    async count({ where }) {
-      return state[name].filter((row) => matches(row, where)).length;
-    },
-    async create({ data }) {
-      const row = structuredClone({ ...defaults, ...data, id: `created-${name}-${nextId++}` });
-      state[name].push(row);
-      recordWrite(name, "create", row);
-      return structuredClone(row);
-    },
-    async update({ where, data }) {
-      const row = state[name].find((item) => matches(item, where));
-      assert.ok(row, `${name} row must exist for update`);
-      Object.assign(row, structuredClone(data));
-      recordWrite(name, "update", { id: row.id, ...data });
-      return structuredClone(row);
-    },
-    async deleteMany({ where }) {
-      const rows = state[name].filter((row) => !matches(row, where));
-      const count = state[name].length - rows.length;
-      state[name].splice(0, state[name].length, ...rows);
-      recordWrite(name, "deleteMany", where);
-      return { count };
-    },
-    async delete({ where }) {
-      return this.deleteMany({ where });
-    },
-  });
-  const route = table("routes", routeRow());
-  const baseFindRoute = route.findUnique;
-  route.findUnique = async (args) => {
-    const row = await baseFindRoute(args);
-    return row && args.include
-      ? {
-          ...row,
-          days: structuredClone(state.days.filter((day) => day.routeId === row.id)),
-          stops: structuredClone(state.stops.filter((stop) => stop.routeId === row.id)),
-        }
-      : row;
-  };
-  route.findFirst = async () => null;
-  const requests = table("requests");
-  requests.findUnique = async ({ where }) =>
-    structuredClone(state.requests.find((row) => matches(row, where.ownerId_requestId)) ?? null);
-
-  const prisma = {
-    route,
-    routeDay: table("days", { date: null, startLocation: null }),
-    routeStop: table("stops", { visitStatus: "PENDING" }),
-    routeCreateRequest: requests,
-    userNotification: { deleteMany: async () => ({ count: 0 }) },
-    placePhoto: { deleteMany: async () => ({ count: 0 }) },
-    async $transaction(operation) {
-      const before = structuredClone(state);
-      transactionDepth += 1;
-      try {
-        return await operation(prisma);
-      } catch (error) {
-        for (const name of Object.keys(state)) state[name].splice(0, state[name].length, ...before[name]);
-        throw error;
-      } finally {
-        transactionDepth -= 1;
-      }
-    },
-  };
-  return { prisma, state, writes };
-}
+import { owner, origin, secondOrigin, changedOrigin, stopInput, routeRow, dayRow, memoryDatabase } from "./helpers/routeMemoryDatabase.mjs";
 
 test("create compacts stop DAYs and their origins together, dropping empty DAY overrides", async () => {
   const db = memoryDatabase();
@@ -192,6 +62,122 @@ test("an empty draft retains only DAY 1 and its origin", async () => {
 
   assert.deepEqual(db.state.days.map((day) => day.startLocation), [secondOrigin]);
   assert.equal(db.state.routes[0].tripDays, 1);
+  assert.equal(db.state.routes[0].status, "DRAFT");
+  assert.equal(db.state.routes[0].totalStopCount, 0);
+  assert.equal(db.state.routes[0].completedStopCount, 0);
+  assert.equal(db.writes.some((write) => write.model === "stops"), false);
+});
+
+test("creating more places keeps the single-DAY database call count constant", async () => {
+  for (const stopCount of [2, 8, 20]) {
+    const db = memoryDatabase();
+    const calls = [];
+    for (const model of ["route", "routeDay", "routeStop", "routeCreateRequest"]) {
+      for (const [operation, method] of Object.entries(db.prisma[model])) {
+        db.prisma[model][operation] = async function (...args) {
+          calls.push(`${model}.${operation}`);
+          return method.apply(this, args);
+        };
+      }
+    }
+
+    const route = await createRoute(db.prisma, owner, {
+      clientRequestId: `batch-${stopCount}`,
+      tripDays: 1,
+      travelStartDate: new Date("2026-09-09T15:00:00.000Z"),
+      startLocation: origin,
+      stops: Array.from({ length: stopCount }, (_, index) => ({
+        ...stopInput(1, `Place ${index + 1}`),
+        stayMinutes: 70,
+        travelMinutesFromPrevious: 4.6,
+        memo: `  Stop ${index + 1}  `,
+      })),
+    });
+
+    assert.equal(calls.length, 6, `${stopCount} places should need only six calls`);
+    assert.equal(calls.filter((call) => call === "routeStop.createMany").length, 1);
+    assert.equal(route.totalStopCount, stopCount);
+    assert.equal(route.completedStopCount, 0);
+    assert.equal(route.status, "ACTIVE");
+    assert.equal(route.startedAt, null);
+    assert.equal(route.completedAt, null);
+    assert.equal(db.state.days.length, 1);
+    assert.equal(db.state.stops.length, stopCount);
+    assert.equal(db.state.requests[0].routeId, route.id);
+    assert.ok(db.writes.every((write) => write.inTransaction));
+    assert.deepEqual(
+      db.state.stops.map((stop) => ({
+        routeId: stop.routeId, dayId: stop.dayId, order: stop.order,
+        title: stop.place.title, stayMinutes: stop.stayMinutes,
+        travelMinutes: stop.travelMinutesFromPrevious,
+        memo: stop.memo, visitStatus: stop.visitStatus,
+      })),
+      Array.from({ length: stopCount }, (_, index) => ({
+        routeId: route.id, dayId: db.state.days[0].id, order: index + 1,
+        title: `Place ${index + 1}`, stayMinutes: 70, travelMinutes: 5,
+        memo: `Stop ${index + 1}`, visitStatus: "PENDING",
+      }))
+    );
+  }
+});
+
+test("a failed place batch rolls back the route and DAYs even without a request ID", async () => {
+  for (const clientRequestId of [undefined, "failed-batch"]) {
+    const db = memoryDatabase();
+    const createMany = db.prisma.routeStop.createMany.bind(db.prisma.routeStop);
+    db.prisma.routeStop.createMany = async ({ data }) => {
+      await createMany({ data: data.slice(0, 1) });
+      throw new Error("forced place batch failure");
+    };
+
+    await assert.rejects(createRoute(db.prisma, owner, {
+      clientRequestId,
+      tripDays: 2,
+      stops: [stopInput(1), stopInput(2)],
+    }), /forced place batch failure/);
+
+    assert.deepEqual(db.state, { routes: [], days: [], stops: [], requests: [] });
+    assert.ok(db.writes.every((write) => write.inTransaction));
+  }
+});
+
+test("a failed request record rolls back an already saved place batch", async () => {
+  const db = memoryDatabase();
+  db.prisma.routeCreateRequest.create = async () => {
+    throw new Error("forced request record failure");
+  };
+
+  await assert.rejects(createRoute(db.prisma, owner, {
+    clientRequestId: "failed-request-record",
+    tripDays: 2,
+    stops: [stopInput(1), stopInput(2)],
+  }), /forced request record failure/);
+
+  assert.deepEqual(db.state, { routes: [], days: [], stops: [], requests: [] });
+});
+
+test("repeating creation returns current saved progress without writing again", async () => {
+  const db = memoryDatabase();
+  const input = {
+    clientRequestId: "completed-route-request",
+    tripDays: 1,
+    stops: [stopInput(1)],
+  };
+  await createRoute(db.prisma, owner, input);
+  const completedAt = new Date("2026-09-10T02:00:00.000Z");
+  Object.assign(db.state.routes[0], {
+    status: "COMPLETED", completedStopCount: 1,
+    startedAt: new Date("2026-09-10T00:00:00.000Z"), completedAt,
+  });
+  Object.assign(db.state.stops[0], { visitStatus: "VISITED", visitedAt: completedAt });
+  const savedState = structuredClone(db.state);
+  const writeCount = db.writes.length;
+
+  const repeated = await createRoute(db.prisma, owner, input);
+
+  assert.deepEqual(repeated, savedState.routes[0]);
+  assert.deepEqual(db.state, savedState);
+  assert.equal(db.writes.length, writeCount);
 });
 
 test("invalid coordinates are rejected before any route or DAY writes", async () => {

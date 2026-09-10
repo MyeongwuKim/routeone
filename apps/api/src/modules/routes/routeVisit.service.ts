@@ -1,3 +1,8 @@
+/**
+ * 용도:
+ * 장소 방문 인증·시간 수정과 사진, 체류 통계 반영을 처리한다.
+ * 단일 방문과 일정 공유는 같은 사진 공개 규칙을 사용하고, 공유 사진은 묶어서 저장한다.
+ */
 import type {
   Prisma,
   PrismaClient,
@@ -7,6 +12,12 @@ import type {
   User,
   VisitStatus,
 } from "@prisma/client";
+import {
+  mongoId,
+  mongoUpsert,
+  runMongoUpdates,
+  type MongoUpdate,
+} from "../../lib/mongoBatch.js";
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import { isDevVerificationBypassEnabled } from "../../lib/devVerification.js";
 import { deleteRouteVisitPhotoImages } from "./routeVisitPhoto.service.js";
@@ -783,8 +794,7 @@ async function refreshRouteAfterVisitChange(
   });
 }
 
-export async function syncPlacePhotoForRouteStopVisit(
-  prisma: RouteServicePrisma,
+function buildPlacePhotoForRouteStopVisit(
   user: User,
   route: Route,
   stop: RouteStop,
@@ -796,16 +806,14 @@ export async function syncPlacePhotoForRouteStopVisit(
     PUBLISHABLE_PLACE_PHOTO_STATUSES.has(visitData.verificationStatus);
 
   if (!photoUrl || !canPublishPhoto) {
-    await markPlacePhotoDeletedForRouteStop(prisma, stop.id);
-    return;
+    return null;
   }
 
   const placeKeys = getPlaceStayStatKeys(stop.place);
   const placeKey = placeKeys[0];
 
   if (!placeKey) {
-    await markPlacePhotoDeletedForRouteStop(prisma, stop.id);
-    return;
+    return null;
   }
 
   const verifiedAt = visitData.verifiedAt ?? visitData.visitedAt ?? new Date();
@@ -815,7 +823,7 @@ export async function syncPlacePhotoForRouteStopVisit(
     publicationConsent === true ||
     (publicationConsent == null && route.visibility === "PUBLIC");
   const thumbnailUrl = buildPlacePhotoThumbnailUrl(photoUrl);
-  const placePhotoData = {
+  return {
     placeKey,
     placeKeys,
     ...buildPlacePhotoSnapshotData(stop.place),
@@ -836,14 +844,56 @@ export async function syncPlacePhotoForRouteStopVisit(
       : null,
     verifiedAt,
   };
+}
 
+export async function syncPlacePhotoForRouteStopVisit(
+  prisma: RouteServicePrisma,
+  user: User,
+  route: Route,
+  stop: RouteStop,
+  visitData: RouteStopVisitData
+) {
+  const data = buildPlacePhotoForRouteStopVisit(user, route, stop, visitData);
+  if (!data) {
+    await markPlacePhotoDeletedForRouteStop(prisma, stop.id);
+    return;
+  }
   await prisma.placePhoto.upsert({
-    where: {
-      routeStopId: stop.id,
-    },
-    create: placePhotoData,
-    update: placePhotoData,
+    where: { routeStopId: stop.id },
+    create: data,
+    update: data,
   });
+}
+
+// 공유 전환에서는 사진이 없는 장소도 하나씩 조회하지 않고 공개 상태를 묶어서 반영한다.
+export async function syncPlacePhotosForRouteShare(
+  transaction: Prisma.TransactionClient,
+  user: User,
+  route: Route,
+  stops: RouteStop[]
+) {
+  const updates: MongoUpdate[] = [];
+  const deletedStopIds: string[] = [];
+  for (const stop of stops) {
+    const data = buildPlacePhotoForRouteStopVisit(
+      user, route, stop, buildRouteStopVisitDataFromStop(stop)
+    );
+    if (data) {
+      updates.push(mongoUpsert(
+        { routeStopId: mongoId(stop.id) }, data, data,
+        ["userId", "routeId", "routeStopId", "routeDayId"]
+      ));
+    } else {
+      deletedStopIds.push(stop.id);
+    }
+  }
+  await runMongoUpdates(transaction, "PlacePhoto", updates);
+  if (deletedStopIds.length) {
+    await transaction.placePhoto.updateMany({
+      where: { routeStopId: { in: deletedStopIds } },
+      data: { status: "DELETED", publicationConsent: false, publishedAt: null },
+    });
+  }
 }
 
 export async function checkInRouteStop(

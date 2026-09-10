@@ -1,7 +1,11 @@
+/**
+ * 용도:
+ * 축제·일정 알림의 생성, 동기화, 알림함 조회와 읽음 처리를 담당한다.
+ * 동기화는 알림 키별로 묶어 저장하고, 기존 읽음·전송 기록을 유지한다.
+ */
 import { randomUUID } from "node:crypto";
 import {
   FestivalNotificationKind,
-  Prisma,
   RouteReviewNotificationKind,
   RouteStatus,
   UserNotificationPushStatus,
@@ -10,6 +14,8 @@ import {
   type PrismaClient,
   type User,
 } from "@prisma/client";
+import { runTransactionWithRetry } from "../../lib/transaction.js";
+import { upsertNotificationsBatch } from "./notificationBatch.repository.js";
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import {
   fetchGangwonFestivalSource,
@@ -66,12 +72,6 @@ const KST_OFFSET_MS = 1000 * 60 * 60 * 9;
 const ROUTE_CORRECTION_GRACE_DAYS = 7;
 const ROUTE_REVIEW_TEST_COOLDOWN_MS = 10_000;
 
-function isUniqueConstraintError(error: unknown) {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002"
-  );
-}
 
 function normalizeRequiredText(
   value: string,
@@ -836,46 +836,38 @@ export async function syncFestivalNotificationInbox(
   );
   const oldestAllowedAt = getUserNotificationCutoffAt(now);
 
-  await prisma.$transaction(async (transaction) => {
-    for (const notification of notifications) {
-      await transaction.userNotification.upsert({
-        where: {
-          userId_notificationKey: {
-            userId: user.id,
-            notificationKey: notification.notificationKey,
-          },
-        },
-        create: {
-          userId: user.id,
-          notificationKey: notification.notificationKey,
-          type: UserNotificationType.FESTIVAL_SUMMARY,
-          festivalKind: notification.kind,
-          regionCode: notification.regionCode,
-          regionLabel: notification.regionLabel,
-          dateKey: notification.dateKey,
-          festivalIds: notification.festivalIds,
-          festivalTitles: notification.festivalTitles,
-          festivalStartDates: notification.festivalStartDates,
-          festivalEndDates: notification.festivalEndDates,
-          availableAt: notification.availableAt,
-        },
-        update: {
-          festivalKind: notification.kind,
-          regionCode: notification.regionCode,
-          regionLabel: notification.regionLabel,
-          dateKey: notification.dateKey,
-          festivalIds: notification.festivalIds,
-          festivalTitles: notification.festivalTitles,
-          festivalStartDates: notification.festivalStartDates,
-          festivalEndDates: notification.festivalEndDates,
-          ...(notification.shouldUpdateAvailableAt
-            ? {
-                availableAt: notification.availableAt,
-              }
-            : {}),
-        },
-      });
-    }
+  await runTransactionWithRetry(prisma, async (transaction) => {
+    await upsertNotificationsBatch(transaction, notifications.map((notification) => ({
+      create: {
+        userId: user.id,
+        notificationKey: notification.notificationKey,
+        type: UserNotificationType.FESTIVAL_SUMMARY,
+        festivalKind: notification.kind,
+        regionCode: notification.regionCode,
+        regionLabel: notification.regionLabel,
+        dateKey: notification.dateKey,
+        festivalIds: notification.festivalIds,
+        festivalTitles: notification.festivalTitles,
+        festivalStartDates: notification.festivalStartDates,
+        festivalEndDates: notification.festivalEndDates,
+        availableAt: notification.availableAt,
+      },
+      update: {
+        festivalKind: notification.kind,
+        regionCode: notification.regionCode,
+        regionLabel: notification.regionLabel,
+        dateKey: notification.dateKey,
+        festivalIds: notification.festivalIds,
+        festivalTitles: notification.festivalTitles,
+        festivalStartDates: notification.festivalStartDates,
+        festivalEndDates: notification.festivalEndDates,
+        ...(notification.shouldUpdateAvailableAt
+          ? {
+            availableAt: notification.availableAt,
+          }
+          : {}),
+      },
+    })));
 
     await transaction.userNotification.deleteMany({
       where: {
@@ -893,10 +885,10 @@ export async function syncFestivalNotificationInbox(
             },
             ...(notificationKeys.length > 0
               ? {
-                  notificationKey: {
-                    notIn: notificationKeys,
-                  },
-                }
+                notificationKey: {
+                  notIn: notificationKeys,
+                },
+              }
               : {}),
           },
         ],
@@ -931,96 +923,74 @@ export async function syncRouteArrivalNotificationInbox(
   );
   const routeIds = [...new Set(candidates.map((item) => item.routeId))];
   const stopIds = [...new Set(candidates.map((item) => item.stopId))];
-  const [ownedRoutes, routeStops] = await Promise.all([
-    prisma.route.findMany({
-      where: {
-        id: {
-          in: routeIds,
+  return runTransactionWithRetry(prisma, async (transaction) => {
+    const [ownedRoutes, routeStops] = await Promise.all([
+      transaction.route.findMany({
+        where: {
+          id: {
+            in: routeIds,
+          },
+          ownerId: user.id,
         },
-        ownerId: user.id,
-      },
-      select: {
-        id: true,
-      },
-    }),
-    prisma.routeStop.findMany({
-      where: {
-        id: {
-          in: stopIds,
+        select: {
+          id: true,
         },
-      },
-      select: {
-        id: true,
-        routeId: true,
-        dayId: true,
-        place: true,
-      },
-    }),
-  ]);
-  const ownedRouteIds = new Set(ownedRoutes.map((route) => route.id));
-  const stopById = new Map(routeStops.map((stop) => [stop.id, stop]));
-  const notifications = candidates.filter((notification) => {
-    const stop = stopById.get(notification.stopId);
+      }),
+      transaction.routeStop.findMany({
+        where: {
+          id: {
+            in: stopIds,
+          },
+        },
+        select: {
+          id: true,
+          routeId: true,
+          dayId: true,
+          place: true,
+        },
+      }),
+    ]);
+    const ownedRouteIds = new Set(ownedRoutes.map((route) => route.id));
+    const stopById = new Map(routeStops.map((stop) => [stop.id, stop]));
+    const notifications = candidates.filter((notification) => {
+      const stop = stopById.get(notification.stopId);
 
-    return (
-      ownedRouteIds.has(notification.routeId) &&
-      stop?.routeId === notification.routeId &&
-      stop.dayId === notification.dayId
-    );
+      return (
+        ownedRouteIds.has(notification.routeId) &&
+        stop?.routeId === notification.routeId &&
+        stop.dayId === notification.dayId
+      );
+    });
+
+    const writes = notifications.map((notification) => {
+      const stop = stopById.get(notification.stopId);
+      const createData = {
+        userId: user.id,
+        notificationKey: notification.notificationKey,
+        type: UserNotificationType.ROUTE_ARRIVAL,
+        routeId: notification.routeId,
+        routeTitle: notification.routeTitle,
+        dayId: notification.dayId,
+        stopId: notification.stopId,
+        placeTitle: stop?.place.title ?? notification.placeTitle,
+        availableAt: notification.deliveredAt,
+      };
+      const updateData = {
+        routeTitle: notification.routeTitle,
+        placeTitle: stop?.place.title ?? notification.placeTitle,
+      };
+
+      return { create: createData, update: updateData };
+    });
+    await upsertNotificationsBatch(transaction, writes);
+
+    return {
+      syncedCount: notifications.length,
+      notificationKeys: notifications.map(
+        (notification) => notification.notificationKey
+      ),
+    };
   });
-
-  for (const notification of notifications) {
-    const stop = stopById.get(notification.stopId);
-    const createData = {
-      userId: user.id,
-      notificationKey: notification.notificationKey,
-      type: UserNotificationType.ROUTE_ARRIVAL,
-      routeId: notification.routeId,
-      routeTitle: notification.routeTitle,
-      dayId: notification.dayId,
-      stopId: notification.stopId,
-      placeTitle: stop?.place.title ?? notification.placeTitle,
-      availableAt: notification.deliveredAt,
-    };
-    const updateData = {
-      routeTitle: notification.routeTitle,
-      placeTitle: stop?.place.title ?? notification.placeTitle,
-    };
-
-    try {
-      await prisma.userNotification.upsert({
-        where: {
-          userId_notificationKey: {
-            userId: user.id,
-            notificationKey: notification.notificationKey,
-          },
-        },
-        create: createData,
-        update: updateData,
-      });
-    } catch (error) {
-      if (!isUniqueConstraintError(error)) {
-        throw error;
-      }
-
-      await prisma.userNotification.update({
-        where: {
-          userId_notificationKey: {
-            userId: user.id,
-            notificationKey: notification.notificationKey,
-          },
-        },
-        data: updateData,
-      });
-    }
-  }
-
-  return {
-    syncedCount: notifications.length,
-    notificationKeys: notifications.map(
-      (notification) => notification.notificationKey
-    ),
-  };
 }
 
 export async function syncRouteReviewNotificationInbox(
@@ -1042,92 +1012,84 @@ export async function syncRouteReviewNotificationInbox(
   const candidates = [...notificationByKey.values()];
   const routeIds = [...new Set(candidates.map((item) => item.routeId))];
   const dayIds = [...new Set(candidates.map((item) => item.dayId))];
-  const [ownedRoutes, routeDays] = await Promise.all([
-    prisma.route.findMany({
-      where: {
-        id: {
-          in: routeIds,
-        },
-        ownerId: user.id,
-      },
-      select: {
-        id: true,
-      },
-    }),
-    prisma.routeDay.findMany({
-      where: {
-        id: {
-          in: dayIds,
-        },
-      },
-      select: {
-        id: true,
-        routeId: true,
-      },
-    }),
-  ]);
-  const ownedRouteIds = new Set(ownedRoutes.map((route) => route.id));
-  const dayById = new Map(routeDays.map((day) => [day.id, day]));
-  const notifications = candidates.filter(
-    (notification) =>
-      ownedRouteIds.has(notification.routeId) &&
-      dayById.get(notification.dayId)?.routeId === notification.routeId
-  );
-  const notificationKeys = notifications.map(
-    (notification) => notification.notificationKey
-  );
-  const futureNotifications = await prisma.userNotification.findMany({
-    where: {
-      userId: user.id,
-      type: UserNotificationType.ROUTE_REVIEW,
-      notificationKey: {
-        in: notificationKeys,
-      },
-      availableAt: {
-        gt: now,
-      },
-    },
-    select: {
-      notificationKey: true,
-    },
-  });
-  const futureNotificationKeys = new Set(
-    futureNotifications.map((notification) => notification.notificationKey)
-  );
-
-  await prisma.$transaction(async (transaction) => {
-    for (const notification of notifications) {
-      await transaction.userNotification.upsert({
+  return runTransactionWithRetry(prisma, async (transaction) => {
+    const [ownedRoutes, routeDays] = await Promise.all([
+      transaction.route.findMany({
         where: {
-          userId_notificationKey: {
-            userId: user.id,
-            notificationKey: notification.notificationKey,
+          id: {
+            in: routeIds,
+          },
+          ownerId: user.id,
+        },
+        select: {
+          id: true,
+        },
+      }),
+      transaction.routeDay.findMany({
+        where: {
+          id: {
+            in: dayIds,
           },
         },
-        create: {
-          userId: user.id,
-          notificationKey: notification.notificationKey,
-          type: UserNotificationType.ROUTE_REVIEW,
-          routeReviewKind: notification.kind,
-          routeId: notification.routeId,
-          routeTitle: notification.routeTitle,
-          dayId: notification.dayId,
-          correctionDeadlineAt: notification.correctionDeadlineAt,
-          availableAt: notification.availableAt,
+        select: {
+          id: true,
+          routeId: true,
         },
-        update: {
-          routeReviewKind: notification.kind,
-          routeTitle: notification.routeTitle,
-          correctionDeadlineAt: notification.correctionDeadlineAt,
-          ...(notification.shouldUpdateAvailableAt ||
-            futureNotificationKeys.has(notification.notificationKey)
-            ? {
-                availableAt: notification.availableAt,
-              }
-            : {}),
+      }),
+    ]);
+    const ownedRouteIds = new Set(ownedRoutes.map((route) => route.id));
+    const dayById = new Map(routeDays.map((day) => [day.id, day]));
+    const notifications = candidates.filter(
+      (notification) =>
+        ownedRouteIds.has(notification.routeId) &&
+        dayById.get(notification.dayId)?.routeId === notification.routeId
+    );
+    const notificationKeys = notifications.map(
+      (notification) => notification.notificationKey
+    );
+    const futureNotifications = await transaction.userNotification.findMany({
+      where: {
+        userId: user.id,
+        type: UserNotificationType.ROUTE_REVIEW,
+        notificationKey: {
+          in: notificationKeys,
         },
-      });
-    }
+        availableAt: {
+          gt: now,
+        },
+      },
+      select: {
+        notificationKey: true,
+      },
+    });
+    const futureNotificationKeys = new Set(
+      futureNotifications.map((notification) => notification.notificationKey)
+    );
+
+    await upsertNotificationsBatch(transaction, notifications.map((notification) => ({
+      create: {
+        userId: user.id,
+        notificationKey: notification.notificationKey,
+        type: UserNotificationType.ROUTE_REVIEW,
+        routeReviewKind: notification.kind,
+        routeId: notification.routeId,
+        routeTitle: notification.routeTitle,
+        dayId: notification.dayId,
+        correctionDeadlineAt: notification.correctionDeadlineAt,
+        availableAt: notification.availableAt,
+      },
+      update: {
+        routeReviewKind: notification.kind,
+        routeTitle: notification.routeTitle,
+        correctionDeadlineAt: notification.correctionDeadlineAt,
+        ...(notification.shouldUpdateAvailableAt ||
+          futureNotificationKeys.has(notification.notificationKey)
+          ? {
+            availableAt: notification.availableAt,
+          }
+          : {}),
+      },
+    })));
 
     await transaction.userNotification.deleteMany({
       where: {
@@ -1138,18 +1100,15 @@ export async function syncRouteReviewNotificationInbox(
         },
         ...(notificationKeys.length > 0
           ? {
-              notificationKey: {
-                notIn: notificationKeys,
-              },
-            }
+            notificationKey: {
+              notIn: notificationKeys,
+            },
+          }
           : {}),
       },
     });
+    return { syncedCount: notifications.length };
   });
-
-  return {
-    syncedCount: notifications.length,
-  };
 }
 
 export async function getNotificationInbox(

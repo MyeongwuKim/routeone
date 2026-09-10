@@ -1,3 +1,8 @@
+/**
+ * 용도:
+ * 일정 서비스에서 함께 쓰는 장소 스냅샷, 공유 태그와 진행 상태 계산을 모은다.
+ * 이미 조회한 장소로 진행 상태를 계산할 수 있어 변경 처리 중 중복 조회를 줄인다.
+ */
 import type {
   Prisma,
   PrismaClient,
@@ -451,6 +456,29 @@ export async function assertRouteOwner(
   return route;
 }
 
+export function buildRouteProgressData(
+  route: Pick<Route, "status" | "completedAt" | "startedAt">,
+  counts: { totalStopCount: number; completedStopCount: number }
+) {
+  const { totalStopCount, completedStopCount } = counts;
+  const isCompleted = totalStopCount > 0 && totalStopCount === completedStopCount;
+  const status = isCompleted ? "COMPLETED" : route.status === "COMPLETED" ? "ACTIVE" : route.status;
+  return {
+    totalStopCount,
+    completedStopCount,
+    status,
+    completedAt: isCompleted ? (route.completedAt ?? new Date()) : null,
+    startedAt: route.startedAt ?? (completedStopCount > 0 ? new Date() : null),
+  } satisfies Prisma.RouteUpdateInput;
+}
+
+export function countRouteStops(stops: Pick<RouteStop, "visitStatus">[]) {
+  return {
+    totalStopCount: stops.length,
+    completedStopCount: stops.filter((stop) => stop.visitStatus === "VISITED").length,
+  };
+}
+
 export async function refreshRouteProgress(
   prisma: RouteSharedPrisma,
   routeId: string
@@ -478,23 +506,10 @@ export async function refreshRouteProgress(
     throw new UserFacingError("루트를 찾을 수 없습니다.");
   }
 
-  const isCompleted = totalStopCount > 0 && totalStopCount === completedStopCount;
-  const nextStatus = isCompleted
-    ? "COMPLETED"
-    : route.status === "COMPLETED"
-      ? "ACTIVE"
-      : route.status;
-
   return prisma.route.update({
     where: {
       id: routeId,
     },
-    data: {
-      totalStopCount,
-      completedStopCount,
-      status: nextStatus,
-      completedAt: isCompleted ? (route.completedAt ?? new Date()) : null,
-      startedAt: route.startedAt ?? (completedStopCount > 0 ? new Date() : null),
-    },
+    data: buildRouteProgressData(route, { totalStopCount, completedStopCount }),
   });
 }

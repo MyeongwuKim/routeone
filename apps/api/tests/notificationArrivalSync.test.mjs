@@ -25,11 +25,11 @@ function createPrisma() {
           },
         ],
       },
-      userNotification: {
-        upsert: async (input) => {
-          upserts.push(input);
-          return input.create;
-        },
+      async $transaction(operation) { return operation(this); },
+      async $runCommandRaw(command) {
+        assert.equal(command.update, "UserNotification");
+        upserts.push(...command.updates);
+        return { ok: 1, n: command.updates.length };
       },
     },
     upserts,
@@ -62,7 +62,7 @@ test("같은 장소의 GPS 테스트 알림도 고유 식별자별로 저장한�
   assert.deepEqual(result.notificationKeys, [firstKey, secondKey]);
   assert.deepEqual(
     upserts.map(
-      (entry) => entry.where.userId_notificationKey.notificationKey
+      (entry) => entry.q.notificationKey
     ),
     [firstKey, secondKey]
   );

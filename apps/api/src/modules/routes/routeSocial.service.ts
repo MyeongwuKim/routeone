@@ -1,13 +1,18 @@
+/**
+ * 용도:
+ * 일정 공유와 좋아요·저장 상태를 관리한다.
+ * 공유 시 진행 상태와 사진 공개 상태를 같은 트랜잭션에서 함께 반영한다.
+ */
 import { Prisma, type PrismaClient, type User } from "@prisma/client";
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import {
   assertRouteOwner,
   buildRouteShareTags,
-  refreshRouteProgress,
+  buildRouteProgressData,
+  countRouteStops,
 } from "./route.shared.js";
 import {
-  buildRouteStopVisitDataFromStop,
-  syncPlacePhotoForRouteStopVisit,
+  syncPlacePhotosForRouteShare,
 } from "./routeVisit.service.js";
 
 function isUniqueConstraintError(error: unknown) {
@@ -22,45 +27,25 @@ export async function shareRoute(
   user: User,
   routeId: string
 ) {
-  const route = await assertRouteOwner(prisma, routeId, user.id);
-  const refreshedRoute = await refreshRouteProgress(prisma, route.id);
-  const routeStops = await prisma.routeStop.findMany({
-    where: {
-      routeId: route.id,
-    },
-    orderBy: {
-      order: "asc",
-    },
-  });
-
-  if (refreshedRoute.status !== "COMPLETED") {
-    throw new UserFacingError("완료한 루트만 공유할 수 있습니다.");
-  }
-
-  const shareTags = buildRouteShareTags(refreshedRoute, routeStops);
-
   return prisma.$transaction(async (transaction) => {
+    const route = await assertRouteOwner(transaction, routeId, user.id);
+    const stops = await transaction.routeStop.findMany({
+      where: { routeId }, orderBy: { order: "asc" },
+    });
+    const progress = buildRouteProgressData(route, countRouteStops(stops));
+    if (progress.status !== "COMPLETED") {
+      throw new UserFacingError("완료한 루트만 공유할 수 있습니다.");
+    }
     const sharedRoute = await transaction.route.update({
-      where: {
-        id: routeId,
-      },
+      where: { id: routeId },
       data: {
+        ...progress,
         visibility: "PUBLIC",
-        sharedAt: refreshedRoute.sharedAt ?? new Date(),
-        shareTags,
+        sharedAt: route.sharedAt ?? new Date(),
+        shareTags: buildRouteShareTags({ ...route, ...progress }, stops),
       },
     });
-
-    for (const stop of routeStops) {
-      await syncPlacePhotoForRouteStopVisit(
-        transaction,
-        user,
-        sharedRoute,
-        stop,
-        buildRouteStopVisitDataFromStop(stop)
-      );
-    }
-
+    await syncPlacePhotosForRouteShare(transaction, user, sharedRoute, stops);
     return sharedRoute;
   });
 }
