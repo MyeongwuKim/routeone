@@ -88,6 +88,7 @@ const MIN_GEOFENCE_RADIUS_METERS = 150;
 const MAX_GEOFENCE_RADIUS_METERS = 500;
 const ROUTE_ARRIVAL_LAST_KNOWN_MAX_AGE_MS = 15_000;
 const ROUTE_ARRIVAL_LAST_KNOWN_REQUIRED_ACCURACY_METERS = 100;
+const ROUTE_ARRIVAL_START_POSITION_GRACE_MS = 3_000;
 const EARTH_RADIUS_METERS = 6_371_000;
 const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
 const ROUTE_ARRIVAL_NOTIFICATION_TEST_MODE = TRUTHY_ENV_VALUES.has(
@@ -1213,16 +1214,38 @@ function reconcileFreshRouteArrivalInBackground(
   radiusMeters: number,
   requestId: string
 ) {
+  void startFreshRouteArrivalReconciliation(
+    places,
+    radiusMeters,
+    requestId
+  );
+}
+
+type FreshRouteArrivalReconciliationOutcome =
+  | {
+      status: "completed";
+      result: RouteArrivalPositionReconciliation;
+    }
+  | {
+      status: "failed";
+      error: unknown;
+    };
+
+function startFreshRouteArrivalReconciliation(
+  places: StoredRouteArrivalPlace[],
+  radiusMeters: number,
+  requestId: string
+): Promise<FreshRouteArrivalReconciliationOutcome> {
   const timing = createRouteVisitTiming(
     "arrival.position-reconcile",
     requestId
   );
 
-  void reconcileFreshRouteArrival(places, radiusMeters, timing)
+  return reconcileFreshRouteArrival(places, radiusMeters, timing)
     .then((result) => {
       if (result !== "unverified") {
         timing.finish();
-        return;
+        return { status: "completed", result } as const;
       }
 
       const error = new Error(
@@ -1232,6 +1255,7 @@ function reconcileFreshRouteArrivalInBackground(
       );
       timing.finish("error");
       warnRouteArrivalError("current position reconciliation deferred", error);
+      return { status: "completed", result } as const;
     })
     .catch((error) => {
       timing.finish("error");
@@ -1241,7 +1265,32 @@ function reconcileFreshRouteArrivalInBackground(
           ? error.originalError
           : error
       );
+      return { status: "failed", error } as const;
     });
+}
+
+function waitForRouteArrivalStartPositionGrace(
+  request: Promise<FreshRouteArrivalReconciliationOutcome>
+) {
+  return new Promise<FreshRouteArrivalReconciliationOutcome | null>(
+    (resolve) => {
+      let didFinishWaiting = false;
+      const timeoutId = setTimeout(() => {
+        didFinishWaiting = true;
+        resolve(null);
+      }, ROUTE_ARRIVAL_START_POSITION_GRACE_MS);
+
+      void request.then((outcome) => {
+        if (didFinishWaiting) {
+          return;
+        }
+
+        didFinishWaiting = true;
+        clearTimeout(timeoutId);
+        resolve(outcome);
+      });
+    }
+  );
 }
 
 async function reconcileKnownRouteArrivalPosition(
@@ -1732,15 +1781,42 @@ async function syncNativeRouteArrivalNotifications(
       );
 
       // iOS location triggers only react to an entry transition. A fresh
-      // position still covers registration while already inside the region,
-      // but it is a best-effort check after OS registration and must not keep
-      // visit saving or the following arrival-target update waiting.
+      // position still covers registration while already inside the region.
+      // Route start waits briefly for this lookup, then lets it continue
+      // without keeping the loading screen open.
       if (lastKnownPositionReconciliation !== "inside") {
-        reconcileFreshRouteArrivalInBackground(
-          places,
-          fallbackRadius,
-          `${message.id}:post-registration`
-        );
+        if (message.waitForCurrentPosition === true) {
+          postNativeRouteArrivalNotificationProgress(
+            webViewRef,
+            message.id,
+            "locating"
+          );
+          const freshPositionOutcome =
+            await waitForRouteArrivalStartPositionGrace(
+              startFreshRouteArrivalReconciliation(
+                places,
+                fallbackRadius,
+                `${message.id}:route-start`
+              )
+            );
+
+          if (
+            freshPositionOutcome?.status === "failed" &&
+            !(freshPositionOutcome.error instanceof
+              RouteArrivalCurrentPositionLookupError)
+          ) {
+            throw freshPositionOutcome.error;
+          }
+        } else {
+          // Visit transitions stay responsive; their fresh lookup may finish
+          // after the registration response because the current target is
+          // already protected by the OS monitor.
+          reconcileFreshRouteArrivalInBackground(
+            places,
+            fallbackRadius,
+            `${message.id}:post-registration`
+          );
+        }
       }
     }
 

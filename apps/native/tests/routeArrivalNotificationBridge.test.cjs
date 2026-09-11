@@ -356,6 +356,8 @@ function createHarness({
       return mocks[specifier];
     },
     process: { env: {} },
+    setTimeout,
+    clearTimeout,
     console: {
       log: () => {},
       warn: (...args) => {
@@ -896,6 +898,82 @@ test("마지막 위치로 도착을 확인하지 못해도 등록 응답 후 fre
 
   assert.equal(state.currentPositionRequests.length, 1);
   assert.equal(state.scheduled.length, 1);
+});
+
+test(
+  "여행 시작 동기화는 fresh GPS와 반경 내 알림 처리가 끝난 뒤 응답한다",
+  { timeout: 1000 },
+  async () => {
+    const { state, sync } = createHarness();
+    state.lastKnownPosition = null;
+    const freshPositionStarted = createDeferred();
+    const releaseFreshPosition = createDeferred();
+    state.onPosition = async () => {
+      freshPositionStarted.resolve();
+      await releaseFreshPosition.promise;
+    };
+
+    const request = sync([place], { waitForCurrentPosition: true });
+    await freshPositionStarted.promise;
+
+    assert.equal(state.responses.length, 0);
+    assert.equal(state.scheduled.length, 0);
+    assert.equal(state.progress.at(-1).stage, "locating");
+
+    releaseFreshPosition.resolve();
+    await request;
+
+    assert.equal(state.responses.at(-1).ok, true);
+    assert.equal(state.scheduled.length, 1);
+  }
+);
+
+test(
+  "여행 시작은 3초 뒤 응답하고 진행 중인 GPS 확인으로 나중에 알린다",
+  { timeout: 5000 },
+  async () => {
+    const { state, sync } = createHarness();
+    state.lastKnownPosition = null;
+    const freshPositionStarted = createDeferred();
+    const releaseFreshPosition = createDeferred();
+    const notificationScheduled = createDeferred();
+    state.onPosition = async () => {
+      freshPositionStarted.resolve();
+      await releaseFreshPosition.promise;
+    };
+    state.onScheduleNotification = () => notificationScheduled.resolve();
+
+    const request = sync([place], { waitForCurrentPosition: true });
+    await freshPositionStarted.promise;
+    await request;
+
+    assert.equal(state.responses.at(-1).ok, true);
+    assert.equal(state.scheduled.length, 0);
+
+    releaseFreshPosition.resolve();
+    await notificationScheduled.promise;
+
+    assert.equal(state.scheduled.length, 1);
+  }
+);
+
+test("여행 시작 GPS 정확도가 부족해도 OS 등록 완료 후 응답한다", async () => {
+  const { state, sync } = createHarness();
+  state.lastKnownPosition = null;
+  state.currentPosition = {
+    ...state.currentPosition,
+    accuracyMeters: 301,
+  };
+
+  await sync([place], { waitForCurrentPosition: true });
+
+  assert.equal(state.responses.at(-1).ok, true);
+  assert.equal(state.scheduled.length, 0);
+  assert.ok(
+    state.warnings.some(([message]) =>
+      message.includes("current position reconciliation deferred")
+    )
+  );
 });
 
 for (const [name, createInvalidLastKnownPosition] of [

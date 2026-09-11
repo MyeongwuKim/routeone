@@ -33,6 +33,7 @@ type RouteArrivalNotificationSyncOptions = {
   onProgress?: RouteArrivalProgressHandler;
   routeArrivalEnabled?: boolean;
   checkCurrentPosition?: boolean;
+  waitForCurrentPosition?: boolean;
   requestPermissions?: boolean;
   requireConfirmedRegistration?: boolean;
 };
@@ -121,6 +122,7 @@ function syncNativeRouteArrivalNotificationPlaces(
   options: {
     onProgress?: RouteArrivalProgressHandler;
     checkCurrentPosition?: boolean;
+    waitForCurrentPosition?: boolean;
     requestPermissions?: boolean;
   } = {}
 ) {
@@ -131,6 +133,7 @@ function syncNativeRouteArrivalNotificationPlaces(
     language,
     onProgress: options.onProgress,
     checkCurrentPosition: options.checkCurrentPosition,
+    waitForCurrentPosition: options.waitForCurrentPosition,
     requestPermissions: options.requestPermissions,
   });
 }
@@ -197,6 +200,7 @@ export async function syncTodayRouteArrivalNotifications(
       {
         onProgress: options.onProgress,
         checkCurrentPosition: options.checkCurrentPosition,
+        waitForCurrentPosition: options.waitForCurrentPosition,
         requestPermissions: options.requestPermissions,
       }
     );

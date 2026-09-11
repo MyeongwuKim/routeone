@@ -713,6 +713,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
       var radiusMeters = options && typeof options.radiusMeters === "number" ? options.radiusMeters : null;
       var language = options && options.language === "en" ? "en" : "ko";
       var checkCurrentPosition = !options || options.checkCurrentPosition !== false;
+      var waitForCurrentPosition = Boolean(options && options.waitForCurrentPosition);
       var requestPermissions = !options || options.requestPermissions !== false;
 
       return new Promise(function routeOneNativeRouteArrivalNotifications(resolve, reject) {
@@ -747,6 +748,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
             radiusMeters: radiusMeters,
             language: language,
             checkCurrentPosition: checkCurrentPosition,
+            waitForCurrentPosition: waitForCurrentPosition,
             requestPermissions: requestPermissions
           })
         );

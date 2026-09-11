@@ -209,6 +209,8 @@ export function isNativeRouteArrivalNotificationSyncRequest(
     NATIVE_APP_LANGUAGES.has(maybeRequest.language) &&
     (maybeRequest.checkCurrentPosition == null ||
       typeof maybeRequest.checkCurrentPosition === "boolean") &&
+    (maybeRequest.waitForCurrentPosition == null ||
+      typeof maybeRequest.waitForCurrentPosition === "boolean") &&
     (maybeRequest.requestPermissions == null ||
       typeof maybeRequest.requestPermissions === "boolean") &&
     Array.isArray(maybeRequest.places) &&

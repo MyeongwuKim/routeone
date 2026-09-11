@@ -127,6 +127,7 @@ test("장소 도착 등록 bridge가 권한 요청 생략 옵션을 네이티브
   const request = window.RouteOneNative.syncRouteArrivalNotifications({
     places: [],
     language: "ko",
+    waitForCurrentPosition: true,
     requestPermissions: false,
   });
   const syncMessage = messages.find(
@@ -134,6 +135,7 @@ test("장소 도착 등록 bridge가 권한 요청 생략 옵션을 네이티브
   );
 
   assert.equal(syncMessage.requestPermissions, false);
+  assert.equal(syncMessage.waitForCurrentPosition, true);
   assert.equal(syncMessage.sessionId, "native-session-1");
   window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_SYNC_RESPONSE__(
     syncMessage.id,

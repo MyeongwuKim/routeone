@@ -409,6 +409,32 @@ test("방문 완료 후에는 다음 장소 반경의 현재 위치를 즉시 �
   );
 });
 
+test("여행 시작 완료 동기화는 fresh GPS 확인 대기 옵션을 전달한다", async () => {
+  capturedNativeSyncOptions = null;
+  const currentDateKey = getCurrentDateKey();
+  const startedRoute = arrivalTarget.createRouteArrivalStartPreview(
+    createRoute(),
+    currentDateKey,
+    `${currentDateKey}T01:30:00.000Z`
+  );
+
+  await arrivalService.syncTodayRouteArrivalNotifications(
+    [startedRoute],
+    "ko",
+    startedRoute.id,
+    {
+      routeArrivalEnabled: true,
+      checkCurrentPosition: true,
+      waitForCurrentPosition: true,
+      requestPermissions: true,
+      requireConfirmedRegistration: true,
+    }
+  );
+
+  assert.equal(capturedNativeSyncOptions.checkCurrentPosition, true);
+  assert.equal(capturedNativeSyncOptions.waitForCurrentPosition, true);
+});
+
 test("방문 완료 전환 lock은 중첩된 작업이 모두 끝날 때까지 전역 동기화를 막는다", () => {
   const releaseFirst =
     transitionLock.acquireRouteArrivalTransitionLock("route-1");

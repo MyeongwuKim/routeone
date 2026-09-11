@@ -772,6 +772,7 @@ function MyRoutePage() {
             routeArrivalEnabled:
               notificationSettings.data.notificationSettings
                 .routeArrivalEnabled,
+            waitForCurrentPosition: true,
             requestPermissions: true,
             requireConfirmedRegistration: true,
           }

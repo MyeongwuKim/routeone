@@ -11,6 +11,7 @@ export function syncNativeRouteArrivalNotifications({
   radiusMeters,
   language,
   checkCurrentPosition,
+  waitForCurrentPosition,
   requestPermissions,
   onProgress,
 }: {
@@ -18,6 +19,7 @@ export function syncNativeRouteArrivalNotifications({
   radiusMeters?: number;
   language?: "ko" | "en";
   checkCurrentPosition?: boolean;
+  waitForCurrentPosition?: boolean;
   requestPermissions?: boolean;
   onProgress?: (stage: NativeArrivalNotificationProgress) => void;
 }) {
@@ -30,6 +32,7 @@ export function syncNativeRouteArrivalNotifications({
         radiusMeters,
         language,
         checkCurrentPosition,
+        waitForCurrentPosition,
         requestPermissions,
         onProgress,
       })

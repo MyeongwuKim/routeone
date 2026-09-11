@@ -201,6 +201,7 @@ export type NativeBridgeApi = {
     radiusMeters?: number;
     language?: "ko" | "en";
     checkCurrentPosition?: boolean;
+    waitForCurrentPosition?: boolean;
     requestPermissions?: boolean;
     onProgress?: (stage: NativeArrivalNotificationProgress) => void;
   }) => Promise<NativeArrivalNotificationSyncResult>;

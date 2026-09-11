@@ -111,6 +111,7 @@ export type NativeRouteArrivalNotificationSyncRequest = {
   radiusMeters?: number | null;
   language: NativeAppLanguage;
   checkCurrentPosition?: boolean | null;
+  waitForCurrentPosition?: boolean | null;
   requestPermissions?: boolean | null;
 };
 
