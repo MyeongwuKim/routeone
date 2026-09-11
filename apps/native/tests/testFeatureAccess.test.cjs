@@ -29,8 +29,8 @@ test("개발 앱은 모든 계정에서 테스트 기능을 허용한다", () =>
   assert.equal(moduleExports.isNativeTestFeatureEnabled(null, "dev"), true);
 });
 
-test("운영 앱은 OWNER 마스터 계정에만 테스트 기능을 허용한다", () => {
-  assert.equal(moduleExports.isNativeTestFeatureEnabled("OWNER", "prod"), true);
+test("운영 앱은 계정 역할과 관계없이 테스트 기능을 차단한다", () => {
+  assert.equal(moduleExports.isNativeTestFeatureEnabled("OWNER", "prod"), false);
   assert.equal(moduleExports.isNativeTestFeatureEnabled("REVIEWER", "prod"), false);
   assert.equal(moduleExports.isNativeTestFeatureEnabled("USER", "prod"), false);
   assert.equal(moduleExports.isNativeTestFeatureEnabled(null, "prod"), false);

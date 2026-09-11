@@ -1014,6 +1014,9 @@ export type UiText = {
     routeOriginal: string;
     routeCurrent: string;
     routeAll: string;
+    routeDetails: string;
+    routeSegmentCount: (count: number) => string;
+    routeMovementOrder: (order: number) => string;
     routeViewModeAria: string;
     routeDayViewAria: (label: string) => string;
     segmentHighlighted: string;
@@ -2533,7 +2536,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       noPlacedPlaces: "배치된 장소가 없습니다",
       routeOriginal: "기존 경로",
       routeCurrent: "재계산 경로",
-      routeAll: "전체",
+      routeAll: "비교",
+      routeDetails: "경로 상세",
+      routeSegmentCount: (count) => `${count}개 구간`,
+      routeMovementOrder: (order) => `${order}번째 이동`,
       routeViewModeAria: "경로 표시 방식",
       routeDayViewAria: (label) => `${label} 경로 보기`,
       segmentHighlighted: "구간 하이라이트 중",
@@ -4102,7 +4108,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       noPlacedPlaces: "No places arranged",
       routeOriginal: "Original route",
       routeCurrent: "Recalculated route",
-      routeAll: "All",
+      routeAll: "Compare",
+      routeDetails: "Route details",
+      routeSegmentCount: (count) =>
+        `${count} ${count === 1 ? "segment" : "segments"}`,
+      routeMovementOrder: (order) => `Movement ${order}`,
       routeViewModeAria: "Route display mode",
       routeDayViewAria: (label) => `View route for ${label}`,
       segmentHighlighted: "Segment highlighted",

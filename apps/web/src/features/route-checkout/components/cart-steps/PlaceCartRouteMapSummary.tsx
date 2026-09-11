@@ -1,25 +1,30 @@
-import { useMemo } from "react";
-import { SegmentedToggle, type SegmentedToggleOption } from "@/components/inputs";
+/**
+ * 사용 위치: 루트 지도 → 하단 경로 상세 영역
+ *
+ * 용도:
+ * 지도에서 확인할 수 있는 이동 구간 수를 먼저 보여주고,
+ * 사용자가 요청할 때 세로형 경로 상세 목록을 펼친다.
+ *
+ * 구조:
+ * 상세 펼침 버튼, START 초기화 버튼, 이동 구간 목록으로 구성되어 있다.
+ */
+import { useCallback, useEffect, useRef, useState } from "react";
+import { IoChevronUp } from "react-icons/io5";
 import type { UiText } from "@/lib/uiText";
-import {
-  getRouteSegmentDisplayColor,
-  getRouteSegmentKey,
-  type RouteDisplayVariant,
-  type RouteMapSegment,
-  type RouteMapViewMode,
-  type RouteSegmentSelection,
-  type StartPreviewMode,
+import type {
+  RouteDisplayVariant,
+  RouteMapSegment,
+  RouteMapViewMode,
+  RouteSegmentSelection,
 } from "../../models/routeMapModel";
 import type { RoutePointGroup } from "../../hooks/usePlaceCartRouteMapPopup";
-import RouteSegmentSelectCard from "./RouteSegmentSelectCard";
+import RouteMapSegmentDetails from "./RouteMapSegmentDetails";
 
 type PlaceCartRouteMapSummaryProps = {
   text: UiText;
   hasComparisonRoute: boolean;
   routeViewMode: RouteMapViewMode;
   isStartPreviewDirty: boolean;
-  startPreviewMode: StartPreviewMode;
-  onStartPreviewModeChange: (mode: StartPreviewMode) => void;
   canResetStartPreview: boolean;
   onResetStartPreview: () => void;
   routePointGroups: RoutePointGroup[];
@@ -36,127 +41,107 @@ function PlaceCartRouteMapSummary({
   hasComparisonRoute,
   routeViewMode,
   isStartPreviewDirty,
-  startPreviewMode,
-  onStartPreviewModeChange,
   canResetStartPreview,
   onResetStartPreview,
   routePointGroups,
   selectedSegment,
   onSelectSegment,
 }: PlaceCartRouteMapSummaryProps) {
-  const startPreviewModeOptions = useMemo(
-    () =>
-      [
-        { value: "original", label: text.cart.routeOriginal },
-        { value: "changed", label: text.cart.routeCurrent },
-      ] satisfies ReadonlyArray<SegmentedToggleOption<StartPreviewMode>>,
-    [text]
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [detailsHeight, setDetailsHeight] = useState(0);
+  const detailsResizeObserverRef = useRef<ResizeObserver | null>(null);
+  const observeDetailsContent = useCallback((element: HTMLDivElement | null) => {
+    detailsResizeObserverRef.current?.disconnect();
+    detailsResizeObserverRef.current = null;
+
+    if (!element) {
+      return;
+    }
+
+    const updateDetailsHeight = () => {
+      const viewportLimit = Math.max(160, window.innerHeight * 0.42);
+      const nextHeight = Math.min(
+        Math.ceil(element.getBoundingClientRect().height),
+        viewportLimit
+      );
+      setDetailsHeight((currentHeight) =>
+        currentHeight === nextHeight ? currentHeight : nextHeight
+      );
+    };
+    const resizeObserver = new ResizeObserver(updateDetailsHeight);
+
+    resizeObserver.observe(element);
+    detailsResizeObserverRef.current = resizeObserver;
+    updateDetailsHeight();
+  }, []);
+  const visibleSegmentCount =
+    routeViewMode === "all"
+      ? Math.max(...routePointGroups.map((group) => group.segments.length), 0)
+      : (routePointGroups[0]?.segments.length ?? 0);
+
+  useEffect(
+    () => () => {
+      detailsResizeObserverRef.current?.disconnect();
+    },
+    []
   );
 
   return (
-    <div className="app-safe-area-footer max-h-[228px] shrink-0 overflow-hidden border-t border-brand-100 bg-white px-4 py-3">
-      <div className="scrollbar-hide max-h-[204px] overflow-y-auto pr-1">
-        <div className="space-y-2 pb-1">
-          {isStartPreviewDirty ? (
-            <div className="flex items-center justify-between gap-3 pb-1">
-              <p className="shrink-0 text-[10px] font-black text-brand-700">
-                {text.dayRoute.startBasis}
-              </p>
-              <div className="flex shrink-0 items-center gap-1.5">
-                <SegmentedToggle
-                  options={startPreviewModeOptions}
-                  value={startPreviewMode}
-                  onChange={onStartPreviewModeChange}
-                  ariaLabel={text.dayRoute.startRouteComparisonAria}
-                  size="xs"
-                />
-                {canResetStartPreview ? (
-                  <button
-                    type="button"
-                    onClick={onResetStartPreview}
-                    className="rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-500"
-                  >
-                    {text.common.reset}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-          {routePointGroups.map((group) => (
-            <div key={group.key}>
-              {hasComparisonRoute ? (
-                <p
-                  className={`mb-1 text-[10px] font-black ${
-                    group.key === "comparison"
-                      ? "text-slate-500"
-                      : "text-brand-700"
-                  }`}
-                >
-                  {group.label}
-                </p>
-              ) : null}
-              <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-1">
-                {group.points.map((point) => (
-                  <div
-                    key={`${group.key}-${point.id}`}
-                    className={`h-16 min-w-[136px] rounded-2xl border px-3 py-2 ${
-                      group.key === "comparison"
-                        ? "border-slate-200 bg-slate-50"
-                        : "border-brand-100 bg-brand-50"
-                    }`}
-                  >
-                    <p
-                      className={`text-[10px] font-bold ${
-                        group.key === "comparison"
-                          ? "text-slate-500"
-                          : "text-brand-700"
-                      }`}
-                    >
-                      {point.variant === "start"
-                        ? "START"
-                        : text.dayRoute.stopOrderLabel(point.sequenceLabel)}
-                    </p>
-                    <p className="mt-1 truncate text-xs font-semibold text-slate-900">
-                      {point.title}
-                    </p>
-                    <p className="mt-0.5 text-[10px] text-slate-500">
-                      {point.subtitle}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              {group.segments.length > 0 ? (
-                <div className="scrollbar-hide mt-1 flex gap-2 overflow-x-auto pb-1">
-                  {group.segments.map((segment, segmentIndex) => {
-                    const isSelectedSegment =
-                      selectedSegment &&
-                      getRouteSegmentKey(
-                        selectedSegment.variant,
-                        selectedSegment.segmentId
-                      ) === getRouteSegmentKey(group.key, segment.id);
-                    const segmentColor = getRouteSegmentDisplayColor({
-                      index: segmentIndex,
-                      variant: group.key,
-                      hasComparisonRoute,
-                      routeViewMode,
-                    });
-
-                    return (
-                      <RouteSegmentSelectCard
-                        key={`${group.key}-${segment.id}`}
-                        segment={segment}
-                        segmentColor={segmentColor}
-                        variant={group.key}
-                        isSelected={Boolean(isSelectedSegment)}
-                        text={text}
-                        onSelect={onSelectSegment}
-                      />
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-          ))}
+    <div className="app-safe-area-footer shrink-0 border-t border-brand-100 bg-white">
+      <div className="flex min-h-14 items-center gap-2 px-4 py-2">
+        <button
+          type="button"
+          aria-expanded={isExpanded}
+          onClick={() => setIsExpanded((current) => !current)}
+          className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl px-1 py-2 text-left"
+        >
+          <span className="min-w-0">
+            <span className="block text-xs font-black text-slate-900">
+              {text.cart.routeDetails}
+            </span>
+            <span className="mt-0.5 block text-[10px] font-bold text-slate-500">
+              {text.cart.routeSegmentCount(visibleSegmentCount)}
+              {isStartPreviewDirty ? ` · ${text.dayRoute.startBasis}` : ""}
+            </span>
+          </span>
+          <IoChevronUp
+            className={`shrink-0 text-lg text-brand-700 motion-safe:transition-transform motion-safe:duration-300 ${
+              isExpanded ? "" : "rotate-180"
+            }`}
+          />
+        </button>
+        {isStartPreviewDirty && canResetStartPreview ? (
+          <button
+            type="button"
+            onClick={onResetStartPreview}
+            className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] font-black text-slate-500"
+          >
+            {text.common.reset}
+          </button>
+        ) : null}
+      </div>
+      <div
+        className="overflow-hidden motion-safe:will-change-[height] motion-safe:transition-[height] motion-safe:duration-[320ms] motion-safe:ease-out"
+        style={{ height: isExpanded ? `${detailsHeight}px` : "0px" }}
+      >
+        <div className="h-full overflow-y-auto">
+          <div
+            ref={observeDetailsContent}
+            className={`scrollbar-hide border-t border-slate-100 px-4 py-3 motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:ease-out ${
+              isExpanded
+                ? "translate-y-0 opacity-100 motion-safe:delay-75"
+                : "-translate-y-2 opacity-0"
+            }`}
+          >
+            <RouteMapSegmentDetails
+              text={text}
+              hasComparisonRoute={hasComparisonRoute}
+              routeViewMode={routeViewMode}
+              routePointGroups={routePointGroups}
+              selectedSegment={selectedSegment}
+              onSelectSegment={onSelectSegment}
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -31,11 +31,7 @@ export function isDevelopmentServiceAreaEnabled() {
 }
 
 export function isTestServiceAreaEnabled() {
-  return (
-    isDevelopmentServiceAreaEnabled() ||
-    (typeof window !== "undefined" &&
-      window.RouteOneRuntimeConfig?.testAccountMode === true)
-  );
+  return isDevelopmentServiceAreaEnabled();
 }
 
 export function getEffectiveServiceAreaId(selectedAreaId: ServiceAreaId) {

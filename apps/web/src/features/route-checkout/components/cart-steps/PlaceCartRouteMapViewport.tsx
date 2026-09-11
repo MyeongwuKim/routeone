@@ -53,12 +53,18 @@ function PlaceCartRouteMapViewport({
   const comparisonControlTopClass = hasDaySelector ? "top-16" : "top-4";
   const floatingPanelTopClass = hasDaySelector
     ? hasComparisonRoute
-      ? "top-28"
+      ? "top-32"
       : "top-16"
     : hasComparisonRoute
       ? "top-20"
       : "top-4";
-  const fallbackPanelTopClass = hasDaySelector ? "top-28" : "top-24";
+  const fallbackPanelTopClass = hasDaySelector
+    ? hasComparisonRoute
+      ? "top-32"
+      : "top-16"
+    : hasComparisonRoute
+      ? "top-20"
+      : "top-4";
 
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden">

@@ -47,7 +47,6 @@ export type RouteMapDayOption = {
 
 export type RouteDisplayVariant = "current" | "comparison";
 export type RouteMapViewMode = "all" | "comparison" | "current";
-export type StartPreviewMode = "original" | "changed";
 export type RouteSegmentSelection = {
   variant: RouteDisplayVariant;
   segmentId: string;
@@ -153,6 +152,13 @@ const DEFAULT_START_PREVIEW_OFFSET = {
   lat: -0.012,
   lng: -0.012,
 };
+
+export const ROUTE_POINT_COMPACT_MARKER_SIZE = {
+  width: 44,
+  height: 50,
+  anchorX: 22,
+  anchorY: 50,
+} as const;
 
 export const EMPTY_COMPLETED_ITEM_IDS: string[] = [];
 export const EMPTY_DAY_OPTIONS: RouteMapDayOption[] = [];
@@ -442,12 +448,14 @@ export function createRoutePointBubbleMarkerIconHtml({
   variant,
   showVariantBadge,
   focusColor,
+  expanded,
   text,
 }: {
   point: RouteMapPoint;
   variant: RouteDisplayVariant;
   showVariantBadge: boolean;
   focusColor?: string;
+  expanded: boolean;
   text: UiText;
 }) {
   const isStart = point.variant === "start";
@@ -482,6 +490,48 @@ export function createRoutePointBubbleMarkerIconHtml({
     ? text.cart.routeOriginal
     : text.cart.routeCurrent;
 
+  if (!expanded) {
+    return `
+      <div style="
+        position:relative;
+        width:${ROUTE_POINT_COMPACT_MARKER_SIZE.width}px;
+        height:${ROUTE_POINT_COMPACT_MARKER_SIZE.height}px;
+        pointer-events:auto;
+        user-select:none;
+        cursor:${isStart ? "grab" : "pointer"};
+        font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      ">
+        <div style="
+          position:absolute; top:0; left:4px; z-index:2;
+          width:36px; height:36px; box-sizing:border-box;
+          border:3px solid #ffffff; border-radius:9999px;
+          background:${labelBackground}; color:${labelText};
+          display:flex; align-items:center; justify-content:center;
+          font-size:14px; font-weight:900; line-height:1;
+          box-shadow:0 7px 16px ${shadowColor}, 0 2px 6px rgba(15,23,42,0.20);
+        ">${escapeMarkerHtml(point.sequenceLabel)}</div>
+        <div style="
+          position:absolute; left:50%; top:31px; z-index:1;
+          width:0; height:0; transform:translateX(-50%);
+          border-left:7px solid transparent;
+          border-right:7px solid transparent;
+          border-top:10px solid ${borderColor};
+          filter:drop-shadow(0 4px 4px ${shadowColor});
+        "></div>
+        ${
+          showVariantBadge
+            ? `<span style="
+                position:absolute; top:-7px; right:-5px; z-index:3;
+                min-width:16px; height:16px; box-sizing:border-box;
+                border:2px solid #ffffff; border-radius:9999px;
+                background:${toneDarkColor};
+              "></span>`
+            : ""
+        }
+      </div>
+    `;
+  }
+
   return `
     <div style="
       position:relative;
@@ -489,7 +539,7 @@ export function createRoutePointBubbleMarkerIconHtml({
       height:${PLACE_BUBBLE_MARKER_SIZE.height}px;
       pointer-events:auto;
       user-select:none;
-      cursor:${isStart ? "grab" : "default"};
+      cursor:${isStart ? "grab" : "pointer"};
       font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     ">
       ${

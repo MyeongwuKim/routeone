@@ -14,6 +14,7 @@
     "images:cleanup:dev": "tsx src/jobs/cleanupOrphanImages.ts",
     "users:backfill-roles": "tsx src/scripts/backfillUserRoles.ts",
     "contest:accounts": "tsx src/scripts/provisionContestAccounts.ts",
+    "routes:fix-seed-starts": "tsx src/scripts/updateSeedRouteStartLocations.ts",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },

@@ -29,6 +29,7 @@ import {
   MdPhotoLibrary,
 } from "react-icons/md";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import FeedbackSkeleton from "@/components/feedback/FeedbackSkeleton";
 import NotificationSettingsSkeleton from "@/components/feedback/NotificationSettingsSkeleton";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import RoutePageHeader from "@/components/layout/RoutePageHeader";
@@ -773,7 +774,7 @@ function AppRouter() {
           />
           <Route
             path="/me/feedback"
-            element={withRouteSuspense(<FeedbackPage />)}
+            element={withRouteSuspense(<FeedbackPage />, <FeedbackSkeleton />)}
           />
         </Route>
       </Routes>

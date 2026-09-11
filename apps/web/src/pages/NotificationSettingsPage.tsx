@@ -206,14 +206,12 @@ function NotificationSettingsPage() {
       await updateMutation.mutateAsync(input);
 
       if (requestPermission) {
-        try {
-          await registerPushToken();
-        } catch (error) {
+        void registerPushToken().catch((error) => {
           console.warn(
             "[push-device] token registration failed",
             error instanceof Error ? error.message : error
           );
-        }
+        });
       }
 
       showToast(text.notificationSettings.savedToast);

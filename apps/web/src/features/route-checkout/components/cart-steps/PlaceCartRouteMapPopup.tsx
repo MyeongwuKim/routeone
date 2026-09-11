@@ -101,8 +101,6 @@ function PlaceCartRouteMapPopup(props: PlaceCartRouteMapPopupProps) {
           hasComparisonRoute={hasComparisonRoute}
           routeViewMode={map.routeViewMode}
           isStartPreviewDirty={summary.isStartPreviewDirty}
-          startPreviewMode={summary.startPreviewMode}
-          onStartPreviewModeChange={summary.setStartPreviewMode}
           canResetStartPreview={summary.canResetStartPreview}
           onResetStartPreview={summary.resetStartPreview}
           routePointGroups={summary.visibleRoutePointGroups}

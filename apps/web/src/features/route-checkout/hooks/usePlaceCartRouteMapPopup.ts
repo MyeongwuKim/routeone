@@ -17,7 +17,6 @@ import {
   type RouteMapPoint,
   type RouteMapSegment,
   type RouteMapViewMode,
-  type StartPreviewMode,
 } from "../models/routeMapModel";
 import type {
   PlannedRouteDay,
@@ -74,9 +73,6 @@ export function usePlaceCartRouteMapPopup({
   const [startPreviewDraftByDayKey, setStartPreviewDraftByDayKey] = useState<
     Record<string, RouteStartLocation>
   >({});
-  const [startPreviewModeByDayKey, setStartPreviewModeByDayKey] = useState<
-    Record<string, StartPreviewMode>
-  >({});
   const [routeMapViewState, dispatchRouteMapView] = useReducer(
     routeMapViewReducer,
     { initialDayOptionId, dayOptions },
@@ -110,14 +106,6 @@ export function usePlaceCartRouteMapPopup({
     : null;
   const isStartPreviewDirty =
     enableStartPreview && Boolean(changedStartPreviewLocation);
-  const startPreviewMode = isStartPreviewDirty
-    ? (startPreviewModeByDayKey[displayDayKey] ?? "changed")
-    : "changed";
-  const previewStartLocation = enableStartPreview
-    ? startPreviewMode === "original"
-      ? initialStartPreviewLocation
-      : (changedStartPreviewLocation ?? initialStartPreviewLocation)
-    : initialStartPreviewLocation;
 
   const createStartPreviewRouteDay = useCallback(
     (routeDay: PlannedRouteDay) => {
@@ -126,41 +114,33 @@ export function usePlaceCartRouteMapPopup({
       const changedLocation = enableStartPreview
         ? (startPreviewDraftByDayKey[routeDayKey] ?? null)
         : null;
-      const isDirty = enableStartPreview && Boolean(changedLocation);
-      const mode = isDirty
-        ? (startPreviewModeByDayKey[routeDayKey] ?? "changed")
-        : "changed";
       const startLocation = enableStartPreview
-        ? mode === "original"
-          ? initialLocation
-          : (changedLocation ?? initialLocation)
+        ? (changedLocation ?? initialLocation)
         : initialLocation;
 
       return enableStartPreview && startLocation
         ? createStartPreviewDay({
             day: routeDay,
             startLocation,
-            shouldReorder: isDirty && mode === "changed",
+            shouldReorder: Boolean(changedLocation),
           })
         : routeDay;
     },
-    [
-      enableStartPreview,
-      startPreviewDraftByDayKey,
-      startPreviewModeByDayKey,
-    ]
+    [enableStartPreview, startPreviewDraftByDayKey]
   );
   const displayRouteDay = useMemo(
+    () => createStartPreviewRouteDay(displayDay),
+    [createStartPreviewRouteDay, displayDay]
+  );
+  const startPreviewComparisonDay = useMemo(
     () =>
-      enableStartPreview && previewStartLocation
-        ? createStartPreviewRouteDay(displayDay)
-        : displayDay,
-    [
-      createStartPreviewRouteDay,
-      displayDay,
-      enableStartPreview,
-      previewStartLocation,
-    ]
+      isStartPreviewDirty && initialStartPreviewLocation
+        ? createStartPreviewDay({
+            day: displayDay,
+            startLocation: initialStartPreviewLocation,
+          })
+        : null,
+    [displayDay, initialStartPreviewLocation, isStartPreviewDirty]
   );
   const checkoutDayOptions = useMemo(() => {
     const routeDayOptions =
@@ -219,7 +199,10 @@ export function usePlaceCartRouteMapPopup({
       selectedCheckoutDayIdSet.has(option.id)
     );
 
-  const displayComparisonDay = selectedDayOption?.comparisonDay ?? comparisonDay;
+  const displayComparisonDay =
+    selectedDayOption?.comparisonDay ??
+    comparisonDay ??
+    startPreviewComparisonDay;
   const completedItemIdSet = useMemo(
     () => new Set(displayCompletedItemIds),
     [displayCompletedItemIds]
@@ -379,10 +362,6 @@ export function usePlaceCartRouteMapPopup({
         ...currentDrafts,
         [displayDayKey]: location,
       }));
-      setStartPreviewModeByDayKey((currentModes) => ({
-        ...currentModes,
-        [displayDayKey]: "changed",
-      }));
       clearSelectedSegment();
     },
     [clearSelectedSegment, displayDayKey]
@@ -416,26 +395,11 @@ export function usePlaceCartRouteMapPopup({
       routeViewMode: nextMode,
     });
   }, []);
-  const setStartPreviewMode = useCallback(
-    (mode: StartPreviewMode) => {
-      setStartPreviewModeByDayKey((currentModes) => ({
-        ...currentModes,
-        [displayDayKey]: mode,
-      }));
-      clearSelectedSegment();
-    },
-    [clearSelectedSegment, displayDayKey]
-  );
   const resetStartPreview = useCallback(() => {
     setStartPreviewDraftByDayKey((currentDrafts) => {
       const nextDrafts = { ...currentDrafts };
       delete nextDrafts[displayDayKey];
       return nextDrafts;
-    });
-    setStartPreviewModeByDayKey((currentModes) => {
-      const nextModes = { ...currentModes };
-      delete nextModes[displayDayKey];
-      return nextModes;
     });
     clearSelectedSegment();
   }, [clearSelectedSegment, displayDayKey]);
@@ -556,8 +520,6 @@ export function usePlaceCartRouteMapPopup({
     },
     summary: {
       isStartPreviewDirty,
-      startPreviewMode,
-      setStartPreviewMode,
       canResetStartPreview,
       resetStartPreview,
       visibleRoutePointGroups,
