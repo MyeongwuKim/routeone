@@ -1017,6 +1017,7 @@ export type UiText = {
     routeDetails: string;
     routeSegmentCount: (count: number) => string;
     routeMovementOrder: (order: number) => string;
+    routeScrollHint: string;
     routeViewModeAria: string;
     routeDayViewAria: (label: string) => string;
     segmentHighlighted: string;
@@ -2540,6 +2541,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       routeDetails: "경로 상세",
       routeSegmentCount: (count) => `${count}개 구간`,
       routeMovementOrder: (order) => `${order}번째 이동`,
+      routeScrollHint: "아래로 스크롤해 나머지 구간 보기",
       routeViewModeAria: "경로 표시 방식",
       routeDayViewAria: (label) => `${label} 경로 보기`,
       segmentHighlighted: "구간 하이라이트 중",
@@ -4113,6 +4115,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       routeSegmentCount: (count) =>
         `${count} ${count === 1 ? "segment" : "segments"}`,
       routeMovementOrder: (order) => `Movement ${order}`,
+      routeScrollHint: "Scroll down for more segments",
       routeViewModeAria: "Route display mode",
       routeDayViewAria: (label) => `View route for ${label}`,
       segmentHighlighted: "Segment highlighted",

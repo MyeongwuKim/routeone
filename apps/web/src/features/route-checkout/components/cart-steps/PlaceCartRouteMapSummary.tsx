@@ -9,7 +9,7 @@
  * 상세 펼침 버튼, START 초기화 버튼, 이동 구간 목록으로 구성되어 있다.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IoChevronUp } from "react-icons/io5";
+import { IoChevronDown, IoChevronUp } from "react-icons/io5";
 import type { UiText } from "@/lib/uiText";
 import type {
   RouteDisplayVariant,
@@ -19,6 +19,10 @@ import type {
 } from "../../models/routeMapModel";
 import type { RoutePointGroup } from "../../hooks/usePlaceCartRouteMapPopup";
 import RouteMapSegmentDetails from "./RouteMapSegmentDetails";
+
+const MIN_DETAILS_HEIGHT = 180;
+const MAX_DETAILS_HEIGHT = 220;
+const DETAILS_VIEWPORT_RATIO = 0.25;
 
 type PlaceCartRouteMapSummaryProps = {
   text: UiText;
@@ -49,7 +53,21 @@ function PlaceCartRouteMapSummary({
 }: PlaceCartRouteMapSummaryProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [detailsHeight, setDetailsHeight] = useState(0);
+  const [showScrollHint, setShowScrollHint] = useState(false);
+  const detailsScrollRef = useRef<HTMLDivElement | null>(null);
   const detailsResizeObserverRef = useRef<ResizeObserver | null>(null);
+  const updateScrollHint = useCallback(() => {
+    const element = detailsScrollRef.current;
+
+    if (!element) {
+      setShowScrollHint(false);
+      return;
+    }
+
+    const remainingScroll =
+      element.scrollHeight - element.scrollTop - element.clientHeight;
+    setShowScrollHint(isExpanded && remainingScroll > 8);
+  }, [isExpanded]);
   const observeDetailsContent = useCallback((element: HTMLDivElement | null) => {
     detailsResizeObserverRef.current?.disconnect();
     detailsResizeObserverRef.current = null;
@@ -59,7 +77,11 @@ function PlaceCartRouteMapSummary({
     }
 
     const updateDetailsHeight = () => {
-      const viewportLimit = Math.max(160, window.innerHeight * 0.42);
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const viewportLimit = Math.min(
+        MAX_DETAILS_HEIGHT,
+        Math.max(MIN_DETAILS_HEIGHT, viewportHeight * DETAILS_VIEWPORT_RATIO)
+      );
       const nextHeight = Math.min(
         Math.ceil(element.getBoundingClientRect().height),
         viewportLimit
@@ -85,6 +107,21 @@ function PlaceCartRouteMapSummary({
     },
     []
   );
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(updateScrollHint);
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [detailsHeight, routePointGroups, routeViewMode, updateScrollHint]);
+
+  useEffect(() => {
+    if (!detailsScrollRef.current) {
+      return;
+    }
+
+    detailsScrollRef.current.scrollTop = 0;
+    updateScrollHint();
+  }, [routeViewMode, updateScrollHint]);
 
   return (
     <div className="app-safe-area-footer shrink-0 border-t border-brand-100 bg-white">
@@ -121,13 +158,22 @@ function PlaceCartRouteMapSummary({
         ) : null}
       </div>
       <div
-        className="overflow-hidden motion-safe:will-change-[height] motion-safe:transition-[height] motion-safe:duration-[320ms] motion-safe:ease-out"
+        className="relative overflow-hidden motion-safe:will-change-[height] motion-safe:transition-[height] motion-safe:duration-[320ms] motion-safe:ease-out"
         style={{ height: isExpanded ? `${detailsHeight}px` : "0px" }}
+        onTransitionEnd={(event) => {
+          if (event.propertyName === "height") {
+            updateScrollHint();
+          }
+        }}
       >
-        <div className="h-full overflow-y-auto">
+        <div
+          ref={detailsScrollRef}
+          onScroll={updateScrollHint}
+          className="scrollbar-hide h-full overflow-y-auto overscroll-contain"
+        >
           <div
             ref={observeDetailsContent}
-            className={`scrollbar-hide border-t border-slate-100 px-4 py-3 motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:ease-out ${
+            className={`border-t border-slate-100 px-4 py-3 motion-safe:transition-[opacity,transform] motion-safe:duration-200 motion-safe:ease-out ${
               isExpanded
                 ? "translate-y-0 opacity-100 motion-safe:delay-75"
                 : "-translate-y-2 opacity-0"
@@ -143,6 +189,14 @@ function PlaceCartRouteMapSummary({
             />
           </div>
         </div>
+        {showScrollHint ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-white via-white/95 to-transparent pb-2 pt-8 dark:from-[#071718] dark:via-[#071718]/95">
+            <span className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-white/95 px-3 py-1.5 text-[10px] font-black text-brand-700 shadow-sm dark:border-brand-400/30 dark:bg-[#0f3431]/95 dark:text-brand-200">
+              {text.cart.routeScrollHint}
+              <IoChevronDown className="text-sm motion-safe:animate-bounce" />
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
