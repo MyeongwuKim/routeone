@@ -1,0 +1,28 @@
+query PendingPhotoReports {
+  pendingPhotoReports {
+    photoId
+    title
+    imageUrl
+    thumbnailUrl
+    status
+    uploader {
+      id
+      displayName
+      email
+    }
+    reportCount
+    reasons
+    details
+    latestReportedAt
+  }
+}
+
+mutation ModeratePlacePhoto(
+  $photoId: ID!
+  $action: PlacePhotoModerationAction!
+) {
+  moderatePlacePhoto(photoId: $photoId, action: $action) {
+    photoId
+    action
+  }
+}

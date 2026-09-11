@@ -719,6 +719,7 @@ export const routeResolvers = {
       args: PlacePhotosArgs,
       context: GraphQLContext
     ) {
+      requireUser(context);
       return getPlacePhotos(context.prisma, args.place, {
         limit: args.limit,
       });

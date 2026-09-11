@@ -1,6 +1,9 @@
 query PlacePhotos($place: PlaceSnapshotInput!, $limit: Int) {
   placePhotos(place: $place, limit: $limit) {
     id
+    userId
+    isMine
+    reportedByMe
     placeKey
     placeKeys
     provider
@@ -24,6 +27,31 @@ query PlacePhotos($place: PlaceSnapshotInput!, $limit: Int) {
     status
     verifiedAt
     createdAt
+    updatedAt
+  }
+}
+
+mutation ReportPlacePhoto(
+  $photoId: ID!
+  $reason: PlacePhotoReportReason!
+  $details: String
+) {
+  reportPlacePhoto(photoId: $photoId, reason: $reason, details: $details) {
+    id
+    photoId
+    reason
+    details
+    status
+    createdAt
+    updatedAt
+  }
+}
+
+mutation CancelPlacePhotoReport($photoId: ID!) {
+  cancelPlacePhotoReport(photoId: $photoId) {
+    id
+    photoId
+    status
     updatedAt
   }
 }

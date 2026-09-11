@@ -442,7 +442,10 @@ export function usePlaceSheetData({
     [placePhotosQuery.data]
   );
   const userPlacePhotoViewerUrls = useMemo(
-    () => userPlacePhotos.map((photo) => photo.imageUrl),
+    () =>
+      userPlacePhotos
+        .filter((photo) => !photo.reportedByMe)
+        .map((photo) => photo.imageUrl),
     [userPlacePhotos]
   );
   const routeDurationText = routeQuery.data

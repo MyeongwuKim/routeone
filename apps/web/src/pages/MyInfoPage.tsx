@@ -11,6 +11,7 @@ import {
   MdLocationOn,
   MdMailOutline,
   MdNotifications,
+  MdOutlineAdminPanelSettings,
 } from "react-icons/md";
 import AccountSummaryCard from "@/components/account/AccountSummaryCard";
 import { useAccountUser } from "@/components/account/useAccountUser";
@@ -139,6 +140,18 @@ function MyInfoPage() {
           description={text.myInfo.likedRoutesDescription}
           onClick={() => navigate("/me/liked-routes")}
         />
+
+        {user?.role === "OWNER" ? (
+          <>
+            <div className="border-b border-brand-50" />
+            <MyInfoMenuRow
+              icon={<MdOutlineAdminPanelSettings />}
+              title={text.photoReport.managementTitle}
+              description={text.photoReport.managementDescription}
+              onClick={() => navigate("/me/photo-reports")}
+            />
+          </>
+        ) : null}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm">

@@ -49,6 +49,28 @@ export async function deleteUserAccount(prisma: PrismaClient, userId: string) {
 
     const linkedRecords = { OR: [{ userId }, { routeId: { in: ownedRouteIds } }] };
     // PlacePhoto의 ID 필드는 cascade 관계가 아니므로 DB 참조는 명시적으로 삭제한다.
+    await transaction.placePhotoReport.deleteMany({
+      where: {
+        OR: [
+          { reporterId: userId },
+          { reportedUserId: userId },
+          ...(ownedRouteIds.length
+            ? [
+                {
+                  photoId: {
+                    in: (
+                      await transaction.placePhoto.findMany({
+                        where: { routeId: { in: ownedRouteIds } },
+                        select: { id: true },
+                      })
+                    ).map((photo) => photo.id),
+                  },
+                },
+              ]
+            : []),
+        ],
+      },
+    });
     await transaction.placePhoto.deleteMany({ where: linkedRecords });
     await transaction.routeLike.deleteMany({ where: linkedRecords });
     await transaction.routeSave.deleteMany({ where: linkedRecords });

@@ -1,12 +1,14 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { IoTimeOutline } from "react-icons/io5";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import type { UiText } from "@/lib/uiText";
 import type { MapSheetPlace } from "@/types/place";
 import type { PlaceSheetData } from "../hooks/usePlaceSheetData";
+import PhotoReportDialog from "@/features/photo-report/components/PhotoReportDialog";
+import ReportablePlacePhotoCard from "@/features/photo-report/components/ReportablePlacePhotoCard";
+import { usePlacePhotoReport } from "@/features/photo-report/hooks/usePlacePhotoReport";
 import {
   ImageStripSkeleton,
-  PlacePhotoThumbnail,
 } from "./PlaceSheetPrimitives";
 
 type PlaceSheetMediaSectionProps = Pick<
@@ -42,6 +44,13 @@ function PlaceSheetMediaSection({
 }: PlaceSheetMediaSectionProps) {
   const officialImageStripRef = useRef<HTMLDivElement | null>(null);
   const userImageStripRef = useRef<HTMLDivElement | null>(null);
+  const [reportPhotoId, setReportPhotoId] = useState<string | null>(null);
+  const {
+    cancelReport,
+    isCanceling,
+    isSubmitting,
+    submitReport,
+  } = usePlacePhotoReport(text.photoReport);
 
   useLayoutEffect(() => {
     officialImageStripRef.current?.scrollTo({ left: 0 });
@@ -165,30 +174,22 @@ function PlaceSheetMediaSection({
             <ImageStripSkeleton />
           ) : userPlacePhotos.length > 0 ? (
             userPlacePhotos.map((photo, index) => (
-              <button
+              <ReportablePlacePhotoCard
                 key={photo.id}
-                type="button"
-                onClick={() =>
+                photo={photo}
+                text={text}
+                alt={text.placeSheet.userPhotoAlt(selectedPlace.title, index + 1)}
+                isCanceling={isCanceling}
+                onCancelReport={() => cancelReport(photo.id)}
+                onReport={() => setReportPhotoId(photo.id)}
+                onOpen={() =>
                   onOpenImageViewer(
                     userPlacePhotoViewerUrls,
-                    index,
+                    userPlacePhotoViewerUrls.indexOf(photo.imageUrl),
                     text.placeSheet.userPhotoViewerTitle(selectedPlace.title)
                   )
                 }
-                className="group relative h-44 w-40 shrink-0 snap-start overflow-hidden rounded-2xl border border-brand-100 bg-brand-50 text-left shadow-sm"
-              >
-                <PlacePhotoThumbnail
-                  thumbnailUrl={photo.thumbnailUrl}
-                  imageUrl={photo.imageUrl}
-                  alt={text.placeSheet.userPhotoAlt(
-                    selectedPlace.title,
-                    index + 1
-                  )}
-                />
-                <span className="absolute bottom-2 left-2 rounded-full bg-slate-950/60 px-2 py-1 text-[10px] font-black text-white backdrop-blur">
-                  {text.placeSheet.visitPhoto}
-                </span>
-              </button>
+              />
             ))
           ) : (
             <div className="w-full min-w-full shrink-0 snap-start">
@@ -203,6 +204,21 @@ function PlaceSheetMediaSection({
           )}
         </div>
       </div>
+
+      <PhotoReportDialog
+        key={reportPhotoId ?? "closed"}
+        isOpen={Boolean(reportPhotoId)}
+        isSubmitting={isSubmitting}
+        onClose={() => setReportPhotoId(null)}
+        onSubmit={(reason, details) => {
+          if (!reportPhotoId) return;
+          submitReport(
+            { photoId: reportPhotoId, reason, details },
+            { onSuccess: () => setReportPhotoId(null) }
+          );
+        }}
+        text={text.photoReport}
+      />
     </>
   );
 }

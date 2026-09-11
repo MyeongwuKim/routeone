@@ -90,6 +90,9 @@ const ServiceAreaSettingsPage = lazyWithPreload(
 );
 const AppInfoPage = lazyWithPreload(() => import("@/pages/AppInfoPage"));
 const FeedbackPage = lazyWithPreload(() => import("@/pages/FeedbackPage"));
+const PhotoReportManagementPage = lazyWithPreload(
+  () => import("@/features/photo-report/pages/PhotoReportManagementPage")
+);
 const NotificationCenterPage = lazyWithPreload(
   () => import("@/pages/NotificationCenterPage")
 );
@@ -775,6 +778,10 @@ function AppRouter() {
           <Route
             path="/me/feedback"
             element={withRouteSuspense(<FeedbackPage />, <FeedbackSkeleton />)}
+          />
+          <Route
+            path="/me/photo-reports"
+            element={withRouteSuspense(<PhotoReportManagementPage />)}
           />
         </Route>
       </Routes>

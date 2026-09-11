@@ -4,6 +4,7 @@ import {
   MdAccessTime,
   MdClose,
   MdDeleteOutline,
+  MdFlag,
   MdImage,
   MdLockOutline,
   MdMyLocation,
@@ -12,6 +13,8 @@ import {
   MdPublic,
   MdRemove,
 } from "react-icons/md";
+import PhotoReportDialog from "@/features/photo-report/components/PhotoReportDialog";
+import { usePlacePhotoReport } from "@/features/photo-report/hooks/usePlacePhotoReport";
 import { useUiText } from "@/lib/uiText";
 import { resolvePlaceVerificationPolicy } from "@/lib/placeVerificationPolicy";
 import { TimeWheelPicker } from "@/components/inputs";
@@ -1336,6 +1339,12 @@ export function VerificationPhotoPreviewPopup({
 }) {
   const text = useUiText();
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [reportedByMe, setReportedByMe] = useState(
+    target.stop.verificationPhotoReportedByMe
+  );
+  const { cancelReport, isCanceling, isSubmitting, submitReport } =
+    usePlacePhotoReport(text.photoReport);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const isDeleteDialogOpen = canManage && isDeleteConfirming;
   const photoUrl = target.stop.verificationPhotoUrl;
@@ -1378,8 +1387,16 @@ export function VerificationPhotoPreviewPopup({
               target.stop.place.title,
               previewLabel
             )}
-            className="max-h-[68vh] w-full object-contain"
+            className={`max-h-[68vh] w-full object-contain ${
+              reportedByMe ? "scale-105 blur-2xl" : ""
+            }`}
           />
+          {reportedByMe ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/35 text-white">
+              <MdFlag className="text-3xl" />
+              <span className="mt-2 text-sm font-black">{text.photoReport.reportedPhoto}</span>
+            </div>
+          ) : null}
           <button
             type="button"
             aria-label={text.common.close}
@@ -1439,6 +1456,32 @@ export function VerificationPhotoPreviewPopup({
                   : text.dayRoute.photoPrivate}
               </span>
             </div>
+          ) : null}
+          {!canManage && target.stop.verificationPhotoRecordId ? (
+            reportedByMe ? (
+              <button
+                type="button"
+                disabled={isCanceling}
+                onClick={() =>
+                  cancelReport(target.stop.verificationPhotoRecordId!, {
+                    onSuccess: () => setReportedByMe(false),
+                  })
+                }
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200"
+              >
+                <MdFlag />
+                {text.photoReport.cancelReport}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsReportDialogOpen(true)}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 px-4 py-3 text-sm font-bold text-rose-600 dark:border-rose-400/30 dark:text-rose-200"
+              >
+                <MdFlag />
+                {text.photoReport.report}
+              </button>
+            )
           ) : null}
           {canReplace ? (
             <button
@@ -1500,6 +1543,26 @@ export function VerificationPhotoPreviewPopup({
           onDelete={() => onDelete(target)}
         />
       ) : null}
+      <PhotoReportDialog
+        key={isReportDialogOpen ? target.stop.id : "closed"}
+        isOpen={isReportDialogOpen}
+        isSubmitting={isSubmitting}
+        onClose={() => setIsReportDialogOpen(false)}
+        onSubmit={(reason, details) => {
+          const photoId = target.stop.verificationPhotoRecordId;
+          if (!photoId) return;
+          submitReport(
+            { photoId, reason, details },
+            {
+              onSuccess: () => {
+                setReportedByMe(true);
+                setIsReportDialogOpen(false);
+              },
+            }
+          );
+        }}
+        text={text.photoReport}
+      />
     </div>
   );
 }

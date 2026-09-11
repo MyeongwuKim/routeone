@@ -19,6 +19,10 @@ import {
   notificationResolvers,
   notificationTypeDefs,
 } from "./modules/notifications/notification.resolver.js";
+import {
+  photoReportResolvers,
+  photoReportTypeDefs,
+} from "./modules/moderation/photoReport.resolver.js";
 
 type ResolverRecord = Record<string, unknown>;
 type TypeDefsServerOptions = Extract<
@@ -74,6 +78,7 @@ export const typeDefs = [
   routeVisitPhotoTypeDefs,
   placeLocalizationTypeDefs,
   notificationTypeDefs,
+  photoReportTypeDefs,
 ];
 
 export const resolvers = mergeResolvers(
@@ -84,5 +89,6 @@ export const resolvers = mergeResolvers(
   routeResolvers,
   routeVisitPhotoResolvers,
   placeLocalizationResolvers,
-  notificationResolvers
+  notificationResolvers,
+  photoReportResolvers
 );

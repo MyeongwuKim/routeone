@@ -119,6 +119,41 @@ export type UiText = {
     logoutDescription: string;
     logoutToast: string;
   };
+  photoReport: {
+    report: string;
+    title: string;
+    description: string;
+    inappropriate: string;
+    violenceOrHate: string;
+    privacy: string;
+    spam: string;
+    other: string;
+    otherPlaceholder: string;
+    cancel: string;
+    submit: string;
+    submitted: string;
+    submitFailed: string;
+    reportedPhoto: string;
+    cancelReport: string;
+    canceled: string;
+    cancelFailed: string;
+    managementTitle: string;
+    managementDescription: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    reports: (count: number) => string;
+    uploader: string;
+    details: string;
+    dismiss: string;
+    hide: string;
+    delete: string;
+    dismissConfirm: string;
+    hideConfirm: string;
+    deleteConfirm: string;
+    actionComplete: string;
+    actionFailed: string;
+    ownerOnly: string;
+  };
   feedback: {
     title: string;
     menuDescription: string;
@@ -1445,6 +1480,41 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       logout: "로그아웃",
       logoutDescription: "현재 계정에서 나가기",
       logoutToast: "로그아웃했어요.",
+    },
+    photoReport: {
+      report: "신고하기",
+      title: "사진 신고",
+      description: "신고 사유를 한 가지 선택해 주세요.",
+      inappropriate: "부적절하거나 불쾌한 사진",
+      violenceOrHate: "폭력적이거나 혐오를 조장하는 내용",
+      privacy: "개인정보 또는 초상권 침해",
+      spam: "광고 또는 반복 게시물",
+      other: "기타",
+      otherPlaceholder: "신고 사유를 입력해 주세요.",
+      cancel: "취소",
+      submit: "신고 보내기",
+      submitted: "신고를 접수했어요. 이 사진은 내 화면에서 흐리게 보여요.",
+      submitFailed: "신고를 접수하지 못했어요.",
+      reportedPhoto: "신고한 사진",
+      cancelReport: "신고 취소",
+      canceled: "신고를 취소했어요.",
+      cancelFailed: "신고를 취소하지 못했어요.",
+      managementTitle: "신고 관리",
+      managementDescription: "신고된 사용자 사진 검토",
+      emptyTitle: "대기 중인 신고가 없어요.",
+      emptyDescription: "새 신고가 접수되면 이곳에 표시돼요.",
+      reports: (count) => `신고 ${count}건`,
+      uploader: "등록 사용자",
+      details: "기타 사유",
+      dismiss: "문제없음",
+      hide: "전체 숨김",
+      delete: "사진 삭제",
+      dismissConfirm: "문제없는 사진으로 처리하고 신고를 종료할까요?",
+      hideConfirm: "이 사진을 모든 사용자에게 숨길까요?",
+      deleteConfirm: "이 사진을 원본과 함께 삭제할까요? 삭제 후 복구할 수 없어요.",
+      actionComplete: "신고 처리를 완료했어요.",
+      actionFailed: "신고를 처리하지 못했어요.",
+      ownerOnly: "운영자 계정에서만 볼 수 있는 화면이에요.",
     },
     feedback: {
       title: "불편사항 보내기",
@@ -2989,6 +3059,41 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       logout: "Log Out",
       logoutDescription: "Leave the current account",
       logoutToast: "Logged out.",
+    },
+    photoReport: {
+      report: "Report",
+      title: "Report Photo",
+      description: "Select one reason for your report.",
+      inappropriate: "Inappropriate or offensive photo",
+      violenceOrHate: "Violence or hateful content",
+      privacy: "Privacy or portrait rights concern",
+      spam: "Advertising or repeated content",
+      other: "Other",
+      otherPlaceholder: "Describe the reason for your report.",
+      cancel: "Cancel",
+      submit: "Send Report",
+      submitted: "Report received. This photo is now blurred only for you.",
+      submitFailed: "Could not submit the report.",
+      reportedPhoto: "Reported Photo",
+      cancelReport: "Cancel Report",
+      canceled: "Report canceled.",
+      cancelFailed: "Could not cancel the report.",
+      managementTitle: "Report Management",
+      managementDescription: "Review reported user photos",
+      emptyTitle: "No reports are waiting.",
+      emptyDescription: "New photo reports will appear here.",
+      reports: (count) => `${count} ${count === 1 ? "report" : "reports"}`,
+      uploader: "Uploader",
+      details: "Other details",
+      dismiss: "No Issue",
+      hide: "Hide for Everyone",
+      delete: "Delete Photo",
+      dismissConfirm: "Close these reports without changing the photo?",
+      hideConfirm: "Hide this photo from every user?",
+      deleteConfirm: "Delete this photo and its original file? This cannot be undone.",
+      actionComplete: "The report was handled.",
+      actionFailed: "Could not handle the report.",
+      ownerOnly: "This page is available only to the owner account.",
     },
     feedback: {
       title: "Send Feedback",

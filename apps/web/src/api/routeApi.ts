@@ -1,5 +1,6 @@
 import {
   AppendRouteDaysDocument,
+  CancelPlacePhotoReportDocument,
   CheckInRouteStopDocument,
   ClearRouteDocument,
   CloneRouteDocument,
@@ -16,6 +17,7 @@ import {
   MyRouteHistoryConnectionDocument,
   MyRoutesDocument,
   PlacePhotosDocument,
+  ReportPlacePhotoDocument,
   PlaceStaySummariesDocument,
   PlaceStaySummaryDocument,
   PosterImageDataUrlDocument,
@@ -41,6 +43,7 @@ import {
   type MyRouteHistoryConnectionQueryVariables,
   type MyRoutesQueryVariables,
   type PlaceSnapshotInput,
+  type PlacePhotoReportReason,
   type ReorderRouteStopsInput,
   type RouteStopVisitVerificationInput,
   type SharedRoutesQueryVariables,
@@ -114,6 +117,20 @@ export const routeApi = {
       place,
       limit,
     });
+  },
+  reportPlacePhoto(
+    photoId: RouteId,
+    reason: PlacePhotoReportReason,
+    details?: string | null
+  ) {
+    return requestGraphQL(ReportPlacePhotoDocument, {
+      photoId,
+      reason,
+      details,
+    });
+  },
+  cancelPlacePhotoReport(photoId: RouteId) {
+    return requestGraphQL(CancelPlacePhotoReportDocument, { photoId });
   },
   posterImageDataUrl(url: string) {
     return requestGraphQL(PosterImageDataUrlDocument, {
