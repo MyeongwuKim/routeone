@@ -16,7 +16,7 @@ type PlacePhoto = PlacePhotosQuery["placePhotos"][number];
 
 type ReportablePlacePhotoCardProps = {
   alt: string;
-  isCanceling: boolean;
+  isUpdating: boolean;
   onCancelReport: () => void;
   onOpen: () => void;
   onReport: () => void;
@@ -26,7 +26,7 @@ type ReportablePlacePhotoCardProps = {
 
 function ReportablePlacePhotoCard({
   alt,
-  isCanceling,
+  isUpdating,
   onCancelReport,
   onOpen,
   onReport,
@@ -37,9 +37,8 @@ function ReportablePlacePhotoCard({
     <div className="group relative h-44 w-40 shrink-0 snap-start overflow-hidden rounded-2xl border border-brand-100 bg-brand-50 text-left shadow-sm">
       <button
         type="button"
-        onClick={photo.reportedByMe ? undefined : onOpen}
-        disabled={photo.reportedByMe}
-        className="h-full w-full cursor-zoom-in disabled:cursor-default"
+        onClick={onOpen}
+        className="h-full w-full cursor-zoom-in"
       >
         <span className={`block h-full w-full ${photo.reportedByMe ? "scale-110 blur-xl" : ""}`}>
           <PlacePhotoThumbnail
@@ -51,14 +50,14 @@ function ReportablePlacePhotoCard({
       </button>
 
       {photo.reportedByMe ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/35 px-3 text-center text-white">
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-slate-950/35 px-3 text-center text-white">
           <MdFlag className="text-xl" />
           <span className="mt-1 text-xs font-black">{text.photoReport.reportedPhoto}</span>
           <button
             type="button"
             onClick={onCancelReport}
-            disabled={isCanceling}
-            className="mt-3 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-black text-slate-800 disabled:opacity-60"
+            disabled={isUpdating}
+            className="pointer-events-auto mt-3 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-black text-slate-800 disabled:opacity-60"
           >
             {text.photoReport.cancelReport}
           </button>
@@ -73,7 +72,8 @@ function ReportablePlacePhotoCard({
               type="button"
               aria-label={text.photoReport.report}
               onClick={onReport}
-              className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-slate-950/65 text-base text-white shadow backdrop-blur hover:bg-rose-600"
+              disabled={isUpdating}
+              className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-slate-950/65 text-base text-white shadow backdrop-blur hover:bg-rose-600 disabled:opacity-50"
             >
               <MdFlag />
             </button>

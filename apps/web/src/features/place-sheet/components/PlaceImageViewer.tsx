@@ -34,24 +34,13 @@ function PlaceImageViewer({
 }: PlaceImageViewerProps) {
   const imageSwipeStartXRef = useRef<number | null>(null);
   const [reportPhotoId, setReportPhotoId] = useState<string | null>(null);
-  const [reportedPhotoIds, setReportedPhotoIds] = useState<Set<string>>(
-    () => new Set()
-  );
-  const [canceledPhotoIds, setCanceledPhotoIds] = useState<Set<string>>(
-    () => new Set()
-  );
-  const { cancelReport, isCanceling, isSubmitting, submitReport } =
+  const { cancelReport, isSubmitting, isUpdating, submitReport } =
     usePlacePhotoReport(text.photoReport);
   const activeImageUrl = target?.imageUrls[target.index];
   const activeUserPhoto = activeImageUrl
     ? userPhotos.find((photo) => photo.imageUrl === activeImageUrl)
     : null;
-  const isReportedByMe = activeUserPhoto
-    ? canceledPhotoIds.has(activeUserPhoto.id)
-      ? false
-      : reportedPhotoIds.has(activeUserPhoto.id) ||
-        activeUserPhoto.reportedByMe
-    : false;
+  const isReportedByMe = activeUserPhoto?.reportedByMe ?? false;
 
   if (!target || !activeImageUrl) {
     return null;
@@ -90,7 +79,7 @@ function PlaceImageViewer({
 
   return (
     <section
-      className={`fixed inset-0 ${UI_LAYER_CLASS.mediaViewer} flex items-center justify-center bg-white/35 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl`}
+      className={`fixed inset-0 ${UI_LAYER_CLASS.mediaViewer} flex items-center justify-center bg-white/35 px-4 py-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl dark:bg-slate-950/80`}
     >
       <button
         type="button"
@@ -124,7 +113,9 @@ function PlaceImageViewer({
                   alt={`${target.title} ${index + 1}`}
                   draggable={false}
                   className={`max-h-[78dvh] max-w-full select-none rounded-3xl object-contain shadow-[0_24px_80px_rgba(15,23,42,0.22)] ${
-                    isReportedByMe && index === target.index
+                    userPhotos.some(
+                      (photo) => photo.imageUrl === imageUrl && photo.reportedByMe
+                    )
                       ? "scale-105 blur-2xl"
                       : ""
                   }`}
@@ -149,22 +140,9 @@ function PlaceImageViewer({
             <div className="relative z-20 mt-3 flex justify-center">
               <button
                 type="button"
-                disabled={isCanceling}
-                onClick={() =>
-                  cancelReport(activeUserPhoto.id, {
-                    onSuccess: () => {
-                      setCanceledPhotoIds((current) =>
-                        new Set(current).add(activeUserPhoto.id)
-                      );
-                      setReportedPhotoIds((current) => {
-                        const next = new Set(current);
-                        next.delete(activeUserPhoto.id);
-                        return next;
-                      });
-                    },
-                  })
-                }
-                className="rounded-full bg-white/90 px-4 py-2 text-xs font-black text-slate-700 shadow-sm backdrop-blur disabled:opacity-50"
+                disabled={isUpdating}
+                onClick={() => cancelReport(activeUserPhoto.id)}
+                className="rounded-full bg-white/90 px-4 py-2 text-xs font-black text-slate-700 shadow-sm backdrop-blur disabled:opacity-50 dark:bg-slate-900/80 dark:text-white"
               >
                 {text.photoReport.cancelReport}
               </button>
@@ -173,7 +151,8 @@ function PlaceImageViewer({
             <button
               type="button"
               onClick={() => setReportPhotoId(activeUserPhoto.id)}
-              className="relative z-20 mt-3 flex items-center gap-1.5 rounded-full bg-slate-900/60 px-4 py-2 text-xs font-black text-white shadow-sm backdrop-blur"
+              disabled={isUpdating}
+              className="relative z-20 mt-3 flex items-center gap-1.5 rounded-full bg-slate-900/60 px-4 py-2 text-xs font-black text-white shadow-sm backdrop-blur disabled:opacity-50"
             >
               <MdFlag />
               {text.photoReport.report}
@@ -186,7 +165,7 @@ function PlaceImageViewer({
         type="button"
         aria-label={text.placeSheet.previousImageAria}
         onClick={showPreviousImage}
-        className="absolute left-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/65 text-2xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80"
+        className="absolute left-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/70 text-2xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80 dark:bg-slate-900/80 dark:text-white dark:hover:bg-slate-800/90"
       >
         ‹
       </button>
@@ -194,7 +173,7 @@ function PlaceImageViewer({
         type="button"
         aria-label={text.placeSheet.nextImageAria}
         onClick={showNextImage}
-        className="absolute right-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/65 text-2xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80"
+        className="absolute right-3 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/70 text-2xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80 dark:bg-slate-900/80 dark:text-white dark:hover:bg-slate-800/90"
       >
         ›
       </button>
@@ -202,7 +181,7 @@ function PlaceImageViewer({
         type="button"
         aria-label={text.placeSheet.imageViewerCloseAria}
         onClick={onClose}
-        className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex size-10 items-center justify-center rounded-full bg-white/65 text-xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80"
+        className="absolute right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex size-10 items-center justify-center rounded-full bg-white/70 text-xl text-slate-700 shadow-sm backdrop-blur transition hover:bg-white/80 dark:bg-slate-900/80 dark:text-white dark:hover:bg-slate-800/90"
       >
         <IoClose />
       </button>
@@ -213,22 +192,8 @@ function PlaceImageViewer({
         onClose={() => setReportPhotoId(null)}
         onSubmit={(reason, details) => {
           if (!reportPhotoId) return;
-          submitReport(
-            { photoId: reportPhotoId, reason, details },
-            {
-              onSuccess: () => {
-                setReportedPhotoIds((current) =>
-                  new Set(current).add(reportPhotoId)
-                );
-                setCanceledPhotoIds((current) => {
-                  const next = new Set(current);
-                  next.delete(reportPhotoId);
-                  return next;
-                });
-                setReportPhotoId(null);
-              },
-            }
-          );
+          submitReport({ photoId: reportPhotoId, reason, details });
+          setReportPhotoId(null);
         }}
         text={text.photoReport}
       />

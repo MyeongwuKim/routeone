@@ -1343,7 +1343,7 @@ export function VerificationPhotoPreviewPopup({
   const [reportedByMe, setReportedByMe] = useState(
     target.stop.verificationPhotoReportedByMe
   );
-  const { cancelReport, isCanceling, isSubmitting, submitReport } =
+  const { cancelReport, isSubmitting, isUpdating, submitReport } =
     usePlacePhotoReport(text.photoReport);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
   const isDeleteDialogOpen = canManage && isDeleteConfirming;
@@ -1461,12 +1461,13 @@ export function VerificationPhotoPreviewPopup({
             reportedByMe ? (
               <button
                 type="button"
-                disabled={isCanceling}
-                onClick={() =>
+                disabled={isUpdating}
+                onClick={() => {
                   cancelReport(target.stop.verificationPhotoRecordId!, {
-                    onSuccess: () => setReportedByMe(false),
-                  })
-                }
+                    onError: () => setReportedByMe(true),
+                  });
+                  setReportedByMe(false);
+                }}
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200"
               >
                 <MdFlag />
@@ -1476,7 +1477,8 @@ export function VerificationPhotoPreviewPopup({
               <button
                 type="button"
                 onClick={() => setIsReportDialogOpen(true)}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 px-4 py-3 text-sm font-bold text-rose-600 dark:border-rose-400/30 dark:text-rose-200"
+                disabled={isUpdating}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 px-4 py-3 text-sm font-bold text-rose-600 disabled:opacity-50 dark:border-rose-400/30 dark:text-rose-200"
               >
                 <MdFlag />
                 {text.photoReport.report}
@@ -1551,15 +1553,11 @@ export function VerificationPhotoPreviewPopup({
         onSubmit={(reason, details) => {
           const photoId = target.stop.verificationPhotoRecordId;
           if (!photoId) return;
-          submitReport(
-            { photoId, reason, details },
-            {
-              onSuccess: () => {
-                setReportedByMe(true);
-                setIsReportDialogOpen(false);
-              },
-            }
-          );
+          submitReport({ photoId, reason, details }, {
+            onError: () => setReportedByMe(false),
+          });
+          setReportedByMe(true);
+          setIsReportDialogOpen(false);
         }}
         text={text.photoReport}
       />

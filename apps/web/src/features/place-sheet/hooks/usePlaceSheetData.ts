@@ -442,10 +442,7 @@ export function usePlaceSheetData({
     [placePhotosQuery.data]
   );
   const userPlacePhotoViewerUrls = useMemo(
-    () =>
-      userPlacePhotos
-        .filter((photo) => !photo.reportedByMe)
-        .map((photo) => photo.imageUrl),
+    () => userPlacePhotos.map((photo) => photo.imageUrl),
     [userPlacePhotos]
   );
   const routeDurationText = routeQuery.data
@@ -507,7 +504,7 @@ export function usePlaceSheetData({
     detailRestDate,
     isConcentrationTrendLoading: concentrationTrendQuery.isFetching,
     isNearbyTouristLoading: nearbyTouristQuery.isFetching,
-    isPlacePhotosLoading: placePhotosQuery.isFetching,
+    isPlacePhotosLoading: placePhotosQuery.isPending,
     isRouteLoading: routeQuery.isFetching,
     isSelectedPlaceDetailReady,
     isTouristAttraction: selectedPlace ? isTouristPlace(selectedPlace) : false,

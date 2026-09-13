@@ -47,8 +47,8 @@ function PlaceSheetMediaSection({
   const [reportPhotoId, setReportPhotoId] = useState<string | null>(null);
   const {
     cancelReport,
-    isCanceling,
     isSubmitting,
+    isUpdating,
     submitReport,
   } = usePlacePhotoReport(text.photoReport);
 
@@ -179,7 +179,7 @@ function PlaceSheetMediaSection({
                 photo={photo}
                 text={text}
                 alt={text.placeSheet.userPhotoAlt(selectedPlace.title, index + 1)}
-                isCanceling={isCanceling}
+                isUpdating={isUpdating}
                 onCancelReport={() => cancelReport(photo.id)}
                 onReport={() => setReportPhotoId(photo.id)}
                 onOpen={() =>
@@ -212,10 +212,8 @@ function PlaceSheetMediaSection({
         onClose={() => setReportPhotoId(null)}
         onSubmit={(reason, details) => {
           if (!reportPhotoId) return;
-          submitReport(
-            { photoId: reportPhotoId, reason, details },
-            { onSuccess: () => setReportPhotoId(null) }
-          );
+          submitReport({ photoId: reportPhotoId, reason, details });
+          setReportPhotoId(null);
         }}
         text={text.photoReport}
       />
