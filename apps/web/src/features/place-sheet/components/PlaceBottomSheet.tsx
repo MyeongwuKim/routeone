@@ -579,6 +579,7 @@ function PlaceBottomSheet() {
       <PlaceImageViewer
         target={imageViewerTarget}
         text={text}
+        userPhotos={userPlacePhotos}
         onClose={closeImageViewer}
         onStep={handleImageViewerStep}
       />

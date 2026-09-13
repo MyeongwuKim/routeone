@@ -109,6 +109,32 @@ test("사진이 없어도 방문 기록 카드가 나오며 빈 여행은 만들
   for (const themeId of themes) {
     const svg = renderRoutePosterTheme({ ...sample, ...page, themeId, photoCount: 0 });
     assert.match(svg, /이날의 발자취/);
+    assert.match(svg, /사진 없이 남긴 방문 기록/);
+    assert.match(svg, /data-no-photo-layout="single"/);
     assert.doesNotMatch(svg, /PHOTO MEMORY|<image\b|undefined|NaN/);
+  }
+});
+
+test("사진이 없는 여러 장소는 방문 순서 카드로 배치한다", () => {
+  const [page] = buildRoutePosterPages(
+    [1, 2, 3].map((order) => ({
+      ...sample.items[0],
+      order,
+      title: `방문지 ${order}`,
+      imageDataUrl: null,
+    }))
+  );
+  const svg = renderRoutePosterTheme({
+    ...sample,
+    ...page,
+    themeId: "journal",
+    photoCount: 0,
+    stopCount: 3,
+  });
+
+  assert.match(svg, /data-no-photo-layout="itinerary"/);
+  assert.match(svg, /사진 없이 남긴 3곳의 방문 기록/);
+  for (const title of ["방문지 1", "방문지 2", "방문지 3"]) {
+    assert.match(svg, new RegExp(title));
   }
 });

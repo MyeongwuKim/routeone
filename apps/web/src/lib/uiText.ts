@@ -1495,7 +1495,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       submit: "신고 보내기",
       submitted: "신고를 접수했어요. 이 사진은 내 화면에서 흐리게 보여요.",
       submitFailed: "신고를 접수하지 못했어요.",
-      reportedPhoto: "신고한 사진",
+      reportedPhoto: "신고된 사진",
       cancelReport: "신고 취소",
       canceled: "신고를 취소했어요.",
       cancelFailed: "신고를 취소하지 못했어요.",

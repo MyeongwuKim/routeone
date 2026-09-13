@@ -1,5 +1,18 @@
-import { useRef, type PointerEvent } from "react";
+/**
+ * 사용 위치: 장소 상세 → 공식 사진 또는 사용자 방문 사진 → 전체 화면
+ *
+ * 용도:
+ * 사진을 크게 넘겨 보고, 사용자 방문 사진은 전체 화면에서도 신고하거나 신고를 취소한다.
+ *
+ * 구조:
+ * 사진 슬라이더, 이동·닫기 버튼, 사용자 사진 신고 동작으로 구성되어 있다.
+ */
+import { useRef, useState, type PointerEvent } from "react";
 import { IoClose } from "react-icons/io5";
+import { MdFlag } from "react-icons/md";
+import type { PlacePhotosQuery } from "@/generated/graphql";
+import PhotoReportDialog from "@/features/photo-report/components/PhotoReportDialog";
+import { usePlacePhotoReport } from "@/features/photo-report/hooks/usePlacePhotoReport";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import type { UiText } from "@/lib/uiText";
 import type { PlaceImageViewerTarget } from "../placeSheetModel";
@@ -9,6 +22,7 @@ type PlaceImageViewerProps = {
   onStep: (direction: -1 | 1) => void;
   target: PlaceImageViewerTarget | null;
   text: UiText;
+  userPhotos: PlacePhotosQuery["placePhotos"];
 };
 
 function PlaceImageViewer({
@@ -16,9 +30,28 @@ function PlaceImageViewer({
   onStep,
   target,
   text,
+  userPhotos,
 }: PlaceImageViewerProps) {
   const imageSwipeStartXRef = useRef<number | null>(null);
+  const [reportPhotoId, setReportPhotoId] = useState<string | null>(null);
+  const [reportedPhotoIds, setReportedPhotoIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [canceledPhotoIds, setCanceledPhotoIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const { cancelReport, isCanceling, isSubmitting, submitReport } =
+    usePlacePhotoReport(text.photoReport);
   const activeImageUrl = target?.imageUrls[target.index];
+  const activeUserPhoto = activeImageUrl
+    ? userPhotos.find((photo) => photo.imageUrl === activeImageUrl)
+    : null;
+  const isReportedByMe = activeUserPhoto
+    ? canceledPhotoIds.has(activeUserPhoto.id)
+      ? false
+      : reportedPhotoIds.has(activeUserPhoto.id) ||
+        activeUserPhoto.reportedByMe
+    : false;
 
   if (!target || !activeImageUrl) {
     return null;
@@ -74,7 +107,7 @@ function PlaceImageViewer({
           imageSwipeStartXRef.current = null;
         }}
       >
-        <div className="w-full overflow-hidden rounded-3xl">
+        <div className="relative w-full overflow-hidden rounded-3xl">
           <div
             className="flex transition-transform duration-300 ease-out"
             style={{
@@ -90,15 +123,63 @@ function PlaceImageViewer({
                   src={imageUrl}
                   alt={`${target.title} ${index + 1}`}
                   draggable={false}
-                  className="max-h-[78dvh] max-w-full select-none rounded-3xl object-contain shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
+                  className={`max-h-[78dvh] max-w-full select-none rounded-3xl object-contain shadow-[0_24px_80px_rgba(15,23,42,0.22)] ${
+                    isReportedByMe && index === target.index
+                      ? "scale-105 blur-2xl"
+                      : ""
+                  }`}
                 />
               </div>
             ))}
           </div>
+          {isReportedByMe ? (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+              <span className="flex items-center gap-2 rounded-full bg-slate-900/65 px-4 py-2.5 text-sm font-black text-white shadow-lg backdrop-blur">
+                <MdFlag />
+                {text.photoReport.reportedPhoto}
+              </span>
+            </div>
+          ) : null}
         </div>
         <div className="mt-4 rounded-full bg-slate-900/45 px-3 py-1 text-xs font-bold text-white shadow-sm backdrop-blur">
           {target.index + 1} / {target.imageUrls.length}
         </div>
+        {activeUserPhoto && !activeUserPhoto.isMine ? (
+          isReportedByMe ? (
+            <div className="relative z-20 mt-3 flex justify-center">
+              <button
+                type="button"
+                disabled={isCanceling}
+                onClick={() =>
+                  cancelReport(activeUserPhoto.id, {
+                    onSuccess: () => {
+                      setCanceledPhotoIds((current) =>
+                        new Set(current).add(activeUserPhoto.id)
+                      );
+                      setReportedPhotoIds((current) => {
+                        const next = new Set(current);
+                        next.delete(activeUserPhoto.id);
+                        return next;
+                      });
+                    },
+                  })
+                }
+                className="rounded-full bg-white/90 px-4 py-2 text-xs font-black text-slate-700 shadow-sm backdrop-blur disabled:opacity-50"
+              >
+                {text.photoReport.cancelReport}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setReportPhotoId(activeUserPhoto.id)}
+              className="relative z-20 mt-3 flex items-center gap-1.5 rounded-full bg-slate-900/60 px-4 py-2 text-xs font-black text-white shadow-sm backdrop-blur"
+            >
+              <MdFlag />
+              {text.photoReport.report}
+            </button>
+          )
+        ) : null}
       </div>
 
       <button
@@ -125,6 +206,32 @@ function PlaceImageViewer({
       >
         <IoClose />
       </button>
+      <PhotoReportDialog
+        key={reportPhotoId ?? "closed"}
+        isOpen={Boolean(reportPhotoId)}
+        isSubmitting={isSubmitting}
+        onClose={() => setReportPhotoId(null)}
+        onSubmit={(reason, details) => {
+          if (!reportPhotoId) return;
+          submitReport(
+            { photoId: reportPhotoId, reason, details },
+            {
+              onSuccess: () => {
+                setReportedPhotoIds((current) =>
+                  new Set(current).add(reportPhotoId)
+                );
+                setCanceledPhotoIds((current) => {
+                  const next = new Set(current);
+                  next.delete(reportPhotoId);
+                  return next;
+                });
+                setReportPhotoId(null);
+              },
+            }
+          );
+        }}
+        text={text.photoReport}
+      />
     </section>
   );
 }
