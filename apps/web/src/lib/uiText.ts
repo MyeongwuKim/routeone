@@ -139,6 +139,7 @@ export type UiText = {
     cancelFailed: string;
     managementTitle: string;
     managementDescription: string;
+    viewFullImage: string;
     emptyTitle: string;
     emptyDescription: string;
     reports: (count: number) => string;
@@ -1501,6 +1502,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       cancelFailed: "신고를 취소하지 못했어요.",
       managementTitle: "신고 관리",
       managementDescription: "신고된 사용자 사진 검토",
+      viewFullImage: "신고 사진 전체 화면 보기",
       emptyTitle: "대기 중인 신고가 없어요.",
       emptyDescription: "새 신고가 접수되면 이곳에 표시돼요.",
       reports: (count) => `신고 ${count}건`,
@@ -3080,6 +3082,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       cancelFailed: "Could not cancel the report.",
       managementTitle: "Report Management",
       managementDescription: "Review reported user photos",
+      viewFullImage: "View reported photo full screen",
       emptyTitle: "No reports are waiting.",
       emptyDescription: "New photo reports will appear here.",
       reports: (count) => `${count} ${count === 1 ? "report" : "reports"}`,
