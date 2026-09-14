@@ -48,6 +48,7 @@ const JWKS_CACHE_TTL_MS = 1000 * 60 * 60;
 const DEFAULT_APPLE_CLIENT_IDS = [
   "com.routeone.app",
   "com.routeone.app.dev",
+  "com.myeongwukim.routeone",
 ];
 
 const jwksCache = new Map<
