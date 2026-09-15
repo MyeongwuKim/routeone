@@ -58,6 +58,10 @@ export const LOGIN_TEXT = {
       "Google 로그인 설정이 앱에 아직 반영되지 않았어요. 앱을 다시 설치한 뒤 시도해 주세요.",
     googleContinue: "Google로 계속",
     passwordPlaceholder: "비밀번호",
+    privacyPolicy: "개인정보처리방침",
+    privacyPolicyErrorMessage:
+      "잠시 후 다시 시도하거나 브라우저에서 개인정보처리방침을 확인해 주세요.",
+    privacyPolicyErrorTitle: "페이지를 열지 못했어요",
     testAccount: "테스트 계정",
     testAccountContinue: "테스트 계정으로 계속",
     accountIdPlaceholder: "아이디"
@@ -79,6 +83,10 @@ export const LOGIN_TEXT = {
       "Google sign-in configuration has not been applied to this app yet. Reinstall the app and try again.",
     googleContinue: "Continue with Google",
     passwordPlaceholder: "Password",
+    privacyPolicy: "Privacy Policy",
+    privacyPolicyErrorMessage:
+      "Try again shortly or view the privacy policy in your browser.",
+    privacyPolicyErrorTitle: "Could not open the page",
     testAccount: "Test account",
     testAccountContinue: "Continue with test account",
     accountIdPlaceholder: "ID"

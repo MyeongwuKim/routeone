@@ -961,6 +961,11 @@ export async function deleteRoute(
         routeId: route.id,
       },
     });
+    await transaction.sharedRouteReport.deleteMany({
+      where: {
+        routeId: route.id,
+      },
+    });
     await transaction.route.delete({
       where: {
         id: route.id,

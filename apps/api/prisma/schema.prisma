@@ -83,6 +83,9 @@ model Route {
   sharedAt    DateTime?
   shareTags   String[]  @default([])
 
+  moderationHiddenAt   DateTime?
+  moderationHiddenById String? @db.ObjectId
+
   startLocation RouteStartLocation?
 
   owner User        @relation(fields: [ownerId], references: [id])
@@ -354,6 +357,34 @@ model PlacePhotoReport {
   @@index([status, createdAt])
 }
 
+model SharedRouteReport {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  routeId        String @db.ObjectId
+  reporterId     String @db.ObjectId
+  reportedUserId String @db.ObjectId
+
+  reason  SharedRouteReportReason
+  details String?
+  status  SharedRouteReportStatus @default(PENDING)
+
+  routePlaceTitles String[] @default([])
+  routeTripDays    Int
+
+  moderationAction SharedRouteModerationAction?
+  resolvedById     String? @db.ObjectId
+  resolvedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([routeId, reporterId])
+  @@index([routeId, status, createdAt])
+  @@index([reporterId, status, createdAt])
+  @@index([reportedUserId, status, createdAt])
+  @@index([status, createdAt])
+}
+
 model UserBlock {
   id String @id @default(auto()) @map("_id") @db.ObjectId
 
@@ -600,6 +631,26 @@ enum PlacePhotoModerationAction {
   DISMISSED
   HIDDEN
   DELETED
+}
+
+enum SharedRouteReportReason {
+  INAPPROPRIATE
+  MISLEADING
+  SPAM
+  HARASSMENT_OR_HATE
+  PRIVACY_OR_RIGHTS
+  OTHER
+}
+
+enum SharedRouteReportStatus {
+  PENDING
+  DISMISSED
+  ACTIONED
+}
+
+enum SharedRouteModerationAction {
+  DISMISSED
+  HIDDEN
 }
 
 enum PlaceLocalizationTitleSource {

@@ -12,6 +12,7 @@ import {
   getBlockedUserIds,
   hasBlockedUser,
 } from "../user/userBlock.service.js";
+import { hasReportedSharedRoute } from "../moderation/sharedRouteReport.service.js";
 import {
   appendRouteDays,
   checkInRouteStop,
@@ -703,7 +704,12 @@ export const routeResolvers = {
       if (route.visibility === "PUBLIC") {
         if (
           context.user &&
-          (await hasBlockedUser(context.prisma, context.user.id, route.ownerId))
+          ((await hasBlockedUser(context.prisma, context.user.id, route.ownerId)) ||
+            (await hasReportedSharedRoute(
+              context.prisma,
+              context.user.id,
+              route.id
+            )))
         ) {
           return null;
         }

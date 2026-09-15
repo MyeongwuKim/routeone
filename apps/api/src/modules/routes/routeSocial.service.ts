@@ -5,6 +5,7 @@
  */
 import { Prisma, type PrismaClient, type User } from "@prisma/client";
 import { UserFacingError } from "../../graphql/userFacingError.js";
+import { assertSharedRouteCanBePublished } from "../moderation/sharedRouteReport.service.js";
 import {
   assertRouteOwner,
   buildRouteShareTags,
@@ -28,6 +29,7 @@ export async function shareRoute(
   routeId: string
 ) {
   return prisma.$transaction(async (transaction) => {
+    await assertSharedRouteCanBePublished(transaction, routeId);
     const route = await assertRouteOwner(transaction, routeId, user.id);
     const stops = await transaction.routeStop.findMany({
       where: { routeId }, orderBy: { order: "asc" },

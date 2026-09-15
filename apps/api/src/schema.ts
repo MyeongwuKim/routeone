@@ -27,6 +27,10 @@ import {
   photoReportResolvers,
   photoReportTypeDefs,
 } from "./modules/moderation/photoReport.resolver.js";
+import {
+  sharedRouteReportResolvers,
+  sharedRouteReportTypeDefs,
+} from "./modules/moderation/sharedRouteReport.resolver.js";
 
 type ResolverRecord = Record<string, unknown>;
 type TypeDefsServerOptions = Extract<
@@ -84,6 +88,7 @@ export const typeDefs = [
   placeLocalizationTypeDefs,
   notificationTypeDefs,
   photoReportTypeDefs,
+  sharedRouteReportTypeDefs,
 ];
 
 export const resolvers = mergeResolvers(
@@ -96,5 +101,6 @@ export const resolvers = mergeResolvers(
   routeVisitPhotoResolvers,
   placeLocalizationResolvers,
   notificationResolvers,
-  photoReportResolvers
+  photoReportResolvers,
+  sharedRouteReportResolvers
 );

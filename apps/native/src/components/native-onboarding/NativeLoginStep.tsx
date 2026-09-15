@@ -2,8 +2,10 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -19,6 +21,9 @@ import { useNativeLoginErrorAlert } from "@/auth/useNativeLoginErrorAlert";
 import { LOGIN_TEXT, LOGIN_THEME } from "@/constants/nativeOnboarding";
 
 type AppLanguage = "ko" | "en";
+
+const PRIVACY_POLICY_URL =
+  "https://quilled-penalty-91a.notion.site/RouteOne-RouteOne-Privacy-Policy-3d8bc37db9d68028bf05e6c82afdfad8?pvs=74";
 
 type NativeLoginStepProps = {
   language: AppLanguage;
@@ -126,6 +131,14 @@ export default function NativeLoginStep({
       clearTimeout(timeoutId);
     };
   }, [toastMessage]);
+
+  const handleOpenPrivacyPolicy = async () => {
+    try {
+      await Linking.openURL(PRIVACY_POLICY_URL);
+    } catch {
+      Alert.alert(text.privacyPolicyErrorTitle, text.privacyPolicyErrorMessage);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -345,6 +358,23 @@ export default function NativeLoginStep({
             </>
           ) : null}
         </View>
+
+        <Pressable
+          accessibilityRole="link"
+          onPress={() => {
+            void handleOpenPrivacyPolicy();
+          }}
+          style={({ pressed }) => [
+            styles.privacyPolicyLink,
+            pressed && styles.privacyPolicyLinkPressed
+          ]}
+        >
+          <Text
+            style={[styles.privacyPolicyText, { color: colors.mutedText }]}
+          >
+            {text.privacyPolicy}
+          </Text>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -513,5 +543,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     letterSpacing: 0
+  },
+  privacyPolicyLink: {
+    minHeight: 44,
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12
+  },
+  privacyPolicyLinkPressed: {
+    opacity: 0.62
+  },
+  privacyPolicyText: {
+    fontSize: 12,
+    fontWeight: "700",
+    textDecorationLine: "underline"
   }
 });

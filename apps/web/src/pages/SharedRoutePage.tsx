@@ -2,7 +2,7 @@
  * 진입 경로: 하단 탭 메뉴 → 공유 루트
  *
  * 용도:
- * 공개된 여행 루트를 탐색하고 상세 일정, 좋아요, 담기와 작성자 차단을 제공한다.
+ * 공개된 여행 루트를 탐색하고 상세 일정, 좋아요, 담기와 작성자 차단·루트 신고를 제공한다.
  *
  * 구조:
  * 정렬·필터, 공유 루트 목록, 상세 일정과 루트 담기 화면으로 구성되어 있다.
@@ -21,10 +21,12 @@ import {
   MdBlock,
   MdClose,
   MdFilterAlt,
+  MdFlag,
   MdOutlinePlace,
   MdSell,
 } from "react-icons/md";
 import { routeApi } from "@/api/routeApi";
+import { moderationApi } from "@/api/moderationApi";
 import {
   BLOCKED_USERS_QUERY_KEY,
   userBlockApi,
@@ -42,6 +44,7 @@ import RouteCheckoutModal from "@/features/route-checkout/components/RouteChecko
 import type { PlannedRouteDay } from "@/features/route-checkout/models/routePlanTypes";
 import SharedRouteCard from "@/features/shared-route/components/SharedRouteCard";
 import SharedRouteFilterDialog from "@/features/shared-route/components/SharedRouteFilterDialog";
+import SharedRouteReportDialog from "@/features/shared-route/components/SharedRouteReportDialog";
 import SharedRouteDetailSkeleton from "@/features/shared-route/components/SharedRouteDetailSkeleton";
 import SharedRouteDetailMeta from "@/features/shared-route/components/SharedRouteDetailMeta";
 import SharedRouteAuthor from "@/features/shared-route/components/SharedRouteAuthor";
@@ -76,6 +79,7 @@ import {
   getSharedRouteConnection,
   getSharedRouteInfiniteList,
   removeSharedRouteOwnerFromInfiniteData,
+  removeSharedRouteFromInfiniteData,
   type SharedRouteInfiniteData,
 } from "@/features/shared-route/queries/sharedRouteCache";
 import {
@@ -86,7 +90,10 @@ import {
 import { useSharedRouteLike } from "@/features/shared-route/hooks/useSharedRouteLike";
 import { useSharedRouteFilters } from "@/features/shared-route/hooks/useSharedRouteFilters";
 import { getSortedRouteDays } from "@/features/my-route/routeDisplay";
-import type { SharedRouteOwnerFieldsFragment } from "@/generated/graphql";
+import type {
+  SharedRouteOwnerFieldsFragment,
+  SharedRouteReportReason,
+} from "@/generated/graphql";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { useLoginRequest } from "@/hooks/useLoginRequest";
 import { getAccountDisplayName } from "@/lib/accountDisplay";
@@ -127,6 +134,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const resetForArea = useHomeExploreStore((state) => state.resetForArea);
   const resetMapSheet = useMapSheetStore((state) => state.resetSheet);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [reportRouteId, setReportRouteId] = useState<string | null>(null);
   const [checkoutRoutePlan, setCheckoutRoutePlan] = useState<
     PlannedRouteDay[] | null
   >(null);
@@ -166,6 +174,42 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     onError: (error) => {
       showToast(
         error instanceof Error ? error.message : text.userBlock.blockFailed,
+        3000
+      );
+    },
+  });
+  const reportMutation = useMutation({
+    mutationFn: ({
+      routeId,
+      reason,
+      details,
+    }: {
+      routeId: string;
+      reason: SharedRouteReportReason;
+      details: string | null;
+    }) => moderationApi.reportSharedRoute(routeId, reason, details),
+    onSuccess: (_result, { routeId }) => {
+      queryClient.setQueriesData<SharedRouteInfiniteData>(
+        { queryKey: SHARED_ROUTES_QUERY_KEY },
+        (current) =>
+          removeSharedRouteFromInfiniteData(current, "feed", routeId)
+      );
+      queryClient.setQueriesData<SharedRouteInfiniteData>(
+        { queryKey: LIKED_SHARED_ROUTES_QUERY_KEY },
+        (current) =>
+          removeSharedRouteFromInfiniteData(current, "liked", routeId)
+      );
+      queryClient.removeQueries({ queryKey: getRouteDetailQueryKey(routeId) });
+      setReportRouteId(null);
+      setSelectedRouteId(null);
+      setCheckoutRoutePlan(null);
+      showToast(text.sharedRouteReport.submitted);
+    },
+    onError: (error) => {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : text.sharedRouteReport.submitFailed,
         3000
       );
     },
@@ -627,6 +671,14 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       ],
     });
   };
+  const handleRequestReport = (routeId: string) => {
+    if (!isAuthenticated) {
+      requestLogin("report-shared-route");
+      return;
+    }
+
+    setReportRouteId(routeId);
+  };
 
   return (
     <section className="relative flex h-full min-h-0 flex-col gap-3">
@@ -947,26 +999,48 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
             displaySelectedRoute.isMine ? text.sharedRoute.mineBadge : undefined
           }
           headerIdentity={
-            <div className="flex items-center justify-between gap-3">
-              <SharedRouteAuthor owner={displaySelectedRoute.owner} />
-              {!displaySelectedRoute.isMine ? (
-                <button
-                  type="button"
-                  aria-label={text.userBlock.blockAria(
-                    getAccountDisplayName(
-                      displaySelectedRoute.owner,
-                      text.account.fallbackName
-                    )
-                  )}
-                  disabled={blockMutation.isPending}
-                  onClick={() =>
-                    handleRequestBlock(displaySelectedRoute.owner)
-                  }
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-500 transition hover:bg-slate-50 hover:text-rose-600 disabled:cursor-wait disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                >
-                  <MdBlock />
-                  {text.userBlock.block}
-                </button>
+            <div className="flex min-w-0 items-center gap-2">
+              <SharedRouteAuthor
+                owner={displaySelectedRoute.owner}
+                className="min-w-0 flex-1"
+              />
+              {isAuthenticated && !displaySelectedRoute.isMine ? (
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    aria-label={text.userBlock.blockAria(
+                      getAccountDisplayName(
+                        displaySelectedRoute.owner,
+                        text.account.fallbackName
+                      )
+                    )}
+                    disabled={blockMutation.isPending}
+                    onClick={() =>
+                      handleRequestBlock(displaySelectedRoute.owner)
+                    }
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-500 transition hover:bg-slate-50 hover:text-rose-600 disabled:cursor-wait disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                  >
+                    <MdBlock />
+                    {text.userBlock.block}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={text.sharedRouteReport.reportAria(
+                      getAccountDisplayName(
+                        displaySelectedRoute.owner,
+                        text.account.fallbackName
+                      )
+                    )}
+                    disabled={reportMutation.isPending}
+                    onClick={() =>
+                      handleRequestReport(displaySelectedRoute.id)
+                    }
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-50 dark:border-rose-400/30 dark:bg-slate-900 dark:text-rose-200 dark:hover:bg-rose-400/10"
+                  >
+                    <MdFlag />
+                    {text.sharedRouteReport.report}
+                  </button>
+                </div>
               ) : null}
             </div>
           }
@@ -1009,6 +1083,18 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           onClose={() => setSelectedRouteId(null)}
         />
       ) : null}
+      <SharedRouteReportDialog
+        key={reportRouteId ?? "closed"}
+        isOpen={Boolean(reportRouteId)}
+        isSubmitting={reportMutation.isPending}
+        onClose={() => setReportRouteId(null)}
+        onSubmit={(reason, details) => {
+          if (reportRouteId) {
+            reportMutation.mutate({ routeId: reportRouteId, reason, details });
+          }
+        }}
+        text={text.sharedRouteReport}
+      />
       <RouteCheckoutModal
         isOpen={Boolean(checkoutRoutePlan)}
         savedPlaces={checkoutSavedPlaces}

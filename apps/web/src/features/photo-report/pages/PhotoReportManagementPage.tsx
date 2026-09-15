@@ -2,10 +2,10 @@
  * 진입 경로: 내 정보 → 신고 관리
  *
  * 용도:
- * OWNER가 신고된 방문 사진을 전체 화면으로 확인하고 문제없음·전체 숨김·삭제를 결정하는 화면이다.
+ * OWNER가 신고된 방문 사진과 공유 루트를 확인하고 공개 여부를 결정하는 화면이다.
  *
  * 구조:
- * 대기 상태 안내, 신고 사진 목록, 사진별 검토 작업 영역으로 구성되어 있다.
+ * 신고 유형 탭, 사진·공유 루트 신고 목록, 콘텐츠별 검토 영역으로 구성되어 있다.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -15,6 +15,7 @@ import { moderationApi } from "@/api/moderationApi";
 import { useAccountUser } from "@/components/account/useAccountUser";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import ModerationPhotoViewer from "../components/ModerationPhotoViewer";
+import SharedRouteReportQueue from "../components/SharedRouteReportQueue";
 import type {
   PendingPhotoReportsQuery,
   PlacePhotoModerationAction,
@@ -129,6 +130,7 @@ function PhotoReportCard({
 
 function PhotoReportManagementPage() {
   const text = useUiText();
+  const [activeTab, setActiveTab] = useState<"photo" | "route">("photo");
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -138,7 +140,7 @@ function PhotoReportManagementPage() {
   const reportsQuery = useQuery({
     queryKey: ["pending-photo-reports"],
     queryFn: moderationApi.pendingPhotoReports,
-    enabled: isOwner,
+    enabled: isOwner && activeTab === "photo",
   });
   const selectedPhoto = reportsQuery.data?.pendingPhotoReports.find(
     (item) => item.photoId === selectedPhotoId
@@ -189,30 +191,65 @@ function PhotoReportManagementPage() {
 
       {!isUserLoading && !isOwner ? (
         <PotatoLoadingCard title={text.photoReport.ownerOnly} description="" animation="empty" />
-      ) : reportsQuery.isPending || isUserLoading ? (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {[0, 1, 2, 3].map((item) => <div key={item} className="skeleton-shimmer h-44 rounded-3xl bg-slate-200 dark:bg-slate-800" />)}
-        </div>
-      ) : (reportsQuery.data?.pendingPhotoReports.length ?? 0) === 0 ? (
-        <PotatoLoadingCard
-          title={text.photoReport.emptyTitle}
-          description={text.photoReport.emptyDescription}
-          animation="empty"
-        />
       ) : (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {reportsQuery.data?.pendingPhotoReports.map((item) => (
-            <PhotoReportCard
-              key={item.photoId}
-              item={item}
-              isProcessing={actionMutation.isPending}
-              onAction={(action) => handleAction(item.photoId, action)}
-              onOpen={() => setSelectedPhotoId(item.photoId)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-1 rounded-2xl border border-brand-100 bg-brand-50 p-1 dark:border-brand-400/25 dark:bg-brand-400/10">
+            <button
+              type="button"
+              aria-pressed={activeTab === "photo"}
+              onClick={() => setActiveTab("photo")}
+              className={`min-h-10 rounded-xl px-3 text-sm font-black transition ${
+                activeTab === "photo"
+                  ? "bg-white text-brand-700 shadow-sm dark:bg-[#0b211f] dark:text-brand-100"
+                  : "text-slate-500 dark:text-slate-300"
+              }`}
+            >
+              {text.photoReport.title}
+            </button>
+            <button
+              type="button"
+              aria-pressed={activeTab === "route"}
+              onClick={() => setActiveTab("route")}
+              className={`min-h-10 rounded-xl px-3 text-sm font-black transition ${
+                activeTab === "route"
+                  ? "bg-white text-brand-700 shadow-sm dark:bg-[#0b211f] dark:text-brand-100"
+                  : "text-slate-500 dark:text-slate-300"
+              }`}
+            >
+              {text.sharedRouteReport.title}
+            </button>
+          </div>
+
+          {activeTab === "photo" ? (
+            reportsQuery.isPending || isUserLoading ? (
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {[0, 1, 2, 3].map((item) => <div key={item} className="skeleton-shimmer h-44 rounded-3xl bg-slate-200 dark:bg-slate-800" />)}
+              </div>
+            ) : (reportsQuery.data?.pendingPhotoReports.length ?? 0) === 0 ? (
+              <PotatoLoadingCard
+                title={text.photoReport.emptyTitle}
+                description={text.photoReport.emptyDescription}
+                animation="empty"
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {reportsQuery.data?.pendingPhotoReports.map((item) => (
+                  <PhotoReportCard
+                    key={item.photoId}
+                    item={item}
+                    isProcessing={actionMutation.isPending}
+                    onAction={(action) => handleAction(item.photoId, action)}
+                    onOpen={() => setSelectedPhotoId(item.photoId)}
+                  />
+                ))}
+              </div>
+            )
+          ) : (
+            <SharedRouteReportQueue />
+          )}
+        </>
       )}
-      {selectedPhoto ? (
+      {activeTab === "photo" && selectedPhoto ? (
         <ModerationPhotoViewer
           item={selectedPhoto}
           isProcessing={actionMutation.isPending}

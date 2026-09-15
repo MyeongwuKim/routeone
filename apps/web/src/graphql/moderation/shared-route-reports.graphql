@@ -1,0 +1,42 @@
+mutation ReportSharedRoute(
+  $routeId: ID!
+  $reason: SharedRouteReportReason!
+  $details: String
+) {
+  reportSharedRoute(routeId: $routeId, reason: $reason, details: $details) {
+    id
+    routeId
+    reason
+    details
+    status
+    createdAt
+    updatedAt
+  }
+}
+
+query PendingSharedRouteReports {
+  pendingSharedRouteReports {
+    routeId
+    placeTitles
+    tripDays
+    owner {
+      id
+      displayName
+      email
+    }
+    reportCount
+    reasons
+    details
+    latestReportedAt
+  }
+}
+
+mutation ModerateSharedRoute(
+  $routeId: ID!
+  $action: SharedRouteModerationAction!
+) {
+  moderateSharedRoute(routeId: $routeId, action: $action) {
+    routeId
+    action
+  }
+}

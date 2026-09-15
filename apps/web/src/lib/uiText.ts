@@ -163,6 +163,37 @@ export type UiText = {
     actionFailed: string;
     ownerOnly: string;
   };
+  sharedRouteReport: {
+    report: string;
+    reportAria: (name: string) => string;
+    title: string;
+    description: string;
+    inappropriate: string;
+    misleading: string;
+    spam: string;
+    harassmentOrHate: string;
+    privacyOrRights: string;
+    other: string;
+    otherPlaceholder: string;
+    cancel: string;
+    submit: string;
+    submitted: string;
+    submitFailed: string;
+    managementDescription: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    reports: (count: number) => string;
+    owner: string;
+    details: string;
+    tripDays: (count: number) => string;
+    routeFallback: string;
+    dismiss: string;
+    hide: string;
+    dismissConfirm: string;
+    hideConfirm: string;
+    actionComplete: string;
+    actionFailed: string;
+  };
   userBlock: {
     block: string;
     blockAria: (name: string) => string;
@@ -1543,7 +1574,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       canceled: "신고를 취소했어요.",
       cancelFailed: "신고를 취소하지 못했어요.",
       managementTitle: "신고 관리",
-      managementDescription: "신고된 사용자 사진 검토",
+      managementDescription: "사진과 공유 루트 신고 검토",
       viewFullImage: "신고 사진 전체 화면 보기",
       emptyTitle: "대기 중인 신고가 없어요.",
       emptyDescription: "새 신고가 접수되면 이곳에 표시돼요.",
@@ -1559,6 +1590,38 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       actionComplete: "신고 처리를 완료했어요.",
       actionFailed: "신고를 처리하지 못했어요.",
       ownerOnly: "운영자 계정에서만 볼 수 있는 화면이에요.",
+    },
+    sharedRouteReport: {
+      report: "신고",
+      reportAria: (name) => `${name} 님의 공유 루트 신고`,
+      title: "공유 루트 신고",
+      description: "이 루트에서 문제가 되는 내용을 선택해 주세요.",
+      inappropriate: "부적절하거나 불쾌한 내용",
+      misleading: "허위 또는 오해를 부르는 정보",
+      spam: "광고 또는 반복 게시물",
+      harassmentOrHate: "괴롭힘 또는 혐오를 조장하는 내용",
+      privacyOrRights: "개인정보 또는 권리 침해",
+      other: "기타",
+      otherPlaceholder: "신고 사유를 입력해 주세요.",
+      cancel: "취소",
+      submit: "신고 보내기",
+      submitted: "신고를 접수했어요. 이 루트는 내 화면에서 숨겼어요.",
+      submitFailed: "공유 루트 신고를 접수하지 못했어요.",
+      managementDescription: "신고된 공유 루트 검토",
+      emptyTitle: "대기 중인 루트 신고가 없어요.",
+      emptyDescription: "새로운 공유 루트 신고가 접수되면 이곳에 표시돼요.",
+      reports: (count) => `신고 ${count}건`,
+      owner: "작성자",
+      details: "상세 사유",
+      tripDays: (count) => `${count}일 일정`,
+      routeFallback: "공유 루트",
+      dismiss: "문제없음",
+      hide: "공유 숨김",
+      dismissConfirm: "문제없는 루트로 처리하고 신고를 종료할까요?",
+      hideConfirm:
+        "이 루트를 공유 목록에서 숨길까요? 작성자의 개인 일정은 삭제되지 않아요.",
+      actionComplete: "루트 신고 처리를 완료했어요.",
+      actionFailed: "루트 신고를 처리하지 못했어요.",
     },
     userBlock: {
       block: "차단",
@@ -3159,7 +3222,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       canceled: "Report canceled.",
       cancelFailed: "Could not cancel the report.",
       managementTitle: "Report Management",
-      managementDescription: "Review reported user photos",
+      managementDescription: "Review photo and shared route reports",
       viewFullImage: "View reported photo full screen",
       emptyTitle: "No reports are waiting.",
       emptyDescription: "New photo reports will appear here.",
@@ -3175,6 +3238,38 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       actionComplete: "The report was handled.",
       actionFailed: "Could not handle the report.",
       ownerOnly: "This page is available only to the owner account.",
+    },
+    sharedRouteReport: {
+      report: "Report",
+      reportAria: (name) => `Report ${name}'s shared route`,
+      title: "Report Shared Route",
+      description: "Select the issue that applies to this route.",
+      inappropriate: "Inappropriate or offensive content",
+      misleading: "False or misleading information",
+      spam: "Advertising or repeated content",
+      harassmentOrHate: "Harassment or hateful content",
+      privacyOrRights: "Privacy or rights concern",
+      other: "Other",
+      otherPlaceholder: "Describe the reason for your report.",
+      cancel: "Cancel",
+      submit: "Send Report",
+      submitted: "Report received. This route is now hidden only for you.",
+      submitFailed: "Could not report this shared route.",
+      managementDescription: "Review reported shared routes",
+      emptyTitle: "No route reports are waiting.",
+      emptyDescription: "New shared route reports will appear here.",
+      reports: (count) => `${count} ${count === 1 ? "report" : "reports"}`,
+      owner: "Creator",
+      details: "Details",
+      tripDays: (count) => `${count}-day trip`,
+      routeFallback: "Shared route",
+      dismiss: "No Issue",
+      hide: "Hide Route",
+      dismissConfirm: "Close these reports without changing the route?",
+      hideConfirm:
+        "Hide this route from Shared Routes? The creator's private itinerary will remain.",
+      actionComplete: "The route report was handled.",
+      actionFailed: "Could not handle the route report.",
     },
     userBlock: {
       block: "Block",

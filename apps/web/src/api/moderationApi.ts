@@ -6,9 +6,14 @@
  * 생성된 GraphQL 문서를 사용해 대기 목록 조회와 기각·숨김·삭제 요청을 전달한다.
  */
 import {
+  ModerateSharedRouteDocument,
   ModeratePlacePhotoDocument,
+  PendingSharedRouteReportsDocument,
   PendingPhotoReportsDocument,
+  ReportSharedRouteDocument,
   type PlacePhotoModerationAction,
+  type SharedRouteModerationAction,
+  type SharedRouteReportReason,
 } from "@/generated/graphql";
 import { requestGraphQL } from "@/lib/graphqlClient";
 
@@ -18,5 +23,22 @@ export const moderationApi = {
   },
   moderatePlacePhoto(photoId: string, action: PlacePhotoModerationAction) {
     return requestGraphQL(ModeratePlacePhotoDocument, { photoId, action });
+  },
+  reportSharedRoute(
+    routeId: string,
+    reason: SharedRouteReportReason,
+    details?: string | null
+  ) {
+    return requestGraphQL(ReportSharedRouteDocument, {
+      routeId,
+      reason,
+      details,
+    });
+  },
+  pendingSharedRouteReports() {
+    return requestGraphQL(PendingSharedRouteReportsDocument);
+  },
+  moderateSharedRoute(routeId: string, action: SharedRouteModerationAction) {
+    return requestGraphQL(ModerateSharedRouteDocument, { routeId, action });
   },
 };

@@ -12,6 +12,7 @@ import type {
   User,
 } from "@prisma/client";
 import { getBlockedUserIds } from "../user/userBlock.service.js";
+import { getReportedSharedRouteIds } from "../moderation/sharedRouteReport.service.js";
 
 async function getBlockedRouteOwnerWhere(
   prisma: PrismaClient,
@@ -25,6 +26,21 @@ async function getBlockedRouteOwnerWhere(
 
   return blockedUserIds.length > 0
     ? { ownerId: { notIn: blockedUserIds } }
+    : {};
+}
+
+async function getReportedRouteWhere(
+  prisma: PrismaClient,
+  viewerId?: string | null
+): Promise<Prisma.RouteWhereInput> {
+  if (!viewerId) {
+    return {};
+  }
+
+  const reportedRouteIds = await getReportedSharedRouteIds(prisma, viewerId);
+
+  return reportedRouteIds.length > 0
+    ? { NOT: { id: { in: reportedRouteIds } } }
     : {};
 }
 
@@ -51,7 +67,10 @@ export async function getSavedRoutes(prisma: PrismaClient, user: User) {
 }
 
 export async function getLikedRoutes(prisma: PrismaClient, user: User) {
-  const blockedOwnerWhere = await getBlockedRouteOwnerWhere(prisma, user.id);
+  const [blockedOwnerWhere, reportedRouteWhere] = await Promise.all([
+    getBlockedRouteOwnerWhere(prisma, user.id),
+    getReportedRouteWhere(prisma, user.id),
+  ]);
   const likes = await prisma.routeLike.findMany({
     where: {
       userId: user.id,
@@ -67,6 +86,7 @@ export async function getLikedRoutes(prisma: PrismaClient, user: User) {
           id: like.routeId,
           visibility: "PUBLIC",
           ...blockedOwnerWhere,
+          ...reportedRouteWhere,
         },
       })
     )
@@ -237,7 +257,10 @@ export async function getLikedRouteConnection(
   }
 ): Promise<RouteConnection> {
   const limit = clampRouteConnectionLimit(options.limit);
-  const blockedOwnerWhere = await getBlockedRouteOwnerWhere(prisma, user.id);
+  const [blockedOwnerWhere, reportedRouteWhere] = await Promise.all([
+    getBlockedRouteOwnerWhere(prisma, user.id),
+    getReportedRouteWhere(prisma, user.id),
+  ]);
   const entries: Array<{ cursor: string; route: Route }> = [];
   let cursor = options.cursor ?? null;
   let lastProcessedCursor: string | null = cursor;
@@ -283,6 +306,7 @@ export async function getLikedRouteConnection(
         },
         visibility: "PUBLIC",
         ...blockedOwnerWhere,
+        ...reportedRouteWhere,
         ...getRegionTagWhere(options.regionTag),
       },
     });
@@ -326,15 +350,16 @@ export async function getPublicRoutes(
     limit?: number | null;
   }
 ) {
-  const blockedOwnerWhere = await getBlockedRouteOwnerWhere(
-    prisma,
-    options.viewerId
-  );
+  const [blockedOwnerWhere, reportedRouteWhere] = await Promise.all([
+    getBlockedRouteOwnerWhere(prisma, options.viewerId),
+    getReportedRouteWhere(prisma, options.viewerId),
+  ]);
 
   return prisma.route.findMany({
     where: {
       visibility: "PUBLIC",
       ...blockedOwnerWhere,
+      ...reportedRouteWhere,
       ...(options.regionCode
         ? {
             primaryRegionCode: options.regionCode,
@@ -360,14 +385,15 @@ export async function getPublicRouteConnection(
   }
 ): Promise<RouteConnection> {
   const limit = clampRouteConnectionLimit(options.limit);
-  const blockedOwnerWhere = await getBlockedRouteOwnerWhere(
-    prisma,
-    options.viewerId
-  );
+  const [blockedOwnerWhere, reportedRouteWhere] = await Promise.all([
+    getBlockedRouteOwnerWhere(prisma, options.viewerId),
+    getReportedRouteWhere(prisma, options.viewerId),
+  ]);
   const routes = await prisma.route.findMany({
     where: {
       visibility: "PUBLIC",
       ...blockedOwnerWhere,
+      ...reportedRouteWhere,
       ...(options.regionCode
         ? {
             primaryRegionCode: options.regionCode,
