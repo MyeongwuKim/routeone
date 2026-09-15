@@ -16,8 +16,8 @@ function LoginRequiredCard() {
   const requestLogin = useLoginRequest();
 
   return (
-    <section className="flex h-full min-h-[20rem] items-center justify-center pb-6">
-      <div className="w-full rounded-3xl border border-brand-100 bg-white p-6 text-center shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
+    <section className="flex h-full min-h-0 items-center justify-center">
+      <div className="w-full max-w-sm rounded-3xl border border-brand-100 bg-white p-6 text-center shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
         <span className="mx-auto flex size-16 items-center justify-center rounded-full bg-brand-50 text-4xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
           <MdOutlineAccountCircle />
         </span>

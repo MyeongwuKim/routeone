@@ -43,6 +43,7 @@ import NotificationSettingsSkeleton from "@/components/feedback/NotificationSett
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import RoutePageHeader from "@/components/layout/RoutePageHeader";
 import TabHelpButton from "@/components/help/TabHelpButton";
+import BlockedUsersPageSkeleton from "@/features/user-block/components/BlockedUsersSkeleton";
 import NativeNotificationInboxSync from "@/features/notifications/NativeNotificationInboxSync";
 import RouteArrivalNotificationCoordinator from "@/features/my-route/components/RouteArrivalNotificationCoordinator";
 import RouteStartAttemptRecoveryCoordinator from "@/features/my-route/components/RouteStartAttemptRecoveryCoordinator";
@@ -568,6 +569,7 @@ function preloadSecondaryRoutes() {
     AppInfoPage,
     NotificationCenterPage,
     NotificationSettingsPage,
+    BlockedUsersPage,
   ]);
 }
 
@@ -803,7 +805,10 @@ function AppRouter() {
             />
             <Route
               path="/me/blocked-users"
-              element={withRouteSuspense(<BlockedUsersPage />)}
+              element={withRouteSuspense(
+                <BlockedUsersPage />,
+                <BlockedUsersPageSkeleton />
+              )}
             />
           </Route>
         </Route>

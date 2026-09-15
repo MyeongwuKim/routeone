@@ -16,6 +16,7 @@ import {
 } from "@/api/userBlockApi";
 import AccountAvatar from "@/components/account/AccountAvatar";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { BlockedUsersListSkeleton } from "../components/BlockedUsersSkeleton";
 import {
   LIKED_SHARED_ROUTES_QUERY_KEY,
   SHARED_ROUTES_QUERY_KEY,
@@ -95,12 +96,7 @@ function BlockedUsersPage() {
       </div>
 
       {blockedUsersQuery.isPending ? (
-        <PotatoLoadingCard
-          title={text.userBlock.pageTitle}
-          description={text.userBlock.loading}
-          animation="running"
-          compact
-        />
+        <BlockedUsersListSkeleton />
       ) : blockedUsersQuery.isError ? (
         <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
           <p>{text.userBlock.loadError}</p>

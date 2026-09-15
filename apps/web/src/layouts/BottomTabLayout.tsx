@@ -25,8 +25,10 @@ function BottomTabLayout() {
   const text = useUiText();
   const { pathname } = useLocation();
   const isHome = pathname === "/home";
-  const isRouteCollectionPage =
-    pathname === "/my-route" || pathname === "/shared-route";
+  const isPrimaryTabPage =
+    pathname === "/my-route" ||
+    pathname === "/shared-route" ||
+    pathname === "/me";
   const shouldSlideInPage = pathname.startsWith("/me/");
   const bottomTabOffsetClass =
     "bottom-[calc(4.5rem+max(0.7rem,env(safe-area-inset-bottom)))]";
@@ -47,7 +49,7 @@ function BottomTabLayout() {
               isHome
                 ? "h-full"
                 : `mx-auto h-full min-h-0 w-full max-w-md px-5 pt-[calc(env(safe-area-inset-top)+0.75rem)] ${
-                    isRouteCollectionPage ? "pb-0" : "pb-3"
+                    isPrimaryTabPage ? "pb-0" : "pb-3"
                   } ${
                     shouldSlideInPage ? "route-page-slide-enter" : ""
                   }`
