@@ -135,6 +135,7 @@ export type PlaceStaySummary = {
 
 export type PlacePhotoListOptions = {
   limit?: number | null;
+  blockedUserIds?: string[];
 };
 
 export type RouteStopVisitVerificationInput = {

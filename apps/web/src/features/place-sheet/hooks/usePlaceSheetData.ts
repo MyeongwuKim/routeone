@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { placeLocalizationApi } from "@/api/placeLocalizationApi";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { routeApi } from "@/api/routeApi";
 import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
 import { isTouristPlace } from "@/lib/placeCategory";
@@ -79,6 +80,7 @@ export function usePlaceSheetData({
   text,
   updateSelectedPlace,
 }: UsePlaceSheetDataParams) {
+  const { isAuthenticated } = useAuthSession();
   const hasTourApiServiceKey = Boolean(TOUR_API_SERVICE_KEY);
   const selectedPlaceKey = selectedPlace
     ? `${selectedPlace.contentId}-${selectedPlace.contentTypeId}`
@@ -293,7 +295,7 @@ export function usePlaceSheetData({
 
   const placePhotosQuery = useQuery({
     queryKey: ["place-photos", selectedPlaceKey],
-    enabled: isOpen && Boolean(selectedPlace),
+    enabled: isAuthenticated && isOpen && Boolean(selectedPlace),
     queryFn: async () => {
       if (!selectedPlace) {
         throw new Error(text.placeSheet.selectedPlaceMissing);

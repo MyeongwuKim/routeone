@@ -99,6 +99,7 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
             mapTargetDayOption?.id ?? mapTargetDayId ?? undefined
           }
           enableStartPreview={enableStartPreview}
+          layerClassName="z-[2500]"
           onRequestCheckout={
             onRequestCheckout ? handleRequestCheckoutFromMap : undefined
           }

@@ -1,3 +1,10 @@
+/**
+ * 용도:
+ * 비로그인 사용자에게 공개할 탐색 화면과 로그인이 필요한 계정 화면을 구분해 연결한다.
+ *
+ * 동작 방식:
+ * 홈과 공유 루트는 바로 열고, 저장 내역·알림·내 정보는 로그인 안내 화면으로 보호한다.
+ */
 import {
   lazy,
   Suspense,
@@ -10,6 +17,7 @@ import {
   BrowserRouter,
   HashRouter,
   Navigate,
+  Outlet,
   Route,
   Routes,
   useLocation,
@@ -29,6 +37,7 @@ import {
   MdPhotoLibrary,
 } from "react-icons/md";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import LoginRequiredCard from "@/components/auth/LoginRequiredCard";
 import FeedbackSkeleton from "@/components/feedback/FeedbackSkeleton";
 import NotificationSettingsSkeleton from "@/components/feedback/NotificationSettingsSkeleton";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
@@ -42,7 +51,7 @@ import {
   AUTH_SESSION_REFRESH_INTERVAL_MS,
   refreshAuthSessionIfNeeded,
 } from "@/lib/authSession";
-import { getAuthToken } from "@/lib/authToken";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import MyInfoPage from "@/pages/MyInfoPage";
@@ -92,6 +101,9 @@ const AppInfoPage = lazyWithPreload(() => import("@/pages/AppInfoPage"));
 const FeedbackPage = lazyWithPreload(() => import("@/pages/FeedbackPage"));
 const PhotoReportManagementPage = lazyWithPreload(
   () => import("@/features/photo-report/pages/PhotoReportManagementPage")
+);
+const BlockedUsersPage = lazyWithPreload(
+  () => import("@/features/user-block/pages/BlockedUsersPage")
 );
 const NotificationCenterPage = lazyWithPreload(
   () => import("@/pages/NotificationCenterPage")
@@ -560,9 +572,12 @@ function preloadSecondaryRoutes() {
 }
 
 function useRoutePreload() {
+  const { isAuthenticated } = useAuthSession();
+
   useEffect(() => {
-    if (!getAuthToken()) {
+    if (!isAuthenticated) {
       void LoginPage.preload();
+      void SharedRoutePage.preload();
       return;
     }
 
@@ -581,7 +596,7 @@ function useRoutePreload() {
     return () => {
       globalThis.clearTimeout(timeoutId);
     };
-  }, []);
+  }, [isAuthenticated]);
 }
 
 function withRouteSuspense(children: ReactNode, fallback: ReactNode = null) {
@@ -590,10 +605,10 @@ function withRouteSuspense(children: ReactNode, fallback: ReactNode = null) {
 
 function AuthSessionTracker() {
   const location = useLocation();
-  const navigate = useNavigate();
+  const { isAuthenticated } = useAuthSession();
 
   useEffect(() => {
-    if (!getAuthToken()) {
+    if (!isAuthenticated) {
       return;
     }
 
@@ -601,9 +616,7 @@ function AuthSessionTracker() {
     const refreshSession = async () => {
       const result = await refreshAuthSessionIfNeeded();
 
-      if (isActive && result === "expired") {
-        navigate("/login", { replace: true });
-      }
+      if (isActive && result === "expired") return;
     };
     const handleNativeAppActive = () => {
       void refreshSession();
@@ -632,21 +645,25 @@ function AuthSessionTracker() {
         handleVisibilityChange
       );
     };
-  }, [location.pathname, navigate]);
+  }, [isAuthenticated, location.pathname]);
 
   return null;
 }
 
 function RequireAuth() {
-  if (!getAuthToken()) {
-    return <Navigate to="/login" replace />;
+  const { isAuthenticated } = useAuthSession();
+
+  if (!isAuthenticated) {
+    return <LoginRequiredCard />;
   }
 
-  return <BottomTabLayout />;
+  return <Outlet />;
 }
 
 function LoginRoute() {
-  if (getAuthToken()) {
+  const { isAuthenticated } = useAuthSession();
+
+  if (isAuthenticated) {
     return <Navigate to="/home" replace />;
   }
 
@@ -669,31 +686,11 @@ function AppRouter() {
       <RouteArrivalNotificationCoordinator />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
-        <Route element={<RequireAuth />}>
+        <Route element={<BottomTabLayout />}>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route
             path="/home"
             element={withRouteSuspense(<HomePage />, <HomeRouteFallback />)}
-          />
-          <Route
-            path="/my-route"
-            element={
-              <RoutePageShell
-                icon={<MdOutlineRoute />}
-                title={text.routeShell.myRouteTitle}
-                description={text.routeShell.myRouteDescription}
-                action={<TabHelpButton topic="myRoute" />}
-              >
-                {withRouteSuspense(
-                  <MyRoutePage />,
-                  <RouteListSkeleton variant="my-route" />
-                )}
-              </RoutePageShell>
-            }
-          />
-          <Route
-            path="/notifications"
-            element={withRouteSuspense(<NotificationCenterPage />)}
           />
           <Route
             path="/shared-route"
@@ -711,78 +708,104 @@ function AppRouter() {
               </RoutePageShell>
             }
           />
-          <Route
-            path="/me"
-            element={
-              <RoutePageShell
-                icon={<MdOutlineAccountCircle />}
-                title={text.routeShell.myInfoTitle}
-                description={text.routeShell.myInfoDescription}
-              >
-                <MyInfoPage />
-              </RoutePageShell>
-            }
-          />
-          <Route
-            path="/me/routes"
-            element={withRouteSuspense(
-              <MyRouteHistoryPage />,
-              <RouteHistoryLazyFallback />
-            )}
-          />
-          <Route
-            path="/me/liked-routes"
-            element={withRouteSuspense(
-              <LikedSharedRoutePage />,
-              <LikedSharedRoutesLazyFallback />
-            )}
-          />
-          <Route
-            path="/me/account"
-            element={withRouteSuspense(
-              <MyAccountPage />,
-              <AccountLazyFallback />
-            )}
-          />
-          <Route
-            path="/me/language"
-            element={withRouteSuspense(
-              <LanguageSettingsPage />,
-              <LanguageLazyFallback />
-            )}
-          />
-          <Route
-            path="/me/service-area"
-            element={
-              isTestServiceAreaEnabled() ? (
-                withRouteSuspense(<ServiceAreaSettingsPage />)
-              ) : (
-                <Navigate to="/me" replace />
-              )
-            }
-          />
-          <Route
-            path="/me/notifications"
-            element={withRouteSuspense(
-              <NotificationSettingsPage />,
-              <NotificationSettingsSkeleton />
-            )}
-          />
-          <Route
-            path="/me/app-info"
-            element={withRouteSuspense(
-              <AppInfoPage />,
-              <AppInfoLazyFallback />
-            )}
-          />
-          <Route
-            path="/me/feedback"
-            element={withRouteSuspense(<FeedbackPage />, <FeedbackSkeleton />)}
-          />
-          <Route
-            path="/me/photo-reports"
-            element={withRouteSuspense(<PhotoReportManagementPage />)}
-          />
+          <Route element={<RequireAuth />}>
+            <Route
+              path="/my-route"
+              element={
+                <RoutePageShell
+                  icon={<MdOutlineRoute />}
+                  title={text.routeShell.myRouteTitle}
+                  description={text.routeShell.myRouteDescription}
+                  action={<TabHelpButton topic="myRoute" />}
+                >
+                  {withRouteSuspense(
+                    <MyRoutePage />,
+                    <RouteListSkeleton variant="my-route" />
+                  )}
+                </RoutePageShell>
+              }
+            />
+            <Route
+              path="/notifications"
+              element={withRouteSuspense(<NotificationCenterPage />)}
+            />
+            <Route
+              path="/me"
+              element={
+                <RoutePageShell
+                  icon={<MdOutlineAccountCircle />}
+                  title={text.routeShell.myInfoTitle}
+                  description={text.routeShell.myInfoDescription}
+                >
+                  <MyInfoPage />
+                </RoutePageShell>
+              }
+            />
+            <Route
+              path="/me/routes"
+              element={withRouteSuspense(
+                <MyRouteHistoryPage />,
+                <RouteHistoryLazyFallback />
+              )}
+            />
+            <Route
+              path="/me/liked-routes"
+              element={withRouteSuspense(
+                <LikedSharedRoutePage />,
+                <LikedSharedRoutesLazyFallback />
+              )}
+            />
+            <Route
+              path="/me/account"
+              element={withRouteSuspense(
+                <MyAccountPage />,
+                <AccountLazyFallback />
+              )}
+            />
+            <Route
+              path="/me/language"
+              element={withRouteSuspense(
+                <LanguageSettingsPage />,
+                <LanguageLazyFallback />
+              )}
+            />
+            <Route
+              path="/me/service-area"
+              element={
+                isTestServiceAreaEnabled() ? (
+                  withRouteSuspense(<ServiceAreaSettingsPage />)
+                ) : (
+                  <Navigate to="/me" replace />
+                )
+              }
+            />
+            <Route
+              path="/me/notifications"
+              element={withRouteSuspense(
+                <NotificationSettingsPage />,
+                <NotificationSettingsSkeleton />
+              )}
+            />
+            <Route
+              path="/me/app-info"
+              element={withRouteSuspense(
+                <AppInfoPage />,
+                <AppInfoLazyFallback />
+              )}
+            />
+            <Route
+              path="/me/feedback"
+              element={withRouteSuspense(<FeedbackPage />, <FeedbackSkeleton />)}
+            />
+            <Route
+              path="/me/photo-reports"
+              element={withRouteSuspense(<PhotoReportManagementPage />)}
+            />
+            <Route
+              path="/me/blocked-users"
+              element={withRouteSuspense(<BlockedUsersPage />)}
+            />
+          </Route>
         </Route>
       </Routes>
     </Router>

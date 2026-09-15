@@ -1,10 +1,21 @@
+/**
+ * 용도:
+ * 앱 업데이트와 초기 권한 설정을 거쳐 WebView를 표시하고
+ * 웹에서 요청한 로그인을 네이티브 화면으로 연결하는 앱 진입점이다.
+ *
+ * 구조:
+ * 부팅 단계 화면, 항상 유지되는 WebView, 필요할 때만 여는 로그인 모달로 구성되어 있다.
+ */
 import {
+  BackHandler,
+  Modal,
   SafeAreaView,
   StatusBar,
   StyleSheet,
   useColorScheme,
   View
 } from "react-native";
+import { useCallback, useEffect, useState } from "react";
 import NativeLoginStep from "./components/native-onboarding/NativeLoginStep";
 import NativeOnboardingStep, {
   useNativeOnboardingTheme
@@ -42,11 +53,35 @@ export default function App() {
     selectAppLanguage,
     updateAppLanguage,
   } = useNativeBoot();
+  const [isNativeLoginVisible, setIsNativeLoginVisible] = useState(false);
+  const handleNativeLoginComplete = useCallback(
+    async (payload: Parameters<typeof completeNativeLogin>[0]) => {
+      await completeNativeLogin(payload);
+      setIsNativeLoginVisible(false);
+    },
+    [completeNativeLogin]
+  );
   const nativeLogin = useNativeLogin({
-    onComplete: completeNativeLogin
+    onComplete: handleNativeLoginComplete
   });
   const nativeUpdate = useNativeUpdate();
   const text = ONBOARDING_TEXT[appLanguage];
+
+  useEffect(() => {
+    if (!isNativeLoginVisible) {
+      return;
+    }
+
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        setIsNativeLoginVisible(false);
+        return true;
+      }
+    );
+
+    return () => subscription.remove();
+  }, [isNativeLoginVisible]);
 
   if (nativeUpdate.status === "checking") {
     return (
@@ -199,55 +234,65 @@ export default function App() {
     );
   }
 
-  if (bootStep === "login") {
-    return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: brandBackgroundColor }]}
-      >
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor={brandBackgroundColor}
-        />
-        <NativeLoginStep
-          accountId={nativeLogin.accountId}
-          activeProvider={nativeLogin.activeProvider}
-          appleAvailable={nativeLogin.appleAvailable}
-          displayName={nativeLogin.displayName}
-          errorMessage={nativeLogin.errorMessage}
-          language={appLanguage}
-          onAppleLogin={() => {
-            void nativeLogin.handleAppleLogin();
-          }}
-          onChangeAccountId={nativeLogin.setAccountId}
-          onChangeDisplayName={nativeLogin.setDisplayName}
-          onChangePassword={nativeLogin.setPassword}
-          onDismissError={nativeLogin.dismissError}
-          onGoogleLogin={() => {
-            void nativeLogin.handleGoogleLogin();
-          }}
-          onPasswordLogin={() => {
-            void nativeLogin.handlePasswordLogin();
-          }}
-          password={nativeLogin.password}
-          passwordLoginMode={getPasswordLoginMode(
-            WEB_BUNDLE_UPDATE_CONFIG.appVariant
-          )}
-          toastMessage={isAuthSessionExpired ? text.sessionExpired : null}
-        />
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <NativeWebViewScreen
-      appLanguage={appLanguage}
-      nativeAuthExpiresAt={nativeAuthExpiresAt}
-      nativeAuthRole={nativeAuthRole}
-      nativeAuthSessionId={nativeAuthSessionId}
-      nativeAuthToken={nativeAuthToken}
-      onAppLanguageChange={updateAppLanguage}
-      onAuthSessionChange={handleNativeAuthSessionChange}
-    />
+    <View style={styles.container}>
+      <NativeWebViewScreen
+        appLanguage={appLanguage}
+        nativeAuthExpiresAt={nativeAuthExpiresAt}
+        nativeAuthRole={nativeAuthRole}
+        nativeAuthSessionId={nativeAuthSessionId}
+        nativeAuthToken={nativeAuthToken}
+        onAppLanguageChange={updateAppLanguage}
+        onAuthSessionChange={handleNativeAuthSessionChange}
+        onLoginRequest={() => {
+          if (!nativeAuthToken) {
+            setIsNativeLoginVisible(true);
+          }
+        }}
+      />
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setIsNativeLoginVisible(false)}
+        presentationStyle="fullScreen"
+        visible={isNativeLoginVisible}
+      >
+        <SafeAreaView
+          style={[styles.container, { backgroundColor: brandBackgroundColor }]}
+        >
+          <StatusBar
+            barStyle="light-content"
+            backgroundColor={brandBackgroundColor}
+          />
+          <NativeLoginStep
+            accountId={nativeLogin.accountId}
+            activeProvider={nativeLogin.activeProvider}
+            appleAvailable={nativeLogin.appleAvailable}
+            displayName={nativeLogin.displayName}
+            errorMessage={nativeLogin.errorMessage}
+            language={appLanguage}
+            onAppleLogin={() => {
+              void nativeLogin.handleAppleLogin();
+            }}
+            onBack={() => setIsNativeLoginVisible(false)}
+            onChangeAccountId={nativeLogin.setAccountId}
+            onChangeDisplayName={nativeLogin.setDisplayName}
+            onChangePassword={nativeLogin.setPassword}
+            onDismissError={nativeLogin.dismissError}
+            onGoogleLogin={() => {
+              void nativeLogin.handleGoogleLogin();
+            }}
+            onPasswordLogin={() => {
+              void nativeLogin.handlePasswordLogin();
+            }}
+            password={nativeLogin.password}
+            passwordLoginMode={getPasswordLoginMode(
+              WEB_BUNDLE_UPDATE_CONFIG.appVariant
+            )}
+            toastMessage={isAuthSessionExpired ? text.sessionExpired : null}
+          />
+        </SafeAreaView>
+      </Modal>
+    </View>
   );
 }
 

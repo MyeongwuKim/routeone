@@ -243,6 +243,19 @@ test("기본 mutation은 12초 timeout 후 자동 재시도하지 않는다", as
   assert.deepEqual(timers.map((timer) => timer.delay), [12_000]);
 });
 
+test("로컬 로그아웃 뒤에도 전달받은 인증값으로 정리 요청을 보낸다", async () => {
+  fetchSteps.push(successResponse);
+
+  await client.requestGraphQL(mutation, variables, {
+    authToken: "logout-cleanup-token",
+  });
+
+  assert.equal(
+    fetchCalls[0].headers.Authorization,
+    "Bearer logout-cleanup-token"
+  );
+});
+
 test("기본 mutation은 body 네트워크 오류와 HTTP 503도 자동 재시도하지 않는다", async () => {
   for (const response of [
     () => failingBodyResponse(new TypeError("terminated")),

@@ -1,4 +1,4 @@
-/** WebView 진입에 필요한 비밀번호·Google·Apple 로그인을 처리하는 화면. */
+/** 계정 기능을 요청한 게스트의 비밀번호·Google·Apple 로그인을 처리하는 화면. */
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -34,6 +34,7 @@ type NativeLoginStepProps = {
   onChangePassword: (value: string) => void;
   onChangeDisplayName: (value: string) => void;
   onDismissError: () => void;
+  onBack?: () => void;
   onPasswordLogin: () => void;
   onGoogleLogin: () => void;
   onAppleLogin: () => void;
@@ -92,6 +93,7 @@ export default function NativeLoginStep({
   onChangePassword,
   onChangeDisplayName,
   onDismissError,
+  onBack,
   onPasswordLogin,
   onGoogleLogin,
   onAppleLogin,
@@ -130,6 +132,22 @@ export default function NativeLoginStep({
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.screen, { backgroundColor: colors.background }]}
     >
+      {onBack ? (
+        <Pressable
+          accessibilityLabel={text.back}
+          accessibilityRole="button"
+          disabled={isBusy}
+          onPress={onBack}
+          style={({ pressed }) => [
+            styles.backButton,
+            pressed && styles.backButtonPressed,
+            isBusy && styles.disabledButton
+          ]}
+        >
+          <Text style={styles.backIcon}>‹</Text>
+          <Text style={styles.backText}>{text.back}</Text>
+        </Pressable>
+      ) : null}
       {isToastVisible && toastMessage ? (
         <View pointerEvents="none" style={styles.toast}>
           <Text style={styles.toastText}>{toastMessage}</Text>
@@ -356,6 +374,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 6
+  },
+  backButton: {
+    position: "absolute",
+    top: 14,
+    left: 16,
+    zIndex: 12,
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 22,
+    paddingHorizontal: 12
+  },
+  backButtonPressed: {
+    backgroundColor: "rgba(255, 255, 255, 0.14)"
+  },
+  backIcon: {
+    marginTop: -2,
+    color: "#ffffff",
+    fontSize: 32,
+    fontWeight: "400"
+  },
+  backText: {
+    marginLeft: 2,
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "800"
   },
   toastText: {
     color: "#ffffff",

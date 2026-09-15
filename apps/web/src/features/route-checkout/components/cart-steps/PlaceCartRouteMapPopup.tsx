@@ -15,6 +15,7 @@ type PlaceCartRouteMapPopupProps = {
   dayOptions?: RouteMapDayOption[];
   initialDayOptionId?: string;
   enableStartPreview?: boolean;
+  layerClassName?: string;
   onRequestCheckout?: (routePlan: PlannedRouteDay[]) => void;
   onClose: () => void;
 };
@@ -35,7 +36,9 @@ function PlaceCartRouteMapPopup(props: PlaceCartRouteMapPopupProps) {
   } = usePlaceCartRouteMapPopup(props);
 
   return createPortal(
-    <div className="fixed inset-0 z-[2750] bg-white">
+    <div
+      className={`fixed inset-0 ${props.layerClassName ?? "z-[2750]"} bg-white`}
+    >
       <div className="flex h-full flex-col">
         <header className="app-safe-area-header flex items-center justify-between border-b border-brand-100 px-4 py-3">
           <div className="min-w-0">

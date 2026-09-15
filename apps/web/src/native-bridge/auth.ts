@@ -19,3 +19,10 @@ export function updateNativeAuthSession({
     reason,
   });
 }
+
+export function requestNativeLogin(source?: string) {
+  return postNativeMessage({
+    type: "routeone:native-login-request",
+    source,
+  });
+}

@@ -52,10 +52,14 @@ export const notificationApi = {
       input,
     });
   },
-  unregisterPushDevice(expoPushToken: string) {
-    return requestGraphQL(UnregisterPushDeviceDocument, {
-      expoPushToken,
-    });
+  unregisterPushDevice(expoPushToken: string, authToken?: string | null) {
+    return requestGraphQL(
+      UnregisterPushDeviceDocument,
+      {
+        expoPushToken,
+      },
+      { authToken }
+    );
   },
   syncFestivalInbox(notifications: FestivalNotificationSyncInput[]) {
     return requestGraphQL(SyncFestivalNotificationInboxDocument, {

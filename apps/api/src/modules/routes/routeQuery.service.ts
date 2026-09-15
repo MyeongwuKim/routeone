@@ -1,9 +1,32 @@
+/**
+ * 용도:
+ * 내 루트와 공개·좋아요 루트 목록을 조회하고 커서 페이지를 구성한다.
+ *
+ * 동작 방식:
+ * 로그인 사용자의 공개 콘텐츠 조회에서는 개인 차단 목록을 소유자 조건에 함께 적용한다.
+ */
 import type {
   Prisma,
   PrismaClient,
   Route,
   User,
 } from "@prisma/client";
+import { getBlockedUserIds } from "../user/userBlock.service.js";
+
+async function getBlockedRouteOwnerWhere(
+  prisma: PrismaClient,
+  viewerId?: string | null
+): Promise<Prisma.RouteWhereInput> {
+  if (!viewerId) {
+    return {};
+  }
+
+  const blockedUserIds = await getBlockedUserIds(prisma, viewerId);
+
+  return blockedUserIds.length > 0
+    ? { ownerId: { notIn: blockedUserIds } }
+    : {};
+}
 
 export async function getSavedRoutes(prisma: PrismaClient, user: User) {
   const saves = await prisma.routeSave.findMany({
@@ -28,6 +51,7 @@ export async function getSavedRoutes(prisma: PrismaClient, user: User) {
 }
 
 export async function getLikedRoutes(prisma: PrismaClient, user: User) {
+  const blockedOwnerWhere = await getBlockedRouteOwnerWhere(prisma, user.id);
   const likes = await prisma.routeLike.findMany({
     where: {
       userId: user.id,
@@ -42,6 +66,7 @@ export async function getLikedRoutes(prisma: PrismaClient, user: User) {
         where: {
           id: like.routeId,
           visibility: "PUBLIC",
+          ...blockedOwnerWhere,
         },
       })
     )
@@ -212,6 +237,7 @@ export async function getLikedRouteConnection(
   }
 ): Promise<RouteConnection> {
   const limit = clampRouteConnectionLimit(options.limit);
+  const blockedOwnerWhere = await getBlockedRouteOwnerWhere(prisma, user.id);
   const entries: Array<{ cursor: string; route: Route }> = [];
   let cursor = options.cursor ?? null;
   let lastProcessedCursor: string | null = cursor;
@@ -256,6 +282,7 @@ export async function getLikedRouteConnection(
           in: likes.map((like) => like.routeId),
         },
         visibility: "PUBLIC",
+        ...blockedOwnerWhere,
         ...getRegionTagWhere(options.regionTag),
       },
     });
@@ -293,14 +320,21 @@ export async function getLikedRouteConnection(
 export async function getPublicRoutes(
   prisma: PrismaClient,
   options: {
+    viewerId?: string | null;
     regionCode?: string | null;
     regionTag?: string | null;
     limit?: number | null;
   }
 ) {
+  const blockedOwnerWhere = await getBlockedRouteOwnerWhere(
+    prisma,
+    options.viewerId
+  );
+
   return prisma.route.findMany({
     where: {
       visibility: "PUBLIC",
+      ...blockedOwnerWhere,
       ...(options.regionCode
         ? {
             primaryRegionCode: options.regionCode,
@@ -318,6 +352,7 @@ export async function getPublicRoutes(
 export async function getPublicRouteConnection(
   prisma: PrismaClient,
   options: {
+    viewerId?: string | null;
     regionCode?: string | null;
     regionTag?: string | null;
     limit?: number | null;
@@ -325,9 +360,14 @@ export async function getPublicRouteConnection(
   }
 ): Promise<RouteConnection> {
   const limit = clampRouteConnectionLimit(options.limit);
+  const blockedOwnerWhere = await getBlockedRouteOwnerWhere(
+    prisma,
+    options.viewerId
+  );
   const routes = await prisma.route.findMany({
     where: {
       visibility: "PUBLIC",
+      ...blockedOwnerWhere,
       ...(options.regionCode
         ? {
             primaryRegionCode: options.regionCode,

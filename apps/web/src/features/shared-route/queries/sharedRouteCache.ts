@@ -98,6 +98,16 @@ function updateSharedRouteInfiniteData(
   };
 }
 
+export function removeSharedRouteOwnerFromInfiniteData(
+  data: SharedRouteInfiniteData | undefined,
+  mode: SharedRoutePageMode,
+  ownerId: string
+) {
+  return updateSharedRouteInfiniteData(data, mode, (routes) =>
+    routes.filter((route) => route.owner.id !== ownerId)
+  );
+}
+
 export function restoreSharedRouteInInfiniteData(
   data: SharedRouteInfiniteData | undefined,
   previousData: SharedRouteInfiniteData | undefined,

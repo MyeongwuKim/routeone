@@ -7,6 +7,7 @@ import {
   IoBagHandleOutline,
   IoCafeOutline,
   IoLocationSharp,
+  IoLogInOutline,
   IoMapOutline,
   IoNotificationsOutline,
   IoRestaurantOutline,
@@ -41,7 +42,9 @@ type HomeMapControlsProps = {
   isSavedPlaceCountLoading: boolean;
   isCurrentLocationLookupPending: boolean;
   isMapReady: boolean;
+  isAuthenticated: boolean;
   onOpenNotifications: () => void;
+  onRequestLogin: () => void;
   onOpenSearch: () => void;
   onOpenSavedList: () => void;
   onFocusCurrentLocation: () => void;
@@ -84,7 +87,9 @@ function HomeMapControls({
   isSavedPlaceCountLoading,
   isCurrentLocationLookupPending,
   isMapReady,
+  isAuthenticated,
   onOpenNotifications,
+  onRequestLogin,
   onOpenSearch,
   onOpenSavedList,
   onFocusCurrentLocation,
@@ -177,21 +182,32 @@ function HomeMapControls({
             {text.home.searchPrompt(selectedRegionLabel)}
           </span>
         </button>
-        <button
-          type="button"
-          aria-label={text.home.notificationsAria}
-          onClick={onOpenNotifications}
-          className="pointer-events-auto relative ml-2 inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-white/95 text-xl text-brand-700 shadow-md backdrop-blur transition hover:bg-brand-50"
-        >
-          <IoNotificationsOutline />
-          {unreadNotificationCount > 0 ? (
-            <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-none text-white ring-2 ring-white">
-              {unreadNotificationCount > 99
-                ? "99+"
-                : unreadNotificationCount}
-            </span>
-          ) : null}
-        </button>
+        {isAuthenticated ? (
+          <button
+            type="button"
+            aria-label={text.home.notificationsAria}
+            onClick={onOpenNotifications}
+            className="pointer-events-auto relative ml-2 inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-white/95 text-xl text-brand-700 shadow-md backdrop-blur transition hover:bg-brand-50"
+          >
+            <IoNotificationsOutline />
+            {unreadNotificationCount > 0 ? (
+              <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-none text-white ring-2 ring-white">
+                {unreadNotificationCount > 99
+                  ? "99+"
+                  : unreadNotificationCount}
+              </span>
+            ) : null}
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label={text.auth.loginAria}
+            onClick={onRequestLogin}
+            className="pointer-events-auto ml-2 inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-white/95 text-lg text-brand-700 shadow-md backdrop-blur transition hover:bg-brand-50"
+          >
+            <IoLogInOutline />
+          </button>
+        )}
         <button
           type="button"
           aria-label={text.home.savedPlacesAria}

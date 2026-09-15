@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { routeApi } from "@/api/routeApi";
-import { getAuthToken } from "@/lib/authToken";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import { useUiModalStore } from "@/stores/uiModalStore";
@@ -43,6 +43,7 @@ function RouteStartAttemptRecoveryCoordinator() {
   const openModal = useUiModalStore((state) => state.openModal);
   const isModalOpen = useUiModalStore((state) => state.isOpen);
   const showToast = useUiToastStore((state) => state.showToast);
+  const { isAuthenticated } = useAuthSession();
   const [revision, setRevision] = useState(0);
   const inFlightAttemptKeysRef = useRef(new Set<string>());
   const presentedRecoveryModalRef = useRef<{
@@ -51,7 +52,7 @@ function RouteStartAttemptRecoveryCoordinator() {
     generation: number;
     status: "restart-required" | "status-unavailable";
   } | null>(null);
-  const isEnabled = Boolean(pathname && getAuthToken());
+  const isEnabled = Boolean(pathname && isAuthenticated);
 
   useEffect(() => {
     const requestRender = () => {

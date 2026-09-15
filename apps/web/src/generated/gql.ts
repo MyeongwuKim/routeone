@@ -72,6 +72,7 @@ type Documents = {
     "mutation LoginWithPassword($input: PasswordLoginInput!) {\n  loginWithPassword(input: $input) {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      avatarUrl\n      authProviders\n      locale\n      role\n      createdAt\n      updatedAt\n    }\n  }\n}": typeof types.LoginWithPasswordDocument,
     "query Me {\n  me {\n    id\n    accountId\n    email\n    displayName\n    avatarUrl\n    authProviders\n    locale\n    role\n    createdAt\n    updatedAt\n  }\n}": typeof types.MeDocument,
     "mutation RefreshAuthSession {\n  refreshAuthSession {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      avatarUrl\n      authProviders\n      locale\n      role\n      createdAt\n      updatedAt\n    }\n  }\n}": typeof types.RefreshAuthSessionDocument,
+    "query BlockedUsers {\n  blockedUsers {\n    id\n    displayName\n    avatarUrl\n  }\n}\n\nmutation BlockUser($userId: ID!) {\n  blockUser(userId: $userId) {\n    id\n    displayName\n    avatarUrl\n  }\n}\n\nmutation UnblockUser($userId: ID!) {\n  unblockUser(userId: $userId) {\n    id\n    displayName\n    avatarUrl\n  }\n}": typeof types.BlockedUsersDocument,
 };
 const documents: Documents = {
     "query PendingPhotoReports {\n  pendingPhotoReports {\n    photoId\n    title\n    imageUrl\n    thumbnailUrl\n    status\n    uploader {\n      id\n      displayName\n      email\n    }\n    reportCount\n    reasons\n    details\n    latestReportedAt\n  }\n}\n\nmutation ModeratePlacePhoto($photoId: ID!, $action: PlacePhotoModerationAction!) {\n  moderatePlacePhoto(photoId: $photoId, action: $action) {\n    photoId\n    action\n  }\n}": types.PendingPhotoReportsDocument,
@@ -132,6 +133,7 @@ const documents: Documents = {
     "mutation LoginWithPassword($input: PasswordLoginInput!) {\n  loginWithPassword(input: $input) {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      avatarUrl\n      authProviders\n      locale\n      role\n      createdAt\n      updatedAt\n    }\n  }\n}": types.LoginWithPasswordDocument,
     "query Me {\n  me {\n    id\n    accountId\n    email\n    displayName\n    avatarUrl\n    authProviders\n    locale\n    role\n    createdAt\n    updatedAt\n  }\n}": types.MeDocument,
     "mutation RefreshAuthSession {\n  refreshAuthSession {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      avatarUrl\n      authProviders\n      locale\n      role\n      createdAt\n      updatedAt\n    }\n  }\n}": types.RefreshAuthSessionDocument,
+    "query BlockedUsers {\n  blockedUsers {\n    id\n    displayName\n    avatarUrl\n  }\n}\n\nmutation BlockUser($userId: ID!) {\n  blockUser(userId: $userId) {\n    id\n    displayName\n    avatarUrl\n  }\n}\n\nmutation UnblockUser($userId: ID!) {\n  unblockUser(userId: $userId) {\n    id\n    displayName\n    avatarUrl\n  }\n}": types.BlockedUsersDocument,
 };
 
 /**
@@ -380,6 +382,10 @@ export function graphql(source: "query Me {\n  me {\n    id\n    accountId\n    
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "mutation RefreshAuthSession {\n  refreshAuthSession {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      avatarUrl\n      authProviders\n      locale\n      role\n      createdAt\n      updatedAt\n    }\n  }\n}"): (typeof documents)["mutation RefreshAuthSession {\n  refreshAuthSession {\n    token\n    user {\n      id\n      accountId\n      email\n      displayName\n      avatarUrl\n      authProviders\n      locale\n      role\n      createdAt\n      updatedAt\n    }\n  }\n}"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "query BlockedUsers {\n  blockedUsers {\n    id\n    displayName\n    avatarUrl\n  }\n}\n\nmutation BlockUser($userId: ID!) {\n  blockUser(userId: $userId) {\n    id\n    displayName\n    avatarUrl\n  }\n}\n\nmutation UnblockUser($userId: ID!) {\n  unblockUser(userId: $userId) {\n    id\n    displayName\n    avatarUrl\n  }\n}"): (typeof documents)["query BlockedUsers {\n  blockedUsers {\n    id\n    displayName\n    avatarUrl\n  }\n}\n\nmutation BlockUser($userId: ID!) {\n  blockUser(userId: $userId) {\n    id\n    displayName\n    avatarUrl\n  }\n}\n\nmutation UnblockUser($userId: ID!) {\n  unblockUser(userId: $userId) {\n    id\n    displayName\n    avatarUrl\n  }\n}"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

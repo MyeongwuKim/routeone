@@ -1565,6 +1565,9 @@ export async function getPlacePhotos(
   return prisma.placePhoto.findMany({
     where: {
       status: "ACTIVE",
+      ...(options.blockedUserIds?.length
+        ? { userId: { notIn: options.blockedUserIds } }
+        : {}),
       AND: [
         {
           OR: [

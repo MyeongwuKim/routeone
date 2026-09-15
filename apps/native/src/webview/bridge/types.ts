@@ -35,6 +35,11 @@ export type NativeAuthTokenMessage = {
   reason?: "logout" | "expired";
 };
 
+export type NativeLoginRequest = {
+  type: "routeone:native-login-request";
+  source?: string;
+};
+
 export type NativeAppLanguage = "ko" | "en";
 
 export type NativeAppLanguageMessage = {

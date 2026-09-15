@@ -35,8 +35,9 @@ import {
   useHomeSearchResults,
 } from "@/features/home/useHomeSearch";
 import { useTestRegionLocation } from "@/features/home/useTestRegionLocation";
+import { useAuthSession } from "@/hooks/useAuthSession";
+import { useLoginRequest } from "@/hooks/useLoginRequest";
 import { useUiText } from "@/lib/uiText";
-import { getAuthToken } from "@/lib/authToken";
 import type { CurrentLocation } from "@/lib/gangwonBoundaryUtils";
 import {
   createMapSheetPlaceFromAttraction,
@@ -59,8 +60,9 @@ function HomePage() {
   const isLocationPermissionDenied = useLocationPermissionDenied();
   const text = useUiText();
   const navigate = useNavigate();
+  const requestLogin = useLoginRequest();
   const [searchParams, setSearchParams] = useSearchParams();
-  const hasAuthToken = Boolean(getAuthToken());
+  const { isAuthenticated } = useAuthSession();
   const serviceArea = useEffectiveServiceArea();
   const canSelectServiceArea = isTestServiceAreaEnabled();
   const developmentFixedRegion = canSelectServiceArea
@@ -139,7 +141,7 @@ function HomePage() {
         first: NOTIFICATION_INBOX_PAGE_SIZE,
         after: null,
       }),
-    enabled: hasAuthToken,
+    enabled: isAuthenticated,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
@@ -632,7 +634,9 @@ function HomePage() {
           isSavedPlaceCountLoading={isAttractionLoading}
           isCurrentLocationLookupPending={isCurrentLocationLookupPending}
           isMapReady={mapReady}
+          isAuthenticated={isAuthenticated}
           onOpenNotifications={() => navigate("/notifications")}
+          onRequestLogin={() => requestLogin("home-header")}
           onOpenSearch={() => openSearchPopup()}
           onOpenSavedList={() => {
             resetSheet();

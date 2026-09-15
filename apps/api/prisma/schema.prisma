@@ -354,6 +354,19 @@ model PlacePhotoReport {
   @@index([status, createdAt])
 }
 
+model UserBlock {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  blockerId String @db.ObjectId
+  blockedId String @db.ObjectId
+
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId, createdAt])
+  @@index([blockedId])
+}
+
 model RouteLike {
   id      String @id @default(auto()) @map("_id") @db.ObjectId
   userId  String @db.ObjectId

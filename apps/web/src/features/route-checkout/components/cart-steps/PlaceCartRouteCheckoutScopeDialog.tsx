@@ -175,7 +175,7 @@ function PlaceCartRouteCheckoutScopeDialog({
             disabled={selectedRoutePlanLength === 0}
             className="inline-flex h-12 min-w-28 shrink-0 items-center justify-center rounded-full bg-brand-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400"
           >
-            {text.common.confirm}
+            {text.dayRoute.createSchedule}
           </button>
         </div>
       </section>

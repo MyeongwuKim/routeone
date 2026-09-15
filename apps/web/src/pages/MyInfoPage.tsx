@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";
 import {
+  MdBlock,
   MdChevronRight,
   MdDarkMode,
   MdHistory,
@@ -139,6 +140,15 @@ function MyInfoPage() {
           title={text.myInfo.likedRoutes}
           description={text.myInfo.likedRoutesDescription}
           onClick={() => navigate("/me/liked-routes")}
+        />
+
+        <div className="border-b border-brand-50" />
+
+        <MyInfoMenuRow
+          icon={<MdBlock />}
+          title={text.userBlock.menuTitle}
+          description={text.userBlock.menuDescription}
+          onClick={() => navigate("/me/blocked-users")}
         />
 
         {user?.role === "OWNER" ? (

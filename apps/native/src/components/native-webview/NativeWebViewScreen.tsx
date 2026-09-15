@@ -59,6 +59,7 @@ type NativeWebViewScreenProps = {
   nativeAuthSessionId: string | null;
   nativeAuthToken: string | null;
   onAppLanguageChange: (language: AppLanguage) => Promise<void> | void;
+  onLoginRequest: () => void;
   onAuthSessionChange: (session: {
     token: string | null;
     expiresAt: number | null;
@@ -305,7 +306,8 @@ export default function NativeWebViewScreen({
   nativeAuthSessionId,
   nativeAuthToken,
   onAppLanguageChange,
-  onAuthSessionChange
+  onAuthSessionChange,
+  onLoginRequest
 }: NativeWebViewScreenProps) {
   const text = WEB_VIEW_TEXT[appLanguage];
   const testAccountMode = isNativeTestFeatureEnabled(
@@ -416,7 +418,15 @@ export default function NativeWebViewScreen({
             AUTH_SESSION_EXPIRES_AT_STORAGE_KEY
           )}, ${JSON.stringify(String(nativeAuthExpiresAt))});
         } catch (error) {}`
-      : "";
+      : `window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ = "";
+        try {
+          window.localStorage.removeItem(${JSON.stringify(
+            AUTH_TOKEN_STORAGE_KEY
+          )});
+          window.localStorage.removeItem(${JSON.stringify(
+            AUTH_SESSION_EXPIRES_AT_STORAGE_KEY
+          )});
+        } catch (error) {}`;
     const languageScript = `
       try {
         window.localStorage.setItem(${JSON.stringify(
@@ -448,6 +458,46 @@ export default function NativeWebViewScreen({
     nativeAuthToken,
     reviewerVerificationBypass,
     testAccountMode
+  ]);
+
+  useEffect(() => {
+    if (!resolvedBundle) {
+      return;
+    }
+
+    webViewRef.current?.injectJavaScript(`
+      (function () {
+        window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ = ${JSON.stringify(
+          nativeAuthSessionId ?? ""
+        )};
+        try {
+          var token = ${JSON.stringify(nativeAuthToken)};
+          var expiresAt = ${JSON.stringify(nativeAuthExpiresAt)};
+          if (token) {
+            window.localStorage.setItem(${JSON.stringify(
+              AUTH_TOKEN_STORAGE_KEY
+            )}, token);
+            window.localStorage.setItem(${JSON.stringify(
+              AUTH_SESSION_EXPIRES_AT_STORAGE_KEY
+            )}, String(expiresAt));
+          } else {
+            window.localStorage.removeItem(${JSON.stringify(
+              AUTH_TOKEN_STORAGE_KEY
+            )});
+            window.localStorage.removeItem(${JSON.stringify(
+              AUTH_SESSION_EXPIRES_AT_STORAGE_KEY
+            )});
+          }
+          window.dispatchEvent(new CustomEvent("routeone:auth-session-change"));
+        } catch (error) {}
+      })();
+      true;
+    `);
+  }, [
+    nativeAuthExpiresAt,
+    nativeAuthSessionId,
+    nativeAuthToken,
+    resolvedBundle
   ]);
 
   const requestFatalAppExit = useCallback(
@@ -549,9 +599,11 @@ export default function NativeWebViewScreen({
           webBundleKind: currentBundle?.kind ?? "embedded"
         },
         {
+          activeAuthSessionId: nativeAuthSessionId,
           locationTestModeEnabled: testAccountMode,
           onAppLanguageChange,
-          onAuthSessionChange
+          onAuthSessionChange,
+          onLoginRequest
         }
       ).catch((error) => {
         reportHandledNativeError(error, {
@@ -561,8 +613,10 @@ export default function NativeWebViewScreen({
     },
     [
       completeWebBundleLoad,
+      nativeAuthSessionId,
       onAppLanguageChange,
       onAuthSessionChange,
+      onLoginRequest,
       testAccountMode,
       text
     ]
@@ -857,7 +911,7 @@ export default function NativeWebViewScreen({
       <StatusBar barStyle="dark-content" />
       {resolvedBundle ? (
         <WebView
-          key={`${resolvedBundle.key}:${nativeAuthSessionId ?? "no-session"}:${webViewReloadVersion}`}
+          key={`${resolvedBundle.key}:${webViewReloadVersion}`}
           ref={webViewRef}
           source={resolvedBundle.source}
           allowingReadAccessToURL={resolvedBundle.allowingReadAccessToUrl}

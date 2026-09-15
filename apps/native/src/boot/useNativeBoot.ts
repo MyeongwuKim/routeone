@@ -1,10 +1,10 @@
 /**
  * 용도:
- * 네이티브 앱의 초기 권한·로그인 상태를 확인하고 WebView 진입 단계를 관리한다.
+ * 네이티브 앱의 초기 설정·권한·인증 상태를 확인하고 WebView 진입 단계를 관리한다.
  *
  * 동작 방식:
- * 저장된 인증 세션이 만료됐거나 새 로그인을 시작할 때 이전 세션의 장소 감시를
- * 먼저 해제한 뒤 새 인증 정보와 위치 준비 상태를 반영한다.
+ * 온보딩을 마치면 인증 여부와 관계없이 지도로 진입하고, 이후 로그인·로그아웃은
+ * WebView를 유지한 채 세션 정보만 교체한다.
  */
 import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -30,7 +30,6 @@ export type NativeBootStep =
   | "language"
   | "location"
   | "notification"
-  | "login"
   | "webview";
 export type NativeBootProgressStage = "storage" | "location";
 export type AppLanguage = "ko" | "en";
@@ -100,15 +99,23 @@ export function useNativeBoot() {
     }
   }, []);
 
-  const goToNotificationOrLogin = useCallback(async () => {
-    const permission = await Notifications.getPermissionsAsync();
-
-    setBootStep(
-      !permission.granted && permission.canAskAgain ? "notification" : "login"
-    );
+  const enterWebView = useCallback(async () => {
+    await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
+    setBootStep("webview");
   }, []);
 
-  const goToLocationOrNotificationOrLogin = useCallback(async () => {
+  const goToNotificationOrWebView = useCallback(async () => {
+    const permission = await Notifications.getPermissionsAsync();
+
+    if (!permission.granted && permission.canAskAgain) {
+      setBootStep("notification");
+      return;
+    }
+
+    await enterWebView();
+  }, [enterWebView]);
+
+  const goToLocationOrNotificationOrWebView = useCallback(async () => {
     const locationPermission = await Location.getForegroundPermissionsAsync();
 
     if (
@@ -120,8 +127,8 @@ export function useNativeBoot() {
     }
 
     await prepareLocationBeforeWebView();
-    await goToNotificationOrLogin();
-  }, [goToNotificationOrLogin, prepareLocationBeforeWebView]);
+    await goToNotificationOrWebView();
+  }, [goToNotificationOrWebView, prepareLocationBeforeWebView]);
 
   useEffect(() => {
     let isMounted = true;
@@ -179,7 +186,14 @@ export function useNativeBoot() {
       }
 
       if (hasCompletedOnboarding === "true") {
-        setBootStep("login");
+        setBootProgressStage("location");
+        await prepareLocationBeforeWebView();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setBootStep("webview");
         return;
       }
 
@@ -203,11 +217,12 @@ export function useNativeBoot() {
         return;
       }
 
-      setBootStep(
-        !notificationPermission.granted && notificationPermission.canAskAgain
-          ? "notification"
-          : "login"
-      );
+      if (!notificationPermission.granted && notificationPermission.canAskAgain) {
+        setBootStep("notification");
+        return;
+      }
+
+      await enterWebView();
     };
 
     void prepareNativeBoot().catch(() => {
@@ -219,15 +234,15 @@ export function useNativeBoot() {
     return () => {
       isMounted = false;
     };
-  }, [prepareLocationBeforeWebView]);
+  }, [enterWebView, prepareLocationBeforeWebView]);
 
   const selectAppLanguage = useCallback(
     async (language: AppLanguage) => {
       setAppLanguage(language);
       await AsyncStorage.setItem(APP_LANGUAGE_STORAGE_KEY, language);
-      await goToLocationOrNotificationOrLogin();
+      await goToLocationOrNotificationOrWebView();
     },
-    [goToLocationOrNotificationOrLogin]
+    [goToLocationOrNotificationOrWebView]
   );
 
   const updateAppLanguage = useCallback(async (language: AppLanguage) => {
@@ -245,11 +260,11 @@ export function useNativeBoot() {
         await prepareLocationBeforeWebView();
       }
 
-      await goToNotificationOrLogin();
+      await goToNotificationOrWebView();
     } finally {
       setIsRequestingLocationPermission(false);
     }
-  }, [goToNotificationOrLogin, prepareLocationBeforeWebView]);
+  }, [goToNotificationOrWebView, prepareLocationBeforeWebView]);
 
   const requestNotificationPermission = useCallback(async () => {
     setIsRequestingNotificationPermission(true);
@@ -262,11 +277,11 @@ export function useNativeBoot() {
           allowSound: true
         }
       });
-      setBootStep("login");
+      await enterWebView();
     } finally {
       setIsRequestingNotificationPermission(false);
     }
-  }, []);
+  }, [enterWebView]);
 
   const completeNativeLogin = useCallback(
     async (payload: NativeAuthPayload) => {
@@ -287,7 +302,6 @@ export function useNativeBoot() {
       setNativeAuthExpiresAt(expiresAt);
       setNativeAuthSessionId(sessionId);
       setIsAuthSessionExpired(false);
-      await AsyncStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
       await prepareLocationBeforeWebView();
       setBootStep("webview");
     },
@@ -308,7 +322,7 @@ export function useNativeBoot() {
       setNativeAuthExpiresAt(session.expiresAt);
       setNativeAuthSessionId(session.sessionId);
       setIsAuthSessionExpired(session.reason === "expired");
-      setBootStep(session.token ? "webview" : "login");
+      setBootStep("webview");
     },
     []
   );

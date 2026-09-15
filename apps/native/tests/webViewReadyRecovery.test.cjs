@@ -224,7 +224,7 @@ test("준비 완료 신호가 오면 예약된 복구 작업을 모두 취소한
   );
 });
 
-test("WebView 복구 시 인라인 번들의 기준 URL을 직접 재로딩하지 않는다", () => {
+test("WebView 복구만 재로딩하고 로그인 세션 변경은 현재 화면에 반영한다", () => {
   assert.doesNotMatch(screenSource, /webViewRef\.current\?\.reload\(\)/);
   assert.match(
     screenSource,
@@ -232,7 +232,15 @@ test("WebView 복구 시 인라인 번들의 기준 URL을 직접 재로딩하�
   );
   assert.match(
     screenSource,
-    /nativeAuthSessionId \?\? "no-session"\}:\$\{webViewReloadVersion\}/
+    /key=\{`\$\{resolvedBundle\.key\}:\$\{webViewReloadVersion\}`\}/
+  );
+  assert.doesNotMatch(
+    screenSource,
+    /key=\{`[^`]*nativeAuthSessionId/
+  );
+  assert.match(
+    screenSource,
+    /window\.dispatchEvent\(new CustomEvent\("routeone:auth-session-change"\)\)/
   );
 });
 

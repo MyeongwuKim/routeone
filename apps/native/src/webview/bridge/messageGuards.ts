@@ -9,6 +9,7 @@ import type {
   NativeFestivalNotificationSyncRequest,
   NativeFetchRequest,
   NativeLocationRequest,
+  NativeLoginRequest,
   NativePhotoUploadRequest,
   NativePhotoRequest,
   NativePushTokenRequest,
@@ -98,6 +99,21 @@ export function isNativeAuthTokenMessage(
     (maybeMessage.reason == null ||
       maybeMessage.reason === "logout" ||
       maybeMessage.reason === "expired")
+  );
+}
+
+export function isNativeLoginRequest(
+  value: unknown
+): value is NativeLoginRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const maybeMessage = value as Partial<NativeLoginRequest>;
+
+  return (
+    maybeMessage.type === "routeone:native-login-request" &&
+    (maybeMessage.source == null || typeof maybeMessage.source === "string")
   );
 }
 

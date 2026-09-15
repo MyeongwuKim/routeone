@@ -1,6 +1,6 @@
 import { useNativeAppInfoStore } from "@/stores/nativeAppInfoStore";
 import { hasNativeCapability } from "./capabilities";
-import { updateNativeAuthSession } from "./auth";
+import { requestNativeLogin, updateNativeAuthSession } from "./auth";
 import {
   subscribeNativeAppActive,
   subscribeNativeNotificationReceived,
@@ -42,6 +42,7 @@ export const nativeBridge = {
     openSettings: openNativeAppSettings,
   },
   auth: {
+    requestLogin: requestNativeLogin,
     updateSession: updateNativeAuthSession,
   },
   location: {

@@ -11,7 +11,7 @@ import { authApi } from "@/api/authApi";
 import { notificationApi } from "@/api/notificationApi";
 import AccountDetailsSection from "@/components/account/AccountDetailsSection";
 import { useAccountUser } from "@/components/account/useAccountUser";
-import { clearAuthToken } from "@/lib/authToken";
+import { clearAuthToken, getAuthToken } from "@/lib/authToken";
 import { clearRouteArrivalTransitions } from "@/features/my-route/services/routeArrivalTransitionLock";
 import { clearRouteStartAttempts } from "@/features/my-route/services/routeStartAttemptJournal";
 import { useUiText } from "@/lib/uiText";
@@ -106,12 +106,15 @@ function MyAccountPage() {
     ]);
   };
 
-  const unregisterPushDevice = async () => {
+  const unregisterPushDevice = async (authToken = getAuthToken()) => {
     try {
       const pushToken = await nativeBridge.notifications.getPushToken(false);
 
       if (pushToken?.expoPushToken) {
-        await notificationApi.unregisterPushDevice(pushToken.expoPushToken);
+        await notificationApi.unregisterPushDevice(
+          pushToken.expoPushToken,
+          authToken
+        );
       }
     } catch (error) {
       console.warn(
@@ -133,7 +136,7 @@ function MyAccountPage() {
     clearAuthUser();
     queryClient.clear();
     showToast(toastMessage);
-    navigate("/login", {
+    navigate("/home", {
       replace: true,
     });
   };
@@ -144,8 +147,9 @@ function MyAccountPage() {
     }
 
     setIsLoggingOut(true);
-    await unregisterPushDevice();
+    const authToken = getAuthToken();
     finishSession(text.myInfo.logoutToast);
+    await unregisterPushDevice(authToken);
   };
 
   const handleDeleteAccount = async () => {

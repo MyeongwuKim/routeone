@@ -5,6 +5,7 @@ const AUTH_SESSION_EXPIRES_AT_STORAGE_KEY =
   "routeone.authSessionExpiresAt";
 const AUTH_SESSION_EXPIRED_STORAGE_KEY = "routeone.authSessionExpired";
 const AUTH_SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
+export const AUTH_SESSION_CHANGE_EVENT = "routeone:auth-session-change";
 
 type AuthSessionEndReason = "logout" | "expired";
 
@@ -22,6 +23,12 @@ function postNativeAuthToken(
 
 function createAuthSessionExpiresAt() {
   return Date.now() + AUTH_SESSION_DURATION_MS;
+}
+
+function notifyAuthSessionChange() {
+  if (typeof window !== "undefined" && "dispatchEvent" in window) {
+    window.dispatchEvent(new Event(AUTH_SESSION_CHANGE_EVENT));
+  }
 }
 
 export function getAuthToken() {
@@ -81,6 +88,7 @@ export function setAuthToken(token: string) {
     String(expiresAt)
   );
   window.localStorage.removeItem(AUTH_SESSION_EXPIRED_STORAGE_KEY);
+  notifyAuthSessionChange();
   postNativeAuthToken(token, expiresAt);
 }
 
@@ -94,6 +102,7 @@ export function clearAuthToken(reason: AuthSessionEndReason = "logout") {
     window.localStorage.removeItem(AUTH_SESSION_EXPIRED_STORAGE_KEY);
   }
 
+  notifyAuthSessionChange();
   postNativeAuthToken(null, null, reason);
 }
 

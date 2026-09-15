@@ -15,7 +15,7 @@ import {
   NOTIFICATION_SETTINGS_QUERY_KEY,
 } from "@/api/notificationApi";
 import type { NotificationInboxQuery } from "@/generated/graphql";
-import { getAuthToken } from "@/lib/authToken";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { nativeBridge } from "@/native-bridge";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 
@@ -23,12 +23,13 @@ function NativeNotificationInboxSync() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const appLanguage = useAppLanguageStore((state) => state.language);
+  const { isAuthenticated } = useAuthSession();
   const optimisticallyCountedNotificationIdsRef = useRef(
     new Set<string>()
   );
 
   useEffect(() => {
-    if (!getAuthToken() || !nativeBridge.runtime.isAvailable()) {
+    if (!isAuthenticated || !nativeBridge.runtime.isAvailable()) {
       return;
     }
 
@@ -71,10 +72,10 @@ function NativeNotificationInboxSync() {
     return () => {
       unsubscribeNotificationReceived();
     };
-  }, [queryClient]);
+  }, [isAuthenticated, queryClient]);
 
   useEffect(() => {
-    if (!getAuthToken() || !nativeBridge.runtime.isAvailable()) {
+    if (!isAuthenticated || !nativeBridge.runtime.isAvailable()) {
       return;
     }
 
@@ -128,10 +129,10 @@ function NativeNotificationInboxSync() {
       isActive = false;
       unsubscribeAppActive();
     };
-  }, [appLanguage, location.pathname, queryClient]);
+  }, [appLanguage, isAuthenticated, location.pathname, queryClient]);
 
   useEffect(() => {
-    if (!getAuthToken() || !nativeBridge.runtime.isAvailable()) {
+    if (!isAuthenticated || !nativeBridge.runtime.isAvailable()) {
       return;
     }
 
@@ -223,7 +224,7 @@ function NativeNotificationInboxSync() {
         handleVisibilityChange
       );
     };
-  }, [location.pathname, queryClient]);
+  }, [isAuthenticated, location.pathname, queryClient]);
 
   return null;
 }

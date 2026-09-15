@@ -16,6 +16,7 @@ import {
   isNativeFestivalNotificationSyncRequest,
   isNativeFetchRequest,
   isNativeLocationRequest,
+  isNativeLoginRequest,
   isNativePhotoUploadRequest,
   isNativePhotoRequest,
   isNativePushTokenRequest,
@@ -45,6 +46,7 @@ import {
 export { ROUTEONE_WEBVIEW_BRIDGE_SCRIPT };
 
 type NativeBridgeHandlers = {
+  activeAuthSessionId?: string | null;
   locationTestModeEnabled?: boolean;
   onAppLanguageChange?: (language: NativeAppLanguage) => Promise<void> | void;
   onAuthSessionChange?: (session: {
@@ -53,6 +55,7 @@ type NativeBridgeHandlers = {
     sessionId: string | null;
     reason: "logout" | "expired" | null;
   }) => void;
+  onLoginRequest?: () => void;
 };
 
 export async function handleNativeBridgeMessage(
@@ -82,8 +85,26 @@ export async function handleNativeBridgeMessage(
   }
 
   if (isNativeAuthTokenMessage(message)) {
+    if (
+      !message.token?.trim() &&
+      Boolean(handlers.activeAuthSessionId) &&
+      message.sessionId.trim() === handlers.activeAuthSessionId
+    ) {
+      handlers.onAuthSessionChange?.({
+        token: null,
+        expiresAt: null,
+        sessionId: null,
+        reason: message.reason ?? "logout"
+      });
+    }
+
     const session = await handleNativeAuthTokenMessage(message);
     handlers.onAuthSessionChange?.(session);
+    return;
+  }
+
+  if (isNativeLoginRequest(message)) {
+    handlers.onLoginRequest?.();
     return;
   }
 

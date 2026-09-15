@@ -43,6 +43,7 @@ export const LOGIN_THEME = {
 
 export const LOGIN_TEXT = {
   ko: {
+    back: "뒤로",
     appleChecking: "Apple 확인 중",
     appleContinue: "Apple로 계속",
     appleIosOnly: "iOS에서 사용 가능",
@@ -62,6 +63,7 @@ export const LOGIN_TEXT = {
     accountIdPlaceholder: "아이디"
   },
   en: {
+    back: "Back",
     appleChecking: "Checking Apple",
     appleContinue: "Continue with Apple",
     appleIosOnly: "Available on iOS",

@@ -35,16 +35,17 @@ import {
   getRouteArrivalTransitionPendingFingerprint,
   isRouteArrivalTransitionExpectationCommitted,
 } from "../services/routeArrivalMutationRecovery";
-import { getAuthToken } from "@/lib/authToken";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { nativeBridge } from "@/native-bridge";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 
 function RouteArrivalNotificationCoordinator() {
   const { pathname } = useLocation();
   const appLanguage = useAppLanguageStore((state) => state.language);
+  const { isAuthenticated } = useAuthSession();
   const [transitionRevision, setTransitionRevision] = useState(0);
   const isEnabled =
-    Boolean(pathname && getAuthToken()) && nativeBridge.runtime.isAvailable();
+    Boolean(pathname && isAuthenticated) && nativeBridge.runtime.isAvailable();
   const routesQuery = useQuery({
     queryKey: MY_ROUTES_QUERY_KEY,
     queryFn: () => routeApi.myRoutes(),

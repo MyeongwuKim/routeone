@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
@@ -14,7 +14,10 @@ import {
 } from "@/features/my-route/myRouteCache";
 import type { MyRoutesQuery } from "@/generated/graphql";
 import { isGraphQLRequestError } from "@/lib/graphqlClient";
+import { getAuthToken } from "@/lib/authToken";
 import { useUiText } from "@/lib/uiText";
+import { useLoginRequest } from "@/hooks/useLoginRequest";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -51,6 +54,8 @@ export function useRouteCheckoutSave({
 }: UseRouteCheckoutSaveOptions) {
   const text = useUiText();
   const navigate = useNavigate();
+  const requestLogin = useLoginRequest();
+  const { isAuthenticated } = useAuthSession();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
   const openModal = useUiModalStore((state) => state.openModal);
@@ -61,8 +66,9 @@ export function useRouteCheckoutSave({
   const { isRouteSaveInFlight, startSavingRoute, finishSavingRoute } =
     useRouteCheckout();
   const createAttemptRef = useRef<RouteCreateAttempt | null>(null);
+  const shouldSaveAfterLoginRef = useRef(false);
 
-  const handleSaveRoute = async () => {
+  const saveAuthenticatedRoute = useCallback(async () => {
     if (!canSave || isRouteSaveInFlight()) {
       return;
     }
@@ -187,6 +193,77 @@ export function useRouteCheckoutSave({
     } finally {
       finishSavingRoute();
     }
+  }, [
+    appendTarget,
+    canSave,
+    clearAppendTarget,
+    finishSavingRoute,
+    input,
+    isRouteSaveInFlight,
+    navigate,
+    onChooseDate,
+    onClearPlaces,
+    onClose,
+    openModal,
+    queryClient,
+    showToast,
+    startSavingRoute,
+    text,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isAuthenticated ||
+      !canSave ||
+      !shouldSaveAfterLoginRef.current
+    ) {
+      return;
+    }
+
+    shouldSaveAfterLoginRef.current = false;
+    void saveAuthenticatedRoute();
+  }, [canSave, isAuthenticated, saveAuthenticatedRoute]);
+
+  useEffect(
+    () => () => {
+      shouldSaveAfterLoginRef.current = false;
+    },
+    []
+  );
+
+  const handleSaveRoute = () => {
+    if (!canSave || isRouteSaveInFlight()) {
+      return;
+    }
+
+    if (!input.routePlan.some((day) => day.items.length > 0)) {
+      showToast(text.cart.noPlacesToSaveToast);
+      return;
+    }
+
+    if (!getAuthToken()) {
+      openModal({
+        title: text.auth.saveRequiredTitle,
+        description: text.auth.saveRequiredDescription,
+        actions: [
+          {
+            label: text.common.cancel,
+            variant: "secondary",
+          },
+          {
+            label: text.auth.login,
+            variant: "primary",
+            onClick: () => {
+              shouldSaveAfterLoginRef.current = true;
+              requestLogin("route-save");
+            },
+          },
+        ],
+      });
+      return;
+    }
+
+    void saveAuthenticatedRoute();
   };
 
   return { handleSaveRoute };

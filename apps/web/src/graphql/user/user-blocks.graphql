@@ -1,0 +1,23 @@
+query BlockedUsers {
+  blockedUsers {
+    id
+    displayName
+    avatarUrl
+  }
+}
+
+mutation BlockUser($userId: ID!) {
+  blockUser(userId: $userId) {
+    id
+    displayName
+    avatarUrl
+  }
+}
+
+mutation UnblockUser($userId: ID!) {
+  unblockUser(userId: $userId) {
+    id
+    displayName
+    avatarUrl
+  }
+}

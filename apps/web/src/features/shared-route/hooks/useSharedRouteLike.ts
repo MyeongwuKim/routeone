@@ -2,7 +2,9 @@ import { useCallback, useMemo } from "react";
 import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useStore } from "zustand";
 import { routeApi } from "@/api/routeApi";
+import { useLoginRequest } from "@/hooks/useLoginRequest";
 import type { RouteByIdQuery } from "@/generated/graphql";
+import { getAuthToken } from "@/lib/authToken";
 import { useUiText } from "@/lib/uiText";
 import type { ServiceAreaId } from "@/data/serviceAreas";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -48,6 +50,7 @@ export function useSharedRouteLike({
   const text = useUiText();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
+  const requestLogin = useLoginRequest();
   const likeStore = useMemo(
     () => getSharedRouteLikeStore(queryClient),
     [queryClient]
@@ -217,6 +220,11 @@ export function useSharedRouteLike({
         return;
       }
 
+      if (!getAuthToken()) {
+        requestLogin("shared-route-like");
+        return;
+      }
+
       const pendingLike = likeStore.getState().pendingLikes.get(route.id);
       const currentLike = pendingLike ?? route;
       const nextLike = getSharedRouteLikeState(currentLike, !currentLike.likedByMe);
@@ -234,7 +242,7 @@ export function useSharedRouteLike({
         });
       }
     },
-    [likeStore, mode, mutateLike, queryKeys, setPendingLike]
+    [likeStore, mode, mutateLike, queryKeys, requestLogin, setPendingLike]
   );
 
   const applyLikeState = useCallback(

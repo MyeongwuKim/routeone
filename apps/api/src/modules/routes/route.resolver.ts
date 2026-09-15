@@ -9,6 +9,10 @@ import { gql } from "graphql-tag";
 import type { GraphQLContext } from "../../context.js";
 import { requireUser } from "../../lib/auth.js";
 import {
+  getBlockedUserIds,
+  hasBlockedUser,
+} from "../user/userBlock.service.js";
+import {
   appendRouteDays,
   checkInRouteStop,
   clearRoute,
@@ -666,6 +670,7 @@ export const routeResolvers = {
       context: GraphQLContext
     ) {
       return getPublicRoutes(context.prisma, {
+        viewerId: context.user?.id,
         regionCode: args.regionCode,
         regionTag: args.regionTag,
         limit: args.limit,
@@ -677,6 +682,7 @@ export const routeResolvers = {
       context: GraphQLContext
     ) {
       return getPublicRouteConnection(context.prisma, {
+        viewerId: context.user?.id,
         regionCode: args.regionCode,
         regionTag: args.regionTag,
         limit: args.limit,
@@ -695,6 +701,13 @@ export const routeResolvers = {
       }
 
       if (route.visibility === "PUBLIC") {
+        if (
+          context.user &&
+          (await hasBlockedUser(context.prisma, context.user.id, route.ownerId))
+        ) {
+          return null;
+        }
+
         return route;
       }
 
@@ -714,14 +727,16 @@ export const routeResolvers = {
     ) {
       return getPlaceStaySummaries(context.prisma, args.places);
     },
-    placePhotos(
+    async placePhotos(
       _parent: unknown,
       args: PlacePhotosArgs,
       context: GraphQLContext
     ) {
-      requireUser(context);
+      const user = requireUser(context);
+      const blockedUserIds = await getBlockedUserIds(context.prisma, user.id);
       return getPlacePhotos(context.prisma, args.place, {
         limit: args.limit,
+        blockedUserIds,
       });
     },
     posterImageDataUrl(

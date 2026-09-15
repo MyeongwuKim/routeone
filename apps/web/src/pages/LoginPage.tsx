@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { MdLogin, MdPassword, MdRoute } from "react-icons/md";
 import { authApi, ME_QUERY_KEY } from "@/api/authApi";
 import {
@@ -24,6 +24,7 @@ function getAuthErrorMessage(error: unknown) {
 
 function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
   const setAuthUser = useAuthUserStore((state) => state.setUser);
@@ -71,7 +72,14 @@ function LoginPage() {
         queryKey: ["my-routes"],
       });
       showToast(`${payload.loginWithPassword.user.displayName ?? accountId} 계정으로 로그인했어요.`);
-      navigate("/home", {
+      const requestedReturnTo = (location.state as { returnTo?: unknown } | null)
+        ?.returnTo;
+      const returnTo =
+        typeof requestedReturnTo === "string" && requestedReturnTo.startsWith("/")
+          ? requestedReturnTo
+          : "/home";
+
+      navigate(returnTo, {
         replace: true,
       });
     } catch (error) {

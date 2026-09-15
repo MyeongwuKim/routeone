@@ -42,6 +42,8 @@ type RouteCheckoutModalProps = {
   insertCandidatePlaces: MapSheetPlace[];
   currentLocation: RouteStartLocation | null;
   appendRouteTitle?: string | null;
+  headerLabel?: string;
+  contextBanner?: string | null;
   initialStep?: CartFlowStep;
   initialRoutePlan?: PlannedRouteDay[] | null;
   initialTravelStartDate?: string | null;
@@ -62,6 +64,8 @@ function RouteCheckoutModalContent({
   savedPlaces,
   insertCandidatePlaces,
   appendRouteTitle,
+  headerLabel = "ROUTE CHECKOUT",
+  contextBanner,
   initialStep = "cart",
   initialRoutePlan,
   onClose,
@@ -214,7 +218,9 @@ function RouteCheckoutModalContent({
               <IoArrowBack />
             </button>
             <div className="ml-3 min-w-0">
-              <p className="font-trip truncate text-sm text-brand-700">ROUTE CHECKOUT</p>
+              <p className="font-trip truncate text-sm text-brand-700">
+                {headerLabel}
+              </p>
               <p className="text-base font-semibold text-slate-900">
                 {stepIndex} / {totalStepCount}
               </p>
@@ -251,6 +257,10 @@ function RouteCheckoutModalContent({
         {appendRouteTitle ? (
           <div className="shrink-0 border-b border-brand-100 bg-brand-50 px-4 py-2 text-xs font-bold text-brand-700">
             {text.cart.appendRouteBanner(appendRouteTitle)}
+          </div>
+        ) : contextBanner ? (
+          <div className="shrink-0 border-b border-brand-100 bg-brand-50 px-4 py-2 text-xs font-bold text-brand-700">
+            {contextBanner}
           </div>
         ) : null}
 

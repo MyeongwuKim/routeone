@@ -18,6 +18,7 @@ const UNEXPECTED_SERVER_ERROR_MESSAGE =
   "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
 
 export type GraphQLRequestOptions = {
+  authToken?: string | null;
   timeoutMs?: number;
   maxRetryCount?: number;
   retryDelayMs?: number;
@@ -293,7 +294,8 @@ export async function requestGraphQL<TResult, TVariables>(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  const token = getAuthToken();
+  const token =
+    options?.authToken === undefined ? getAuthToken() : options.authToken;
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;

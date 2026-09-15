@@ -71,6 +71,32 @@ function getRoute(data, mode, routeId) {
   );
 }
 
+for (const mode of ["feed", "liked"]) {
+  test(`${mode} 캐시에서 차단한 작성자의 루트를 모두 제거한다`, () => {
+    const firstRoute = createRoute("route-a");
+    const secondRoute = createRoute("route-b");
+    const thirdRoute = {
+      ...createRoute("route-c"),
+      owner: firstRoute.owner,
+    };
+    const data = createInfiniteData(mode, [
+      [firstRoute, secondRoute],
+      [thirdRoute],
+    ]);
+
+    const next = cache.removeSharedRouteOwnerFromInfiniteData(
+      data,
+      mode,
+      firstRoute.owner.id
+    );
+
+    assert.deepEqual(
+      cache.getSharedRouteInfiniteList(next, mode).map((route) => route.id),
+      ["route-b"]
+    );
+  });
+}
+
 function createDeferred() {
   let resolve;
   const promise = new Promise((resolvePromise) => {

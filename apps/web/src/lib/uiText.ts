@@ -57,6 +57,14 @@ export type UiText = {
     sharedRoute: string;
     myInfo: string;
   };
+  auth: {
+    login: string;
+    loginAria: string;
+    requiredTitle: string;
+    requiredDescription: string;
+    saveRequiredTitle: string;
+    saveRequiredDescription: string;
+  };
   tabHelp: {
     label: string;
     guides: Record<"home" | "myRoute" | "sharedRoute", UiHelpGuide>;
@@ -154,6 +162,27 @@ export type UiText = {
     actionComplete: string;
     actionFailed: string;
     ownerOnly: string;
+  };
+  userBlock: {
+    block: string;
+    blockAria: (name: string) => string;
+    confirmTitle: (name: string) => string;
+    confirmDescription: string;
+    confirmDetail: string;
+    blockedToast: (name: string) => string;
+    blockFailed: string;
+    menuTitle: string;
+    menuDescription: string;
+    pageTitle: string;
+    pageDescription: string;
+    loading: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    loadError: string;
+    unblock: string;
+    unblockAria: (name: string) => string;
+    unblockedToast: (name: string) => string;
+    unblockFailed: string;
   };
   feedback: {
     title: string;
@@ -654,6 +683,9 @@ export type UiText = {
     currentViewingDaySr: string;
     selectedDays: (count: number) => string;
     addPlacesSummary: (count: number) => string;
+    createSchedule: string;
+    sharedRouteCheckoutTitle: string;
+    sharedRouteCheckoutBanner: (count: number) => string;
     sharing: string;
     shared: string;
     share: string;
@@ -1242,6 +1274,16 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       sharedRoute: "공유 루트",
       myInfo: "내 정보",
     },
+    auth: {
+      login: "로그인",
+      loginAria: "로그인하기",
+      requiredTitle: "로그인이 필요한 기능이에요",
+      requiredDescription:
+        "저장한 루트와 계정 정보는 로그인한 뒤 확인할 수 있어요. 지도와 장소 둘러보기는 로그인 없이도 이용할 수 있어요.",
+      saveRequiredTitle: "루트를 저장하려면 로그인해 주세요",
+      saveRequiredDescription:
+        "작성한 일정은 그대로 유지되며, 로그인이 완료되면 자동으로 저장을 이어가요.",
+    },
     tabHelp: {
       label: "사용법",
       guides: {
@@ -1517,6 +1559,28 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       actionComplete: "신고 처리를 완료했어요.",
       actionFailed: "신고를 처리하지 못했어요.",
       ownerOnly: "운영자 계정에서만 볼 수 있는 화면이에요.",
+    },
+    userBlock: {
+      block: "차단",
+      blockAria: (name) => `${name} 차단`,
+      confirmTitle: (name) => `${name} 님을 차단할까요?`,
+      confirmDescription:
+        "이 사용자의 공유 루트와 방문 사진이 내 화면에서 보이지 않아요.",
+      confirmDetail: "상대방에게 차단 사실은 알려지지 않아요.",
+      blockedToast: (name) => `${name} 님을 차단했어요.`,
+      blockFailed: "사용자를 차단하지 못했어요.",
+      menuTitle: "차단 사용자 관리",
+      menuDescription: "내 화면에서 숨긴 사용자 확인 및 해제",
+      pageTitle: "차단 사용자",
+      pageDescription: "차단한 사용자의 공유 루트와 사진은 내 화면에 표시되지 않아요.",
+      loading: "차단 사용자 목록을 불러오는 중이에요.",
+      emptyTitle: "차단한 사용자가 없어요.",
+      emptyDescription: "공유 루트에서 사용자를 차단하면 여기에 표시돼요.",
+      loadError: "차단 사용자 목록을 불러오지 못했어요.",
+      unblock: "차단 해제",
+      unblockAria: (name) => `${name} 차단 해제`,
+      unblockedToast: (name) => `${name} 님의 차단을 해제했어요.`,
+      unblockFailed: "차단을 해제하지 못했어요.",
     },
     feedback: {
       title: "불편사항 보내기",
@@ -2099,7 +2163,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       selectedSchedule: "선택한 일정",
       routeMapCloseAria: "루트 지도 닫기",
       routeMapComparison: "기존/재계산 비교",
-      addToCart: "담기",
+      addToCart: "이 루트로 일정 만들기",
       routeCalculating: "경로 계산 중",
       mapPreparing: "지도 준비 중",
       mapFallbackTitle: "지도 대신 장소 순서를 보여드려요",
@@ -2112,16 +2176,20 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startBasis: "START 기준",
       startRouteComparisonAria: "START 기준 경로 비교",
       stopOrderLabel: (order) => `${order}번째`,
-      checkoutScopeAria: "담기 범위 선택",
-      checkoutScope: "담기 범위",
-      checkoutScopeTitle: "담을 DAY를 선택해주세요",
-      checkoutScopeCloseAria: "담기 범위 닫기",
+      checkoutScopeAria: "가져올 일정 선택",
+      checkoutScope: "새 일정 만들기",
+      checkoutScopeTitle: "가져올 DAY를 선택해주세요",
+      checkoutScopeCloseAria: "가져올 일정 선택 닫기",
       selectAll: "전체 선택",
       selected: "선택됨",
       select: "선택",
       currentViewingDaySr: "현재 보고 있는 DAY",
       selectedDays: (count) => `${count}일 선택`,
-      addPlacesSummary: (count) => `총 ${count}곳 담기`,
+      addPlacesSummary: (count) => `총 ${count}곳으로 일정 만들기`,
+      createSchedule: "일정 만들기",
+      sharedRouteCheckoutTitle: "새 일정 만들기",
+      sharedRouteCheckoutBanner: (count) =>
+        `공유 루트에서 ${count}곳을 가져왔어요.`,
       sharing: "공유 중",
       shared: "공유됨",
       share: "공유하기",
@@ -2820,6 +2888,16 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       sharedRoute: "Shared",
       myInfo: "My Info",
     },
+    auth: {
+      login: "Log In",
+      loginAria: "Log in",
+      requiredTitle: "Log in to use this feature",
+      requiredDescription:
+        "Saved routes and account details are available after login. You can browse the map and places without an account.",
+      saveRequiredTitle: "Log in to save this route",
+      saveRequiredDescription:
+        "Your itinerary will stay here, and saving will continue automatically after login.",
+    },
     tabHelp: {
       label: "How to use",
       guides: {
@@ -3097,6 +3175,29 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       actionComplete: "The report was handled.",
       actionFailed: "Could not handle the report.",
       ownerOnly: "This page is available only to the owner account.",
+    },
+    userBlock: {
+      block: "Block",
+      blockAria: (name) => `Block ${name}`,
+      confirmTitle: (name) => `Block ${name}?`,
+      confirmDescription:
+        "Their shared routes and visit photos will be hidden from your account.",
+      confirmDetail: "They will not be notified that you blocked them.",
+      blockedToast: (name) => `Blocked ${name}.`,
+      blockFailed: "Could not block this user.",
+      menuTitle: "Blocked Users",
+      menuDescription: "Review or unblock people hidden from your account",
+      pageTitle: "Blocked Users",
+      pageDescription:
+        "Shared routes and photos from blocked users are hidden from your account.",
+      loading: "Loading blocked users.",
+      emptyTitle: "No blocked users",
+      emptyDescription: "People you block from Shared Routes will appear here.",
+      loadError: "Could not load blocked users.",
+      unblock: "Unblock",
+      unblockAria: (name) => `Unblock ${name}`,
+      unblockedToast: (name) => `Unblocked ${name}.`,
+      unblockFailed: "Could not unblock this user.",
     },
     feedback: {
       title: "Send Feedback",
@@ -3703,7 +3804,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       selectedSchedule: "Selected schedule",
       routeMapCloseAria: "Close route map",
       routeMapComparison: "Original/Recalculated",
-      addToCart: "Add",
+      addToCart: "Use This Route",
       routeCalculating: "Calculating route",
       mapPreparing: "Preparing map",
       mapFallbackTitle: "Showing place order instead of the map",
@@ -3716,16 +3817,21 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startBasis: "START basis",
       startRouteComparisonAria: "Compare routes from START",
       stopOrderLabel: (order) => `Stop ${order}`,
-      checkoutScopeAria: "Choose add scope",
-      checkoutScope: "Add Scope",
-      checkoutScopeTitle: "Choose DAYs to add",
-      checkoutScopeCloseAria: "Close add scope",
+      checkoutScopeAria: "Choose itinerary to import",
+      checkoutScope: "Create a New Trip",
+      checkoutScopeTitle: "Choose DAYs to import",
+      checkoutScopeCloseAria: "Close itinerary selection",
       selectAll: "Select all",
       selected: "Selected",
       select: "Select",
       currentViewingDaySr: "Currently viewing DAY",
       selectedDays: (count) => `${count} days selected`,
-      addPlacesSummary: (count) => `Add ${count} places`,
+      addPlacesSummary: (count) =>
+        `Create a trip with ${count} ${count === 1 ? "place" : "places"}`,
+      createSchedule: "Create trip",
+      sharedRouteCheckoutTitle: "Create a New Trip",
+      sharedRouteCheckoutBanner: (count) =>
+        `Imported ${count} ${count === 1 ? "place" : "places"} from the shared route.`,
       sharing: "Sharing",
       shared: "Shared",
       share: "Share",

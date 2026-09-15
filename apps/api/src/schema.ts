@@ -12,6 +12,10 @@ import {
 } from "./modules/routes/routeVisitPhoto.resolver.js";
 import { userResolvers, userTypeDefs } from "./modules/user/user.resolver.js";
 import {
+  userBlockResolvers,
+  userBlockTypeDefs,
+} from "./modules/user/userBlock.resolver.js";
+import {
   placeLocalizationResolvers,
   placeLocalizationTypeDefs,
 } from "./modules/places/placeLocalization.resolver.js";
@@ -74,6 +78,7 @@ export const typeDefs = [
     }
   `,
   userTypeDefs,
+  userBlockTypeDefs,
   routeTypeDefs,
   routeVisitPhotoTypeDefs,
   placeLocalizationTypeDefs,
@@ -86,6 +91,7 @@ export const resolvers = mergeResolvers(
     DateTime: dateTimeScalar,
   },
   userResolvers,
+  userBlockResolvers,
   routeResolvers,
   routeVisitPhotoResolvers,
   placeLocalizationResolvers,

@@ -83,6 +83,9 @@ export async function deleteUserAccount(prisma: PrismaClient, userId: string) {
     await transaction.userNotificationSetting.deleteMany({ where: { userId } });
     await transaction.pushDevice.deleteMany({ where: { userId } });
     await transaction.routeCreateRequest.deleteMany({ where: { ownerId: userId } });
+    await transaction.userBlock.deleteMany({
+      where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+    });
     await transaction.authAccount.deleteMany({ where: { userId } });
     await transaction.user.delete({ where: { id: userId } });
   });
