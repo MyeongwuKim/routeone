@@ -141,7 +141,7 @@ function MyAccountPage() {
     });
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     if (isBusy) {
       return;
     }
@@ -149,7 +149,7 @@ function MyAccountPage() {
     setIsLoggingOut(true);
     const authToken = getAuthToken();
     finishSession(text.myInfo.logoutToast);
-    await unregisterPushDevice(authToken);
+    void unregisterPushDevice(authToken);
   };
 
   const handleDeleteAccount = async () => {

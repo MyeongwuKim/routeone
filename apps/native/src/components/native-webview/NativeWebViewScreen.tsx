@@ -49,11 +49,13 @@ import {
   reconcileStoredRouteArrivalNotifications,
   recordDeliveredRouteArrivalNotification
 } from "@/webview/bridge/routeArrivalNotificationBridge";
+import { createAuthSessionPreparingScript } from "@/webview/authPreparingOverlayScript";
 import NativeDevBuildBadge from "./NativeDevBuildBadge";
 import RouteOneLaunchScreen from "./RouteOneLaunchScreen";
 
 type NativeWebViewScreenProps = {
   appLanguage: AppLanguage;
+  isAuthSessionPreparing: boolean;
   nativeAuthExpiresAt: number | null;
   nativeAuthRole: NativeAuthRole | null;
   nativeAuthSessionId: string | null;
@@ -301,6 +303,7 @@ function readWebBundleAllowedOrigins(bundle: ResolvedWebBundle | null) {
 
 export default function NativeWebViewScreen({
   appLanguage,
+  isAuthSessionPreparing,
   nativeAuthExpiresAt,
   nativeAuthRole,
   nativeAuthSessionId,
@@ -449,16 +452,31 @@ export default function NativeWebViewScreen({
         }
       );
     `;
+    const authPreparingScript = createAuthSessionPreparingScript(
+      isAuthSessionPreparing,
+      appLanguage
+    );
 
-    return `${authScript}\n${languageScript}\n${runtimeConfigScript}\n${ROUTEONE_WEBVIEW_BRIDGE_SCRIPT}`;
+    return `${authScript}\n${authPreparingScript}\n${languageScript}\n${runtimeConfigScript}\n${ROUTEONE_WEBVIEW_BRIDGE_SCRIPT}`;
   }, [
     appLanguage,
+    isAuthSessionPreparing,
     nativeAuthExpiresAt,
     nativeAuthSessionId,
     nativeAuthToken,
     reviewerVerificationBypass,
     testAccountMode
   ]);
+
+  useEffect(() => {
+    if (!resolvedBundle) {
+      return;
+    }
+
+    webViewRef.current?.injectJavaScript(
+      createAuthSessionPreparingScript(isAuthSessionPreparing, appLanguage)
+    );
+  }, [appLanguage, isAuthSessionPreparing, resolvedBundle]);
 
   useEffect(() => {
     if (!resolvedBundle) {

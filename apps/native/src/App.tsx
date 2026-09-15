@@ -56,8 +56,14 @@ export default function App() {
   const [isNativeLoginVisible, setIsNativeLoginVisible] = useState(false);
   const handleNativeLoginComplete = useCallback(
     async (payload: Parameters<typeof completeNativeLogin>[0]) => {
-      await completeNativeLogin(payload);
       setIsNativeLoginVisible(false);
+
+      try {
+        await completeNativeLogin(payload);
+      } catch (error) {
+        setIsNativeLoginVisible(true);
+        throw error;
+      }
     },
     [completeNativeLogin]
   );
@@ -242,6 +248,7 @@ export default function App() {
         nativeAuthRole={nativeAuthRole}
         nativeAuthSessionId={nativeAuthSessionId}
         nativeAuthToken={nativeAuthToken}
+        isAuthSessionPreparing={nativeLogin.isPreparingSession}
         onAppLanguageChange={updateAppLanguage}
         onAuthSessionChange={handleNativeAuthSessionChange}
         onLoginRequest={() => {
@@ -251,7 +258,7 @@ export default function App() {
         }}
       />
       <Modal
-        animationType="slide"
+        animationType="none"
         onRequestClose={() => setIsNativeLoginVisible(false)}
         presentationStyle="fullScreen"
         visible={isNativeLoginVisible}

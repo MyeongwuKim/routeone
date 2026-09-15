@@ -22,6 +22,7 @@ import type {
   PlacePhotoReportReason,
 } from "@/generated/graphql";
 import { useUiText } from "@/lib/uiText";
+import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 type ReportItem = PendingPhotoReportsQuery["pendingPhotoReports"][number];
@@ -134,6 +135,7 @@ function PhotoReportManagementPage() {
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const openModal = useUiModalStore((state) => state.openModal);
   const showToast = useUiToastStore((state) => state.showToast);
   const { user, isLoading: isUserLoading } = useAccountUser();
   const isOwner = user?.role === "OWNER";
@@ -160,13 +162,34 @@ function PhotoReportManagementPage() {
   });
 
   const handleAction = (photoId: string, action: PlacePhotoModerationAction) => {
-    const message =
+    const description =
       action === "DISMISSED"
         ? text.photoReport.dismissConfirm
         : action === "HIDDEN"
           ? text.photoReport.hideConfirm
           : text.photoReport.deleteConfirm;
-    if (window.confirm(message)) actionMutation.mutate({ photoId, action });
+    const actionLabel =
+      action === "DISMISSED"
+        ? text.photoReport.dismiss
+        : action === "HIDDEN"
+          ? text.photoReport.hide
+          : text.photoReport.delete;
+
+    openModal({
+      title: actionLabel,
+      description,
+      actions: [
+        {
+          label: text.common.cancel,
+          variant: "secondary",
+        },
+        {
+          label: actionLabel,
+          variant: action === "DISMISSED" ? "primary" : "danger",
+          onClick: () => actionMutation.mutate({ photoId, action }),
+        },
+      ],
+    });
   };
 
   return (

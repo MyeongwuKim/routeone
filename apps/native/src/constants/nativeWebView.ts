@@ -18,6 +18,8 @@ export const REQUEST_WEB_BUNDLE_READY_SCRIPT = `
 
 export const WEB_VIEW_TEXT = {
   ko: {
+    authPreparingDescription: "계정과 여행 정보를 준비하고 있어요.",
+    authPreparingTitle: "로그인 정보 연결 중",
     fatalAlertConfirm: "예",
     fatalAlertDescription: "앱을 종료한 뒤 다시 실행해 주세요.",
     fatalAlertTitle: "업데이트를 적용하지 못했어요",
@@ -50,6 +52,8 @@ export const WEB_VIEW_TEXT = {
     waitingReadySignal: "웹 화면 준비 신호를 기다리고 있어요."
   },
   en: {
+    authPreparingDescription: "Preparing your account and trip data.",
+    authPreparingTitle: "Connecting your account",
     fatalAlertConfirm: "Yes",
     fatalAlertDescription: "The app will close. Please open it again.",
     fatalAlertTitle: "Could not apply the update",

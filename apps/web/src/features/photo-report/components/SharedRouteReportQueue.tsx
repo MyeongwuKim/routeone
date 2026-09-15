@@ -21,6 +21,7 @@ import type {
   SharedRouteReportReason,
 } from "@/generated/graphql";
 import { useUiText } from "@/lib/uiText";
+import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 type ReportItem =
@@ -126,6 +127,7 @@ function SharedRouteReportCard({
 function SharedRouteReportQueue() {
   const text = useUiText();
   const queryClient = useQueryClient();
+  const openModal = useUiModalStore((state) => state.openModal);
   const showToast = useUiToastStore((state) => state.showToast);
   const reportsQuery = useQuery({
     queryKey: ["pending-shared-route-reports"],
@@ -165,14 +167,30 @@ function SharedRouteReportQueue() {
     routeId: string,
     action: SharedRouteModerationAction
   ) => {
-    const message =
+    const description =
       action === "DISMISSED"
         ? text.sharedRouteReport.dismissConfirm
         : text.sharedRouteReport.hideConfirm;
+    const actionLabel =
+      action === "DISMISSED"
+        ? text.sharedRouteReport.dismiss
+        : text.sharedRouteReport.hide;
 
-    if (window.confirm(message)) {
-      actionMutation.mutate({ routeId, action });
-    }
+    openModal({
+      title: actionLabel,
+      description,
+      actions: [
+        {
+          label: text.common.cancel,
+          variant: "secondary",
+        },
+        {
+          label: actionLabel,
+          variant: action === "DISMISSED" ? "primary" : "danger",
+          onClick: () => actionMutation.mutate({ routeId, action }),
+        },
+      ],
+    });
   };
 
   if (reportsQuery.isPending) {

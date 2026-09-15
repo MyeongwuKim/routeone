@@ -3,7 +3,8 @@
  * 비로그인 사용자에게 공개할 탐색 화면과 로그인이 필요한 계정 화면을 구분해 연결한다.
  *
  * 동작 방식:
- * 홈과 공유 루트는 바로 열고, 저장 내역·알림·내 정보는 로그인 안내 화면으로 보호한다.
+ * 홈의 지도·장소 탐색은 바로 열고, 공유 루트와 저장 내역·알림·내 정보는
+ * 로그인 안내 화면으로 보호한다.
  */
 import {
   lazy,
@@ -694,23 +695,23 @@ function AppRouter() {
             path="/home"
             element={withRouteSuspense(<HomePage />, <HomeRouteFallback />)}
           />
-          <Route
-            path="/shared-route"
-            element={
-              <RoutePageShell
-                icon={<MdOutlineHub />}
-                title={text.routeShell.sharedRouteTitle}
-                description={text.routeShell.sharedRouteDescription}
-                action={<TabHelpButton topic="sharedRoute" />}
-              >
-                {withRouteSuspense(
-                  <SharedRoutePage />,
-                  <SharedRouteLazyFallback />
-                )}
-              </RoutePageShell>
-            }
-          />
           <Route element={<RequireAuth />}>
+            <Route
+              path="/shared-route"
+              element={
+                <RoutePageShell
+                  icon={<MdOutlineHub />}
+                  title={text.routeShell.sharedRouteTitle}
+                  description={text.routeShell.sharedRouteDescription}
+                  action={<TabHelpButton topic="sharedRoute" />}
+                >
+                  {withRouteSuspense(
+                    <SharedRoutePage />,
+                    <SharedRouteLazyFallback />
+                  )}
+                </RoutePageShell>
+              }
+            />
             <Route
               path="/my-route"
               element={

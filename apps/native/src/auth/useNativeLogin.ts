@@ -76,6 +76,7 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
   const [accountId, setAccountId] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [isPreparingSession, setIsPreparingSession] = useState(false);
 
   const dismissError = useCallback(() => {
     setErrorMessage(null);
@@ -97,6 +98,19 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
     };
   }, []);
 
+  const completeLogin = useCallback(
+    async (payload: NativeAuthPayload) => {
+      setIsPreparingSession(true);
+
+      try {
+        await onComplete(payload);
+      } finally {
+        setIsPreparingSession(false);
+      }
+    },
+    [onComplete]
+  );
+
   const handlePasswordLogin = useCallback(async () => {
     if (activeProvider) {
       return;
@@ -106,7 +120,7 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
     setErrorMessage(null);
 
     try {
-      await onComplete(
+      await completeLogin(
         await loginWithNativePassword({
           accountId,
           password,
@@ -118,7 +132,7 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
     } finally {
       setActiveProvider(null);
     }
-  }, [accountId, activeProvider, displayName, onComplete, password]);
+  }, [accountId, activeProvider, completeLogin, displayName, password]);
 
   const handleGoogleLogin = useCallback(async () => {
     if (activeProvider) {
@@ -145,7 +159,7 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
         throw new Error("Google identity token을 받지 못했어요.");
       }
 
-      await onComplete(
+      await completeLogin(
         await loginWithNativeOAuth({
           provider: "GOOGLE",
           identityToken: idToken,
@@ -159,7 +173,7 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
     } finally {
       setActiveProvider(null);
     }
-  }, [activeProvider, onComplete]);
+  }, [activeProvider, completeLogin]);
 
   const handleAppleLogin = useCallback(async () => {
     if (activeProvider) {
@@ -181,7 +195,7 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
         throw new Error("Apple identity token을 받지 못했어요.");
       }
 
-      await onComplete(
+      await completeLogin(
         await loginWithNativeOAuth({
           provider: "APPLE",
           identityToken: credential.identityToken,
@@ -194,7 +208,7 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
     } finally {
       setActiveProvider(null);
     }
-  }, [activeProvider, onComplete]);
+  }, [activeProvider, completeLogin]);
 
   return {
     accountId,
@@ -203,6 +217,7 @@ export function useNativeLogin({ onComplete }: UseNativeLoginOptions) {
     displayName,
     dismissError,
     errorMessage,
+    isPreparingSession,
     password,
     setAccountId,
     setDisplayName,

@@ -36,12 +36,14 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
     ROUTEONE_RUNTIME_CONFIG
   )});
 
-  var nativeAuthSessionId =
-    typeof window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ === "string"
-      ? window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__
-      : "";
   var didPostBridgeReady = false;
   var didPostRuntimeError = false;
+
+  function getNativeAuthSessionId() {
+    return typeof window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ === "string"
+      ? window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__
+      : "";
+  }
 
   function postBridgeReady() {
     if (didPostBridgeReady || !window.ReactNativeWebView) {
@@ -743,7 +745,7 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
           JSON.stringify({
             type: "routeone:native-route-arrival-notifications-sync",
             id: requestId,
-            sessionId: nativeAuthSessionId,
+            sessionId: getNativeAuthSessionId(),
             places: places,
             radiusMeters: radiusMeters,
             language: language,

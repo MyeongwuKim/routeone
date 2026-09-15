@@ -302,8 +302,8 @@ export function useNativeBoot() {
       setNativeAuthExpiresAt(expiresAt);
       setNativeAuthSessionId(sessionId);
       setIsAuthSessionExpired(false);
-      await prepareLocationBeforeWebView();
       setBootStep("webview");
+      void prepareLocationBeforeWebView();
     },
     [prepareLocationBeforeWebView]
   );
