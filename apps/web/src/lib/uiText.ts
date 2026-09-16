@@ -2255,7 +2255,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       selectedSchedule: "선택한 일정",
       routeMapCloseAria: "루트 지도 닫기",
       routeMapComparison: "기존/재계산 비교",
-      addToCart: "이 루트로 일정 만들기",
+      addToCart: "일정 만들기",
       routeCalculating: "경로 계산 중",
       mapPreparing: "지도 준비 중",
       mapFallbackTitle: "지도 대신 장소 순서를 보여드려요",

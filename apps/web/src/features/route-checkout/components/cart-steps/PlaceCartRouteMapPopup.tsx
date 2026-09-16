@@ -40,14 +40,14 @@ function PlaceCartRouteMapPopup(props: PlaceCartRouteMapPopupProps) {
       className={`fixed inset-0 ${props.layerClassName ?? "z-[2750]"} bg-white`}
     >
       <div className="flex h-full flex-col">
-        <header className="app-safe-area-header flex items-center justify-between border-b border-brand-100 px-4 py-3">
-          <div className="min-w-0">
+        <header className="app-safe-area-header flex items-center gap-3 border-b border-brand-100 px-4 py-3">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <p className="font-trip text-sm text-brand-700">
               {hasDaySelector
                 ? "ROUTE MAP"
                 : text.dayRoute.routeMapDayTitle(displayDay.day)}
             </p>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 truncate whitespace-nowrap text-xs text-slate-500">
               {hasDaySelector
                 ? `${text.dayRoute.daySchedule(
                     dayOptions.length
@@ -56,16 +56,15 @@ function PlaceCartRouteMapPopup(props: PlaceCartRouteMapPopupProps) {
                   ? formatRouteMapDate(displayDay.date)
                   : text.dayRoute.selectedSchedule}{" "}
               · {text.dayRoute.placeCount(displayDay.items.length)}
-              {hasComparisonRoute ? ` · ${text.dayRoute.routeMapComparison}` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {canRequestCheckout ? (
               <button
                 type="button"
                 onClick={openCheckoutScope}
                 disabled={isCheckoutDisabled}
-                className="inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-brand-600 px-4 text-xs font-black text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-40"
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full bg-brand-600 px-3 text-xs font-black text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-40"
               >
                 <MdAdd className="text-base" />
                 {text.dayRoute.addToCart}
@@ -75,7 +74,7 @@ function PlaceCartRouteMapPopup(props: PlaceCartRouteMapPopupProps) {
               type="button"
               aria-label={text.dayRoute.routeMapCloseAria}
               onClick={props.onClose}
-              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
             >
               <IoClose />
             </button>

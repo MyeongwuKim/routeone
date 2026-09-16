@@ -108,7 +108,7 @@ function PlaceCartRouteMapViewport({
       ) : null}
       {hasComparisonRoute ? (
         <div
-          className={`absolute inset-x-4 ${comparisonControlTopClass} rounded-2xl border border-brand-100 bg-white/95 p-1 shadow-sm backdrop-blur`}
+          className={`absolute inset-x-4 z-10 ${comparisonControlTopClass} rounded-2xl border border-brand-100 bg-white/95 p-1 shadow-sm backdrop-blur`}
         >
           <SegmentedToggle
             options={routeViewOptions}
@@ -117,7 +117,7 @@ function PlaceCartRouteMapViewport({
             ariaLabel={text.cart.routeViewModeAria}
             fullWidth
             className="rounded-xl border-0 bg-transparent p-0"
-            itemClassName="rounded-xl px-2 py-2 text-xs font-bold"
+            itemClassName="min-w-0 whitespace-nowrap rounded-xl px-2 py-2 text-xs font-bold"
             idleItemClassName="text-slate-500 hover:bg-brand-50"
           />
         </div>
