@@ -1378,9 +1378,9 @@ export function VerificationPhotoPreviewPopup({
       />
       <section
         inert={isDeleteDialogOpen}
-        className="center-modal-panel-enter relative flex h-[calc(100dvh-3rem)] max-h-[860px] w-full max-w-[430px] flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-2xl dark:bg-slate-950"
+        className="center-modal-panel-enter relative flex max-h-[calc(100dvh-3rem)] w-full max-w-[430px] flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-2xl dark:bg-slate-950"
       >
-        <div className="relative min-h-0 flex-1 bg-slate-950">
+        <div className="relative aspect-[4/3] max-h-[50dvh] w-full shrink-0 bg-slate-100 dark:bg-slate-900">
           <img
             src={photoUrl}
             alt={text.dayRoute.verificationImageAlt(

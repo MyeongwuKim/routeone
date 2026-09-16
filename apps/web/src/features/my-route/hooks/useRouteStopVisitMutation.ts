@@ -547,13 +547,18 @@ export function useRouteStopVisitMutation({
       const nextIsDayCompleted =
         nextStops.length > 0 &&
         nextStops.filter(isVisitedStop).length === nextStops.length;
+      const isRouteCompleted = Boolean(
+        data.completeRouteStopVisit.completedAt
+      );
       const successMessage =
-        !wasDayCompleted && nextIsDayCompleted
+        isRouteCompleted
+          ? "전체 루트를 완료했어요!"
+          : !wasDayCompleted && nextIsDayCompleted
           ? `DAY ${variables.target.routeDay.dayIndex} 클리어`
           : "방문을 완료했어요.";
 
       setActualStayMinutesTarget(null);
-      showToast(successMessage);
+      showToast(successMessage, isRouteCompleted ? 3200 : undefined);
 
       const arrivalSyncError = await syncUpdatedRouteArrivalTarget(
         data.completeRouteStopVisit,
@@ -687,6 +692,8 @@ export function useRouteStopVisitMutation({
       const nextCompletedStopCount = nextStops.filter(isVisitedStop).length;
       const nextIsDayCompleted =
         nextStops.length > 0 && nextCompletedStopCount === nextStops.length;
+      const isRouteCompleted =
+        variables.nextVisited && Boolean(data.markRouteStopVisited.completedAt);
 
       if (variables.isActiveRouteDay) {
         setOrderedStops(nextStops);
@@ -694,7 +701,9 @@ export function useRouteStopVisitMutation({
       }
 
       const successMessage =
-        !variables.wasDayCompleted && nextIsDayCompleted
+        isRouteCompleted
+          ? "전체 루트를 완료했어요!"
+          : !variables.wasDayCompleted && nextIsDayCompleted
           ? `DAY ${variables.routeDay.dayIndex} 클리어`
             : variables.nextVisited
               ? variables.isGpsPhotoVerified
@@ -715,7 +724,7 @@ export function useRouteStopVisitMutation({
         (currentData) =>
           upsertMyRouteCache(currentData, data.markRouteStopVisited)
       );
-      showToast(successMessage);
+      showToast(successMessage, isRouteCompleted ? 3200 : undefined);
 
       const arrivalSyncError = await syncUpdatedRouteArrivalTarget(
         data.markRouteStopVisited,

@@ -62,85 +62,92 @@ function ModerationPhotoViewer({
       role="dialog"
       aria-modal="true"
       aria-label={text.photoReport.viewFullImage}
-      className="fixed inset-0 z-[3600] flex h-dvh flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-white"
+      className="fixed inset-0 z-[3600] flex items-center justify-center bg-slate-950/75 px-4 py-6 text-slate-900"
     >
-      <header className="flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))]">
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-bold">{item.title}</h2>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-300">
-            {isPublicationReview
-              ? text.photoReport.publicationReviewBadge
-              : text.photoReport.reports(item.reportCount)}
-          </p>
-        </div>
-        <button
-          type="button"
-          autoFocus
-          aria-label={text.common.close}
-          onClick={onClose}
-          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-2xl dark:bg-white/15"
-        >
-          <MdClose />
-        </button>
-      </header>
-
-      <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 px-3 py-2 dark:bg-black">
-        <img
-          src={item.imageUrl}
-          alt={item.title}
-          className="h-full w-full object-contain"
-        />
-      </div>
-
-      <footer className="shrink-0 space-y-3 border-t border-slate-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:border-white/15 dark:bg-slate-900">
-        <div className="flex flex-wrap gap-1.5">
-          {item.reasons.map((reason) => (
-            <span key={reason} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 dark:bg-white/10 dark:text-slate-200">
-              {labels[reason]}
-            </span>
-          ))}
-        </div>
-        {item.details.length > 0 ? (
-          <div className="max-h-20 overflow-y-auto text-xs leading-5 text-slate-600 dark:text-slate-300">
-            {item.details.map((detail, index) => (
-              <p key={`${detail}-${index}`}>{detail}</p>
-            ))}
+      <div className="flex max-h-[calc(100dvh-3rem)] w-full max-w-[640px] flex-col overflow-hidden rounded-[1.35rem] bg-white shadow-2xl dark:bg-slate-950 dark:text-white">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-white/10">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-bold">{item.title}</h2>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-300">
+              {isPublicationReview
+                ? text.photoReport.publicationReviewBadge
+                : text.photoReport.reports(item.reportCount)}
+            </p>
           </div>
-        ) : null}
-        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
-            disabled={isProcessing}
-            onClick={() => onAction("DISMISSED")}
-            className="flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-xl border border-brand-200 px-1 text-center text-xs font-bold leading-tight text-brand-700 disabled:opacity-50 dark:border-white/30 dark:text-white"
+            autoFocus
+            aria-label={text.common.close}
+            onClick={onClose}
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xl dark:bg-white/10"
           >
-            <MdOutlineCheckCircle className="shrink-0 text-base" />
-            {isPublicationReview
-              ? text.photoReport.approve
-              : text.photoReport.dismiss}
+            <MdClose />
           </button>
-          <button
-            type="button"
-            disabled={isProcessing}
-            onClick={() => onAction("HIDDEN")}
-            className="flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-xl border border-amber-200 px-1 text-center text-xs font-bold leading-tight text-amber-700 disabled:opacity-50 dark:border-amber-300/70 dark:text-amber-200"
-          >
-            <MdHideImage className="shrink-0 text-base" />
-            {isPublicationReview
-              ? text.photoReport.reject
-              : text.photoReport.hide}
-          </button>
-          <button
-            type="button"
-            disabled={isProcessing}
-            onClick={() => onAction("DELETED")}
-            className="flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-xl bg-rose-600 px-1 text-center text-xs font-bold leading-tight text-white disabled:opacity-50"
-          >
-            <MdDeleteOutline className="shrink-0 text-base" />
-            {text.photoReport.delete}
-          </button>
+        </header>
+
+        <div className="flex aspect-[4/3] max-h-[55dvh] w-full shrink-0 items-center justify-center bg-slate-100 dark:bg-slate-900">
+          <img
+            src={item.imageUrl}
+            alt={item.title}
+            className="h-full w-full object-contain"
+          />
         </div>
-      </footer>
+
+        <footer className="min-h-0 shrink overflow-y-auto border-t border-slate-200 bg-white px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:border-white/10 dark:bg-slate-950">
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-1.5">
+              {item.reasons.map((reason) => (
+                <span
+                  key={reason}
+                  className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 dark:bg-white/10 dark:text-slate-200"
+                >
+                  {labels[reason]}
+                </span>
+              ))}
+            </div>
+            {item.details.length > 0 ? (
+              <div className="max-h-20 overflow-y-auto text-xs leading-5 text-slate-600 dark:text-slate-300">
+                {item.details.map((detail, index) => (
+                  <p key={`${detail}-${index}`}>{detail}</p>
+                ))}
+              </div>
+            ) : null}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={() => onAction("DISMISSED")}
+                className="flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-xl border border-brand-200 px-1 text-center text-xs font-bold leading-tight text-brand-700 disabled:opacity-50 dark:border-white/30 dark:text-white"
+              >
+                <MdOutlineCheckCircle className="shrink-0 text-base" />
+                {isPublicationReview
+                  ? text.photoReport.approve
+                  : text.photoReport.dismiss}
+              </button>
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={() => onAction("HIDDEN")}
+                className="flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-xl border border-amber-200 px-1 text-center text-xs font-bold leading-tight text-amber-700 disabled:opacity-50 dark:border-amber-300/70 dark:text-amber-200"
+              >
+                <MdHideImage className="shrink-0 text-base" />
+                {isPublicationReview
+                  ? text.photoReport.reject
+                  : text.photoReport.hide}
+              </button>
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={() => onAction("DELETED")}
+                className="flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-xl bg-rose-600 px-1 text-center text-xs font-bold leading-tight text-white disabled:opacity-50"
+              >
+                <MdDeleteOutline className="shrink-0 text-base" />
+                {text.photoReport.delete}
+              </button>
+            </div>
+          </div>
+        </footer>
+      </div>
     </section>,
     document.body
   );
