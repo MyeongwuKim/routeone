@@ -169,6 +169,10 @@ export type UiText = {
     hideConfirm: string;
     rejectConfirm: string;
     deleteConfirm: string;
+    approveComplete: string;
+    rejectComplete: string;
+    deleteComplete: string;
+    publicationActionFailed: string;
     actionComplete: string;
     actionFailed: string;
     ownerOnly: string;
@@ -302,6 +306,9 @@ export type UiText = {
     reviewerAccount: string;
     providers: Record<AuthProvider, string>;
     managementSection: string;
+    switchAccount: string;
+    switchAccountDescription: string;
+    switchAccountToast: string;
     logout: string;
     logoutDescription: string;
     deleteAccount: string;
@@ -1612,6 +1619,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       hideConfirm: "이 사진을 모든 사용자에게 숨길까요?",
       rejectConfirm: "이 사진의 공개 요청을 거절하고 비공개로 전환할까요?",
       deleteConfirm: "이 사진을 원본과 함께 삭제할까요? 삭제 후 복구할 수 없어요.",
+      approveComplete: "사진 공개를 승인했어요.",
+      rejectComplete: "사진 공개 요청을 거절했어요.",
+      deleteComplete: "사진을 삭제했어요.",
+      publicationActionFailed: "사진 공개 요청을 처리하지 못했어요.",
       actionComplete: "신고 처리를 완료했어요.",
       actionFailed: "신고를 처리하지 못했어요.",
       ownerOnly: "운영자 계정에서만 볼 수 있는 화면이에요.",
@@ -1660,10 +1671,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       menuTitle: "차단 사용자 관리",
       menuDescription: "내 화면에서 숨긴 사용자 확인 및 해제",
       pageTitle: "차단 사용자",
-      pageDescription: "차단한 사용자의 공유 루트와 사진은 내 화면에 표시되지 않아요.",
+      pageDescription: "차단한 사용자의 루트와 사진은 숨겨져요.",
       loading: "차단 사용자 목록을 불러오는 중이에요.",
       emptyTitle: "차단한 사용자가 없어요.",
-      emptyDescription: "공유 루트에서 사용자를 차단하면 여기에 표시돼요.",
+      emptyDescription: "차단한 사용자는 여기에 표시돼요.",
       loadError: "차단 사용자 목록을 불러오지 못했어요.",
       unblock: "차단 해제",
       unblockAria: (name) => `${name} 차단 해제`,
@@ -1755,6 +1766,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         UNKNOWN: "테스트용",
       },
       managementSection: "계정 관리",
+      switchAccount: "계정 전환",
+      switchAccountDescription: "로그아웃하고 다른 계정으로 로그인",
+      switchAccountToast: "다른 계정으로 로그인해 주세요.",
       logout: "로그아웃",
       logoutDescription: "현재 계정에서 나가기",
       deleteAccount: "회원 탈퇴",
@@ -2351,7 +2365,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsVerificationPhoto: "GPS 인증 사진",
       photoPublicationQuestion: "이 사진의 공개 검토를 요청할까요?",
       photoPublicationDescription: (title) =>
-        `운영자 승인 후 ${title}의 ‘사용자들이 올린 사진’에 표시돼요.`,
+        `운영자 승인 후 ${title}의 ‘사용자들이 올린 사진’에 표시돼요. 검토 결과 공개가 거절될 수 있으며, 정책에 맞지 않는 사진은 삭제될 수 있어요.`,
       publishPhoto: "공개 검토 요청",
       keepPhotoPrivate: "나만 보기",
       photoPublished: "장소 사진에 공개 중",
@@ -3275,6 +3289,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       hideConfirm: "Hide this photo from every user?",
       rejectConfirm: "Reject this publication request and keep the photo private?",
       deleteConfirm: "Delete this photo and its original file? This cannot be undone.",
+      approveComplete: "The photo was approved for publication.",
+      rejectComplete: "The photo publication request was rejected.",
+      deleteComplete: "The photo was deleted.",
+      publicationActionFailed: "Could not process the photo publication request.",
       actionComplete: "The report was handled.",
       actionFailed: "Could not handle the report.",
       ownerOnly: "This page is available only to the owner account.",
@@ -3323,11 +3341,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       menuTitle: "Blocked Users",
       menuDescription: "Review or unblock people hidden from your account",
       pageTitle: "Blocked Users",
-      pageDescription:
-        "Shared routes and photos from blocked users are hidden from your account.",
+      pageDescription: "Routes and photos from blocked users are hidden.",
       loading: "Loading blocked users.",
       emptyTitle: "No blocked users",
-      emptyDescription: "People you block from Shared Routes will appear here.",
+      emptyDescription: "People you block will appear here.",
       loadError: "Could not load blocked users.",
       unblock: "Unblock",
       unblockAria: (name) => `Unblock ${name}`,
@@ -3419,6 +3436,9 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         UNKNOWN: "Test-only",
       },
       managementSection: "Account Management",
+      switchAccount: "Switch Account",
+      switchAccountDescription: "Log out and sign in with another account",
+      switchAccountToast: "Sign in with another account.",
       logout: "Log Out",
       logoutDescription: "Leave the current account",
       deleteAccount: "Delete Account",
@@ -4040,7 +4060,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       gpsVerificationPhoto: "GPS verification photo",
       photoPublicationQuestion: "Request publication review for this photo?",
       photoPublicationDescription: (title) =>
-        `After approval, your photo will appear in the community photos for ${title}.`,
+        `After approval, your photo will appear in the community photos for ${title}. Publication may be rejected, and photos that violate the content policy may be deleted.`,
       publishPhoto: "Request review",
       keepPhotoPrivate: "Keep private",
       photoPublished: "Shared on place page",

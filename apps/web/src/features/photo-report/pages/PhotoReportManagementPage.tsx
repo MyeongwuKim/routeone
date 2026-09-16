@@ -177,9 +177,13 @@ function PhotoReportManagementPage() {
     (item) => item.photoId === selectedPhotoId
   );
   const actionMutation = useMutation({
-    mutationFn: ({ photoId, action }: { photoId: string; action: PlacePhotoModerationAction }) =>
+    mutationFn: ({ photoId, action }: {
+      photoId: string;
+      action: PlacePhotoModerationAction;
+      reviewType: ReportItem["reviewType"];
+    }) =>
       moderationApi.moderatePlacePhoto(photoId, action),
-    onSuccess: async () => {
+    onSuccess: async (_result, variables) => {
       setSelectedPhotoId(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["pending-photo-reports"] }),
@@ -189,9 +193,24 @@ function PhotoReportManagementPage() {
         queryClient.invalidateQueries({ queryKey: MY_ROUTES_QUERY_KEY }),
         queryClient.invalidateQueries({ queryKey: MY_ROUTE_HISTORY_QUERY_KEY }),
       ]);
-      showToast(text.photoReport.actionComplete);
+      const successMessage =
+        variables.action === "DELETED"
+          ? text.photoReport.deleteComplete
+          : variables.reviewType === "PUBLICATION"
+            ? variables.action === "DISMISSED"
+              ? text.photoReport.approveComplete
+              : text.photoReport.rejectComplete
+            : text.photoReport.actionComplete;
+      showToast(successMessage);
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : text.photoReport.actionFailed),
+    onError: (error, variables) =>
+      showToast(
+        error instanceof Error
+          ? error.message
+          : variables.reviewType === "PUBLICATION"
+            ? text.photoReport.publicationActionFailed
+            : text.photoReport.actionFailed
+      ),
   });
 
   const handleAction = (item: ReportItem, action: PlacePhotoModerationAction) => {
@@ -228,7 +247,12 @@ function PhotoReportManagementPage() {
         {
           label: actionLabel,
           variant: action === "DISMISSED" ? "primary" : "danger",
-          onClick: () => actionMutation.mutate({ photoId: item.photoId, action }),
+          onClick: () =>
+            actionMutation.mutate({
+              photoId: item.photoId,
+              action,
+              reviewType: item.reviewType,
+            }),
         },
       ],
     });

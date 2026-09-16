@@ -6,6 +6,7 @@ import {
   MdChevronRight,
   MdDeleteOutline,
   MdLogout,
+  MdSwitchAccount,
 } from "react-icons/md";
 import { authApi } from "@/api/authApi";
 import { notificationApi } from "@/api/notificationApi";
@@ -126,7 +127,7 @@ function MyAccountPage() {
     await clearNativeNotifications();
   };
 
-  const finishSession = (toastMessage: string) => {
+  const finishSession = (toastMessage: string, destination = "/home") => {
     resetHomeForArea(serviceArea.defaultRegion.sigunguCode);
     resetMapSheet();
     clearAppendTarget();
@@ -136,9 +137,30 @@ function MyAccountPage() {
     clearAuthUser();
     queryClient.clear();
     showToast(toastMessage);
-    navigate("/home", {
+    navigate(destination, {
       replace: true,
     });
+  };
+
+  const handleSwitchAccount = () => {
+    if (isBusy) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+    const authToken = getAuthToken();
+    const isNativeApp = nativeBridge.runtime.isAvailable();
+    finishSession(
+      text.account.switchAccountToast,
+      isNativeApp ? "/home" : "/login"
+    );
+    void unregisterPushDevice(authToken);
+
+    if (isNativeApp) {
+      window.setTimeout(() => {
+        nativeBridge.auth.requestLogin("account-switch");
+      }, 250);
+    }
   };
 
   const handleLogout = () => {
@@ -226,6 +248,16 @@ function MyAccountPage() {
             {text.account.managementSection}
           </p>
         </div>
+
+        <AccountActionRow
+          icon={<MdSwitchAccount />}
+          title={text.account.switchAccount}
+          description={text.account.switchAccountDescription}
+          disabled={isBusy}
+          onClick={handleSwitchAccount}
+        />
+
+        <div className="border-b border-brand-50" />
 
         <AccountActionRow
           icon={<MdLogout />}
