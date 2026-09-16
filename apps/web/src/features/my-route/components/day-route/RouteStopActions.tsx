@@ -7,6 +7,7 @@
  */
 import {
   MdGpsFixed,
+  MdHourglassTop,
   MdImage,
   MdLockOutline,
   MdMap,
@@ -18,7 +19,7 @@ export type RouteStopPhotoAction = {
   label: string;
   ariaLabel: string;
   photoUrl: string | null;
-  publicationStatus: "public" | "private" | null;
+  publicationStatus: "pending" | "public" | "private" | null;
   onClick: () => void;
 };
 
@@ -74,16 +75,22 @@ function RouteStopActions({
                     aria-label={
                       photoAction.publicationStatus === "public"
                         ? text.dayRoute.photoPublished
-                        : text.dayRoute.photoPrivate
+                        : photoAction.publicationStatus === "pending"
+                          ? text.dayRoute.photoPendingReview
+                          : text.dayRoute.photoPrivate
                     }
                     className={`absolute -bottom-0.5 -right-0.5 flex size-3 items-center justify-center rounded-full text-[8px] text-white ring-1 ring-white dark:ring-[#0b211f] ${
                       photoAction.publicationStatus === "public"
                         ? "bg-emerald-700"
-                        : "bg-slate-600"
+                        : photoAction.publicationStatus === "pending"
+                          ? "bg-amber-600"
+                          : "bg-slate-600"
                     }`}
                   >
                     {photoAction.publicationStatus === "public" ? (
                       <MdPublic />
+                    ) : photoAction.publicationStatus === "pending" ? (
+                      <MdHourglassTop />
                     ) : (
                       <MdLockOutline />
                     )}

@@ -1,10 +1,10 @@
 /**
  * 용도:
- * 방문 인증 사진 신고와 운영자 검토 상태를 관리한다.
+ * 방문 인증 사진의 공개 검토와 신고 처리 상태를 관리한다.
  *
  * 동작 방식:
- * 신고 자체는 원본 공개 상태를 바꾸지 않고 신고자별 대기 기록만 남긴다.
- * 전체 숨김·삭제는 OWNER가 검토 작업을 실행했을 때만 반영한다.
+ * 공개 요청 사진은 승인 전까지 노출하지 않고 신고 사진과 함께 OWNER 검토 목록에 제공한다.
+ * 승인·전체 숨김·삭제는 OWNER가 검토 작업을 실행했을 때만 반영한다.
  */
 import type {
   PlacePhotoModerationAction,
@@ -123,10 +123,16 @@ export async function getMyPendingPhotoReport(
 }
 
 export async function getPendingPhotoReportQueue(prisma: PrismaClient) {
-  const reports = await prisma.placePhotoReport.findMany({
-    where: { status: "PENDING" },
-    orderBy: { createdAt: "desc" },
-  });
+  const [reports, publicationPendingPhotos] = await Promise.all([
+    prisma.placePhotoReport.findMany({
+      where: { status: "PENDING" },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.placePhoto.findMany({
+      where: { status: "PENDING" },
+      orderBy: { updatedAt: "desc" },
+    }),
+  ]);
   const grouped = new Map<string, typeof reports>();
 
   for (const report of reports) {
@@ -135,38 +141,74 @@ export async function getPendingPhotoReportQueue(prisma: PrismaClient) {
     grouped.set(report.photoId, group);
   }
 
-  const photoIds = [...grouped.keys()];
-  const photos = await prisma.placePhoto.findMany({
-    where: { id: { in: photoIds } },
+  const publicationPendingPhotoIds = new Set(
+    publicationPendingPhotos.map((photo) => photo.id)
+  );
+  const reportedPhotoIds = [...grouped.keys()].filter(
+    (photoId) => !publicationPendingPhotoIds.has(photoId)
+  );
+  const reportedPhotos = await prisma.placePhoto.findMany({
+    where: { id: { in: reportedPhotoIds } },
   });
-  const photoById = new Map(photos.map((photo) => [photo.id, photo]));
-  const uploaderIds = [...new Set(reports.map((report) => report.reportedUserId))];
+  const photoById = new Map(
+    [...publicationPendingPhotos, ...reportedPhotos].map((photo) => [
+      photo.id,
+      photo,
+    ])
+  );
+  const uploaderIds = [
+    ...new Set([
+      ...reports.map((report) => report.reportedUserId),
+      ...publicationPendingPhotos.map((photo) => photo.userId),
+    ]),
+  ];
   const uploaders = await prisma.user.findMany({
     where: { id: { in: uploaderIds } },
     select: { id: true, displayName: true, email: true },
   });
   const uploaderById = new Map(uploaders.map((user) => [user.id, user]));
 
-  return [...grouped.entries()].map(([photoId, photoReports]) => {
-    const latest = photoReports[0];
-    const photo = photoById.get(photoId);
+  const publicationItems = publicationPendingPhotos.map((photo) => ({
+    photoId: photo.id,
+    reviewType: "PUBLICATION" as const,
+    title: photo.title,
+    imageUrl: photo.imageUrl,
+    thumbnailUrl: photo.thumbnailUrl ?? photo.imageUrl,
+    status: photo.status,
+    uploader: uploaderById.get(photo.userId) ?? null,
+    reportCount: 0,
+    reasons: [],
+    details: [],
+    latestReportedAt: photo.updatedAt,
+  }));
+  const reportItems = [...grouped.entries()]
+    .filter(([photoId]) => !publicationPendingPhotoIds.has(photoId))
+    .map(([photoId, photoReports]) => {
+      const latest = photoReports[0];
+      const photo = photoById.get(photoId);
 
-    return {
-      photoId,
-      title: photo?.title ?? latest.photoTitle,
-      imageUrl: photo?.imageUrl ?? latest.photoImageUrl,
-      thumbnailUrl:
-        photo?.thumbnailUrl ?? latest.photoThumbnailUrl ?? latest.photoImageUrl,
-      status: photo?.status ?? "DELETED",
-      uploader: uploaderById.get(latest.reportedUserId) ?? null,
-      reportCount: photoReports.length,
-      reasons: [...new Set(photoReports.map((report) => report.reason))],
-      details: photoReports
-        .map((report) => report.details)
-        .filter((value): value is string => Boolean(value)),
-      latestReportedAt: latest.createdAt,
-    };
-  });
+      return {
+        photoId,
+        reviewType: "REPORT" as const,
+        title: photo?.title ?? latest.photoTitle,
+        imageUrl: photo?.imageUrl ?? latest.photoImageUrl,
+        thumbnailUrl:
+          photo?.thumbnailUrl ?? latest.photoThumbnailUrl ?? latest.photoImageUrl,
+        status: photo?.status ?? "DELETED",
+        uploader: uploaderById.get(latest.reportedUserId) ?? null,
+        reportCount: photoReports.length,
+        reasons: [...new Set(photoReports.map((report) => report.reason))],
+        details: photoReports
+          .map((report) => report.details)
+          .filter((value): value is string => Boolean(value)),
+        latestReportedAt: latest.createdAt,
+      };
+    });
+
+  return [...publicationItems, ...reportItems].sort(
+    (left, right) =>
+      right.latestReportedAt.getTime() - left.latestReportedAt.getTime()
+  );
 }
 
 async function resolvePendingReports(
@@ -192,20 +234,37 @@ export async function moderatePlacePhoto(
   photoId: string,
   action: PlacePhotoModerationAction
 ) {
-  const pendingCount = await prisma.placePhotoReport.count({
-    where: { photoId, status: "PENDING" },
-  });
+  const [pendingCount, photo] = await Promise.all([
+    prisma.placePhotoReport.count({
+      where: { photoId, status: "PENDING" },
+    }),
+    prisma.placePhoto.findUnique({ where: { id: photoId } }),
+  ]);
+  const isPublicationPending = photo?.status === "PENDING";
 
-  if (pendingCount === 0) {
-    throw new UserFacingError("처리할 신고가 없습니다.");
+  if (pendingCount === 0 && !isPublicationPending) {
+    throw new UserFacingError("처리할 사진 검토 항목이 없습니다.");
   }
 
   if (action === "DISMISSED") {
-    await resolvePendingReports(prisma, owner.id, photoId, action);
+    await prisma.$transaction(async (transaction) => {
+      if (isPublicationPending && photo) {
+        const publishedAt = new Date();
+        await transaction.placePhoto.update({
+          where: { id: photoId },
+          data: { status: "ACTIVE", publishedAt },
+        });
+        await transaction.routeStop.updateMany({
+          where: { id: photo.routeStopId },
+          data: { verificationPhotoPublishedAt: publishedAt },
+        });
+      }
+      if (pendingCount > 0) {
+        await resolvePendingReports(transaction, owner.id, photoId, action);
+      }
+    });
     return { photoId, action };
   }
-
-  const photo = await prisma.placePhoto.findUnique({ where: { id: photoId } });
 
   if (!photo) {
     await resolvePendingReports(prisma, owner.id, photoId, action);

@@ -695,23 +695,23 @@ function AppRouter() {
             path="/home"
             element={withRouteSuspense(<HomePage />, <HomeRouteFallback />)}
           />
+          <Route
+            path="/shared-route"
+            element={
+              <RoutePageShell
+                icon={<MdOutlineHub />}
+                title={text.routeShell.sharedRouteTitle}
+                description={text.routeShell.sharedRouteDescription}
+                action={<TabHelpButton topic="sharedRoute" />}
+              >
+                {withRouteSuspense(
+                  <SharedRoutePage />,
+                  <SharedRouteLazyFallback />
+                )}
+              </RoutePageShell>
+            }
+          />
           <Route element={<RequireAuth />}>
-            <Route
-              path="/shared-route"
-              element={
-                <RoutePageShell
-                  icon={<MdOutlineHub />}
-                  title={text.routeShell.sharedRouteTitle}
-                  description={text.routeShell.sharedRouteDescription}
-                  action={<TabHelpButton topic="sharedRoute" />}
-                >
-                  {withRouteSuspense(
-                    <SharedRoutePage />,
-                    <SharedRouteLazyFallback />
-                  )}
-                </RoutePageShell>
-              }
-            />
             <Route
               path="/my-route"
               element={

@@ -202,9 +202,10 @@ function RouteStopNode({
             ? stop.verificationPhotoUrl ?? null
             : null,
           publicationStatus:
-            stop.verificationPhotoPublicationConsent === true ||
-            stop.verificationPhotoPublishedAt
+            stop.verificationPhotoPublicationStatus === "ACTIVE"
               ? "public"
+              : stop.verificationPhotoPublicationStatus === "PENDING"
+                ? "pending"
               : stop.verificationPhotoPublicationConsent === false
                 ? "private"
                 : null,

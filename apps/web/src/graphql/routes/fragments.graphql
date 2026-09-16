@@ -38,6 +38,7 @@ fragment RouteStopFields on RouteStop {
   verificationPhotoUrl
   verificationPhotoPublicationConsent
   verificationPhotoPublishedAt
+  verificationPhotoPublicationStatus
   verificationPhotoRecordId
   verificationPhotoReportedByMe
   verificationLat

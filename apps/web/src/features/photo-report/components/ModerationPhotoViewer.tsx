@@ -1,11 +1,11 @@
 /**
- * 사용 위치: 내 정보 → 신고 관리 → 신고 사진 선택
+ * 사용 위치: 내 정보 → 콘텐츠 관리 → 검토 사진 선택
  *
  * 용도:
- * 운영자가 신고된 사진의 원본을 전체 화면에서 확인하고 처리한다.
+ * 운영자가 공개 요청 또는 신고된 사진 원본을 전체 화면에서 확인하고 처리한다.
  *
  * 구조:
- * 원본 사진, 신고 사유, 문제없음·전체 숨김·사진 삭제 버튼으로 구성된다.
+ * 원본 사진, 검토 정보, 승인·숨김·사진 삭제 버튼으로 구성된다.
  */
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -34,6 +34,8 @@ function ModerationPhotoViewer({
   onClose,
   text,
 }: ModerationPhotoViewerProps) {
+  const isPublicationReview = item.reviewType === "PUBLICATION";
+
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -66,7 +68,9 @@ function ModerationPhotoViewer({
         <div className="min-w-0">
           <h2 className="truncate text-base font-bold">{item.title}</h2>
           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-300">
-            {text.photoReport.reports(item.reportCount)}
+            {isPublicationReview
+              ? text.photoReport.publicationReviewBadge
+              : text.photoReport.reports(item.reportCount)}
           </p>
         </div>
         <button
@@ -111,7 +115,9 @@ function ModerationPhotoViewer({
             className="flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-xl border border-brand-200 px-1 text-center text-xs font-bold leading-tight text-brand-700 disabled:opacity-50 dark:border-white/30 dark:text-white"
           >
             <MdOutlineCheckCircle className="shrink-0 text-base" />
-            {text.photoReport.dismiss}
+            {isPublicationReview
+              ? text.photoReport.approve
+              : text.photoReport.dismiss}
           </button>
           <button
             type="button"
@@ -120,7 +126,9 @@ function ModerationPhotoViewer({
             className="flex min-h-12 min-w-0 items-center justify-center gap-1 rounded-xl border border-amber-200 px-1 text-center text-xs font-bold leading-tight text-amber-700 disabled:opacity-50 dark:border-amber-300/70 dark:text-amber-200"
           >
             <MdHideImage className="shrink-0 text-base" />
-            {text.photoReport.hide}
+            {isPublicationReview
+              ? text.photoReport.reject
+              : text.photoReport.hide}
           </button>
           <button
             type="button"

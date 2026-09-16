@@ -607,6 +607,7 @@ enum PushPlatform {
 }
 
 enum PlacePhotoStatus {
+  PENDING
   ACTIVE
   HIDDEN
   DELETED

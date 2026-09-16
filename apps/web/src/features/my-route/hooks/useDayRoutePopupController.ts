@@ -721,7 +721,7 @@ export function useDayRoutePopupController({
       description:
         "한 번 공유하면 현재 앱에서는 직접 삭제하거나 공유를 되돌릴 수 없어요.",
       detail:
-        "완료한 일정이 공개돼요. 장소 사진 공개를 선택한 인증 이미지만 함께 표시되며, 비공개 사진은 공개되지 않아요.",
+        "완료한 일정이 공개돼요. 장소 사진 공개를 선택한 인증 이미지는 운영자 검토 승인 후 표시되며, 비공개 사진은 공개되지 않아요.",
       actions: [
         { label: "취소", variant: "secondary" },
         {

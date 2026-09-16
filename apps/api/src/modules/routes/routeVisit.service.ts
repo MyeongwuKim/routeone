@@ -4,6 +4,7 @@
  * 단일 방문과 일정 공유는 같은 사진 공개 규칙을 사용하고, 공유 사진은 묶어서 저장한다.
  */
 import type {
+  PlacePhoto,
   Prisma,
   PrismaClient,
   Route,
@@ -798,7 +799,11 @@ function buildPlacePhotoForRouteStopVisit(
   user: User,
   route: Route,
   stop: RouteStop,
-  visitData: RouteStopVisitData
+  visitData: RouteStopVisitData,
+  existingPhoto?: Pick<
+    PlacePhoto,
+    "status" | "imageId" | "imageUrl" | "publishedAt"
+  > | null
 ) {
   const photoUrl = nullableString(visitData.verificationPhotoUrl);
   const canPublishPhoto =
@@ -822,6 +827,16 @@ function buildPlacePhotoForRouteStopVisit(
   const isPublished =
     publicationConsent === true ||
     (publicationConsent == null && route.visibility === "PUBLIC");
+  const isSameApprovedPhoto =
+    existingPhoto?.status === "ACTIVE" &&
+    (existingPhoto.imageId
+      ? existingPhoto.imageId === nullableString(visitData.verificationPhotoImageId)
+      : existingPhoto.imageUrl === photoUrl);
+  const status = isPublished
+    ? isSameApprovedPhoto
+      ? ("ACTIVE" as const)
+      : ("PENDING" as const)
+    : ("HIDDEN" as const);
   const thumbnailUrl = buildPlacePhotoThumbnailUrl(photoUrl);
   return {
     placeKey,
@@ -837,11 +852,14 @@ function buildPlacePhotoForRouteStopVisit(
     thumbnailUrl: thumbnailUrl ?? photoUrl,
     variant: getImageDeliveryVariantName(photoUrl),
     source: "VISIT_PHOTO" as const,
-    status: isPublished ? ("ACTIVE" as const) : ("HIDDEN" as const),
+    status,
     publicationConsent,
-    publishedAt: isPublished
-      ? (visitData.verificationPhotoPublishedAt ?? verifiedAt)
-      : null,
+    publishedAt:
+      status === "ACTIVE"
+        ? (existingPhoto?.publishedAt ??
+          visitData.verificationPhotoPublishedAt ??
+          verifiedAt)
+        : null,
     verifiedAt,
   };
 }
@@ -853,7 +871,22 @@ export async function syncPlacePhotoForRouteStopVisit(
   stop: RouteStop,
   visitData: RouteStopVisitData
 ) {
-  const data = buildPlacePhotoForRouteStopVisit(user, route, stop, visitData);
+  const existingPhoto = await prisma.placePhoto.findUnique({
+    where: { routeStopId: stop.id },
+    select: {
+      status: true,
+      imageId: true,
+      imageUrl: true,
+      publishedAt: true,
+    },
+  });
+  const data = buildPlacePhotoForRouteStopVisit(
+    user,
+    route,
+    stop,
+    visitData,
+    existingPhoto
+  );
   if (!data) {
     await markPlacePhotoDeletedForRouteStop(prisma, stop.id);
     return;
@@ -874,9 +907,26 @@ export async function syncPlacePhotosForRouteShare(
 ) {
   const updates: MongoUpdate[] = [];
   const deletedStopIds: string[] = [];
+  const existingPhotos = await transaction.placePhoto.findMany({
+    where: { routeStopId: { in: stops.map((stop) => stop.id) } },
+    select: {
+      routeStopId: true,
+      status: true,
+      imageId: true,
+      imageUrl: true,
+      publishedAt: true,
+    },
+  });
+  const existingPhotoByStopId = new Map(
+    existingPhotos.map((photo) => [photo.routeStopId, photo])
+  );
   for (const stop of stops) {
     const data = buildPlacePhotoForRouteStopVisit(
-      user, route, stop, buildRouteStopVisitDataFromStop(stop)
+      user,
+      route,
+      stop,
+      buildRouteStopVisitDataFromStop(stop),
+      existingPhotoByStopId.get(stop.id)
     );
     if (data) {
       updates.push(mongoUpsert(

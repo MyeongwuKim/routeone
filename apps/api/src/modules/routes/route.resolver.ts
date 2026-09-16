@@ -97,6 +97,7 @@ export const routeTypeDefs = gql`
   }
 
   enum PlacePhotoStatus {
+    PENDING
     ACTIVE
     HIDDEN
     DELETED
@@ -190,6 +191,7 @@ export const routeTypeDefs = gql`
     verificationPhotoUrl: String
     verificationPhotoPublicationConsent: Boolean
     verificationPhotoPublishedAt: DateTime
+    verificationPhotoPublicationStatus: PlacePhotoStatus
     verificationLat: Float
     verificationLng: Float
     verificationAccuracyMeters: Float
@@ -556,20 +558,27 @@ type UpdateRouteStopVisitTimesArgs = {
 function sanitizeRouteStopPhotoForViewer(
   stop: RouteStop,
   route: Pick<Route, "ownerId" | "visibility">,
-  viewerId: string | null
+  viewerId: string | null,
+  publicationStatus: "PENDING" | "ACTIVE" | "HIDDEN" | "DELETED" | null
 ) {
   const isOwner = route.ownerId === viewerId;
   const isPhotoPublic =
-    stop.verificationPhotoPublicationConsent === true ||
-    (stop.verificationPhotoPublicationConsent == null &&
-      route.visibility === "PUBLIC");
+    publicationStatus === "ACTIVE" &&
+    (stop.verificationPhotoPublicationConsent === true ||
+      (stop.verificationPhotoPublicationConsent == null &&
+        route.visibility === "PUBLIC"));
+
+  const resolvedStop = {
+    ...stop,
+    verificationPhotoPublicationStatus: publicationStatus,
+  };
 
   if (isOwner || isPhotoPublic || !stop.verificationPhotoUrl) {
-    return stop;
+    return resolvedStop;
   }
 
   return {
-    ...stop,
+    ...resolvedStop,
     verificationStatus:
       stop.verificationStatus === "GPS_PHOTO"
         ? ("GPS" as RouteStopVerificationStatus)
@@ -579,6 +588,32 @@ function sanitizeRouteStopPhotoForViewer(
     verificationPhotoPublicationConsent: null,
     verificationPhotoPublishedAt: null,
   };
+}
+
+async function sanitizeRouteStopsForViewer(
+  context: GraphQLContext,
+  stops: RouteStop[],
+  route: Pick<Route, "ownerId" | "visibility">,
+  viewerId: string | null
+) {
+  const photos = stops.length
+    ? await context.prisma.placePhoto.findMany({
+        where: { routeStopId: { in: stops.map((stop) => stop.id) } },
+        select: { routeStopId: true, status: true },
+      })
+    : [];
+  const statusByStopId = new Map(
+    photos.map((photo) => [photo.routeStopId, photo.status])
+  );
+
+  return stops.map((stop) =>
+    sanitizeRouteStopPhotoForViewer(
+      stop,
+      route,
+      viewerId,
+      statusByStopId.get(stop.id) ?? null
+    )
+  );
 }
 
 type RouteIdArgs = {
@@ -994,8 +1029,11 @@ export const routeResolvers = {
         },
       });
 
-      return stops.map((stop) =>
-        sanitizeRouteStopPhotoForViewer(stop, parent, context.user?.id ?? null)
+      return sanitizeRouteStopsForViewer(
+        context,
+        stops,
+        parent,
+        context.user?.id ?? null
       );
     },
   },
@@ -1021,12 +1059,25 @@ export const routeResolvers = {
         return [];
       }
 
-      return stops.map((stop) =>
-        sanitizeRouteStopPhotoForViewer(stop, route, context.user?.id ?? null)
+      return sanitizeRouteStopsForViewer(
+        context,
+        stops,
+        route,
+        context.user?.id ?? null
       );
     },
   },
   RouteStop: {
+    verificationPhotoPublicationStatus(parent: RouteStop & {
+      verificationPhotoPublicationStatus?:
+        | "PENDING"
+        | "ACTIVE"
+        | "HIDDEN"
+        | "DELETED"
+        | null;
+    }) {
+      return parent.verificationPhotoPublicationStatus ?? null;
+    },
     verificationStatus(parent: RouteStop) {
       return (parent.verificationStatus ?? "NONE") as RouteStopVerificationStatus;
     },

@@ -147,6 +147,12 @@ export type UiText = {
     cancelFailed: string;
     managementTitle: string;
     managementDescription: string;
+    publicationReviewTab: string;
+    photoReportTab: string;
+    routeReportTab: string;
+    publicationReviewBadge: string;
+    publicationEmptyTitle: string;
+    publicationEmptyDescription: string;
     viewFullImage: string;
     emptyTitle: string;
     emptyDescription: string;
@@ -154,10 +160,14 @@ export type UiText = {
     uploader: string;
     details: string;
     dismiss: string;
+    approve: string;
     hide: string;
+    reject: string;
     delete: string;
     dismissConfirm: string;
+    approveConfirm: string;
     hideConfirm: string;
+    rejectConfirm: string;
     deleteConfirm: string;
     actionComplete: string;
     actionFailed: string;
@@ -260,6 +270,10 @@ export type UiText = {
     cameraPermission: string;
     photoLibraryPermission: string;
     permissionCheckingAria: string;
+    legalSection: string;
+    privacyPolicy: string;
+    privacyPolicyDescription: string;
+    openPrivacyPolicyAria: string;
     permissionStatuses: {
       granted: string;
       denied: string;
@@ -782,6 +796,7 @@ export type UiText = {
     publishPhoto: string;
     keepPhotoPrivate: string;
     photoPublished: string;
+    photoPendingReview: string;
     photoPrivate: string;
     unpublishPhoto: string;
     deletePhoto: string;
@@ -1573,19 +1588,29 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       cancelReport: "신고 취소",
       canceled: "신고를 취소했어요.",
       cancelFailed: "신고를 취소하지 못했어요.",
-      managementTitle: "신고 관리",
-      managementDescription: "사진과 공유 루트 신고 검토",
-      viewFullImage: "신고 사진 전체 화면 보기",
+      managementTitle: "콘텐츠 관리",
+      managementDescription: "사진 공개 검토와 콘텐츠 신고 처리",
+      publicationReviewTab: "공개 검토",
+      photoReportTab: "사진 신고",
+      routeReportTab: "루트 신고",
+      publicationReviewBadge: "공개 대기",
+      publicationEmptyTitle: "공개 검토를 기다리는 사진이 없어요.",
+      publicationEmptyDescription: "사용자가 사진 공개를 요청하면 이곳에 표시돼요.",
+      viewFullImage: "사진 전체 화면 보기",
       emptyTitle: "대기 중인 신고가 없어요.",
       emptyDescription: "새 신고가 접수되면 이곳에 표시돼요.",
       reports: (count) => `신고 ${count}건`,
       uploader: "등록 사용자",
       details: "기타 사유",
       dismiss: "문제없음",
+      approve: "공개 승인",
       hide: "전체 숨김",
+      reject: "공개 거절",
       delete: "사진 삭제",
       dismissConfirm: "문제없는 사진으로 처리하고 신고를 종료할까요?",
+      approveConfirm: "이 사진을 다른 사용자에게 공개할까요?",
       hideConfirm: "이 사진을 모든 사용자에게 숨길까요?",
+      rejectConfirm: "이 사진의 공개 요청을 거절하고 비공개로 전환할까요?",
       deleteConfirm: "이 사진을 원본과 함께 삭제할까요? 삭제 후 복구할 수 없어요.",
       actionComplete: "신고 처리를 완료했어요.",
       actionFailed: "신고를 처리하지 못했어요.",
@@ -1692,6 +1717,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       cameraPermission: "카메라 권한",
       photoLibraryPermission: "앨범 권한",
       permissionCheckingAria: "권한 정보 확인 중",
+      legalSection: "정책",
+      privacyPolicy: "개인정보처리방침",
+      privacyPolicyDescription: "수집·이용 및 보호 내용 확인",
+      openPrivacyPolicyAria: "개인정보처리방침 열기",
       permissionStatuses: {
         granted: "켜짐",
         denied: "꺼짐",
@@ -2320,12 +2349,13 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       placeFallback: "장소",
       gpsVerification: "GPS 인증",
       gpsVerificationPhoto: "GPS 인증 사진",
-      photoPublicationQuestion: "이 사진을 다른 사용자에게 공개할까요?",
+      photoPublicationQuestion: "이 사진의 공개 검토를 요청할까요?",
       photoPublicationDescription: (title) =>
-        `공개한 사진은 ${title}의 ‘사용자들이 올린 사진’에 표시돼요.`,
-      publishPhoto: "사진 공개하기",
+        `운영자 승인 후 ${title}의 ‘사용자들이 올린 사진’에 표시돼요.`,
+      publishPhoto: "공개 검토 요청",
       keepPhotoPrivate: "나만 보기",
       photoPublished: "장소 사진에 공개 중",
+      photoPendingReview: "공개 검토 중",
       photoPrivate: "나만 보는 사진",
       unpublishPhoto: "공개 취소",
       deletePhoto: "사진 삭제",
@@ -3221,19 +3251,29 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       cancelReport: "Cancel Report",
       canceled: "Report canceled.",
       cancelFailed: "Could not cancel the report.",
-      managementTitle: "Report Management",
-      managementDescription: "Review photo and shared route reports",
-      viewFullImage: "View reported photo full screen",
+      managementTitle: "Content Management",
+      managementDescription: "Review photo publication requests and content reports",
+      publicationReviewTab: "Publication",
+      photoReportTab: "Photo Reports",
+      routeReportTab: "Route Reports",
+      publicationReviewBadge: "Awaiting Review",
+      publicationEmptyTitle: "No photos are waiting for publication review.",
+      publicationEmptyDescription: "Photo publication requests will appear here.",
+      viewFullImage: "View photo full screen",
       emptyTitle: "No reports are waiting.",
       emptyDescription: "New photo reports will appear here.",
       reports: (count) => `${count} ${count === 1 ? "report" : "reports"}`,
       uploader: "Uploader",
       details: "Other details",
       dismiss: "No Issue",
+      approve: "Approve",
       hide: "Hide for Everyone",
+      reject: "Reject",
       delete: "Delete Photo",
       dismissConfirm: "Close these reports without changing the photo?",
+      approveConfirm: "Publish this photo for other users?",
       hideConfirm: "Hide this photo from every user?",
+      rejectConfirm: "Reject this publication request and keep the photo private?",
       deleteConfirm: "Delete this photo and its original file? This cannot be undone.",
       actionComplete: "The report was handled.",
       actionFailed: "Could not handle the report.",
@@ -3341,6 +3381,10 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       cameraPermission: "Camera",
       photoLibraryPermission: "Photo Library",
       permissionCheckingAria: "Checking permission details",
+      legalSection: "Policies",
+      privacyPolicy: "Privacy Policy",
+      privacyPolicyDescription: "Review how your data is collected and protected",
+      openPrivacyPolicyAria: "Open Privacy Policy",
       permissionStatuses: {
         granted: "On",
         denied: "Off",
@@ -3994,12 +4038,13 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       placeFallback: "Place",
       gpsVerification: "GPS verified",
       gpsVerificationPhoto: "GPS verification photo",
-      photoPublicationQuestion: "Share this photo with other users?",
+      photoPublicationQuestion: "Request publication review for this photo?",
       photoPublicationDescription: (title) =>
-        `Your photo will appear in the community photos for ${title}.`,
-      publishPhoto: "Share photo",
+        `After approval, your photo will appear in the community photos for ${title}.`,
+      publishPhoto: "Request review",
       keepPhotoPrivate: "Keep private",
       photoPublished: "Shared on place page",
+      photoPendingReview: "Waiting for review",
       photoPrivate: "Private photo",
       unpublishPhoto: "Stop sharing",
       deletePhoto: "Delete photo",

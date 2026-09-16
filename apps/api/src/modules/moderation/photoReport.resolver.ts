@@ -1,9 +1,9 @@
 /**
  * 용도:
- * 사진 신고 및 OWNER 전용 검토 기능을 GraphQL API로 제공한다.
+ * 사진 공개 요청과 신고에 대한 OWNER 전용 검토 기능을 GraphQL API로 제공한다.
  *
  * 요청 흐름:
- * 일반 사용자는 신고·취소만 할 수 있고, 검토 목록과 전체 노출 변경은 OWNER만 접근한다.
+ * 일반 사용자는 공개 요청과 신고·취소를 이용하고, 검토 목록과 노출 변경은 OWNER만 접근한다.
  */
 import type {
   PlacePhoto,
@@ -59,8 +59,14 @@ export const photoReportTypeDefs = gql`
     email: String
   }
 
+  enum ModerationPhotoReviewType {
+    PUBLICATION
+    REPORT
+  }
+
   type ModerationPhotoReportItem {
     photoId: ID!
+    reviewType: ModerationPhotoReviewType!
     title: String!
     imageUrl: String!
     thumbnailUrl: String!

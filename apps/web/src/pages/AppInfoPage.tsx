@@ -7,7 +7,7 @@
  * 구조:
  * 앱 정보와 위치·알림·카메라·앨범 권한 영역으로 구성되어 있다.
  */
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   MdArrowBack,
@@ -17,6 +17,7 @@ import {
   MdNotifications,
   MdPhotoCamera,
   MdPhotoLibrary,
+  MdPolicy,
   MdSystemUpdateAlt,
 } from "react-icons/md";
 import {
@@ -25,10 +26,13 @@ import {
   type NativeAppInfo,
   type NativePermissionStatus,
 } from "@/native-bridge";
+import { getNativeBridgeApi } from "@/native-bridge/runtime";
 import { useUiText, type UiText } from "@/lib/uiText";
 
 const PERMISSION_ROW_CLASS_NAME =
   "flex w-full items-center gap-3 px-4 py-3 text-left";
+const PRIVACY_POLICY_URL =
+  "https://quilled-penalty-91a.notion.site/RouteOne-RouteOne-Privacy-Policy-3d8bc37db9d68028bf05e6c82afdfad8?pvs=74";
 
 function formatPlatform(
   platform: NativeAppInfo["platform"],
@@ -233,6 +237,13 @@ function AppInfoPage() {
     { label: appInfoText.osVersion, valueWidth: "w-28" },
     { label: appInfoText.webBundleVersion, valueWidth: "w-24" },
   ] as const;
+  const handleOpenPrivacyPolicy = (
+    event: MouseEvent<HTMLAnchorElement>
+  ) => {
+    if (getNativeBridgeApi()?.openExternalUrl?.(PRIVACY_POLICY_URL)) {
+      event.preventDefault();
+    }
+  };
 
   return (
     <section className="space-y-4 pb-4 text-slate-900">
@@ -365,6 +376,32 @@ function AppInfoPage() {
           />
         </section>
       ) : null}
+
+      <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm">
+        <div className="border-b border-brand-50 px-4 py-3">
+          <p className="text-xs font-black text-brand-700">
+            {appInfoText.legalSection}
+          </p>
+        </div>
+        <a
+          href={PRIVACY_POLICY_URL}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={appInfoText.openPrivacyPolicyAria}
+          onClick={handleOpenPrivacyPolicy}
+          className={`${PERMISSION_ROW_CLASS_NAME} transition hover:bg-brand-50/70 active:bg-brand-50`}
+        >
+          <AppPermissionRowContent
+            icon={<MdPolicy />}
+            label={appInfoText.privacyPolicy}
+            trailing={
+              <span className="min-w-0 flex-1 truncate text-right text-xs font-semibold text-slate-500">
+                {appInfoText.privacyPolicyDescription}
+              </span>
+            }
+          />
+        </a>
+      </section>
     </section>
   );
 }

@@ -900,7 +900,7 @@ export function useRouteStopVisitMutation({
       invalidatePlaceVisitQueries(variables.target.stop);
       showToast(
         variables.published
-          ? "장소 사진에 공개했어요."
+          ? "사진 공개 검토를 요청했어요. 승인되면 다른 사용자에게 표시돼요."
           : "사진 공개를 취소했어요."
       );
     },

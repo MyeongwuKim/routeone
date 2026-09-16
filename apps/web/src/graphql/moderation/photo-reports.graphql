@@ -1,6 +1,7 @@
 query PendingPhotoReports {
   pendingPhotoReports {
     photoId
+    reviewType
     title
     imageUrl
     thumbnailUrl
