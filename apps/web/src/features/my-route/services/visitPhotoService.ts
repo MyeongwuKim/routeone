@@ -325,5 +325,5 @@ export async function uploadVerifiedVisitPhoto(
     throw new Error(getCloudflareUploadError(payload));
   }
 
-  return payload.result?.variants?.[0] ?? uploadTarget.imageUrl;
+  return uploadTarget.imageUrl ?? payload.result?.variants?.[0];
 }

@@ -88,7 +88,7 @@ function ModerationPhotoViewer({
         <img
           src={item.imageUrl}
           alt={item.title}
-          className="max-h-full max-w-full object-contain"
+          className="h-full w-full object-contain"
         />
       </div>
 

@@ -32,6 +32,7 @@ import {
   getImageDeliveryVariantName,
   getPlaceStayStatKeys,
   getPrimaryPlaceStayStatKey,
+  normalizePlacePhotoImageUrl,
   nullableString,
   refreshRouteProgress,
 } from "./route.shared.js";
@@ -482,8 +483,11 @@ function buildRouteStopVisitData(
   const verificationStatus = getVisitVerificationStatus(verification);
   const isGpsVerified = VERIFIED_ROUTE_STOP_STATUSES.has(verificationStatus);
   const photoUrl = nullableString(verification?.photoUrl);
+  const normalizedPhotoUrl = photoUrl
+    ? normalizePlacePhotoImageUrl(photoUrl)
+    : null;
   const hasPhotoRecord =
-    Boolean(photoUrl) &&
+    Boolean(normalizedPhotoUrl) &&
     (verificationStatus === "GPS_PHOTO" || verificationStatus === "MANUAL");
 
   assertRouteStopGpsVerification(
@@ -508,7 +512,9 @@ function buildRouteStopVisitData(
         ? nullableString(verification?.photoImageId)
         : null,
     verificationPhotoUrl:
-      verificationStatus === "GPS_PHOTO" || hasPhotoRecord ? photoUrl : null,
+      verificationStatus === "GPS_PHOTO" || hasPhotoRecord
+        ? normalizedPhotoUrl
+        : null,
     verificationPhotoPublicationConsent: hasPhotoRecord ? false : null,
     verificationPhotoPublishedAt: null,
     verificationLat: isGpsVerified ? (verification?.lat ?? null) : null,
@@ -554,8 +560,8 @@ function buildRouteStopCheckInData(
         ? nullableString(verification.photoImageId)
         : null,
     verificationPhotoUrl:
-      verificationStatus === "GPS_PHOTO"
-        ? nullableString(verification.photoUrl)
+      verificationStatus === "GPS_PHOTO" && verification.photoUrl
+        ? normalizePlacePhotoImageUrl(verification.photoUrl)
         : null,
     verificationPhotoPublicationConsent:
       verificationStatus === "GPS_PHOTO" ? false : null,
@@ -1072,7 +1078,10 @@ export async function setRouteStopVisitPhoto(
   }
 
   const normalizedImageId = nullableString(imageId);
-  const normalizedImageUrl = nullableString(imageUrl);
+  const sourceImageUrl = nullableString(imageUrl);
+  const normalizedImageUrl = sourceImageUrl
+    ? normalizePlacePhotoImageUrl(sourceImageUrl)
+    : null;
 
   if (!normalizedImageId || !normalizedImageUrl) {
     throw new UserFacingError("저장할 인증 사진 정보가 올바르지 않아요.");

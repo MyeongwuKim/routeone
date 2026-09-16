@@ -20,6 +20,7 @@ import {
   moderatePlacePhoto,
   reportPlacePhoto,
 } from "./photoReport.service.js";
+import { normalizePlacePhotoImageUrl } from "../routes/route.shared.js";
 
 export const photoReportTypeDefs = gql`
   enum PlacePhotoReportReason {
@@ -166,6 +167,9 @@ export const photoReportResolvers = {
     },
   },
   PlacePhoto: {
+    imageUrl(parent: PlacePhoto) {
+      return normalizePlacePhotoImageUrl(parent.imageUrl);
+    },
     isMine(parent: PlacePhoto, _args: unknown, context: GraphQLContext) {
       return parent.userId === context.user?.id;
     },
@@ -185,6 +189,11 @@ export const photoReportResolvers = {
     },
   },
   RouteStop: {
+    verificationPhotoUrl(parent: { verificationPhotoUrl?: string | null }) {
+      return parent.verificationPhotoUrl
+        ? normalizePlacePhotoImageUrl(parent.verificationPhotoUrl)
+        : null;
+    },
     async verificationPhotoRecordId(
       parent: { id: string; verificationPhotoUrl?: string | null },
       _args: unknown,

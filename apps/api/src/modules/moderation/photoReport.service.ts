@@ -15,6 +15,7 @@ import type {
 } from "@prisma/client";
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import { deleteRouteVisitPhotoImages } from "../routes/routeVisitPhoto.service.js";
+import { normalizePlacePhotoImageUrl } from "../routes/route.shared.js";
 
 const MAX_REPORT_DETAILS_LENGTH = 500;
 const REPORTABLE_REASONS = new Set<PlacePhotoReportReason>([
@@ -172,7 +173,7 @@ export async function getPendingPhotoReportQueue(prisma: PrismaClient) {
     photoId: photo.id,
     reviewType: "PUBLICATION" as const,
     title: photo.title,
-    imageUrl: photo.imageUrl,
+    imageUrl: normalizePlacePhotoImageUrl(photo.imageUrl),
     thumbnailUrl: photo.thumbnailUrl ?? photo.imageUrl,
     status: photo.status,
     uploader: uploaderById.get(photo.userId) ?? null,
@@ -191,7 +192,9 @@ export async function getPendingPhotoReportQueue(prisma: PrismaClient) {
         photoId,
         reviewType: "REPORT" as const,
         title: photo?.title ?? latest.photoTitle,
-        imageUrl: photo?.imageUrl ?? latest.photoImageUrl,
+        imageUrl: normalizePlacePhotoImageUrl(
+          photo?.imageUrl ?? latest.photoImageUrl
+        ),
         thumbnailUrl:
           photo?.thumbnailUrl ?? latest.photoThumbnailUrl ?? latest.photoImageUrl,
         status: photo?.status ?? "DELETED",

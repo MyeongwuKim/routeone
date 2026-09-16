@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAccountUser } from "@/components/account/useAccountUser";
 import type { PlannedRouteDay } from "@/features/route-checkout/models/routePlanTypes";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -84,6 +86,8 @@ export function useDayRoutePopupController({
   readOnlyPosterAction,
 }: DayRoutePopupProps) {
   const appLanguage = useAppLanguageStore((state) => state.language);
+  const { isAuthenticated } = useAuthSession();
+  const { user } = useAccountUser();
   const text = useUiText();
   const navigate = useNavigate();
   const openModal = useUiModalStore((state) => state.openModal);
@@ -932,7 +936,10 @@ export function useDayRoutePopupController({
     !isRetrospectiveCompletion &&
     route.isMine &&
     Boolean(route.startedAt) &&
-    isTestAccountModeEnabled() &&
+    isAuthenticated &&
+    (isTestAccountModeEnabled() ||
+      user?.role === "OWNER" ||
+      user?.role === "REVIEWER") &&
     nativeBridge.runtime.isAvailable();
   const indoorTestTarget = isGpsTestEnabled
     ? sortedDays

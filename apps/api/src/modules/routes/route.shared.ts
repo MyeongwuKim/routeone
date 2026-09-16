@@ -147,6 +147,17 @@ function buildImageDeliveryVariantUrl(imageUrl: string, variant: string) {
   return nextUrl.toString();
 }
 
+function getPlacePhotoPublicVariantName() {
+  return process.env.CF_IMAGES_VARIANT?.trim() || "public";
+}
+
+export function normalizePlacePhotoImageUrl(imageUrl: string) {
+  return (
+    buildImageDeliveryVariantUrl(imageUrl, getPlacePhotoPublicVariantName()) ??
+    imageUrl
+  );
+}
+
 export function getImageDeliveryVariantName(imageUrl: string) {
   return parseImageDeliveryUrl(imageUrl)?.variant ?? null;
 }
