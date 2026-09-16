@@ -7,6 +7,7 @@ import type { PlaceSheetData } from "../hooks/usePlaceSheetData";
 import PhotoReportDialog from "@/features/photo-report/components/PhotoReportDialog";
 import ReportablePlacePhotoCard from "@/features/photo-report/components/ReportablePlacePhotoCard";
 import { usePlacePhotoReport } from "@/features/photo-report/hooks/usePlacePhotoReport";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import {
   ImageStripSkeleton,
 } from "./PlaceSheetPrimitives";
@@ -42,6 +43,7 @@ function PlaceSheetMediaSection({
   userPlacePhotos,
   userPlacePhotoViewerUrls,
 }: PlaceSheetMediaSectionProps) {
+  const { isAuthenticated } = useAuthSession();
   const officialImageStripRef = useRef<HTMLDivElement | null>(null);
   const userImageStripRef = useRef<HTMLDivElement | null>(null);
   const [reportPhotoId, setReportPhotoId] = useState<string | null>(null);
@@ -179,6 +181,7 @@ function PlaceSheetMediaSection({
                 photo={photo}
                 text={text}
                 alt={text.placeSheet.userPhotoAlt(selectedPlace.title, index + 1)}
+                canReport={isAuthenticated}
                 isUpdating={isUpdating}
                 onCancelReport={() => cancelReport(photo.id)}
                 onReport={() => setReportPhotoId(photo.id)}

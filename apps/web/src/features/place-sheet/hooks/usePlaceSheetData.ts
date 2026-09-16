@@ -294,8 +294,12 @@ export function usePlaceSheetData({
   });
 
   const placePhotosQuery = useQuery({
-    queryKey: ["place-photos", selectedPlaceKey],
-    enabled: isAuthenticated && isOpen && Boolean(selectedPlace),
+    queryKey: [
+      "place-photos",
+      selectedPlaceKey,
+      isAuthenticated ? "authenticated" : "guest",
+    ],
+    enabled: isOpen && Boolean(selectedPlace),
     queryFn: async () => {
       if (!selectedPlace) {
         throw new Error(text.placeSheet.selectedPlaceMissing);
@@ -506,7 +510,7 @@ export function usePlaceSheetData({
     detailRestDate,
     isConcentrationTrendLoading: concentrationTrendQuery.isFetching,
     isNearbyTouristLoading: nearbyTouristQuery.isFetching,
-    isPlacePhotosLoading: placePhotosQuery.isPending,
+    isPlacePhotosLoading: placePhotosQuery.isFetching,
     isRouteLoading: routeQuery.isFetching,
     isSelectedPlaceDetailReady,
     isTouristAttraction: selectedPlace ? isTouristPlace(selectedPlace) : false,

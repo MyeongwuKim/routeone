@@ -13,6 +13,7 @@ import { MdFlag } from "react-icons/md";
 import type { PlacePhotosQuery } from "@/generated/graphql";
 import PhotoReportDialog from "@/features/photo-report/components/PhotoReportDialog";
 import { usePlacePhotoReport } from "@/features/photo-report/hooks/usePlacePhotoReport";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import type { UiText } from "@/lib/uiText";
 import type { PlaceImageViewerTarget } from "../placeSheetModel";
@@ -32,6 +33,7 @@ function PlaceImageViewer({
   text,
   userPhotos,
 }: PlaceImageViewerProps) {
+  const { isAuthenticated } = useAuthSession();
   const imageSwipeStartXRef = useRef<number | null>(null);
   const [reportPhotoId, setReportPhotoId] = useState<string | null>(null);
   const { cancelReport, isSubmitting, isUpdating, submitReport } =
@@ -135,7 +137,7 @@ function PlaceImageViewer({
         <div className="mt-4 rounded-full bg-slate-900/45 px-3 py-1 text-xs font-bold text-white shadow-sm backdrop-blur">
           {target.index + 1} / {target.imageUrls.length}
         </div>
-        {activeUserPhoto && !activeUserPhoto.isMine ? (
+        {isAuthenticated && activeUserPhoto && !activeUserPhoto.isMine ? (
           isReportedByMe ? (
             <div className="relative z-20 mt-3 flex justify-center">
               <button

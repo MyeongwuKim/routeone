@@ -16,6 +16,7 @@ type PlacePhoto = PlacePhotosQuery["placePhotos"][number];
 
 type ReportablePlacePhotoCardProps = {
   alt: string;
+  canReport: boolean;
   isUpdating: boolean;
   onCancelReport: () => void;
   onOpen: () => void;
@@ -26,6 +27,7 @@ type ReportablePlacePhotoCardProps = {
 
 function ReportablePlacePhotoCard({
   alt,
+  canReport,
   isUpdating,
   onCancelReport,
   onOpen,
@@ -67,7 +69,7 @@ function ReportablePlacePhotoCard({
           <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-slate-950/60 px-2 py-1 text-[10px] font-black text-white backdrop-blur">
             {text.placeSheet.visitPhoto}
           </span>
-          {!photo.isMine ? (
+          {canReport && !photo.isMine ? (
             <button
               type="button"
               aria-label={text.photoReport.report}

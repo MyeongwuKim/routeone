@@ -773,8 +773,9 @@ export const routeResolvers = {
       args: PlacePhotosArgs,
       context: GraphQLContext
     ) {
-      const user = requireUser(context);
-      const blockedUserIds = await getBlockedUserIds(context.prisma, user.id);
+      const blockedUserIds = context.user
+        ? await getBlockedUserIds(context.prisma, context.user.id)
+        : [];
       return getPlacePhotos(context.prisma, args.place, {
         limit: args.limit,
         blockedUserIds,
