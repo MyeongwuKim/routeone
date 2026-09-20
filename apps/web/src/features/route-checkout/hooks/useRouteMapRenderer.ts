@@ -204,7 +204,7 @@ export function useRouteMapRenderer({
       routeMap = new naverMaps.Map(container, {
         center: new naverMaps.LatLng(routePoints[0].lat, routePoints[0].lng),
         zoom: 11,
-        minZoom: 7,
+        minZoom: 5,
         mapTypeId: naverMaps.MapTypeId.NORMAL,
         zoomControl: false,
         draggable: true,

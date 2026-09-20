@@ -5,9 +5,13 @@ import {
 
 export type RouteOnePosition = NativePosition;
 
-export function getCurrentPosition({ forceRefresh = false } = {}) {
+export function getCurrentPosition({
+  forceRefresh = false,
+  useRealPosition = false,
+} = {}) {
   const nativePositionRequest = nativeBridge.location.getCurrentPosition({
     forceRefresh,
+    useRealPosition,
   });
 
   if (nativePositionRequest) {

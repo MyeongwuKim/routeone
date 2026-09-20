@@ -75,10 +75,10 @@ function fitPreviewMapToBounds(
 
   try {
     previewMap.fitBounds(bounds, {
-      top: 24,
-      right: 24,
-      bottom: 40,
-      left: 24,
+      top: 40,
+      right: 32,
+      bottom: 48,
+      left: 32,
     });
   } catch {
     previewMap.fitBounds(bounds);
@@ -174,7 +174,7 @@ function PlaceDirectionsContent({
       previewMap = new naverMaps.Map(container, {
         center: new naverMaps.LatLng(selectedPlace.lat, selectedPlace.lng),
         zoom: 11,
-        minZoom: 9,
+        minZoom: 5,
         mapTypeId: naverMaps.MapTypeId.NORMAL,
         ...getNaverMapThemeOptions(isDarkMode),
         draggable: false,

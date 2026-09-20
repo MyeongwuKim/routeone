@@ -8,6 +8,7 @@ import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useCurrentPositionStore } from "@/stores/currentPositionStore";
+import { getCurrentPosition } from "@/lib/currentPosition";
 import { useUiText } from "@/lib/uiText";
 import { resolvePlaceVerificationPolicy } from "@/lib/placeVerificationPolicy";
 import { nativeBridge } from "@/native-bridge";
@@ -862,17 +863,30 @@ export function useDayRoutePopupController({
     });
   };
 
-  const handleOpenStopDirections = (
+  const handleOpenStopDirections = async (
     routeDay: MyRouteDay,
     stop: MyRouteStop
   ) => {
     const startLocation = getDayRouteStartLocation(routeDay, route.startLocation);
+    let realCurrentLocation: { lat: number; lng: number } | null = null;
+
+    if (gpsTestLocation || isTestAccountModeEnabled()) {
+      try {
+        realCurrentLocation = await getCurrentPosition({
+          forceRefresh: true,
+          useRealPosition: true,
+        });
+      } catch {
+        showToast(text.placeSheet.currentLocationUnavailableTitle);
+        return;
+      }
+    }
 
     openSheet(createMapSheetPlaceFromRouteStop(stop), {
       mode: "directions-popup",
-      directionOrigin: gpsTestLocation
+      directionOrigin: realCurrentLocation
         ? {
-            coordinates: gpsTestLocation,
+            coordinates: realCurrentLocation,
             label: text.placeSheet.currentLocation,
             isCurrentLocation: true,
           }
