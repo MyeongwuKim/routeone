@@ -405,9 +405,6 @@ export type UiText = {
     currentLocation: string;
     focusCurrentLocationAria: string;
     currentLocationUnavailable: string;
-    testLocationApplied: (region: string) => string;
-    testLocationRestored: string;
-    testLocationFailed: string;
   };
   notifications: {
     title: string;
@@ -1885,10 +1882,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "현재 위치",
       focusCurrentLocationAria: "현재 위치로 이동",
       currentLocationUnavailable: "현재 위치를 확인하지 못했어요.",
-      testLocationApplied: (region) =>
-        `테스트 위치를 ${region} 중심으로 이동했어요.`,
-      testLocationRestored: "테스트 위치를 끄고 실제 GPS로 돌아왔어요.",
-      testLocationFailed: "테스트 위치를 적용하지 못했어요.",
     },
     notifications: {
       title: "알림함",
@@ -3561,10 +3554,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "Current location",
       focusCurrentLocationAria: "Move to current location",
       currentLocationUnavailable: "Could not find your current location.",
-      testLocationApplied: (region) =>
-        `Test location moved to the center of ${region}.`,
-      testLocationRestored: "Test location is off. Using real GPS.",
-      testLocationFailed: "Could not update the test location.",
     },
     notifications: {
       title: "Notifications",

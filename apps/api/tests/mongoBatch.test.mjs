@@ -59,13 +59,19 @@ test("upserts keep insert defaults separate and encode IDs and dates without int
 
 test("duplicate bulk upserts retry the whole transaction, while ordinary failures do not", async () => {
   let attempts = 0;
-  const prisma = { $transaction: async operation => {
+  const transactionOptions = [];
+  const prisma = { $transaction: async (operation, options) => {
     attempts++;
+    transactionOptions.push(options);
     return operation({ $runCommandRaw: async () => attempts === 1
       ? { ok: 1, writeErrors: [{ code: 11000 }] } : { ok: 1, n: 1 } });
   } };
   await runTransactionWithRetry(prisma, tx => runMongoUpdates(tx, "PlacePhoto", [update]));
   assert.equal(attempts, 2);
+  assert.deepEqual(transactionOptions, [
+    { maxWait: 5_000, timeout: 20_000 },
+    { maxWait: 5_000, timeout: 20_000 },
+  ]);
   attempts = 0;
   const broken = { $transaction: async () => { attempts++; throw new Error("not retryable"); } };
   await assert.rejects(runTransactionWithRetry(broken, () => {}), /not retryable/);

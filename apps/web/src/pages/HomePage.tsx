@@ -34,7 +34,6 @@ import {
   useHomeSearch,
   useHomeSearchResults,
 } from "@/features/home/useHomeSearch";
-import { useTestRegionLocation } from "@/features/home/useTestRegionLocation";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { useLoginRequest } from "@/hooks/useLoginRequest";
 import { useUiText } from "@/lib/uiText";
@@ -83,12 +82,6 @@ function HomePage() {
   const showLoading = useUiLoadingStore((state) => state.showLoading);
   const hideLoading = useUiLoadingStore((state) => state.hideLoading);
   const showToast = useUiToastStore((state) => state.showToast);
-  const {
-    activePosition: activeTestRegionPosition,
-    applyRegionPosition,
-    clearRegionPosition,
-    isEnabled: isTestRegionLocationEnabled,
-  } = useTestRegionLocation();
   const appendTarget = useRouteEditFlowStore((state) => state.appendTarget);
   const clearAppendTarget = useRouteEditFlowStore(
     (state) => state.clearAppendTarget
@@ -188,13 +181,6 @@ function HomePage() {
           topRank: rank ?? null,
         }),
         {
-          directionOrigin: activeTestRegionPosition
-            ? {
-                coordinates: activeTestRegionPosition,
-                label: text.placeSheet.currentLocation,
-                isCurrentLocation: true,
-              }
-            : undefined,
           fallbackDirectionOrigin: {
             coordinates: selectedRegionForOrigin.center,
             label: text.placeSheet.referenceLocation(selectedRegionOriginLabel),
@@ -205,7 +191,6 @@ function HomePage() {
       );
     },
     [
-      activeTestRegionPosition,
       openSheet,
       selectedSigunguCode,
       serviceArea,
@@ -350,48 +335,11 @@ function HomePage() {
   const handleSelectRegion = useCallback(
     (sigunguCode: string) => {
       selectRegion(sigunguCode);
-
-      const region = serviceArea.regions.find(
-        (candidate) => candidate.sigunguCode === sigunguCode
-      );
-      if (!region || !isTestRegionLocationEnabled) {
-        return;
-      }
-
-      const regionLabel = text.labels.regions[region.label] ?? region.label;
-
-      void applyRegionPosition(region)
-        .then((didApply) => {
-          if (didApply) {
-            showToast(text.home.testLocationApplied(regionLabel));
-          }
-        })
-        .catch(() => {
-          showToast(text.home.testLocationFailed);
-        });
     },
-    [
-      applyRegionPosition,
-      isTestRegionLocationEnabled,
-      selectRegion,
-      serviceArea.regions,
-      showToast,
-      text,
-    ]
+    [selectRegion]
   );
   const handleFocusCurrentLocation = useCallback(() => {
     const focus = async () => {
-      let didClearTestLocation = false;
-
-      if (isTestRegionLocationEnabled) {
-        try {
-          didClearTestLocation = await clearRegionPosition();
-        } catch {
-          showToast(text.home.testLocationFailed);
-          return;
-        }
-      }
-
       const nextLocation = await refreshCurrentLocation({
         forceRefresh: true,
       });
@@ -420,17 +368,11 @@ function HomePage() {
         sigunguCode: nextRegion.sigunguCode,
       });
       selectRegion(nextRegion.sigunguCode);
-
-      if (didClearTestLocation) {
-        showToast(text.home.testLocationRestored);
-      }
     };
 
     void focus();
   }, [
     boundaryBySigunguCode,
-    clearRegionPosition,
-    isTestRegionLocationEnabled,
     refreshCurrentLocation,
     selectRegion,
     serviceArea,
@@ -460,7 +402,7 @@ function HomePage() {
     pendingCurrentLocationFocus,
     selectedSigunguCode,
   ]);
-  const homeOriginLocation = activeTestRegionPosition ?? currentLocation;
+  const homeOriginLocation = currentLocation;
   const routeStartLocation = homeOriginLocation
     ? {
         lat: homeOriginLocation.lat,
@@ -704,13 +646,6 @@ function HomePage() {
         onClose={closeSavedList}
         onSelectPlace={(place) => {
           openSheet(place, {
-            directionOrigin: activeTestRegionPosition
-              ? {
-                  coordinates: activeTestRegionPosition,
-                  label: text.placeSheet.currentLocation,
-                  isCurrentLocation: true,
-                }
-              : undefined,
             fallbackDirectionOrigin: selectedRegionDirectionOrigin,
             mode: "full-popup",
           });
