@@ -972,6 +972,7 @@ export type UiText = {
     operatingHours: string;
     closedDays: string;
     contact: string;
+    dataSourceAttribution: string;
     mapPreparing: string;
     address: string;
     routeFromCurrentLocation: (duration: string) => string;
@@ -2562,6 +2563,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       operatingHours: "이용시간",
       closedDays: "휴무일",
       contact: "문의",
+      dataSourceAttribution: "출처: ⓒ한국관광공사",
       mapPreparing: "지도 준비 중",
       address: "주소",
       routeFromCurrentLocation: (duration) =>
@@ -4261,6 +4263,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       operatingHours: "Hours",
       closedDays: "Closed Days",
       contact: "Contact",
+      dataSourceAttribution: "Source: ⓒ Korea Tourism Organization",
       mapPreparing: "Preparing map",
       address: "Address",
       routeFromCurrentLocation: (duration) =>

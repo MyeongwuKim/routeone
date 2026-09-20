@@ -493,6 +493,9 @@ function PlaceBottomSheet() {
               <p className={`${festivalPeriod ? "mt-3" : "mt-4"} text-sm leading-6 text-slate-600`}>
                 {selectedPlace.address}
               </p>
+              <p className="mt-1 text-[11px] font-semibold text-slate-400 dark:text-slate-400">
+                {text.placeSheet.dataSourceAttribution}
+              </p>
 
               <PlaceSheetMediaSection
                 activeImageList={activeImageList}

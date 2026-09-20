@@ -59,9 +59,7 @@ import { nativeBridge } from "@/native-bridge";
 import MyInfoPage from "@/pages/MyInfoPage";
 import { isTestServiceAreaEnabled } from "@/stores/serviceAreaStore";
 
-type PreloadableLazyComponent<
-  T extends ComponentType<Record<string, never>>,
-> =
+type PreloadableLazyComponent<T extends ComponentType<Record<string, never>>> =
   LazyExoticComponent<T> & {
     preload: () => Promise<{ default: T }>;
   };
@@ -143,9 +141,7 @@ function RoutePageShell({
         description={description}
         action={action}
       />
-      <div className="min-h-0 flex-1">
-        {children}
-      </div>
+      <div className="min-h-0 flex-1">{children}</div>
     </section>
   );
 }
@@ -585,9 +581,12 @@ function useRoutePreload() {
     }
 
     if (typeof window.requestIdleCallback === "function") {
-      const idleCallbackId = window.requestIdleCallback(preloadSecondaryRoutes, {
-        timeout: 1800,
-      });
+      const idleCallbackId = window.requestIdleCallback(
+        preloadSecondaryRoutes,
+        {
+          timeout: 1800,
+        }
+      );
 
       return () => {
         window.cancelIdleCallback(idleCallbackId);
@@ -635,18 +634,16 @@ function AuthSessionTracker() {
       () => void refreshSession(),
       AUTH_SESSION_REFRESH_INTERVAL_MS
     );
-    const unsubscribeAppActive =
-      nativeBridge.events.subscribeAppActive(handleNativeAppActive);
+    const unsubscribeAppActive = nativeBridge.events.subscribeAppActive(
+      handleNativeAppActive
+    );
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       isActive = false;
       window.clearInterval(intervalId);
       unsubscribeAppActive();
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange
-      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [isAuthenticated, location.pathname]);
 
@@ -798,7 +795,10 @@ function AppRouter() {
             />
             <Route
               path="/me/feedback"
-              element={withRouteSuspense(<FeedbackPage />, <FeedbackSkeleton />)}
+              element={withRouteSuspense(
+                <FeedbackPage />,
+                <FeedbackSkeleton />
+              )}
             />
             <Route
               path="/me/photo-reports"
