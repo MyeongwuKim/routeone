@@ -868,31 +868,27 @@ export function useDayRoutePopupController({
     stop: MyRouteStop
   ) => {
     const startLocation = getDayRouteStartLocation(routeDay, route.startLocation);
-    let realCurrentLocation: { lat: number; lng: number } | null = null;
+    let realCurrentLocation: { lat: number; lng: number };
 
-    if (gpsTestLocation || isTestAccountModeEnabled()) {
-      try {
-        realCurrentLocation = await getCurrentPosition({
-          forceRefresh: true,
-          useRealPosition: true,
-        });
-      } catch {
-        showToast(text.placeSheet.currentLocationUnavailableTitle);
-        return;
-      }
+    try {
+      realCurrentLocation = await getCurrentPosition({
+        forceRefresh: true,
+        useRealPosition: true,
+      });
+    } catch {
+      showToast(text.placeSheet.currentLocationUnavailableTitle);
+      return;
     }
 
     openSheet(createMapSheetPlaceFromRouteStop(stop), {
       mode: "directions-popup",
-      directionOrigin: realCurrentLocation
-        ? {
-            coordinates: realCurrentLocation,
-            label: text.placeSheet.currentLocation,
-            isCurrentLocation: true,
-          }
-        : undefined,
+      directionOrigin: {
+        coordinates: realCurrentLocation,
+        label: text.placeSheet.currentLocation,
+        isCurrentLocation: true,
+      },
       fallbackDirectionOrigin:
-        !gpsTestLocation && startLocation
+        startLocation
           ? {
               coordinates: {
                 lat: startLocation.lat,
