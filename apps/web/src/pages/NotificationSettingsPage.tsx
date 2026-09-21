@@ -1,4 +1,12 @@
-import { useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MdAccessTime,
@@ -6,6 +14,7 @@ import {
   MdCelebration,
   MdCheck,
   MdExpandMore,
+  MdInfoOutline,
   MdLocationOn,
   MdOutlineRoute,
 } from "react-icons/md";
@@ -89,38 +98,232 @@ function FestivalNotificationSettingRow({
   status: string;
 }) {
   const text = useUiText();
+  const noticeId = useId();
+  const [isNoticeOpen, setIsNoticeOpen] = useState(false);
+  const noticeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const noticeRef = useRef<HTMLElement | null>(null);
+  const [noticePosition, setNoticePosition] = useState<{
+    arrowLeft: number;
+    left: number;
+    placement: "top" | "bottom";
+    top: number;
+    width: number;
+  } | null>(null);
+
+  const handleSettingOpen = () => {
+    setNoticePosition(null);
+    setIsNoticeOpen(false);
+    onOpen();
+  };
+
+  const handleNoticeToggle = () => {
+    if (isNoticeOpen) {
+      setNoticePosition(null);
+    }
+
+    setIsNoticeOpen((current) => !current);
+  };
+
+  useLayoutEffect(() => {
+    if (!isNoticeOpen) {
+      return;
+    }
+
+    const updatePosition = () => {
+      const button = noticeButtonRef.current;
+      const notice = noticeRef.current;
+
+      if (!button || !notice) {
+        return;
+      }
+
+      const viewportMargin = 12;
+      const gap = 10;
+      const buttonRect = button.getBoundingClientRect();
+      const width = Math.min(340, window.innerWidth - viewportMargin * 2);
+      const height = notice.offsetHeight;
+      const spaceAbove = buttonRect.top - viewportMargin;
+      const spaceBelow = window.innerHeight - buttonRect.bottom - viewportMargin;
+      const placement =
+        (expanded && spaceAbove >= height + gap) ||
+        (spaceBelow < height + gap && spaceAbove > spaceBelow)
+          ? "top"
+          : "bottom";
+      const centeredLeft =
+        buttonRect.left + buttonRect.width / 2 - width / 2;
+      const left = Math.max(
+        viewportMargin,
+        Math.min(centeredLeft, window.innerWidth - viewportMargin - width)
+      );
+      const top =
+        placement === "top"
+          ? buttonRect.top - height - gap
+          : buttonRect.bottom + gap;
+      const arrowLeft = Math.max(
+        18,
+        Math.min(
+          buttonRect.left + buttonRect.width / 2 - left - 6,
+          width - 30
+        )
+      );
+
+      setNoticePosition({ arrowLeft, left, placement, top, width });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [expanded, isNoticeOpen]);
+
+  useEffect(() => {
+    if (!isNoticeOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !noticeButtonRef.current?.contains(event.target) &&
+        !noticeRef.current?.contains(event.target)
+      ) {
+        setNoticePosition(null);
+        setIsNoticeOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setNoticePosition(null);
+        setIsNoticeOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isNoticeOpen]);
 
   return (
-    <button
-      type="button"
-      aria-controls="festival-region-settings"
-      aria-expanded={expanded}
-      disabled={disabled}
-      onClick={onOpen}
-      className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-slate-800/70"
-    >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/10 dark:text-brand-200">
-        <MdCelebration aria-hidden="true" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-bold text-slate-900 dark:text-white">
-          {text.notificationSettings.festivalTitle}
-        </span>
-        <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500 dark:text-slate-300">
-          {description}
-        </span>
-      </span>
-      <span className="flex shrink-0 items-center gap-1.5">
-        <span className="rounded-full bg-brand-50 px-2 py-1 text-[11px] font-black text-brand-700 dark:bg-brand-400/10 dark:text-brand-200">
+    <div className="relative">
+      <div className="flex items-center py-4 transition hover:bg-slate-50 dark:hover:bg-slate-800/70">
+        <button
+          type="button"
+          aria-controls="festival-region-settings"
+          aria-expanded={expanded}
+          disabled={disabled}
+          onClick={handleSettingOpen}
+          className="flex min-w-0 flex-1 items-center gap-3 pl-4 pr-2 text-left disabled:cursor-wait disabled:opacity-60"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/10 dark:text-brand-200">
+            <MdCelebration aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-slate-900 dark:text-white">
+              {text.notificationSettings.festivalTitle}
+            </span>
+            <span className="mt-1 block truncate whitespace-nowrap text-xs font-semibold leading-5 text-slate-500 dark:text-slate-300">
+              {description}
+            </span>
+          </span>
+        </button>
+        <button
+          ref={noticeButtonRef}
+          type="button"
+          aria-controls={noticeId}
+          aria-expanded={isNoticeOpen}
+          aria-label={text.notificationSettings.festivalNoticeButtonAria}
+          onClick={handleNoticeToggle}
+          className={`flex size-8 shrink-0 items-center justify-center rounded-full text-lg transition ${
+            isNoticeOpen
+              ? "bg-brand-600 text-white"
+              : "text-brand-600 hover:bg-brand-50 dark:text-brand-200 dark:hover:bg-brand-400/10"
+          }`}
+        >
+          <MdInfoOutline aria-hidden="true" />
+        </button>
+        <span className="ml-1.5 shrink-0 whitespace-nowrap rounded-full bg-brand-50 px-2 py-1 text-[11px] font-black text-brand-700 dark:bg-brand-400/10 dark:text-brand-200">
           {status}
         </span>
-        <MdExpandMore
-          className={`text-xl text-slate-400 transition-transform duration-300 motion-reduce:transition-none ${
-            expanded ? "rotate-180" : ""
-          }`}
-        />
-      </span>
-    </button>
+        <button
+          type="button"
+          aria-controls="festival-region-settings"
+          aria-expanded={expanded}
+          aria-label={text.notificationSettings.regionSectionTitle}
+          disabled={disabled}
+          onClick={handleSettingOpen}
+          className="mr-2 flex size-8 shrink-0 items-center justify-center rounded-full text-xl text-slate-400 transition hover:bg-brand-50 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-brand-400/10"
+        >
+          <MdExpandMore
+            aria-hidden="true"
+            className={`transition-transform duration-300 motion-reduce:transition-none ${
+              expanded ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+      </div>
+
+      {isNoticeOpen
+        ? createPortal(
+            <aside
+              ref={noticeRef}
+              id={noticeId}
+              role="tooltip"
+              style={
+                noticePosition
+                  ? {
+                      left: noticePosition.left,
+                      top: noticePosition.top,
+                      width: noticePosition.width,
+                    }
+                  : {
+                      left: 0,
+                      top: 0,
+                      visibility: "hidden",
+                      width: Math.min(340, window.innerWidth - 24),
+                    }
+              }
+              className="fixed z-[3450] rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-3 text-left shadow-xl dark:border-brand-400/30 dark:bg-[#0b2b28]"
+            >
+              {noticePosition ? (
+                <span
+                  aria-hidden="true"
+                  style={{ left: noticePosition.arrowLeft }}
+                  className={`absolute size-3 rotate-45 border-brand-200 bg-brand-50 dark:border-brand-400/30 dark:bg-[#0b2b28] ${
+                    noticePosition.placement === "top"
+                      ? "-bottom-1.5 border-b border-r"
+                      : "-top-1.5 border-l border-t"
+                  }`}
+                />
+              ) : null}
+              <p className="text-xs font-black text-brand-800 dark:text-brand-100">
+                {text.notificationSettings.festivalNoticeTitle}
+              </p>
+              <ul className="mt-2 space-y-1 text-xs font-semibold leading-5 text-slate-600 dark:text-slate-300">
+                {text.notificationSettings.festivalNoticeItems.map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <span
+                      aria-hidden="true"
+                      className="text-brand-600 dark:text-brand-200"
+                    >
+                      •
+                    </span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </aside>,
+            document.body
+          )
+        : null}
+    </div>
   );
 }
 
@@ -303,11 +506,11 @@ function NotificationSettingsPage() {
             type="button"
             aria-label={text.common.backToMyInfo}
             onClick={() => navigate("/me")}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700"
+            className="inline-flex size-10 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700"
           >
             <MdArrowBack />
           </button>
-          <h1 className="text-lg font-bold">
+          <h1 className="text-base font-bold leading-6">
             {text.routeShell.notificationSettingsTitle}
           </h1>
         </header>
@@ -325,15 +528,15 @@ function NotificationSettingsPage() {
           type="button"
           aria-label={text.common.backToMyInfo}
           onClick={() => navigate("/me")}
-          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200"
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200"
         >
           <MdArrowBack />
         </button>
         <div className="min-w-0">
-          <p className="text-xs font-black text-brand-700 dark:text-brand-200">
+          <p className="text-xs font-black leading-4 text-brand-700 dark:text-brand-200">
             {text.routeShell.appSettings}
           </p>
-          <h1 className="truncate text-lg font-bold text-slate-900 dark:text-white">
+          <h1 className="truncate text-base font-bold leading-6 text-slate-900 dark:text-white">
             {text.routeShell.notificationSettingsTitle}
           </h1>
         </div>

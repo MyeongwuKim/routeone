@@ -22,13 +22,13 @@ function FeedbackPage() {
           type="button"
           aria-label={text.common.backToMyInfo}
           onClick={() => navigate("/me")}
-          className="inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200"
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200"
         >
           <MdArrowBack aria-hidden="true" />
         </button>
         <div className="min-w-0">
-          <p className="text-xs font-black text-brand-700 dark:text-brand-200">{text.routeShell.appSettings}</p>
-          <h1 className="text-lg font-bold text-slate-900 dark:text-white">{feedback.title}</h1>
+          <p className="text-xs font-black leading-4 text-brand-700 dark:text-brand-200">{text.routeShell.appSettings}</p>
+          <h1 className="text-base font-bold leading-6 text-slate-900 dark:text-white">{feedback.title}</h1>
         </div>
       </header>
 

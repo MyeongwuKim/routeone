@@ -327,6 +327,9 @@ export type UiText = {
     festivalOnDescription: (regions: string) => string;
     festivalOffDescription: string;
     festivalStatus: (count: number) => string;
+    festivalNoticeButtonAria: string;
+    festivalNoticeTitle: string;
+    festivalNoticeItems: string[];
     routeStartTitle: string;
     routeStartDescription: string;
     routeReviewTitle: string;
@@ -1785,9 +1788,16 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       sectionTitle: "받을 알림",
       festivalTitle: "축제 알림",
       festivalOnDescription: (regions) => `${regions} 축제 소식 받기`,
-      festivalOffDescription: "지역을 선택하면 축제 소식을 받을 수 있어요",
+      festivalOffDescription: "지역을 선택해 축제 소식 받기",
       festivalStatus: (count) =>
         count > 0 ? `${count}곳 알림 중` : "꺼짐",
+      festivalNoticeButtonAria: "축제 알림 발송 조건 보기",
+      festivalNoticeTitle: "축제 알림은 이렇게 보내요",
+      festivalNoticeItems: [
+        "매일 오전 9시부터 오후 9시 전까지 발송해요.",
+        "토요일과 일요일에도 같은 기준으로 발송해요.",
+        "선택한 지역에 알릴 축제가 있을 때 하루 최대 한 번 보내요.",
+      ],
       routeStartTitle: "일정 시작 알림",
       routeStartDescription:
         "각 DAY 시작 1시간 전과 미시작 시 한 번 더 안내",
@@ -1798,8 +1808,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       routeArrivalDescription:
         "앱이 닫혀 있어도 다음 장소 유형에 맞는 거리에서 도착 알림",
       regionSectionTitle: "축제 알림 지역",
-      regionSectionDescription:
-        "최대 2곳까지 선택할 수 있어요. 선택하지 않으면 알림이 꺼져요.",
+      regionSectionDescription: "최대 2곳 선택 · 미선택 시 알림 꺼짐",
       finishRegionSelection: "선택 완료",
       selectedRegionCount: (count) => `${count}/2곳 선택`,
       maxRegionToast: "축제 알림 지역은 최대 2곳까지 선택할 수 있어요.",
@@ -3458,6 +3467,13 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         count > 0
           ? `${count} area${count === 1 ? "" : "s"} active`
           : "Off",
+      festivalNoticeButtonAria: "View festival alert delivery details",
+      festivalNoticeTitle: "When festival alerts are sent",
+      festivalNoticeItems: [
+        "Alerts are sent daily from 9 AM until before 9 PM.",
+        "The same schedule applies on Saturdays and Sundays.",
+        "You may receive up to one alert per day when matching festivals are available.",
+      ],
       routeStartTitle: "Schedule Start Alerts",
       routeStartDescription:
         "An alert 1 hour before each DAY and one follow-up if it has not started",

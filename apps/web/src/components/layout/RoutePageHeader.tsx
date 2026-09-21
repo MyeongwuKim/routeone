@@ -14,7 +14,7 @@ type RoutePageHeaderProps = {
 function RoutePageHeader({ icon, title, description, action }: RoutePageHeaderProps) {
   return (
     <div className="rounded-2xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40">
-      <div className="flex items-center gap-3">
+      <div className="flex min-h-11 items-center gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
           {icon}
         </span>

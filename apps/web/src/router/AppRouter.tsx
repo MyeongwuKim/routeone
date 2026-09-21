@@ -36,6 +36,7 @@ import {
   MdOutlineRoute,
   MdPhotoCamera,
   MdPhotoLibrary,
+  MdPolicy,
 } from "react-icons/md";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import LoginRequiredCard from "@/components/auth/LoginRequiredCard";
@@ -298,15 +299,15 @@ function MyInfoSubpageFallbackHeader({
         type="button"
         aria-label={text.common.backToMyInfo}
         onClick={() => navigate("/me")}
-        className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
+        className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
       >
         <MdArrowBack />
       </button>
       <div className="min-w-0">
-        <p className="text-xs font-black text-brand-700 dark:text-brand-200">
+        <p className="text-xs font-black leading-4 text-brand-700 dark:text-brand-200">
           {eyebrow}
         </p>
-        <h1 className="truncate text-lg font-bold text-slate-900 dark:text-white">
+        <h1 className="truncate text-base font-bold leading-6 text-slate-900 dark:text-white">
           {title}
         </h1>
       </div>
@@ -540,6 +541,24 @@ function AppInfoLazyFallback() {
           ))}
         </section>
       ) : null}
+
+      <section className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
+        <div className="border-b border-brand-50 px-4 py-3 dark:border-brand-400/15">
+          <p className="text-xs font-black text-brand-700 dark:text-brand-200">
+            {text.appInfo.legalSection}
+          </p>
+        </div>
+        <div className="flex w-full items-center gap-3 px-4 py-3 text-left">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-lg text-brand-700">
+            <MdPolicy />
+          </span>
+          <span className="min-w-0 flex-1 text-sm font-semibold text-slate-700">
+            {text.appInfo.privacyPolicy}
+          </span>
+          <span className="skeleton-shimmer h-3 w-32 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700" />
+          <MdChevronRight className="shrink-0 text-lg text-slate-400" />
+        </div>
+      </section>
     </section>
   );
 }
