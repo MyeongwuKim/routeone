@@ -30,7 +30,19 @@ import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { useEffectiveServiceArea } from "@/stores/serviceAreaStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
+import { useUiLoadingStore } from "@/stores/uiLoadingStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
+
+const SESSION_ACTION_MIN_LOADING_MS = 500;
+
+/** 작업이 빠르게 끝나도 사용자가 세션 처리 상태를 인지할 수 있도록 최소 표시 시간을 보장한다. */
+async function waitForSessionLoading(startedAt: number) {
+  const remaining = SESSION_ACTION_MIN_LOADING_MS - (Date.now() - startedAt);
+
+  if (remaining > 0) {
+    await new Promise((resolve) => window.setTimeout(resolve, remaining));
+  }
+}
 
 function AccountActionRow({
   icon,
@@ -38,6 +50,7 @@ function AccountActionRow({
   description,
   tone = "default",
   disabled = false,
+  loading = false,
   onClick,
 }: {
   icon: ReactNode;
@@ -45,6 +58,7 @@ function AccountActionRow({
   description: string;
   tone?: "default" | "danger";
   disabled?: boolean;
+  loading?: boolean;
   onClick: () => void;
 }) {
   const isDanger = tone === "danger";
@@ -52,6 +66,7 @@ function AccountActionRow({
   return (
     <button
       type="button"
+      aria-busy={loading}
       disabled={disabled}
       onClick={onClick}
       className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-slate-50 active:scale-[0.99] disabled:cursor-wait disabled:opacity-50 dark:hover:bg-slate-800/70"
@@ -75,11 +90,18 @@ function AccountActionRow({
           {description}
         </span>
       </span>
-      <MdChevronRight
-        className={`shrink-0 text-2xl ${
-          isDanger ? "text-rose-300" : "text-slate-300"
-        }`}
-      />
+      {loading ? (
+        <span
+          aria-hidden="true"
+          className="size-5 shrink-0 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600"
+        />
+      ) : (
+        <MdChevronRight
+          className={`shrink-0 text-2xl ${
+            isDanger ? "text-rose-300" : "text-slate-300"
+          }`}
+        />
+      )}
     </button>
   );
 }
@@ -91,6 +113,8 @@ function MyAccountPage() {
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
   const openModal = useUiModalStore((state) => state.openModal);
+  const showLoading = useUiLoadingStore((state) => state.showLoading);
+  const hideLoading = useUiLoadingStore((state) => state.hideLoading);
   const clearAuthUser = useAuthUserStore((state) => state.clearUser);
   const resetHomeForArea = useHomeExploreStore(
     (state) => state.resetForArea
@@ -99,10 +123,11 @@ function MyAccountPage() {
   const clearAppendTarget = useRouteEditFlowStore(
     (state) => state.clearAppendTarget
   );
+  const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const { user, isLoading, retry } = useAccountUser();
-  const isBusy = isLoggingOut || isDeleting;
+  const isBusy = isSwitchingAccount || isLoggingOut || isDeleting;
 
   const clearNativeNotifications = async () => {
     await Promise.allSettled([
@@ -147,12 +172,23 @@ function MyAccountPage() {
       return;
     }
 
-    setIsLoggingOut(true);
+    setIsSwitchingAccount(true);
+    const loadingStartedAt = Date.now();
+    showLoading({
+      title: text.account.switchingAccount,
+      description: text.account.switchAccountDescription,
+      footerText: "",
+      animation: "running",
+      blocking: true,
+    });
+
     const authToken = getAuthToken();
     const isNativeApp = nativeBridge.runtime.isAvailable();
 
     try {
       await unregisterPushDevice(authToken);
+      await waitForSessionLoading(loadingStartedAt);
+      hideLoading();
       finishSession(
         text.account.switchAccountToast,
         isNativeApp ? "/home" : "/login"
@@ -169,7 +205,8 @@ function MyAccountPage() {
         error instanceof Error ? error.message : error
       );
       showToast(text.account.sessionEndError, 3000);
-      setIsLoggingOut(false);
+      hideLoading();
+      setIsSwitchingAccount(false);
     }
   };
 
@@ -179,10 +216,21 @@ function MyAccountPage() {
     }
 
     setIsLoggingOut(true);
+    const loadingStartedAt = Date.now();
+    showLoading({
+      title: text.account.loggingOut,
+      description: text.account.logoutDescription,
+      footerText: "",
+      animation: "running",
+      blocking: true,
+    });
+
     const authToken = getAuthToken();
 
     try {
       await unregisterPushDevice(authToken);
+      await waitForSessionLoading(loadingStartedAt);
+      hideLoading();
       finishSession(text.myInfo.logoutToast);
     } catch (error) {
       console.warn(
@@ -190,6 +238,7 @@ function MyAccountPage() {
         error instanceof Error ? error.message : error
       );
       showToast(text.account.sessionEndError, 3000);
+      hideLoading();
       setIsLoggingOut(false);
     }
   };
@@ -271,9 +320,14 @@ function MyAccountPage() {
 
         <AccountActionRow
           icon={<MdSwitchAccount />}
-          title={text.account.switchAccount}
+          title={
+            isSwitchingAccount
+              ? text.account.switchingAccount
+              : text.account.switchAccount
+          }
           description={text.account.switchAccountDescription}
           disabled={isBusy}
+          loading={isSwitchingAccount}
           onClick={handleSwitchAccount}
         />
 
@@ -281,9 +335,10 @@ function MyAccountPage() {
 
         <AccountActionRow
           icon={<MdLogout />}
-          title={text.account.logout}
+          title={isLoggingOut ? text.account.loggingOut : text.account.logout}
           description={text.account.logoutDescription}
           disabled={isBusy}
+          loading={isLoggingOut}
           onClick={() => {
             void handleLogout();
           }}

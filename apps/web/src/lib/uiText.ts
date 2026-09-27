@@ -308,9 +308,11 @@ export type UiText = {
     providers: Record<AuthProvider, string>;
     managementSection: string;
     switchAccount: string;
+    switchingAccount: string;
     switchAccountDescription: string;
     switchAccountToast: string;
     logout: string;
+    loggingOut: string;
     logoutDescription: string;
     sessionEndError: string;
     deleteAccount: string;
@@ -1770,9 +1772,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       },
       managementSection: "계정 관리",
       switchAccount: "계정 전환",
+      switchingAccount: "계정 전환 중…",
       switchAccountDescription: "로그아웃하고 다른 계정으로 로그인",
       switchAccountToast: "다른 계정으로 로그인해 주세요.",
       logout: "로그아웃",
+      loggingOut: "로그아웃 중…",
       logoutDescription: "현재 계정에서 나가기",
       sessionEndError: "푸시 알림 해제에 실패했어요. 다시 시도해 주세요.",
       deleteAccount: "회원 탈퇴",
@@ -3444,9 +3448,11 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       },
       managementSection: "Account Management",
       switchAccount: "Switch Account",
+      switchingAccount: "Switching accounts…",
       switchAccountDescription: "Log out and sign in with another account",
       switchAccountToast: "Sign in with another account.",
       logout: "Log Out",
+      loggingOut: "Logging out…",
       logoutDescription: "Leave the current account",
       sessionEndError:
         "Couldn't turn off push notifications. Please try again.",

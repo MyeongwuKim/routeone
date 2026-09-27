@@ -30,6 +30,8 @@ export type AppLoadingPayload = {
   animation?: AppLoadingAnimation;
   /** 배경을 어둡게 가릴지 여부. 생략하면 true */
   dimmed?: boolean;
+  /** true이면 오버레이 아래의 탭·버튼 등 화면 조작을 차단한다. 생략하면 false */
+  blocking?: boolean;
 };
 
 type UiLoadingState = {
@@ -45,6 +47,8 @@ type UiLoadingState = {
   animation: AppLoadingAnimation;
   /** true이면 오버레이 뒤 화면을 어둡게 가린다. */
   dimmed: boolean;
+  /** true이면 로딩이 끝날 때까지 오버레이 아래의 화면 조작을 차단한다. */
+  blocking: boolean;
   /** 생략 필드에 기본값을 적용하고 전역 로딩 오버레이를 연다. */
   showLoading: (payload: AppLoadingPayload) => void;
   /** 열림 상태를 바꾸지 않고 전달한 표시 필드만 현재 값에 덮어쓴다. */
@@ -59,6 +63,7 @@ const DEFAULT_LOADING_STATE = {
   footerText: "감자 분석 모드 진행 중",
   animation: "generic" as AppLoadingAnimation,
   dimmed: true,
+  blocking: false,
 };
 
 export const useUiLoadingStore = create<UiLoadingState>((set) => ({
@@ -72,6 +77,7 @@ export const useUiLoadingStore = create<UiLoadingState>((set) => ({
       footerText: payload.footerText ?? DEFAULT_LOADING_STATE.footerText,
       animation: payload.animation ?? DEFAULT_LOADING_STATE.animation,
       dimmed: payload.dimmed ?? DEFAULT_LOADING_STATE.dimmed,
+      blocking: payload.blocking ?? DEFAULT_LOADING_STATE.blocking,
     }),
   updateLoading: (payload) =>
     set((state) => ({
@@ -81,6 +87,7 @@ export const useUiLoadingStore = create<UiLoadingState>((set) => ({
       footerText: payload.footerText ?? state.footerText,
       animation: payload.animation ?? state.animation,
       dimmed: payload.dimmed ?? state.dimmed,
+      blocking: payload.blocking ?? state.blocking,
     })),
   hideLoading: () =>
     set({

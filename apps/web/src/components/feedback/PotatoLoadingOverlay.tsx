@@ -562,7 +562,15 @@ export function PotatoLoadingCard({
  * uiLoadingStore의 상태를 구독해 화면 전체 로딩 오버레이를 표시한다.
  */
 export default function PotatoLoadingOverlay() {
-  const { isOpen, title, description, footerText, animation, dimmed } = useUiLoadingStore();
+  const {
+    isOpen,
+    title,
+    description,
+    footerText,
+    animation,
+    dimmed,
+    blocking,
+  } = useUiLoadingStore();
 
   if (!isOpen) {
     return null;
@@ -570,7 +578,9 @@ export default function PotatoLoadingOverlay() {
 
   return (
     <div
-      className={`pointer-events-none fixed inset-0 ${UI_LAYER_CLASS.loadingOverlay} flex items-center justify-center px-4`}
+      aria-busy="true"
+      aria-live="polite"
+      className={`${blocking ? "pointer-events-auto touch-none" : "pointer-events-none"} fixed inset-0 ${UI_LAYER_CLASS.loadingOverlay} flex items-center justify-center px-4`}
     >
       {dimmed ? <div className="absolute inset-0 bg-slate-900/5" /> : null}
       <PotatoLoadingCard
