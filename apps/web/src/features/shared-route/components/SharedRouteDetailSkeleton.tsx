@@ -1,3 +1,4 @@
+/** 공유 경로 상세 Query가 끝날 때까지 전달받은 목록 요약은 유지하고 DAY 일정 영역만 뼈대로 표시하는 전체 화면 팝업이다. */
 import { createPortal } from "react-dom";
 import { MdClose } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
@@ -6,7 +7,9 @@ import SharedRouteAuthor from "./SharedRouteAuthor";
 import SharedRouteDetailMeta from "./SharedRouteDetailMeta";
 
 type SharedRouteDetailSkeletonProps = {
+
   route?: SharedRoute;
+
   onClose: () => void;
 };
 

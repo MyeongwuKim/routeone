@@ -1,12 +1,17 @@
+
 type RouteListSkeletonVariant = "my-route" | "history" | "shared";
 
 type RouteCardSkeletonProps = {
+
   variant?: RouteListSkeletonVariant;
 };
 
 type RouteListSkeletonProps = {
+
   variant?: RouteListSkeletonVariant;
+  /** 로딩 목록에 반복해 표시할 경로 카드 자리 수 */
   itemCount?: number;
+
   className?: string;
 };
 

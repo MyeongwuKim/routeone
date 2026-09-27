@@ -1,3 +1,4 @@
+/** React Query 캐시에서 읽은 경로별 좋아요 여부·개수와 진행 중 Mutation 수를 카드·상세 화면 구독자에게 공유한다. */
 import type { QueryClient } from "@tanstack/react-query";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { SharedRouteLikeState } from "../queries/sharedRouteCache";
@@ -12,6 +13,7 @@ type SharedRouteLikeStore = {
 const likeStores = new WeakMap<QueryClient, StoreApi<SharedRouteLikeStore>>();
 
 // Share pending clicks across the feed and liked pages, including navigation mid-request.
+
 export function getSharedRouteLikeStore(queryClient: QueryClient) {
   const existingStore = likeStores.get(queryClient);
 

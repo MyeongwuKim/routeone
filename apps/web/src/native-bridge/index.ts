@@ -29,6 +29,7 @@ import {
   isNativeTestAccountMode,
 } from "./runtime";
 
+/** 웹 기능이 앱 정보·인증·위치·미디어·알림·생명주기 브리지를 한 진입점에서 호출하도록 묶는다. */
 export const nativeBridge = {
   runtime: {
     isAvailable: isNativeRuntime,

@@ -1,7 +1,9 @@
+
 import type { AppLanguage } from "@/stores/appLanguageStore";
 
 // VisitKorea EngService2 returns these labels in Korean or omits the codes.
 // Keep this catalog aligned with the API override used when reading old caches.
+
 export const TOUR_CATEGORY_ENGLISH_LABEL_BY_CODE = {
   C01: "Recommended Courses",
   C0112: "Family Courses",

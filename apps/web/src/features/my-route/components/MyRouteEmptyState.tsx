@@ -1,3 +1,4 @@
+/** 저장한 경로가 없을 때 빈 상태를 표시하고 홈 지도로 이동해 장소를 담도록 안내한다. */
 import { Link } from "react-router-dom";
 import { MdArrowForward, MdMap } from "react-icons/md";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";

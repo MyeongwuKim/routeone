@@ -1,3 +1,9 @@
+/**
+ * 진입 경로: 내 정보 → 언어 설정
+ *
+ * 한국어·영어 중 표시 언어를 선택해 Store, HTML 문서 언어와 네이티브 앱 설정에 함께 반영한다.
+ * 변경 후 언어별 장소·경로 캐시를 무효화하고 열린 장소 상세 화면을 닫아 이전 언어 데이터가 남지 않게 한다.
+ */
 import { MdArrowBack, MdCheck, MdLanguage } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";

@@ -1,3 +1,4 @@
+
 import { isTourContentTypeId } from "@/lib/tourContentType";
 
 export const CAFE_LCLS_CODE = "FD050100";
@@ -8,6 +9,7 @@ export type PlaceCategoryLabel =
   | "카페"
   | "축제/공연"
   | "장소";
+
 export type RoutePlaceCategory = "tourist" | "food" | "cafe";
 
 type PlaceCategorySource = {

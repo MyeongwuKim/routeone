@@ -1,7 +1,9 @@
+
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { nativeBridge } from "@/native-bridge";
 
 type AppErrorBoundaryProps = {
+
   children: ReactNode;
 };
 
@@ -37,6 +39,9 @@ function readErrorLanguage() {
   }
 }
 
+/**
+ * AppErrorBoundary는 하위 화면의 렌더링 오류를 감지하고 대체 화면으로 전환하는 오류 경계다.
+ */
 export default class AppErrorBoundary extends Component<
   AppErrorBoundaryProps,
   AppErrorBoundaryState

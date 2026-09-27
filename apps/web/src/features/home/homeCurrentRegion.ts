@@ -1,11 +1,4 @@
-/**
- * 용도:
- * 홈 지도에서 현재 GPS를 지역 필터에 적용해도 되는지 판단한다.
- *
- * 동작 방식:
- * 유효한 위치 좌표가 경계에 포함되는 지역을 찾고,
- * 경계 밖이면 서비스 지역 가운데 가장 가까운 지역을 반환한다.
- */
+/** 홈 화면의 현재 위치 좌표 검증과 서비스 지역 선택 규칙을 제공한다. */
 import type { ServiceArea } from "@/data/serviceAreas";
 import { getNearestServiceRegion } from "@/data/serviceAreas";
 import {
@@ -14,6 +7,10 @@ import {
 } from "@/lib/gangwonBoundaryUtils";
 import type { RouteOnePosition } from "@/lib/currentPosition";
 
+/**
+ * position의 위도와 경도가 유한한 숫자이고 각각 -90~90, -180~180 범위에 있는지 확인한다.
+ * 위치 권한, 측정 시각, 정확도는 판정하지 않는다.
+ */
 export function isUsableHomeRegionPosition(
   position: RouteOnePosition
 ) {
@@ -29,6 +26,11 @@ export function isUsableHomeRegionPosition(
   );
 }
 
+/**
+ * 유효한 현재 위치가 어느 서비스 지역 경계에 포함되는지 찾는다.
+ * 경계에 포함되지 않으면 serviceArea.regions의 중심 좌표를 기준으로 가장 가까운 지역을 반환하고,
+ * 좌표 자체가 유효하지 않으면 지역을 추정하지 않고 null을 반환한다.
+ */
 export function resolveHomeRegionFromPosition(
   position: RouteOnePosition,
   serviceArea: ServiceArea,

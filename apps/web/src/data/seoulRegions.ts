@@ -1,3 +1,6 @@
+/**
+ * 서울 자치구의 중심 좌표와 지도 이동 범위를 정의하고 지역 ID로 조회하는 함수를 제공한다.
+ */
 import type { Coordinates } from "@/data/gangwonRegions";
 
 export const SEOUL_CENTER: Coordinates = {
@@ -159,6 +162,7 @@ export const SEOUL_REGIONS = [
 ] as const;
 
 export const DEFAULT_SEOUL_REGION = SEOUL_REGIONS[22];
-export const SEOUL_TOUR_AREA_CODE = "1";
-export const SEOUL_TATS_AREA_CODE = "11";
 
+export const SEOUL_TOUR_AREA_CODE = "1";
+
+export const SEOUL_TATS_AREA_CODE = "11";

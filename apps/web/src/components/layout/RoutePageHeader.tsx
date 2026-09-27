@@ -5,9 +5,13 @@
 import type { ReactNode } from "react";
 
 type RoutePageHeaderProps = {
+
   icon: ReactNode;
+
   title: string;
+
   description?: string;
+
   action?: ReactNode;
 };
 

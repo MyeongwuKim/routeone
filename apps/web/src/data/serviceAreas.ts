@@ -1,3 +1,6 @@
+/**
+ * 서비스 가능 지역의 ID, 표시 이름, 기본 지도 위치와 축제 데이터 제공 여부를 정의한다.
+ */
 import {
   DEFAULT_GANGWON_REGION,
   GANGWON_AREA_CODE,

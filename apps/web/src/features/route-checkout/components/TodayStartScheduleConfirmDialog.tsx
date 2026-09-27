@@ -1,11 +1,17 @@
+/** 오늘 시작 일정의 당일·여러 DAY 여부와 이미 지난 시작 시각을 안내하고 그대로 진행·현재 시각 사용·재선택을 받는다. */
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText } from "@/lib/uiText";
 
 type TodayStartScheduleConfirmDialogProps = {
+
   tripDays: number;
+
   hasPastStartTime: boolean;
+
   onClose: () => void;
+
   onConfirm: () => void;
+
   onUseCurrentTime: () => void;
 };
 

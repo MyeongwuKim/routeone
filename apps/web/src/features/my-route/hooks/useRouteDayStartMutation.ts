@@ -1,3 +1,4 @@
+/** DAY별 시작 시각을 저장하고 내 경로 현재·과거 캐시를 동기화한다. */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { routeApi } from "@/api/routeApi";
 import type { MyRoutesQuery, UpdateRouteDayStartInput } from "@/generated/graphql";
@@ -8,6 +9,7 @@ import {
   upsertMyRouteCache,
 } from "../myRouteCache";
 
+/** 저장 중 중복 호출을 거절하며, 성공·실패를 토스트로 안내하고 boolean으로 반환한다. */
 export function useRouteDayStartMutation() {
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
@@ -26,6 +28,7 @@ export function useRouteDayStartMutation() {
     },
   });
 
+  /** 진행 중이면 요청하지 않고 false를 반환하며, 성공한 경우에만 전달받은 successMessage를 표시한다. */
   const updateRouteDayStart = async (
     input: UpdateRouteDayStartInput,
     successMessage: string

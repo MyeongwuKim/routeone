@@ -1,3 +1,4 @@
+/** 공유 경로의 적용 필터와 필터 팝업 draft를 분리해 열기·토글·적용·초기화 동작을 관리한다. */
 import { useCallback, useReducer } from "react";
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import type { SharedRouteFilterCandidate } from "../sharedRouteCardModel";
@@ -126,6 +127,10 @@ function sharedRouteFilterReducer(
   }
 }
 
+/**
+ * 팝업을 열 때 적용 필터를 draft로 복사하고 적용 전 변경은 목록 조회에 반영하지 않는다.
+ * 언어가 바뀌면 이전 언어의 표시값을 유지하지 않고 빈 필터 상태로 다시 시작한다.
+ */
 export function useSharedRouteFilters(language: AppLanguage) {
   const [storedState, dispatch] = useReducer(
     sharedRouteFilterReducer,

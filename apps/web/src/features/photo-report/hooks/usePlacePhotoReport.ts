@@ -1,9 +1,6 @@
 /**
- * 용도:
- * 장소 사진 신고·취소 요청과 관련 목록 갱신을 관리한다.
- *
- * 동작 방식:
- * 요청 전에 사진 캐시의 신고 상태를 바꾸고, 실패하면 이전 상태로 되돌린다.
+ * 장소 사진 신고·취소를 사진 Query에 낙관적으로 반영하고 실패하면 이전 캐시로 복구한다.
+ * 성공 후 장소 사진과 내 경로·다녀온 경로 캐시를 갱신하며 사진별 진행 중 상태와 사용자 안내를 반환한다.
  */
 import { useIsMutating, useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import type { PlacePhotoReportReason, PlacePhotosQuery } from "@/generated/graphql";

@@ -16,6 +16,9 @@ import type { RoutePosterPreview } from "../hooks/useRoutePosterPreview";
 import type { RoutePosterThemeId } from "../models/routePosterTheme";
 import RoutePosterThemePicker from "./RoutePosterThemePicker";
 
+/**
+ * 완주 포스터 미리보기와 저장·공유 동작을 모달로 제공한다.
+ */
 export default function RoutePosterPreviewModal({
   preview,
   isGenerating,
@@ -280,6 +283,9 @@ export default function RoutePosterPreviewModal({
   );
 }
 
+/**
+ * 완주 포스터 이미지를 생성하는 동안 진행 상태를 모달로 표시한다.
+ */
 export function RoutePosterGeneratingModal() {
   const text = useUiText();
 

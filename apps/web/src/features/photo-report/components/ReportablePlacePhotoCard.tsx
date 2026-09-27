@@ -15,13 +15,21 @@ import { PlacePhotoThumbnail } from "@/features/place-sheet/components/PlaceShee
 type PlacePhoto = PlacePhotosQuery["placePhotos"][number];
 
 type ReportablePlacePhotoCardProps = {
+
   alt: string;
+
   canReport: boolean;
+
   isUpdating: boolean;
+
   onCancelReport: () => void;
+
   onOpen: () => void;
+
   onReport: () => void;
+
   photo: PlacePhoto;
+
   text: UiText;
 };
 

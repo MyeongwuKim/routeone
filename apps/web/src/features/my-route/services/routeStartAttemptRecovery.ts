@@ -13,6 +13,10 @@ import {
 } from "./routeArrivalMutationRecovery";
 import type { RouteStartAttempt } from "./routeStartAttemptJournal";
 
+/**
+ * started는 서버에서 시작을 확인한 상태, restart-required는 같은 미시작 결과가 반복돼 재시작이 필요한 상태다.
+ * observe는 아직 확정하지 않고 다음 조회와 비교할 서버 상태 지문을 반환하는 상태다.
+ */
 export type RouteStartAttemptRecoveryDecision =
   | { kind: "started" }
   | { kind: "restart-required" }

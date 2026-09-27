@@ -1,3 +1,4 @@
+/** DAY 시작 시각, 방문 시각·체류시간, 사진 공개·삭제, 방문 완료와 여행 조기 종료에 필요한 팝업을 제공한다. */
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import {
   MdAdd,
@@ -118,6 +119,9 @@ function getVisitTimeEditInitialArrival(target: VisitTimesEditTarget) {
   return new Date(checkedOutTimestamp - stayMinutes * 60_000).toISOString();
 }
 
+/**
+ * 여행 일차의 시작 날짜와 시간을 선택·저장하는 팝업을 표시한다.
+ */
 export function DayStartTimePopup({
   target,
   defaultStartMinutes,
@@ -344,6 +348,9 @@ function getRecordedStopCompletionTimestamp(stop: VisitTimeStop) {
   return Number.isFinite(completedTimestamp) ? completedTimestamp : null;
 }
 
+/**
+ * 방문지의 실제 도착·출발 시간을 수정하는 팝업을 표시한다.
+ */
 export function VisitTimesEditPopup({
   target,
   isSaving,
@@ -642,6 +649,9 @@ export function VisitTimesEditPopup({
   );
 }
 
+/**
+ * 방문 인증 사진의 공개 여부를 선택하는 팝업을 표시한다.
+ */
 export function PhotoPublicationPopup({
   target,
   isSaving,
@@ -850,6 +860,9 @@ export function StayMinutesPopup({
   );
 }
 
+/**
+ * 방문 완료 기록의 실제 체류 시간을 수정하는 팝업을 표시한다.
+ */
 export function ActualStayMinutesPopup({
   target,
   isSaving,
@@ -1049,6 +1062,9 @@ export function ActualStayMinutesPopup({
   );
 }
 
+/**
+ * 방문 완료 시간과 인증 사진을 확인하는 팝업을 표시한다.
+ */
 export function VisitCompletionPopup({
   target,
   isSaving,
@@ -1315,6 +1331,9 @@ function VerificationPhotoDeleteDialog({
   );
 }
 
+/**
+ * 선택하거나 저장한 방문 인증 사진을 크게 미리 보여준다.
+ */
 export function VerificationPhotoPreviewPopup({
   target,
   canManage,
@@ -1569,6 +1588,9 @@ function formatRouteDurationDays(days: number) {
   return days <= 1 ? "당일 여행" : `${days - 1}박 ${days}일`;
 }
 
+/**
+ * 남은 방문지가 있는 경로의 조기 종료 여부를 확인한다.
+ */
 export function EarlyRouteCompletionPopup({
   target,
   plannedDays,

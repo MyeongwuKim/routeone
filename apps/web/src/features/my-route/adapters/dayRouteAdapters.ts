@@ -1,3 +1,4 @@
+/** 내 경로의 DAY·장소 응답을 일정 만들기와 장소 상세이 사용하는 모델로 변환한다. */
 import type { PlannedRouteDay } from "@/features/route-checkout/models/routePlanTypes";
 import {
   getPlaceCategoryIcon,

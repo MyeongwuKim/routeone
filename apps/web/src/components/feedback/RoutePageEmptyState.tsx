@@ -9,8 +9,11 @@
 import type { ReactNode } from "react";
 
 type RoutePageEmptyStateProps = {
+
   children: ReactNode;
+
   action?: ReactNode;
+
   className?: string;
 };
 

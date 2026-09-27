@@ -1,3 +1,4 @@
+/** 공유 경로 페이지를 ID 기준으로 합치고 최신·인기 정렬과 feed·liked 모드별 빈 상태 문구를 계산한다. */
 import type { DropdownSelectOption } from "@/components/inputs";
 import type { UiText } from "@/lib/uiText";
 import type { SharedRoute } from "./sharedRouteCardModel";

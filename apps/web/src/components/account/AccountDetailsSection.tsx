@@ -1,3 +1,4 @@
+
 import type { ReactNode } from "react";
 import { FaApple } from "react-icons/fa";
 import { FcGoogle } from "react-icons/fc";
@@ -58,8 +59,11 @@ function formatJoinedAt(value: string, language: "ko" | "en") {
 }
 
 type AccountDetailsSectionProps = {
+
   user: AuthUser | null;
+
   isLoading: boolean;
+
   onRetry: () => void;
 };
 

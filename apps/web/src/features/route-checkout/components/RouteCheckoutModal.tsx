@@ -37,21 +37,37 @@ import {
 } from "../models/routeCheckoutFlow";
 
 type RouteCheckoutModalProps = {
+
   isOpen: boolean;
+
   savedPlaces: SavedPlaceItem[];
+
   insertCandidatePlaces: MapSheetPlace[];
+
   currentLocation: RouteStartLocation | null;
+  /** 기존 경로에 DAY를 추가하는 흐름에서 배너에 표시할 대상 경로명 */
   appendRouteTitle?: string | null;
+
   headerLabel?: string;
+
   contextBanner?: string | null;
+  /** 모달을 열었을 때 시작할 일정 만들기 단계 */
   initialStep?: CartFlowStep;
+  /** 기존 경로 편집·DAY 추가 흐름에서 결과 단계에 먼저 표시할 일정 */
   initialRoutePlan?: PlannedRouteDay[] | null;
+  /** 모달을 열 때 일정 상태에 적용할 여행 시작일 */
   initialTravelStartDate?: string | null;
+
   initialTripDays?: number;
+
   onClose: () => void;
+
   onSelectPlace: (place: MapSheetPlace) => void;
+
   onRemovePlace: (placeId: string) => void;
+
   onClearPlaces: () => void;
+
   onRequestSearchPlace: () => void;
 };
 

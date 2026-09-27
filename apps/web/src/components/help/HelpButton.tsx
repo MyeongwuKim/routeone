@@ -7,9 +7,13 @@ import { IoInformationCircleOutline } from "react-icons/io5";
 import HelpDialog, { type HelpGuide } from "./HelpDialog";
 
 type HelpButtonProps = {
+
   guide: HelpGuide;
+
   label: string;
+
   className?: string;
+
   disabled?: boolean;
 };
 

@@ -1,3 +1,4 @@
+
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import type { NativeFestivalNotificationKind } from "@/native-bridge";
 import type { AuthProvider } from "@/generated/graphql";
@@ -311,6 +312,7 @@ export type UiText = {
     switchAccountToast: string;
     logout: string;
     logoutDescription: string;
+    sessionEndError: string;
     deleteAccount: string;
     deleteAccountDescription: string;
     deleteConfirmTitle: string;
@@ -1772,6 +1774,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       switchAccountToast: "다른 계정으로 로그인해 주세요.",
       logout: "로그아웃",
       logoutDescription: "현재 계정에서 나가기",
+      sessionEndError: "푸시 알림 해제에 실패했어요. 다시 시도해 주세요.",
       deleteAccount: "회원 탈퇴",
       deleteAccountDescription: "계정과 저장된 데이터를 모두 삭제",
       deleteConfirmTitle: "RouteOne을 탈퇴할까요?",
@@ -3445,6 +3448,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       switchAccountToast: "Sign in with another account.",
       logout: "Log Out",
       logoutDescription: "Leave the current account",
+      sessionEndError:
+        "Couldn't turn off push notifications. Please try again.",
       deleteAccount: "Delete Account",
       deleteAccountDescription: "Delete the account and all saved data",
       deleteConfirmTitle: "Delete your RouteOne account?",

@@ -1,9 +1,13 @@
+
 import { IoClose, IoSearch } from "react-icons/io5";
 import { useUiText } from "@/lib/uiText";
 
 type RecentSearchItemProps = {
+
   keyword: string;
+
   onSelect: (keyword: string) => void;
+
   onDelete: (keyword: string) => void;
 };
 

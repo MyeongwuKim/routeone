@@ -1,7 +1,8 @@
 /**
- * 진입 경로: 장소 담기 → 일정 설정 → 추천 루트 결과
- * 용도: DAY별 추천 일정의 편집과 저장을 연결한다.
- * 구조: 결과 안내, DAY 카드, 편집·저장 버튼과 화면 중앙의 계산 로딩으로 구성된다.
+ * 사용 위치: 일정 만들기 → 추천 경로 결과
+ *
+ * 담은 장소와 일정 조건으로 만든 DAY별 경로를 표시하고 출발지·장소 순서·체류시간·DAY 구성을 draft로 편집한다.
+ * 이동시간 조회와 재계산은 편집 Hook에, 새 경로 저장 또는 기존 경로 DAY 추가는 저장 Hook에 맡기며 중복 장소와 날짜 충돌을 안내한다.
  */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -31,12 +32,19 @@ import type {
 } from "../../models/routePlanTypes";
 
 type PlaceCartRouteResultStepProps = {
+
   savedPlaces: SavedPlaceItem[];
+
   candidatePlaces: MapSheetPlace[];
+  /** 새 추천 계산 전 결과 편집기에 먼저 적용할 기존 일정 */
   initialRoutePlan?: PlannedRouteDay[] | null;
+
   currentLocation: RouteStartLocation | null;
+
   onClose: () => void;
+
   onClearPlaces: () => void;
+
   onRequestSearchPlace: () => void;
 };
 

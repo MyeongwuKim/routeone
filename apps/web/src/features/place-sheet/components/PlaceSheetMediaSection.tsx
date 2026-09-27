@@ -1,3 +1,4 @@
+/** 선택 장소의 대표 이미지와 사용자 방문 사진을 표시하고, 사진 확대·신고·신고 취소 동작을 연결한다. */
 import { useLayoutEffect, useRef, useState } from "react";
 import { IoTimeOutline } from "react-icons/io5";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";

@@ -25,18 +25,25 @@ export type RouteStartAttempt = {
 };
 
 export type RouteStartAttemptInput = {
+
   routeId: string | number;
+
   startedAt: string;
+
   dayStartedAt?: string | null;
 };
 
 export const ROUTE_START_ATTEMPT_STORAGE_KEY =
   "routeone:route-start-attempt-journal:v1";
+
 export const ROUTE_START_RECOVERY_ROUTE_ID_PARAM =
   "routeStartRecoveryRouteId";
+
 export const ROUTE_START_RECOVERY_GENERATION_PARAM =
   "routeStartRecoveryGeneration";
+
 export const ROUTE_START_ATTEMPT_RECONCILIATION_DELAY_MS = 5_000;
+
 export const ROUTE_START_ATTEMPT_API_SETTLEMENT_DELAY_MS = 30_000;
 
 const activeAttemptCountByRouteId = new Map<string, number>();

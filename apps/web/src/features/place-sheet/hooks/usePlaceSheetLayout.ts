@@ -1,11 +1,15 @@
+/** 장소 상세 bottom sheet의 접힘·펼침 높이, 포인터 드래그와 배경 스크롤 잠금을 관리한다. */
 import { useEffect, useRef, useState } from "react";
 import type { PointerEventHandler } from "react";
 
 type SheetSnap = "collapsed" | "expanded";
 
 type UsePlaceSheetLayoutParams = {
+
   isSheetOpen: boolean;
+
   onRequestClose: () => void;
+
   resetVersion?: number;
 };
 
@@ -30,6 +34,10 @@ function getSheetTop(viewportHeight: number, snap: SheetSnap) {
   return snap === "expanded" ? expandedTop : collapsedTop;
 }
 
+/**
+ * viewport와 safe area를 기준으로 두 snap 위치를 계산한다. 헤더 드래그 거리와 속도로 snap 또는 닫기를 결정하고,
+ * 열린 동안 body 스크롤을 잠근다. resetVersion이 바뀌면 접힌 상태와 스크롤 위치로 초기화한다.
+ */
 export function usePlaceSheetLayout({
   isSheetOpen,
   onRequestClose,

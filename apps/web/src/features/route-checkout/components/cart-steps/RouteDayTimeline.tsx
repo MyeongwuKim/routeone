@@ -1,3 +1,4 @@
+/** DAY의 출발지·장소·자동차 이동 구간을 시간 순서의 경로선으로 표시하고 장소 선택·삽입·드래그 편집을 연결한다. */
 import { IoAdd, IoCarSportOutline } from "react-icons/io5";
 import { MdDragIndicator } from "react-icons/md";
 import type { UiText } from "@/lib/uiText";

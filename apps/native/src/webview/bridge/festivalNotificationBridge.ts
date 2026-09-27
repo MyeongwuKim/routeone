@@ -237,6 +237,22 @@ async function cancelStoredNotification(
   ).catch(() => undefined);
 }
 
+/**
+ * 로그아웃·세션 만료 시 현재 계정이 예약한 축제 알림을 모두 취소한다.
+ * 예약 목록과 즉시 알림 이력도 함께 비워 다음 로그인 계정의 알림 판정을 분리한다.
+ */
+async function clearFestivalNotificationsForSession() {
+  const storedSchedule = await readStoredSchedule();
+
+  await Promise.all(
+    Object.values(storedSchedule).map(cancelStoredNotification)
+  );
+  await Promise.all([
+    AsyncStorage.removeItem(FESTIVAL_SCHEDULE_STORAGE_KEY),
+    AsyncStorage.removeItem(FESTIVAL_NOTIFIED_STORAGE_KEY),
+  ]);
+}
+
 async function syncFestivalNotifications(
   message: NativeFestivalNotificationSyncRequest,
   webViewRef: WebViewRef
@@ -355,4 +371,13 @@ export function handleNativeFestivalNotificationSyncRequest(
 
   festivalNotificationSyncQueue = nextSync.catch(() => undefined);
   return nextSync;
+}
+
+export function clearNativeFestivalNotificationsForSession() {
+  const nextClear = festivalNotificationSyncQueue.then(
+    clearFestivalNotificationsForSession
+  );
+
+  festivalNotificationSyncQueue = nextClear.catch(() => undefined);
+  return nextClear;
 }

@@ -1,35 +1,52 @@
+/**
+ * 사용 위치: 홈 지도 → 상단 검색
+ *
+ * 용도:
+ * 장소 검색어와 필터, 검색 결과, 최근 검색어를 전체 화면 팝업으로 보여준다.
+ *
+ * 구조:
+ * 검색 입력과 필터, 결과 목록으로 구성되며 최근 검색어는 팝업 내부에서 관리한다.
+ */
 import type { RefObject } from "react";
 import { IoClose, IoSearch, IoTrashOutline } from "react-icons/io5";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
 import RecentSearchItem from "@/components/search/RecentSearchItem";
+import { useRecentPlaceSearches } from "@/components/search/useRecentPlaceSearches";
 import type { HomeSearchResult } from "@/features/home/homeSearchResults";
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText } from "@/lib/uiText";
 
 type PlaceSearchPopupProps = {
+
   searchInputRef: RefObject<HTMLInputElement | null>;
+
   regionLabel: string;
+
   filters: Array<{
     key: SearchFilter;
     label: string;
   }>;
+
   searchKeyword: string;
+
   searchFilter: SearchFilter;
+
   searchResults: HomeSearchResult[];
+
   visibleSearchResults: HomeSearchResult[];
-  recentSearches: string[];
+
   onKeywordChange: (keyword: string) => void;
-  onSearchSubmit: (keyword: string) => void;
+
   onSearchFilterChange: (filter: SearchFilter) => void;
+
   onClose: () => void;
+
   onLoadMore: () => void;
+
   onResultClick: (result: HomeSearchResult) => void;
-  onRecentSearchSelect: (keyword: string) => void;
-  onRecentSearchDelete: (keyword: string) => void;
-  onRecentSearchClear: () => void;
 };
 
 function PlaceSearchPopup({
@@ -40,19 +57,20 @@ function PlaceSearchPopup({
   searchFilter,
   searchResults,
   visibleSearchResults,
-  recentSearches,
   onKeywordChange,
-  onSearchSubmit,
   onSearchFilterChange,
   onClose,
   onLoadMore,
   onResultClick,
-  onRecentSearchSelect,
-  onRecentSearchDelete,
-  onRecentSearchClear,
 }: PlaceSearchPopupProps) {
   const text = useUiText();
   const hasKeyword = Boolean(searchKeyword.trim());
+  const {
+    recentSearches,
+    appendRecentSearch,
+    removeRecentSearch,
+    clearRecentSearches,
+  } = useRecentPlaceSearches();
 
   return (
     <section
@@ -65,7 +83,7 @@ function PlaceSearchPopup({
               className="flex h-12 min-w-0 flex-1 items-center rounded-full border border-slate-200 bg-slate-50/90 px-4 shadow-[0_8px_18px_rgba(15,23,42,0.06)] dark:border-brand-400/25 dark:bg-slate-950/60 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)]"
               onSubmit={(event) => {
                 event.preventDefault();
-                onSearchSubmit(searchKeyword);
+                appendRecentSearch(searchKeyword);
               }}
             >
               <input
@@ -145,7 +163,10 @@ function PlaceSearchPopup({
                               ? text.search.concentrationRank(item.rank)
                               : null
                         }
-                        onClick={() => onResultClick(item)}
+                        onClick={() => {
+                          appendRecentSearch(searchKeyword);
+                          onResultClick(item);
+                        }}
                       />
                     </div>
                   ))}
@@ -184,7 +205,7 @@ function PlaceSearchPopup({
                     type="button"
                     aria-label={text.search.clearRecent}
                     title={text.search.clearRecent}
-                    onClick={onRecentSearchClear}
+                    onClick={clearRecentSearches}
                     className="inline-flex size-8 items-center justify-center rounded-full border border-slate-200 bg-white text-base text-slate-400 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 active:scale-95 dark:border-brand-400/20 dark:bg-[#0b211f] dark:text-slate-400 dark:hover:border-rose-400/30 dark:hover:bg-rose-400/10 dark:hover:text-rose-300"
                   >
                     <IoTrashOutline aria-hidden="true" />
@@ -197,8 +218,8 @@ function PlaceSearchPopup({
                     <RecentSearchItem
                       key={keyword}
                       keyword={keyword}
-                      onSelect={onRecentSearchSelect}
-                      onDelete={onRecentSearchDelete}
+                      onSelect={onKeywordChange}
+                      onDelete={removeRecentSearch}
                     />
                   ))}
                 </div>

@@ -1,3 +1,4 @@
+/** 공유 경로 좋아요를 낙관적으로 변경하고 목록·좋아요 목록·상세 캐시와 요청 중 상태를 함께 관리한다. */
 import { useCallback, useMemo } from "react";
 import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useStore } from "zustand";
@@ -25,7 +26,9 @@ import {
 } from "../queries/sharedRouteQueryKeys";
 
 type UseSharedRouteLikeOptions = {
+
   mode: SharedRoutePageMode;
+
   serviceAreaId?: ServiceAreaId;
 };
 
@@ -43,6 +46,10 @@ type ToggleLikeContext = {
   previousDetail: RouteByIdQuery | undefined;
 };
 
+/**
+ * 비로그인 사용자는 로그인 흐름으로 보낸다. 요청 전 세 캐시를 예상 상태로 갱신하고 세대 번호로 연속 클릭의
+ * 늦은 응답을 구분하며, 실패 시 해당 요청이 최신일 때만 이전 캐시와 좋아요 상태를 복원한다.
+ */
 export function useSharedRouteLike({
   mode,
   serviceAreaId,

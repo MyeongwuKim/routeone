@@ -83,6 +83,26 @@ function createCleanupHarness() {
           },
         };
       }
+      if (
+        specifier ===
+        "@/webview/bridge/festivalNotificationBridge"
+      ) {
+        return {
+          clearNativeFestivalNotificationsForSession: async () => {
+            events.push("clear-festival-notifications");
+          },
+        };
+      }
+      if (
+        specifier ===
+        "@/webview/bridge/routeReviewNotificationBridge"
+      ) {
+        return {
+          clearNativeRouteReviewNotificationsForSession: async () => {
+            events.push("clear-route-review-notifications");
+          },
+        };
+      }
 
       throw new Error(`Unexpected module: ${specifier}`);
     },
@@ -109,6 +129,8 @@ test("세션 정리는 표식·위치 감시·인증·표식 순서로 처리한
   assert.deepEqual(harness.events, [
     `set:${CLEANUP_KEY}`,
     "clear-route-targets",
+    "clear-festival-notifications",
+    "clear-route-review-notifications",
     "clear-auth",
     `remove:${CLEANUP_KEY}`,
   ]);
@@ -136,6 +158,8 @@ test("위치 감시 해제 도중 실패하면 표식을 남기고 다음 부팅
   assert.deepEqual(harness.events, [
     `set:${CLEANUP_KEY}`,
     "clear-route-targets",
+    "clear-festival-notifications",
+    "clear-route-review-notifications",
     "clear-auth",
     `remove:${CLEANUP_KEY}`,
   ]);

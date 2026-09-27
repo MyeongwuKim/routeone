@@ -1,3 +1,4 @@
+/** DAY별 장소·출발지 편집 draft를 만들고 서버 UpdateRouteLayout 입력과 화면 표시 순서로 변환한다. */
 import type { UpdateRouteLayoutInput } from "@/generated/graphql";
 import type { RouteStopsByDayId } from "../hooks/useRouteStopDrag";
 import type { MyRouteDay, MyRouteStop } from "../types";

@@ -2,6 +2,74 @@
 
 React Native WebView로 `apps/web` 빌드 산출물을 감싸는 하이브리드 앱입니다.
 
+[루트 README](../../README.md)에는 프로젝트 목적과 전체 서비스 구성을 정리해 두었습니다.
+
+## 역할
+
+- 앱 내장 번들, 설치된 R2 번들 또는 원격 fallback을 선택해 RouteOne Web을 WebView에서 실행합니다.
+- Google·Apple 로그인과 Native 인증 세션을 관리하고 Web에 token을 전달합니다.
+- 위치, 알림, 카메라·앨범, 이미지 저장·공유와 외부 지도 앱 기능을 Web에 제공합니다.
+- WebView의 GraphQL·Tour API·길찾기 요청을 Native 네트워크 계층으로 전달합니다.
+- Web 번들 manifest와 SHA-256을 검증해 새 번들을 설치하고 실패 시 이전 번들로 복구합니다.
+- 최소 Native 앱 버전 정책을 확인하고 필요한 경우 스토어 업데이트 화면을 표시합니다.
+- 로컬 시뮬레이터·실기기, dev TestFlight와 prod EAS 빌드 흐름을 구분합니다.
+
+## 기술 스택
+
+| 구분 | 기술 | 사용 범위 |
+| --- | --- | --- |
+| 앱 | Expo 56, React Native 0.85 | iOS·Android 앱 실행 환경과 Native 화면을 구성합니다. |
+| Web 실행 | React Native WebView | Web 빌드 결과를 앱 안에서 실행하고 메시지를 중계합니다. |
+| 인증 | Google Sign-In, Apple Authentication | Native OAuth 로그인과 세션 시작을 처리합니다. |
+| 위치 | Expo Location, Task Manager | 현재 위치와 여행 장소 도착 판단에 필요한 위치 정보를 제공합니다. |
+| 알림 | Expo Notifications | Push Token, 도착·축제·루트 회고 알림을 관리합니다. |
+| 미디어 | Expo Image Picker, Image Manipulator | 방문 사진 촬영·선택과 업로드 전 처리를 담당합니다. |
+| 저장소 | AsyncStorage, Expo FileSystem | 인증, Web 번들과 앱 실행 상태를 저장합니다. |
+| 배포 | Expo EAS, Cloudflare R2 | Native 바이너리와 Web 번들의 배포 주기를 분리합니다. |
+| 오류 수집 | Sentry React Native | Native 부팅, WebView와 브릿지 오류를 수집합니다. |
+
+## 구조
+
+```text
+apps/native
+├── assets
+├── plugins                 # Expo config plugin
+├── scripts                 # Web 동기화, iOS 권한·환경·버전 스크립트
+├── src
+│   ├── auth                # Google·Apple 로그인과 Native 세션
+│   ├── boot                # 최초 실행, 권한과 인증 부팅 상태
+│   ├── components
+│   │   ├── native-onboarding
+│   │   ├── native-update
+│   │   └── native-webview
+│   ├── generated           # WebView 내장 번들
+│   ├── location            # 위치 조회와 테스트 위치
+│   ├── monitoring          # Sentry
+│   ├── nativeUpdate        # 최소 앱 버전 정책
+│   ├── version             # 앱·번들 버전 비교
+│   ├── webBundle           # 내장·설치·원격 번들 선택과 설치
+│   └── webview
+│       └── bridge          # WebView 요청 라우팅과 기능별 핸들러
+├── app.config.ts
+├── app-versions.json
+├── minimum-app-versions.json
+└── eas.json
+```
+
+## 전체 연결
+
+```mermaid
+flowchart TD
+    App[Native App] --> Update[최소 앱 버전 확인]
+    Update --> Boot[권한·인증 세션 확인]
+    Boot --> Bundle[Web 번들 선택]
+    Bundle --> WebView[React Native WebView]
+    WebView <--> Bridge[RouteOneNative 브릿지]
+    Bridge <--> Device[위치·알림·사진·외부 앱]
+    Bridge --> API[GraphQL·Tour API·Directions]
+    R2[Cloudflare R2] --> Bundle
+```
+
 ## 명령어
 
 루트에서 실행하는 명령어를 우선 사용합니다.

@@ -1,3 +1,9 @@
+/**
+ * 진입 경로: 로그인이 필요한 기능 → 로그인
+ *
+ * 이메일·비밀번호를 검증해 로그인 API를 호출하고 성공한 사용자를 인증 Store와 사용자 Query에 반영한다.
+ * 로그인 후에는 요청 전 위치로 돌아가며, 처리 중 중복 제출과 화면 이탈을 막고 서버 오류를 입력 폼에 표시한다.
+ */
 import { useEffect, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";

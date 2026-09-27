@@ -1,3 +1,4 @@
+
 import { placeLocalizationApi } from "@/api/placeLocalizationApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import {
@@ -21,9 +22,13 @@ type LocalizablePlaceIdentity = {
 };
 
 type LocalizeTourPlacesOptions = {
+
   retryUncached?: boolean;
+
   retryAttempts?: number;
+
   retryDelayMs?: number;
+
   waitForFresh?: boolean;
 };
 

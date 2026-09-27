@@ -1,11 +1,9 @@
 /**
- * 진입 경로: 하단 탭 메뉴 → 공유 루트
+ * 진입 경로: 하단 공유 루트 탭 또는 좋아요한 루트
  *
- * 용도:
- * 공개된 여행 루트를 탐색하고 상세 일정, 좋아요, 담기와 작성자 차단·루트 신고를 제공한다.
- *
- * 구조:
- * 정렬·필터, 공유 루트 목록, 상세 일정과 루트 담기 화면으로 구성되어 있다.
+ * 공개 경로를 정렬·지역·일수·태그 조건으로 무한 조회하고, 선택한 경로의 DAY 일정을 상세 팝업에 표시한다.
+ * 좋아요는 목록과 상세 캐시에 낙관적으로 반영하며, 경로 담기·작성자 차단·신고 후 관련 목록을 갱신한다.
+ * mode가 liked이면 전체 공개 목록 대신 현재 사용자가 좋아요한 경로만 조회한다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -112,6 +110,7 @@ import { useUiToastStore } from "@/stores/uiToastStore";
 import type { MapSheetPlace } from "@/types/place";
 
 type SharedRoutePageProps = {
+
   mode?: SharedRoutePageMode;
 };
 

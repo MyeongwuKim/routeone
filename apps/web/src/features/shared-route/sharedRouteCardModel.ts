@@ -1,3 +1,4 @@
+/** 공유 경로 GraphQL 응답을 작성자·날짜·DAY·장소·태그를 포함한 목록 카드 모델과 필터 후보로 변환한다. */
 import type {
   LikedSharedRouteConnectionQuery,
   LikedSharedRoutesQuery,

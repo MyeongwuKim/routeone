@@ -1,13 +1,21 @@
+
 import { useUiLoadingStore, type AppLoadingAnimation } from "@/stores/uiLoadingStore";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 
 type PotatoLoadingCardProps = {
+
   title: string;
+
   description?: string;
+
   footerText?: string;
+
   animation?: AppLoadingAnimation;
+
   compact?: boolean;
+
   layout?: "inline" | "stacked";
+
   className?: string;
 };
 
@@ -491,6 +499,9 @@ function PotatoCharacter({
   );
 }
 
+/**
+ * 제목·설명·애니메이션을 카드 형태의 로딩 UI로 표시한다.
+ */
 export function PotatoLoadingCard({
   title,
   description,
@@ -547,6 +558,9 @@ export function PotatoLoadingCard({
   );
 }
 
+/**
+ * uiLoadingStore의 상태를 구독해 화면 전체 로딩 오버레이를 표시한다.
+ */
 export default function PotatoLoadingOverlay() {
   const { isOpen, title, description, footerText, animation, dimmed } = useUiLoadingStore();
 

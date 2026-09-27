@@ -1,3 +1,4 @@
+
 import { MdChevronRight } from "react-icons/md";
 import {
   getAccountDisplayName,
@@ -10,9 +11,13 @@ import AccountAvatar from "./AccountAvatar";
 import { AccountLoadError, AccountLoadingState } from "./AccountQueryFeedback";
 
 type AccountSummaryCardProps = {
+
   user: AuthUser | null;
+
   isLoading: boolean;
+
   onRetry: () => void;
+
   onClick: () => void;
 };
 

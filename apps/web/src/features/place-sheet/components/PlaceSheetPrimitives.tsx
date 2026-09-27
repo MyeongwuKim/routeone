@@ -1,3 +1,4 @@
+/** 장소 사진 썸네일, 정보 행, 로딩 뼈대와 길어진 운영시간을 펼쳐 보는 배지를 상세 시트에 제공한다. */
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   IoCalendarClearOutline,
@@ -67,6 +68,9 @@ export function PlaceInfoRow({
   );
 }
 
+/**
+ * 장소 상세 로딩 화면에서 사용할 막대 형태의 스켈레톤을 표시한다.
+ */
 export function SkeletonBar({
   className,
   rounded = "rounded-full",
@@ -81,6 +85,9 @@ export function SkeletonBar({
   );
 }
 
+/**
+ * 장소 이미지 목록을 불러오는 동안 썸네일 스켈레톤을 표시한다.
+ */
 export function ImageStripSkeleton() {
   return (
     <>
@@ -96,6 +103,9 @@ export function ImageStripSkeleton() {
   );
 }
 
+/**
+ * 장소 기본 정보를 불러오는 동안 요약 영역 스켈레톤을 표시한다.
+ */
 export function OverviewSkeleton() {
   return (
     <div className="rounded-2xl border border-brand-100 bg-brand-50/45 px-3 py-4 dark:border-brand-400/25 dark:bg-slate-950/45">
@@ -110,6 +120,9 @@ export function OverviewSkeleton() {
   );
 }
 
+/**
+ * 길찾기 정보를 불러오는 동안 경로 영역 스켈레톤을 표시한다.
+ */
 export function RouteInfoSkeleton() {
   return (
     <div className="flex items-center gap-3">
@@ -122,6 +135,9 @@ export function RouteInfoSkeleton() {
   );
 }
 
+/**
+ * 주변 장소를 불러오는 동안 장소 카드 스켈레톤을 표시한다.
+ */
 export function NearbyPlacesSkeleton() {
   return (
     <div className="space-y-2">

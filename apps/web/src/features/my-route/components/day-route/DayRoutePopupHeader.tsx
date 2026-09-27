@@ -1,8 +1,10 @@
+/** 선택 DAY의 경로명·날짜·전체 방문 진행률·공유 상태를 표시하고 편집 가능할 때 순서 편집 시작 버튼을 제공한다. */
 import { MdClose, MdEdit } from "react-icons/md";
 import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupController";
 import { getLocalizedDayDateLabel } from "../../utils/dayRouteFormatting";
 
 type DayRoutePopupHeaderProps = {
+
   controller: DayRoutePopupController["header"];
 };
 

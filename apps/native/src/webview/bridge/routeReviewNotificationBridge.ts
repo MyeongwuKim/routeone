@@ -187,6 +187,22 @@ async function cancelStoredNotification(
   ).catch(() => undefined);
 }
 
+/**
+ * 로그아웃·세션 만료 시 현재 계정의 여행 회고 예약 알림을 모두 취소한다.
+ * 알림 이력도 삭제해 이후 로그인 계정과 기기 로컬 상태가 섞이지 않게 한다.
+ */
+async function clearRouteReviewNotificationsForSession() {
+  const storedSchedule = await readStoredSchedule();
+
+  await Promise.all(
+    Object.values(storedSchedule).map(cancelStoredNotification)
+  );
+  await Promise.all([
+    AsyncStorage.removeItem(ROUTE_REVIEW_SCHEDULE_STORAGE_KEY),
+    AsyncStorage.removeItem(ROUTE_REVIEW_NOTIFIED_STORAGE_KEY),
+  ]);
+}
+
 async function syncRouteReviewNotifications(
   message: NativeRouteReviewNotificationSyncRequest,
   webViewRef: WebViewRef
@@ -322,4 +338,13 @@ export function handleNativeRouteReviewNotificationSyncRequest(
 
   routeReviewNotificationSyncQueue = nextSync.catch(() => undefined);
   return nextSync;
+}
+
+export function clearNativeRouteReviewNotificationsForSession() {
+  const nextClear = routeReviewNotificationSyncQueue.then(
+    clearRouteReviewNotificationsForSession
+  );
+
+  routeReviewNotificationSyncQueue = nextClear.catch(() => undefined);
+  return nextClear;
 }

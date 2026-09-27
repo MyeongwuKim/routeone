@@ -1,3 +1,4 @@
+/** 내 경로의 DAY별 날짜·방문 진행 상태를 일반 목록, 축약 목록, 오늘 일정 카드 형태로 나눠 표시한다. */
 import { Fragment } from "react";
 import {
   MdArrowForward,

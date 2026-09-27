@@ -14,10 +14,15 @@ import type { SharedRouteReportReason } from "@/generated/graphql";
 import type { UiText } from "@/lib/uiText";
 
 type SharedRouteReportDialogProps = {
+
   isOpen: boolean;
+
   isSubmitting: boolean;
+
   onClose: () => void;
+
   onSubmit: (reason: SharedRouteReportReason, details: string | null) => void;
+
   text: UiText["sharedRouteReport"];
 };
 

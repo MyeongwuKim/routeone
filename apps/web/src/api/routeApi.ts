@@ -1,3 +1,4 @@
+
 import {
   AppendRouteDaysDocument,
   CancelPlacePhotoReportDocument,
@@ -64,6 +65,10 @@ type RouteId = string | number;
 const ROUTE_SAVE_TIMEOUT_MS = 30_000;
 const ROUTE_CREATE_RETRY_DELAY_MS = 1_000;
 
+/**
+ * 내 경로·공유 경로 조회, 일정 생성·편집, 방문 처리, 사진과 좋아요·저장 요청을 GraphQL에 전달한다.
+ * 각 메서드는 입력을 해당 문서 변수 형태로 감싸며 별도 가공이 필요한 생성 요청의 제한 시간과 재시도만 이 모듈에서 지정한다.
+ */
 export const routeApi = {
   myRoutes(
     variables?: MyRoutesQueryVariables,

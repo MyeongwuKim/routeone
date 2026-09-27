@@ -1,3 +1,4 @@
+
 import {
   type PointerEvent,
   useCallback,
@@ -10,11 +11,17 @@ import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText, type UiText } from "@/lib/uiText";
 
 type TimeWheelInputProps = {
+
   value: string;
+
   placeholder?: string;
+
   title: string;
+
   description?: string;
+
   disabled?: boolean;
+
   onChange: (value: string) => void;
 };
 
@@ -86,10 +93,15 @@ function getWheelMomentumImpulse(deltaY: number) {
 }
 
 type WheelColumnProps = {
+
   options: string[];
+  /** 휠 중앙에 맞추고 선택 상태로 표시할 options의 값 */
   selectedValue: string;
+
   onSelect: (value: string) => void;
+
   getOptionLabel?: (value: string) => string;
+
   loop?: boolean;
 };
 
@@ -447,8 +459,11 @@ function WheelColumn({
 }
 
 type TimeWheelPickerProps = {
+
   value: string;
+
   disabled?: boolean;
+
   onChange: (value: string) => void;
 };
 

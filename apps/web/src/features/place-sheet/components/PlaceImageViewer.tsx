@@ -19,10 +19,15 @@ import type { UiText } from "@/lib/uiText";
 import type { PlaceImageViewerTarget } from "../placeSheetModel";
 
 type PlaceImageViewerProps = {
+
   onClose: () => void;
+
   onStep: (direction: -1 | 1) => void;
+
   target: PlaceImageViewerTarget | null;
+
   text: UiText;
+
   userPhotos: PlacePhotosQuery["placePhotos"];
 };
 

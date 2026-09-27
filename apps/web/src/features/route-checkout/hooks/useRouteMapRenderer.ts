@@ -1,10 +1,7 @@
 /**
- * 용도:
- * 루트 체크아웃 지도에 이동선과 장소 마커를 그리고 선택 상태를 반영한다.
- *
- * 동작 방식:
- * 경로 테두기, 일반 이동선, 선택 이동선을 서로 다른 층에 배치하고
- * 장소는 작은 핀으로 표시한 뒤 누른 장소만 상세 말풍선으로 펼친다.
+ * 일정 결과와 비교 경로의 지점·자동차 구간을 네이버 지도 마커와 폴리라인으로 렌더링한다.
+ * 선택 구간은 별도 선과 정보 오버레이로 강조하고, 선택 장소만 말풍선 마커로 펼친다.
+ * 경로·선택·DAY가 바뀌면 기존 오버레이를 교체하며 언마운트 시 지도 리스너와 모든 오버레이를 정리한다.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PLACE_BUBBLE_MARKER_SIZE } from "@/components/map/NaverMapMarkerIcon";
@@ -54,21 +51,37 @@ type SelectedRouteSegmentView = {
 } | null;
 
 type UseRouteMapRendererOptions = {
+
   comparisonRoutePoints: RouteMapPoint[];
+
   comparisonRouteSegments: RouteMapSegment[];
+
   displayDayKey: string;
+
   enableStartPreview: boolean;
+
   hasComparisonRoute: boolean;
+
   hasDaySelector: boolean;
+
   isStartPreviewDirty: boolean;
+
   mapAutoFitKey: string;
+
   moveStartPreviewTo: (location: RouteStartLocation) => void;
+
   routePoints: RouteMapPoint[];
+
   routeSegments: RouteMapSegment[];
+
   routeViewMode: RouteMapViewMode;
+  /** 지도에서 강조하고 자동 맞춤 대상에 포함할 경로 종류·구간 ID */
   selectedSegment: RouteSegmentSelection | null;
+  /** 선택 구간 오버레이에 표시할 출발·도착 이름과 거리·시간 */
   selectedRouteSegmentView: SelectedRouteSegmentView;
+
   shouldShowComparisonRoute: boolean;
+
   shouldShowCurrentRoute: boolean;
 };
 

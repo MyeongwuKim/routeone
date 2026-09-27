@@ -1,3 +1,4 @@
+/** 일정 결과와 원본 비교 경로를 지도에 표시하고 DAY·구간 선택, 출발지 미리보기, 담기 범위를 관리한다. */
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { useUiText } from "@/lib/uiText";
 import {
@@ -26,13 +27,21 @@ import { useRouteMapRenderer } from "./useRouteMapRenderer";
 import { useRouteMapSegments } from "./useRouteMapSegments";
 
 type UsePlaceCartRouteMapPopupOptions = {
+
   day: PlannedRouteDay;
+
   comparisonDay?: PlannedRouteDay | null;
+
   completedItemIds?: string[];
+
   dayOptions?: RouteMapDayOption[];
+
   initialDayOptionId?: string;
+
   enableStartPreview?: boolean;
+
   onRequestCheckout?: (routePlan: PlannedRouteDay[]) => void;
+
   onClose: () => void;
 };
 
@@ -59,6 +68,10 @@ function serializeRoutePoint(point: RouteMapPoint) {
   return `${point.id}:${point.lat.toFixed(6)},${point.lng.toFixed(6)}`;
 }
 
+/**
+ * 지도 표시 모델과 fallback 구간을 계산해 현재·비교 경로 보기를 전환한다. 출발지 변경은 미리보기 draft로
+ * 유지하다 적용하며, 일정 담기 전에는 선택 DAY 범위를 별도 상태로 확인받는다.
+ */
 export function usePlaceCartRouteMapPopup({
   day,
   comparisonDay,

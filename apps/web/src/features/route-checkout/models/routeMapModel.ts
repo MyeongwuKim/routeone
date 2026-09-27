@@ -1,3 +1,6 @@
+/**
+ * 경로 지도에 표시할 지점·구간·일차 선택 상태를 정의하고 지도 표시용 모델을 계산한다.
+ */
 import {
   PLACE_BUBBLE_MARKER_SIZE,
   type PlaceBubbleMarkerVariant,
@@ -46,7 +49,9 @@ export type RouteMapDayOption = {
 };
 
 export type RouteDisplayVariant = "current" | "comparison";
+
 export type RouteMapViewMode = "all" | "comparison" | "current";
+
 export type RouteSegmentSelection = {
   variant: RouteDisplayVariant;
   segmentId: string;
@@ -161,6 +166,7 @@ export const ROUTE_POINT_COMPACT_MARKER_SIZE = {
 } as const;
 
 export const EMPTY_COMPLETED_ITEM_IDS: string[] = [];
+
 export const EMPTY_DAY_OPTIONS: RouteMapDayOption[] = [];
 
 function escapeMarkerHtml(text: string) {

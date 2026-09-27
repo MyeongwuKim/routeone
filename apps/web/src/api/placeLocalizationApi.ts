@@ -1,3 +1,4 @@
+
 import {
   CacheTourCategoryLocalizationsDocument,
   LocalizeTourPlaceOverviewDocument,
@@ -29,6 +30,10 @@ const CATEGORY_LOCALIZATION_REQUEST_OPTIONS = {
   maxRetryCount: 0,
 };
 
+/**
+ * 관광지 개요·장소·분류명 번역 요청을 각각의 제한 시간으로 전달하며 자동 재시도는 하지 않는다.
+ * waitForFresh 장소 번역은 캐시 응답 대신 새 번역을 기다리므로 30초 제한 시간을 사용한다.
+ */
 export const placeLocalizationApi = {
   localizeTourPlaceOverview(input: TourPlaceOverviewLocalizationInput) {
     return requestGraphQL(

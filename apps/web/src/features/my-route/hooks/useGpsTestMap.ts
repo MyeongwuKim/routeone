@@ -25,13 +25,18 @@ type TestMarker = NaverMarkerInstance & {
 };
 
 type GpsTestMapOptions = {
+
   placeLocation: TestLocation & { title: string };
+
   location: TestLocation | null;
+
   verificationPolicy: {
     notificationRadiusMeters: number;
     verificationRadiusMeters: number;
   };
+
   disabled: boolean;
+
   onSelect: (position: TestLocation) => void;
 };
 

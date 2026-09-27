@@ -27,25 +27,41 @@ import type {
 import { useRouteDayDrag } from "../../hooks/useRouteDayDrag";
 
 type PlaceCartRouteDayCardProps = {
+
   day: PlannedRouteDay;
+
   routePlan: PlannedRouteDay[];
+
   isOrderEditing: boolean;
+
   isTravelTimeEstimated: boolean;
+
   isTravelTimeLoading: boolean;
+
   comparisonDay?: PlannedRouteDay | null;
+
   candidatePlaces: MapSheetPlace[];
+
   excludedPlaceKeys: string[];
+
   placeStaySummaryByPlaceId: Map<string, PlaceStaySummaryPreview>;
+
   onChangeStayMinutes: (placeId: string, minutes: number) => void;
+
   onChangeStartLocation: (dayNumber: number) => void;
+
   onInsertPlace: (request: RouteInsertRequest, place: MapSheetPlace) => void;
+
   onRemovePlace: (placeId: string) => void;
+
   onReorderDayItems: (dayNumber: number, nextItems: PlannedRouteItem[]) => void;
+
   onMovePlaceToDay: (
     placeId: string,
     targetDayNumber: number,
     position: "first" | "last"
   ) => void;
+
   onRequestSearchPlace: () => void;
 };
 

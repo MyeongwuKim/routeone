@@ -1,3 +1,4 @@
+
 const NAVER_DARK_MAP_STYLE_ID =
   import.meta.env.VITE_NCP_MAPS_DARK_STYLE_ID?.trim() ?? "";
 

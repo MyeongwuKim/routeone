@@ -14,8 +14,11 @@ export type HelpGuide = Omit<UiHelpGuide, "steps"> & {
 };
 
 type HelpDialogProps = {
+
   guide: HelpGuide;
+
   label: string;
+
   onClose: () => void;
 };
 

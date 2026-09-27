@@ -21,15 +21,19 @@ export type RouteStartRequest = {
 };
 
 export type RouteStartOptions = {
+
   startWithoutLocationPermission: boolean;
 };
 
 type UseRouteStartLocationPermissionGuardOptions = {
+
   isStartPending: boolean;
+
   onStart: (
     request: RouteStartRequest,
     options: RouteStartOptions
   ) => void;
+
   onCancel?: (request: RouteStartRequest) => void;
 };
 

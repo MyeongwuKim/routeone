@@ -1,3 +1,6 @@
+/**
+ * 강원특별자치도 행정 경계 GeoJSON을 지도 경계 표시와 지역 판별 로직에 제공한다.
+ */
 type GeoPoint = {
   lat: number;
   lng: number;

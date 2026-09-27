@@ -1,8 +1,10 @@
+
 import type { PlaceProvider, PlaceSnapshotInput } from "@/generated/graphql";
 import { DEFAULT_GANGWON_REGION } from "@/data/gangwonRegions";
 import type { MapSheetPlace } from "@/types/place";
 
 const ROUTE_PLACE_PROVIDER: PlaceProvider = "TOUR_API";
+
 export const MIN_PLACE_STAY_SUMMARY_VISIT_COUNT = 3;
 
 export type PlaceStaySummaryPreview = {

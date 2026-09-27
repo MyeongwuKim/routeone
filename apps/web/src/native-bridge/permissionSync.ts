@@ -1,18 +1,14 @@
-/**
- * 호출 위치: 앱 루트 → 앱 시작 및 설정에서 복귀
- *
- * 용도:
- * 권한 변경을 전역 상태에 반영하고 사용할 수 없게 된 현재 위치를 비운다.
- *
- * 동작 방식:
- * 네이티브 복귀, 포커스, 화면 표시 이벤트에서 권한을 먼저 읽는다.
- * 위치 사용이 허용된 경우에만 좌표를 다시 조회하며 구독은 한 곳에서 관리한다.
- */
 import { useCurrentPositionStore } from "@/stores/currentPositionStore";
 import { useNativeAppInfoStore } from "@/stores/nativeAppInfoStore";
 import { subscribeNativeAppActive } from "./events";
 import { isNativeRuntime, isNativeTestAccountMode } from "./runtime";
 
+/**
+ * 앱 루트에서 권한 Store 변경과 앱 활성화·브라우저 focus·visibility 이벤트를 구독하고 즉시 한 번 동기화한다.
+ * 위치 권한이 사라지면 저장 좌표를 무효화하고, 정확도 설정만 바뀌면 좌표 캐시를 비운다.
+ * 위치 권한이 있거나 테스트 계정일 때만 좌표를 다시 조회한다.
+ * 반환 함수는 예약된 늦은 결과를 무시하게 만들고 Store·DOM·네이티브 이벤트 구독을 모두 해제한다.
+ */
 export function startNativePermissionSync() {
   let isActive = true;
   let latestSyncId = 0;

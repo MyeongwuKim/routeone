@@ -1,11 +1,15 @@
+
 import { useEffect, useMemo, useState } from "react";
 import { IoChevronBack, IoChevronForward } from "react-icons/io5";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText, type UiText } from "@/lib/uiText";
 
 type DateInputProps = {
+
   value: string;
+
   placeholder?: string;
+
   onChange: (value: string) => void;
 };
 

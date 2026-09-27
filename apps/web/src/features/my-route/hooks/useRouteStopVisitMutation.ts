@@ -70,23 +70,35 @@ import {
 } from "./useRouteVisitProgress";
 
 type UseRouteStopVisitMutationOptions = {
+
   route: MyRoute;
+
   routeId: string;
+
   activeDayId: string;
+
   orderedStops: MyRouteStop[];
+
   isRetrospectiveCompletion: boolean;
+
   setOrderedStops: (value: SetStateAction<MyRouteStop[]>) => void;
+
   setBaseStopIds: (value: string[]) => void;
+
   setVisitCompletionTarget: (value: VisitCompletionTarget | null) => void;
+
   setActualStayMinutesTarget: (
     value: ActualStayMinutesTarget | null
   ) => void;
+
   setPhotoPublicationTarget: (
     value: PhotoPublicationTarget | null
   ) => void;
+
   setVerificationPhotoPreviewTarget: (
     value: VerificationPhotoPreviewTarget | null
   ) => void;
+
   setVisitTimesEditTarget: (value: VisitTimesEditTarget | null) => void;
 };
 

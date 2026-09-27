@@ -1,3 +1,4 @@
+
 import type { MapMarkerBadge } from "@/components/map/NaverMapMarkerIcon";
 import {
   getPlaceCategoryIcon,
@@ -318,11 +319,17 @@ export function getMarkerTypeIcon(markerType: ResolvedMarkerType) {
 }
 
 type AttractionMapSheetPlaceInput = {
+
   attraction: GangwonAttraction;
+
   markerType: ResolvedMarkerType;
+
   areaCode: string;
+
   signguCode: string;
+
   touristTrendName: string;
+
   topRank: number | null;
 };
 
@@ -359,9 +366,14 @@ export function createMapSheetPlaceFromAttraction({
 }
 
 export type OpenPlaceSheetFromAttractionOptions = {
+
   attraction: GangwonAttraction;
+
   markerType: ResolvedMarkerType;
+
   touristTrendName: string;
+
   rank: number | null;
+
   mode?: MapSheetMode;
 };

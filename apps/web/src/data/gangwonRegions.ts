@@ -1,3 +1,4 @@
+
 export type Coordinates = {
   lat: number;
   lng: number;
@@ -127,6 +128,7 @@ export const GANGWON_REGIONS = [
 ] as const;
 
 export type GangwonRegion = (typeof GANGWON_REGIONS)[number];
+
 export type GangwonRegionLabel = GangwonRegion["label"];
 
 export const DEFAULT_GANGWON_REGION = GANGWON_REGIONS[0];
@@ -154,4 +156,5 @@ export const GANGWON_SIGNGU_ADMIN_CODES = Object.fromEntries(
 ) as Readonly<Record<string, string>>;
 
 export const GANGWON_TATS_AREA_CODE = "51";
+
 export const GANGWON_AREA_CODE = "32";

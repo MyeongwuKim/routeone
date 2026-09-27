@@ -1,3 +1,4 @@
+
 import type { ReactNode } from "react";
 
 export type SegmentedToggleOption<TValue extends string> = {
@@ -8,15 +9,25 @@ export type SegmentedToggleOption<TValue extends string> = {
 };
 
 type SegmentedToggleProps<TValue extends string> = {
+
   options: ReadonlyArray<SegmentedToggleOption<TValue>>;
+
   value: TValue;
+
   onChange: (value: TValue) => void;
+
   ariaLabel?: string;
+
   className?: string;
+
   itemClassName?: string;
+  /** value와 일치하는 선택 버튼에 기본 선택 스타일 대신 적용할 클래스 */
   selectedItemClassName?: string;
+
   idleItemClassName?: string;
+
   fullWidth?: boolean;
+
   size?: "xs" | "sm";
 };
 

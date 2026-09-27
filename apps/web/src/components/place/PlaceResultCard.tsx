@@ -1,14 +1,24 @@
+
 import { useUiText } from "@/lib/uiText";
 
 type PlaceResultCardProps = {
+
   title: string;
+
   address: string;
+
   categoryLabel: string;
+
   thumbnailUrl?: string;
+  /** thumbnailUrl이 없을 때 이미지 영역에 표시할 카테고리 아이콘 */
   fallbackIcon: string;
+
   distanceLabel?: string | null;
+
   badgeLabel?: string | null;
+
   onClick: () => void;
+
   surface?: "white" | "tinted";
 };
 

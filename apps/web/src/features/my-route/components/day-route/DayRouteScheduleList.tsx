@@ -1,7 +1,4 @@
-/**
- * 사용 위치: DAY 일정 팝업의 스크롤 영역
- * 용도: 날짜별 방문 목록과 일정 편집 동작을 조합한다.
- */
+/** DAY 일정 팝업에서 날짜별 출발지와 장소를 아코디언으로 표시하고 controller의 순서·방문·시간 편집 동작을 각 행에 연결한다. */
 import { MdDirectionsWalk } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
 import DayRouteAccordionItem from "./DayRouteAccordionItem";
@@ -10,6 +7,7 @@ import { getRouteDateKey, getTodayDateKey } from "../../routeDisplay";
 import { getDayRouteStartLocation } from "../../utils/dayRouteStartLocation";
 
 type DayRouteScheduleListProps = {
+
   controller: DayRoutePopupController["schedule"];
 };
 

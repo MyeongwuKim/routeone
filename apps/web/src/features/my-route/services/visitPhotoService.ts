@@ -1,3 +1,7 @@
+/**
+ * 방문 완료에 사용할 GPS를 측정 시각·정확도·장소 반경 기준으로 검증하고 네이티브 사진 선택과 업로드를 연결한다.
+ * 검수 우회와 테스트 위치 조건을 구분하며, 직접 업로드 URL은 허용된 Cloudflare 호스트인지 확인한 뒤 전송한다.
+ */
 import {
   nativeBridge,
   type NativePhotoUploadTarget,
@@ -152,6 +156,10 @@ export function assertVisitPositionFreshness(position: NativePosition) {
   }
 }
 
+/**
+ * 방문 인증에 사용할 최신 위치를 네이티브 브리지에 강제 조회한다.
+ * 웹처럼 위치 브리지가 연결되지 않은 환경에서는 인증을 진행하지 않고 안내 오류를 던진다.
+ */
 export async function requestCurrentPosition() {
   const positionRequest = nativeBridge.location.getCurrentPosition({
     forceRefresh: true,
@@ -164,6 +172,10 @@ export async function requestCurrentPosition() {
   return positionRequest;
 }
 
+/**
+ * 방문 인증용 위치를 가져와 측정 시각, GPS 정확도, 장소와의 거리를 차례로 검증한다.
+ * 검토·개발 우회 설정이 켜져 있고 도착 위치 테스트가 아니면 장소 좌표를 현재 위치로 대신 반환한다.
+ */
 export async function requestVisitVerificationPosition(
   place: VisitPlaceCoordinates
 ) {
@@ -188,6 +200,10 @@ export async function requestVisitVerificationPosition(
   return position;
 }
 
+/**
+ * source에 지정된 카메라 또는 앨범 경로로 네이티브 방문 인증 사진을 요청한다.
+ * 미지원 환경에서는 사진 선택을 시작하지 않고 안내 오류를 던진다.
+ */
 export async function requestVisitPhoto(source: VisitPhotoSource) {
   const photoRequest = nativeBridge.media.takeVisitPhoto(source);
 

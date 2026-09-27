@@ -1,3 +1,4 @@
+/** 선택 DAY와 비교 DAY의 장소·자동차 경로를 전체 화면 지도에 표시하고 DAY·구간 선택, 출발지 미리보기와 일정 담기 범위를 연결한다. */
 import { createPortal } from "react-dom";
 import { IoClose } from "react-icons/io5";
 import { MdAdd } from "react-icons/md";
@@ -9,14 +10,23 @@ import PlaceCartRouteMapSummary from "./PlaceCartRouteMapSummary";
 import PlaceCartRouteMapViewport from "./PlaceCartRouteMapViewport";
 
 type PlaceCartRouteMapPopupProps = {
+
   day: PlannedRouteDay;
+
   comparisonDay?: PlannedRouteDay | null;
+
   completedItemIds?: string[];
+
   dayOptions?: RouteMapDayOption[];
+
   initialDayOptionId?: string;
+
   enableStartPreview?: boolean;
+
   layerClassName?: string;
+
   onRequestCheckout?: (routePlan: PlannedRouteDay[]) => void;
+
   onClose: () => void;
 };
 

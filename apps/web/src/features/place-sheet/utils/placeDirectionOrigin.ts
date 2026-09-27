@@ -1,10 +1,6 @@
 /**
- * 용도:
- * 장소 상세에서 사용할 출발지를 현재 좌표, 지정 출발지, 지역 기준으로 결정한다.
- *
- * 동작 방식:
- * 실제 현재 위치는 공유 좌표만 사용하고 오래된 현재 위치 사본은 무시한다.
- * 사용할 좌표가 없으면 전달받은 기준 위치나 장소가 속한 지역 중심을 반환한다.
+ * 장소 상세 길찾기 출발지를 명시 출발지, 전역 현재 위치, 테스트 위치, 지역 기준 위치 순으로 결정한다.
+ * 현재 위치로 표시된 directionOrigin의 복사 좌표는 재사용하지 않으며 입력 Store나 장소 객체는 변경하지 않는다.
  */
 import { GANGWON_CENTER } from "@/data/gangwonRegions";
 import { SERVICE_AREAS } from "@/data/serviceAreas";
@@ -13,11 +9,17 @@ import type { MapSheetDirectionOrigin } from "@/stores/mapSheetStore";
 import type { MapSheetPlace } from "@/types/place";
 
 type Options = {
+
   directionOrigin: MapSheetDirectionOrigin | null;
+  /** 명시 출발지와 저장된 현재 위치가 없을 때 사용할 지역 기준 출발지 */
   fallbackDirectionOrigin: MapSheetDirectionOrigin | null;
+  /** 테스트 계정 위치를 만들 때 좌표 기준으로 사용할 상세 장소 */
   selectedPlace: MapSheetPlace | null;
+
   storedCurrentPosition: { lat: number; lng: number } | null;
+
   useTestPosition: boolean;
+
   text: UiText;
 };
 

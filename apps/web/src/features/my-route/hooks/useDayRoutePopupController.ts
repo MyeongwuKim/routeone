@@ -1,3 +1,7 @@
+/**
+ * DAY 상세 팝업의 일정 표시와 편집, 방문 완료·사진, 길찾기, 공유·삭제 동작을 조합한다.
+ * 화면 상태는 전용 reducer 훅에 맡기고, 서버 변경과 지도·권한·GPS 테스트 흐름은 책임별 훅과 Service에 위임한다.
+ */
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccountUser } from "@/components/account/useAccountUser";
@@ -64,6 +68,11 @@ import {
   isVisitVerificationBypassEnabled,
 } from "../services/visitPhotoService";
 
+/**
+ * route와 선택 day를 화면 모델로 만들고 편집 가능 여부에 따라 공개 동작을 제한한다.
+ * 순서 편집은 draft에서 수행한 뒤 명시적으로 저장하며, 방문 처리는 인증·위치·사진 검증과
+ * 도착 알림 전환을 거쳐 서버 결과가 확인된 경우에만 관련 상태와 캐시를 갱신한다.
+ */
 export function useDayRoutePopupController({
   route,
   day,

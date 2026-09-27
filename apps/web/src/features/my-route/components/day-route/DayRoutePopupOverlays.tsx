@@ -1,3 +1,4 @@
+/** DAY 팝업 controller가 선택한 지도·출발지·방문·시간·사진·GPS 테스트 대상을 해당 전용 팝업과 진행 토스트로 연결한다. */
 import RouteVisitProgressToast from "./RouteVisitProgressToast";
 import { MdDragIndicator } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
@@ -17,6 +18,7 @@ import {
 } from "./DayRouteDialogs";
 
 type DayRoutePopupOverlaysProps = {
+
   controller: DayRoutePopupController["overlays"];
 };
 

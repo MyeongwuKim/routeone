@@ -1,3 +1,4 @@
+/** 공유 경로 목록에서 태그·지역·장소 후보를 중복 없이 만들고 AND 조건으로 일치하는 경로만 반환한다. */
 import {
   getDisplayPlaceOptions,
   getDisplayRegionNames,
@@ -35,13 +36,16 @@ import type { AppLanguage } from "@/stores/appLanguageStore";
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
 
 export type SharedRouteFilters = {
+
   tags: string[];
   regions: string[];
   places: SharedRoutePlaceFilterOption[];
 };
 
 export type SharedRouteFilterOptions = {
+  /** 공유 경로 필터에서 선택할 수 있는 태그 목록 */
   tags: string[];
+
   placeRegions: Array<{
     region: string;
     categories: Array<{

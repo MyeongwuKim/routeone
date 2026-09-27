@@ -1,3 +1,4 @@
+
 import {
   useEffect,
   useMemo,
@@ -57,17 +58,29 @@ type NaverMapInteractions = {
 };
 
 type NaverMapViewProps = {
+
   center: NaverMapPoint;
+
   zoom?: number;
+
   minZoom?: number;
+
   className?: string;
+
   mapClassName?: string;
+
   loadingLabel?: string;
+
   controls?: Partial<NaverMapControls>;
+
   interactions?: Partial<NaverMapInteractions>;
+
   mapOptions?: Record<string, unknown>;
+
   resetKey?: string | number;
+
   children?: ReactNode;
+
   onReady?: (context: NaverMapReadyContext) => void | (() => void);
 };
 

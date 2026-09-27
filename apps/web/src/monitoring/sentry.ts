@@ -111,6 +111,10 @@ function syncSentryUser() {
   Sentry.setUser(userId ? { id: userId } : null);
 }
 
+/**
+ * 브라우저에서 DSN이 설정된 경우에만 Sentry를 한 번 초기화하고 현재 로그인 사용자를 연결한다.
+ * 콘솔 breadcrumb와 민감한 요청 헤더는 전송하지 않으며, 초기화 후 인증 Store 변경도 사용자 정보에 반영한다.
+ */
 export function initializeWebMonitoring() {
   if (isInitialized || typeof window === "undefined") {
     return;

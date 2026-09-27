@@ -1,3 +1,4 @@
+/** 일정의 출발지→첫 장소와 장소 간 자동차 이동시간을 조회해 DAY별 시간 계산에 제공한다. */
 import { useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
@@ -14,8 +15,11 @@ type RouteTravelSegment = {
 };
 
 type UseRoutePlanDrivingTimesOptions = {
+
   routePlan: PlannedRouteDay[];
+
   dailyStartMinutes: number;
+
   dailyEndMinutes: number;
 };
 
@@ -125,6 +129,10 @@ function applyRouteTravelMinutes({
   });
 }
 
+/**
+ * 좌표가 있는 구간을 DAY와 itemIndex로 구분해 Query로 조회하고 분 단위로 변환한다.
+ * 개별 구간 실패는 null로 남겨 다른 구간 계산을 유지하며, 조회 결과로 각 DAY의 도착·종료 시각을 다시 계산한다.
+ */
 export function useRoutePlanDrivingTimes({
   routePlan,
   dailyStartMinutes,

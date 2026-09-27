@@ -1,3 +1,4 @@
+/** 일정 만들기에서 여유·보통·알찬 여행 속도를 선택하고 RouteCheckout Context의 tempo를 변경한다. */
 import { useRouteCheckout } from "../../hooks/useRouteCheckout";
 import { useUiText } from "@/lib/uiText";
 

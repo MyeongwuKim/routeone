@@ -1,3 +1,10 @@
+/**
+ * 용도:
+ * 웹 앱 실행에 필요한 전역 설정을 적용하고 React 애플리케이션을 시작한다.
+ *
+ * 동작 방식:
+ * 모니터링과 공통 스타일을 준비한 뒤 루트 요소에 App을 렌더링한다.
+ */
 import "./instrument";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

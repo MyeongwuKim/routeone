@@ -15,13 +15,21 @@ import {
 } from "../../models/routeMapModel";
 
 type RouteSegmentSelectCardProps = {
+
   segment: RouteMapSegment;
+
   segmentColor: string;
+
   variant: RouteDisplayVariant;
+
   isSelected: boolean;
+
   routeLabel?: string;
+
   lineStyle?: "solid" | "dashed";
+
   text: UiText;
+
   onSelect: (
     variant: RouteDisplayVariant,
     segment: RouteMapSegment,

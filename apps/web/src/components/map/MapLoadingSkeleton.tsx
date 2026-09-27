@@ -1,4 +1,6 @@
+
 type MapLoadingSkeletonProps = {
+
   label: string;
 };
 

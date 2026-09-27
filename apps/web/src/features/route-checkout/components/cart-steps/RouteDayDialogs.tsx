@@ -1,3 +1,4 @@
+/** 추천 일정의 장소 체류시간을 조정하고, 장소 상세·삭제·DAY 간 이동 동작을 제공하는 편집 팝업을 묶는다. */
 import { useState } from "react";
 import {
   IoAdd,
@@ -123,6 +124,9 @@ export function StayMinutesPopup({
   );
 }
 
+/**
+ * 경로 생성 결과의 장소를 다른 일차로 이동하거나 제거하는 시트를 표시한다.
+ */
 export function PlaceCartRouteItemSheet({
   item,
   currentDay,

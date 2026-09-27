@@ -1,3 +1,4 @@
+/** 추천 일정의 체류시간·장소 삽입·삭제·순서·DAY 출발지를 draft로 편집하고 적용 상태와 비교한다. */
 import { useMemo, useReducer } from "react";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
@@ -19,15 +20,25 @@ import type {
 } from "../models/routePlanTypes";
 
 type UseRouteResultEditorParams = {
+
   savedPlaces: SavedPlaceItem[];
+  /** 편집 draft를 만들고 변경 여부를 비교할 기준 일정 */
   initialRoutePlan?: PlannedRouteDay[] | null;
+
   travelStartDate: string;
+
   tripDays: number;
+
   dailyStartMinutes: number;
+
   dailyEndMinutes: number;
+
   tempo: TravelTempo | null;
+
   isScheduleValid: boolean;
+
   currentLocation: RouteStartLocation | null;
+
   isRouteSaveInFlight: () => boolean;
 };
 
@@ -314,6 +325,10 @@ function applyManualRouteInsertions(options: {
   });
 }
 
+/**
+ * 담은 장소와 설정으로 기본 일정을 만들고 수동 변경을 reducer snapshot에 누적한다.
+ * 이동시간 조회 결과가 바뀌면 draft와 적용 일정을 다시 계산하며, 적용 전에는 저장 입력에 반영하지 않는다.
+ */
 export function useRouteResultEditor({
   savedPlaces,
   initialRoutePlan = null,

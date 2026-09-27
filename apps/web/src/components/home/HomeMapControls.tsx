@@ -31,24 +31,43 @@ type SearchFilterOption = {
 };
 
 type HomeMapControlsProps = {
+  /** 사용자가 선택할 수 있는 시·군·구 이름과 코드 목록 */
   regions: ReadonlyArray<RegionOption>;
+  /** 지역 버튼의 선택 상태와 가로 스크롤 위치를 결정하는 현재 시·군·구 코드 */
   selectedSigunguCode: string;
+  /** 검색 버튼의 접근성 문구에 표시하는 현재 지역 이름 */
   selectedRegionLabel: string;
+  /** 시·군·구 코드를 키로 갖는 예정·진행 축제 개수. 지역 버튼 배지에 표시한다. */
   festivalCountBySigunguCode: Map<string, number>;
+  /** 지도 마커에 적용할 수 있는 장소 종류 필터 목록 */
   filters: ReadonlyArray<SearchFilterOption>;
+  /** 현재 선택된 필터 버튼을 표시하는 장소 종류 */
   selectedFilter: SearchFilter;
+  /** 담은 장소 버튼 배지에 표시할 장소 수 */
   savedPlaceCount: number;
+  /** 알림 버튼 배지에 표시할 읽지 않은 알림 수 */
   unreadNotificationCount: number;
+  /** true이면 담은 장소 개수 대신 로딩 표시를 보여준다. */
   isSavedPlaceCountLoading: boolean;
+  /** true이면 현재 위치 버튼을 비활성화하고 조회 중 표시를 보여준다. */
   isCurrentLocationLookupPending: boolean;
+  /** false이면 지도 조작이 필요한 현재 위치 버튼을 비활성화한다. */
   isMapReady: boolean;
+  /** 알림 버튼을 노출할 로그인 상태 */
   isAuthenticated: boolean;
+
   onOpenNotifications: () => void;
+
   onRequestLogin: () => void;
+
   onOpenSearch: () => void;
+
   onOpenSavedList: () => void;
+
   onFocusCurrentLocation: () => void;
+
   onSelectRegion: (sigunguCode: string) => void;
+
   onSelectFilter: (filter: SearchFilter) => void;
 };
 
@@ -109,6 +128,10 @@ function HomeMapControls({
     (state) => state.setRegionScrollLeft
   );
 
+  /**
+   * 처음 표시될 때는 Store에 남아 있는 가로 스크롤 위치를 복원한다.
+   * 저장 위치가 없거나 선택 지역이 바뀌면 활성 지역 버튼이 목록 중앙에 오도록 이동한다.
+   */
   useLayoutEffect(() => {
     const regionScroll = regionScrollRef.current;
     const previousSelectedRegion = previousSelectedRegionRef.current;
@@ -160,6 +183,7 @@ function HomeMapControls({
     });
   }, [regions, selectedSigunguCode]);
 
+  /** 화면을 벗날 때 마지막 지역 목록 스크롤 위치를 Store에 보관한다. */
   useEffect(() => {
     return () => {
       setRegionScrollLeft(latestRegionScrollLeftRef.current);

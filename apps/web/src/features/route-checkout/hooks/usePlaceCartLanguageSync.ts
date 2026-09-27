@@ -1,3 +1,4 @@
+/** 담은 장소의 제목과 주소를 현재 앱 언어에 맞춰 다시 조회하고 Place Cart 저장값에 반영한다. */
 import { useEffect } from "react";
 import { localizeTourPlaces } from "@/lib/placeLocalization";
 import { fetchTourPlaceBasicInfo } from "@/lib/visitKoreaTourApi";
@@ -87,6 +88,10 @@ async function getEnglishLabelUpdates(
   });
 }
 
+/**
+ * 저장 언어와 현재 언어가 다르거나 영어 목록에 한글이 남은 장소만 동기화한다.
+ * 한국어는 관광 API 원문을, 영어는 번역 API를 사용하며 취소된 Effect의 늦은 결과는 Store에 반영하지 않는다.
+ */
 export function usePlaceCartLanguageSync() {
   const language = useAppLanguageStore((state) => state.language);
   const savedPlaces = usePlaceCartStore((state) => state.savedPlaces);

@@ -1,3 +1,4 @@
+
 import { routeApi } from "./routeApi";
 import type { AppendRouteDaysInput, CreateRouteInput } from "@/generated/graphql";
 import {
@@ -8,7 +9,9 @@ import {
 import type { MapSheetPlace } from "@/types/place";
 
 export type RouteCheckoutPlanDay = {
+  /** 비어 있는 일차 제거 전의 화면상 일차 번호 */
   day: number;
+  /** 해당 일차의 출발 좌표. 없으면 전체 일정 출발지를 사용한다. */
   startLocation?: { lat: number; lng: number } | null;
   items: Array<{
     stayMinutes: number;
@@ -18,11 +21,17 @@ export type RouteCheckoutPlanDay = {
 };
 
 export type SaveRoutePlanInput = {
+  /** 일정 만들기 화면에서 편집한 일차와 장소 목록 */
   routePlan: RouteCheckoutPlanDay[];
+  /** 첫 일차의 여행 시작일 문자열 */
   travelStartDate: string;
+  /** 화면에서 선택한 여행 일수. 서버 입력은 비어 있지 않은 일차 수로 다시 계산한다. */
   tripDays: number;
+  /** 각 일차의 기본 출발 시각을 자정부터 분 단위로 표현한 값 */
   dailyStartMinutes: number;
+  /** 하루 일정 종료 제한 시각을 자정부터 분 단위로 표현한 값 */
   scheduleEndMinutes: number;
+  /** 개별 일차 출발지가 없을 때 사용할 전체 일정 출발 좌표 */
   startLocation?: {
     lat: number;
     lng: number;
@@ -55,6 +64,7 @@ function normalizeRoutePlanDays(routePlan: RouteCheckoutPlanDay[]) {
   };
 }
 
+/** 장소가 없는 일차를 제거하고 번호를 다시 매겼을 때 서버에 저장될 실제 여행 일수를 반환한다. */
 export function getEffectiveRoutePlanTripDays(
   routePlan: RouteCheckoutPlanDay[]
 ) {
@@ -99,6 +109,11 @@ function toRouteStartLocation(
   };
 }
 
+/**
+ * 빈 일차를 제거하고 남은 일차를 1부터 다시 번호 매겨 CreateRouteInput으로 변환한다.
+ * 장소가 가장 많이 속한 지역을 대표 지역으로 선택하고, 유효한 전체·일차별 출발 좌표만 포함한다.
+ * 장소 순서는 정규화된 일차 순서대로 하나의 연속 order를 부여한다.
+ */
 export function buildCreateRouteInput(
   input: SaveRoutePlanInput
 ): CreateRouteInput {
@@ -162,6 +177,7 @@ function buildAppendRouteDaysInput(
   };
 }
 
+/** 새 경로 생성과 기존 경로 일차 추가에 공통 일정 변환 규칙을 적용한 뒤 routeApi에 요청을 위임한다. */
 export const routeCheckoutApi = {
   async saveRoutePlan(input: SaveRoutePlanInput, clientRequestId: string) {
     const routeInput = buildCreateRouteInput(input);

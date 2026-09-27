@@ -1,3 +1,6 @@
+/**
+ * 경로 생성 과정의 선택값을 보관하는 상태와 각 입력·이동·초기화 액션을 정의한다.
+ */
 import type { CartFlowStep } from "./routeCheckoutFlow";
 import type { RouteStartLocation, TravelTempo } from "./routePlanTypes";
 
@@ -25,9 +28,13 @@ export type RouteCheckoutAction =
   | { type: "set-start-location"; value: RouteStartLocation | null };
 
 type CreateRouteCheckoutStateOptions = {
+  /** 생성할 상태에서 처음 표시할 일정 만들기 단계 */
   initialStep?: CartFlowStep;
+  /** 생성할 상태에 적용할 여행 시작일. null은 빈 문자열로 정규화된다. */
   initialTravelStartDate?: string | null;
+
   initialTripDays?: number;
+  /** 생성할 상태에 적용할 추천 일정 출발지 */
   initialStartLocation?: RouteStartLocation | null;
 };
 

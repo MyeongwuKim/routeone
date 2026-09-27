@@ -1,3 +1,4 @@
+/** 공유 경로의 DAY·장소를 일정 만들기의 초기 경로와 담은 장소 목록으로 복사하며 원본 객체는 변경하지 않는다. */
 import type {
   PlannedRouteDay,
   RouteStartLocation,

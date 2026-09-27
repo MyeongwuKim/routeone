@@ -1,7 +1,9 @@
+/** 공유 경로의 장소를 번역 요청용 후보로 중복 제거하고 응답 제목·주소를 목록 또는 상세 경로 구조에 다시 합친다. */
 import type { RouteByIdQuery } from "@/generated/graphql";
 import { getPlaceLocalizationId } from "@/lib/placeLocalization";
 import type { SharedRoute } from "./sharedRouteCardModel";
 
+/** 번역 요청에서 같은 장소를 합치는 ID와 서버에 전달할 원문 장소 정보를 묶는다. */
 export type SharedRoutePlaceLocalizationCandidate = {
   id: string;
   contentTypeId: string;

@@ -1,3 +1,4 @@
+/** 장소의 계획 체류시간 변경을 낙관적으로 반영하고 DAY 편집 상태와 내 경로 캐시를 동기화한다. */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SetStateAction } from "react";
 import { routeApi } from "@/api/routeApi";
@@ -12,10 +13,15 @@ import {
 import type { MyRouteDay, MyRouteStop } from "../types";
 
 type UseRouteStopStayMutationOptions = {
+
   routeId: string;
+
   activeDayId: string;
+
   orderedStops: MyRouteStop[];
+
   isOrderEditing: boolean;
+
   setOrderedStops: (value: SetStateAction<MyRouteStop[]>) => void;
 };
 
@@ -28,6 +34,10 @@ type UpdateStayVariables = {
   previousStops: MyRouteStop[];
 };
 
+/**
+ * 순서 편집 중에는 로컬 장소 배열만 바꾸고, 일반 상태에서는 서버 저장 전에 캐시를 먼저 갱신한다.
+ * 실패하면 이전 캐시와 장소 배열을 복원하고 성공하면 서버 응답 경로를 최종 상태로 적용한다.
+ */
 export function useRouteStopStayMutation({
   routeId,
   activeDayId,

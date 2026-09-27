@@ -1,6 +1,11 @@
+/** 네이티브 컨테이너에 웹 번들 렌더링 준비 신호를 전달하는 비표시 컴포넌트다. */
 import { useEffect } from "react";
 import { nativeBridge } from "@/native-bridge";
 
+/**
+ * 연결 직후, 두 번의 렌더링 프레임 뒤, 250ms·1초 뒤에 준비 신호를 반복 전송한다.
+ * 네이티브가 준비 상태를 다시 요청하는 이벤트에도 응답하며, 정리 시 예약 작업과 리스너를 해제한다.
+ */
 export default function NativeWebBundleReadySignal() {
   useEffect(() => {
     let isCancelled = false;

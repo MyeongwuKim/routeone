@@ -1,3 +1,4 @@
+
 import { nativeBridge } from "@/native-bridge";
 
 const AUTH_TOKEN_STORAGE_KEY = "routeone.authToken";
@@ -5,6 +6,7 @@ const AUTH_SESSION_EXPIRES_AT_STORAGE_KEY =
   "routeone.authSessionExpiresAt";
 const AUTH_SESSION_EXPIRED_STORAGE_KEY = "routeone.authSessionExpired";
 const AUTH_SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
+
 export const AUTH_SESSION_CHANGE_EVENT = "routeone:auth-session-change";
 
 type AuthSessionEndReason = "logout" | "expired";
@@ -106,6 +108,9 @@ export function clearAuthToken(reason: AuthSessionEndReason = "logout") {
   postNativeAuthToken(null, null, reason);
 }
 
+/**
+ * `consumeAuthSessionExpired`는 저장된 세션 만료 표시를 읽은 뒤 중복 노출되지 않도록 제거한다.
+ */
 export function consumeAuthSessionExpired() {
   if (typeof window === "undefined") {
     return false;

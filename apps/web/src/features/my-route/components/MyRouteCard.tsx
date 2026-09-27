@@ -1,3 +1,4 @@
+/** 내 경로를 예정·진행·완료 화면에 맞는 카드 형태로 표시하고 DAY 선택, 여행 시작, DAY 추가와 삭제 요청을 부모에 전달한다. */
 import { useState } from "react";
 import {
   MdAdd,
@@ -34,12 +35,19 @@ import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
 import { useUiText, type UiText } from "@/lib/uiText";
 
 type MyRouteCardProps = {
+
   route: MyRoute;
+
   variant?: "featured" | "compact" | "upcoming" | "history";
+
   hideTimelineBadge?: boolean;
+
   onSelectDay: (route: MyRoute, day: MyRouteDay) => void;
+
   onRequestStartRoute?: (route: MyRoute) => void;
+
   onRequestAppendDay?: (route: MyRoute) => void;
+
   onRequestDeleteRoute?: (route: MyRoute) => void;
 };
 

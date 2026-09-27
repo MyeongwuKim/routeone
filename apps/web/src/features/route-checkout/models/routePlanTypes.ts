@@ -1,3 +1,6 @@
+/**
+ * 경로 생성과 편집에서 사용하는 여행 속도, 출발지, 일차별 장소와 수동 삽입 위치 구조를 정의한다.
+ */
 import type { MapSheetPlace } from "@/types/place";
 
 export type TravelTempo = "relaxed" | "balanced" | "packed";

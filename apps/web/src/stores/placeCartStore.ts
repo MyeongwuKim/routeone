@@ -1,3 +1,12 @@
+/**
+ * 용도:
+ * 사용자가 여행에 담은 장소 목록과 경로 생성 모달의 열림 여부를 공유한다.
+ * 홈 지도·장소 상세에서 담은 장소를 경로 계산 단계까지 유지하고 수정할 때 사용한다.
+ *
+ * 동작 방식:
+ * 장소 추가·삭제·전체 삭제와 번역된 이름 갱신을 처리하고 중복 장소는 하나로 유지한다.
+ * 담은 장소 ID와 상세 정보는 localStorage에 저장해 새로고침 후에도 복원한다.
+ */
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import {
@@ -9,33 +18,51 @@ import type { AppLanguage } from "@/stores/appLanguageStore";
 import type { MapSheetPlace } from "@/types/place";
 
 export type SavedPlaceItem = {
+  /** 저장 목록과 삭제 동작에 사용하는 장소 ID */
   id: string;
+  /** 경로 생성과 장소 상세에 다시 전달할 장소 스냅샷 */
   place: MapSheetPlace;
+  /** 목록 카드에 표시할 대표 이미지 URL */
   thumbnailUrl: string;
+  /** 담은 순서를 식별하는 Unix 밀리초 시각 */
   savedAt: number;
+  /** 저장된 제목·주소가 어느 언어로 변환됐는지 나타내며 확인되지 않으면 undefined */
   labelLanguage?: AppLanguage;
 };
 
 export type SavedPlaceLabelUpdate = {
+  /** 제목·주소를 교체할 저장 장소 ID */
   id: string;
+  /** language로 번역된 새 장소명 */
   title: string;
+  /** language로 번역된 새 주소 */
   address: string;
+  /** title과 address에 적용된 언어 */
   language: AppLanguage;
 };
 
 type PlaceCartState = {
+  /** 담은 장소 목록 모달의 표시 여부. 영속 저장하지 않는다. */
   isSavedListOpen: boolean;
+  /** 포함 여부를 빠르게 확인하는 장소 ID 목록. savedPlaces 순서와 동일하게 유지한다. */
   savedPlaceIds: string[];
+  /** 최근에 담은 장소가 앞에 오도록 저장한 장소 스냅샷 목록 */
   savedPlaces: SavedPlaceItem[];
+  /** 저장 목록과 장소 데이터는 유지하고 목록 모달만 연다. */
   openSavedList: () => void;
+  /** 저장 목록과 장소 데이터는 유지하고 목록 모달만 닫는다. */
   closeSavedList: () => void;
+  /** 같은 장소가 있으면 제거하고, 없으면 썸네일·언어 정보와 함께 목록 앞에 추가한다. */
   toggleSavedPlace: (
     place: MapSheetPlace,
     thumbnailUrl?: string,
     language?: AppLanguage
   ) => void;
+  /** ID가 일치하는 저장 장소의 제목·주소·번역 언어를 일괄 교체한다. */
   updateSavedPlaceLabels: (updates: SavedPlaceLabelUpdate[]) => void;
+  /** placeId를 savedPlaceIds와 savedPlaces 양쪽에서 제거한다. */
   removeSavedPlace: (placeId: string) => void;
+  /** 담은 장소 두 목록을 모두 비우고 영속 저장값에 반영한다. */
   clearSavedPlaces: () => void;
 };
 

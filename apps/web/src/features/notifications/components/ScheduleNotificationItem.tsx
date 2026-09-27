@@ -1,3 +1,4 @@
+/** 일정 시작·장소 도착 알림의 경로명과 시각·장소를 표시하고, 연결된 경로와 DAY가 있으면 해당 일정 상세로 이동한다. */
 import {
   MdAccessTime,
   MdChevronRight,

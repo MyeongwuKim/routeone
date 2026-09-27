@@ -1,3 +1,4 @@
+/** 내 경로 React Query 캐시에서 경로·DAY·장소를 원본 변경 없이 교체하고 방문 수·완료 상태 집계를 다시 계산한다. */
 import type {
   MyRoutesQuery,
   RouteSummaryFieldsFragment,
@@ -11,6 +12,7 @@ import {
 import type { MyRoute, MyRouteStop } from "./types";
 
 export const MY_ROUTES_QUERY_KEY = ["my-routes"] as const;
+
 export const MY_ROUTE_HISTORY_QUERY_KEY = ["my-route-history"] as const;
 
 function getRouteStopCounts(route: MyRoute) {
@@ -120,6 +122,10 @@ export function mergeMyRouteSummaryCache(
   };
 }
 
+/**
+ * 지정한 DAY의 장소를 stopIds 순서로 재배열하고 order를 1부터 다시 매긴다.
+ * 전달된 ID로 모든 기존 장소를 찾지 못하면 해당 DAY는 바꾸지 않으며, 경로 집계값도 함께 다시 계산한다.
+ */
 export function optimisticReorderRouteStopsCache({
   data,
   routeId,
@@ -162,6 +168,10 @@ export function optimisticReorderRouteStopsCache({
   });
 }
 
+/**
+ * stopId의 방문 여부와 인증 위치·사진·실제 체류시간을 서버 응답 전에 내 경로 캐시에 반영한다.
+ * 방문 취소 시 인증·체크인·체크아웃 값을 비우고, GPS 인증 여부에 따라 위치와 verifiedAt 저장 범위를 구분한다.
+ */
 export function optimisticVisitRouteStopCache({
   data,
   routeId,
@@ -238,6 +248,7 @@ export function optimisticVisitRouteStopCache({
   });
 }
 
+/** DAY 목록과 경로의 평탄화된 stops 양쪽에서 stopId의 예정 체류시간을 같은 값으로 교체한다. */
 export function optimisticUpdateRouteStopStayMinutesCache({
   data,
   routeId,

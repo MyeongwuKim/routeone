@@ -1,3 +1,4 @@
+/** 관광지 혼잡도 시계열을 최근 7일·30일 선 그래프로 전환해 표시하고 로딩·오류·데이터 없음 상태를 구분한다. */
 import { useMemo, useState, type CSSProperties } from "react";
 import {
   CategoryScale,
@@ -21,9 +22,13 @@ import { useUiText } from "@/lib/uiText";
 type TrendTabType = "weekly" | "monthly";
 
 type PlaceTrendChartProps = {
+
   points: TouristConcentrationPoint[];
+
   isLoading: boolean;
+
   errorMessage: string | null;
+
   isTouristAttraction: boolean;
 };
 

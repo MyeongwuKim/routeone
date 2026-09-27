@@ -1,3 +1,4 @@
+
 const DIRECTIONS_API_BASE_URL = "/map-direction/v1/driving";
 
 type DirectionsLanguage = "ko" | "en";
@@ -23,10 +24,15 @@ export type DrivingRouteResult = {
 };
 
 type FetchDrivingRouteParams = {
+
   startLat: number;
+
   startLng: number;
+
   goalLat: number;
+
   goalLng: number;
+
   language?: DirectionsLanguage;
 };
 

@@ -1,3 +1,4 @@
+/** uiToastStore에 메시지가 있을 때 화면 상단에 담기 결과 안내를 표시하며, 노출 시간과 닫힘은 Store가 관리한다. */
 import { IoBagHandleOutline } from "react-icons/io5";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiToastStore } from "@/stores/uiToastStore";

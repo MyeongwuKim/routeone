@@ -1,3 +1,4 @@
+
 import {
   useCallback,
   useMemo,
@@ -25,10 +26,15 @@ import {
 import { RouteCheckoutContext } from "../hooks/useRouteCheckout";
 
 type RouteCheckoutProviderProps = {
+
   children: ReactNode;
+  /** Provider를 처음 만들 때 표시할 일정 만들기 단계 */
   initialStep?: CartFlowStep;
+  /** 일정 상태를 처음 만들 때 적용할 여행 시작일. null과 빈 문자열은 미선택 상태로 정규화된다. */
   initialTravelStartDate?: string | null;
+
   initialTripDays?: number;
+  /** 추천 일정 계산에 사용할 최초 출발지. 없으면 출발지 선택 단계에서 정한다. */
   initialStartLocation?: RouteStartLocation | null;
 };
 

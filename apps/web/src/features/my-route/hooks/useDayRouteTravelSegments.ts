@@ -1,3 +1,4 @@
+/** DAY 출발지와 장소 사이의 자동차 이동시간을 저장값, 길찾기 응답 또는 거리 추정값으로 제공한다. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
@@ -67,6 +68,7 @@ function getCoordinateKey(point: RouteLatLng) {
   return `${point.lat.toFixed(6)},${point.lng.toFixed(6)}`;
 }
 
+/** 두 좌표가 유효하면 소수점 여섯 자리 좌표 쌍으로 중복 요청을 구분하는 키를 만들고, 아니면 null을 반환한다. */
 export function getTravelSegmentKey(
   from: RouteLatLng | null | undefined,
   to: RouteLatLng | null | undefined
@@ -95,6 +97,7 @@ function createTravelSegmentRequest(
   };
 }
 
+/** 장소에 저장된 이전 구간 이동시간이 양수일 때만 success 상태로 반환한다. */
 export function getStoredTravelSegment(
   stop: MyRouteStop | null | undefined
 ): TravelSegmentState | null {
@@ -109,14 +112,21 @@ export function getStoredTravelSegment(
 }
 
 type UseDayRouteTravelSegmentsOptions = {
+
   language: AppLanguage;
+
   days: MyRouteDay[];
+
   activeDayId: string;
+
   orderedStops: MyRouteStop[];
+
   stopsByDayId?: Record<string, MyRouteStop[]>;
+
   routeStartLocation: MyRoute["startLocation"];
 };
 
+/** 각 DAY의 출발지→첫 장소와 저장 시간이 없는 장소 간 구간을 만들고 같은 좌표 쌍은 한 요청으로 합친다. */
 export function createDayRouteTravelSegmentRequests({
   days,
   activeDayId,
@@ -154,6 +164,11 @@ export function createDayRouteTravelSegmentRequests({
   return [...requestByKey.values()];
 }
 
+/**
+ * 필요한 좌표 구간을 한 번씩 조회하고 결과를 프레임 단위로 묶어 상태에 반영한다.
+ * 길찾기 실패 시 유효한 좌표는 직선거리와 시속 35km 기준 추정시간을 fallback으로 사용하며,
+ * 훅 정리 뒤 도착한 결과와 이미 해결·요청 중인 키는 무시한다.
+ */
 export function useDayRouteTravelSegments({
   language,
   days,

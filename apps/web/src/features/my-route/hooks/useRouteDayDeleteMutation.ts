@@ -1,3 +1,4 @@
+/** DAY 삭제를 낙관적으로 반영하고 활성 일차·펼침 상태와 내 경로 캐시를 서버 결과에 맞춰 복구한다. */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SetStateAction } from "react";
 import { routeApi } from "@/api/routeApi";
@@ -12,11 +13,17 @@ import {
 import type { MyRouteDay } from "../types";
 
 type UseRouteDayDeleteMutationOptions = {
+
   routeId: string;
+
   activeDay: MyRouteDay;
+
   sortedDays: MyRouteDay[];
+
   isReadOnly: boolean;
+
   resetDayEditor: (day: MyRouteDay) => void;
+
   setExpandedDayIds: (value: SetStateAction<Set<string>>) => void;
 };
 
@@ -25,6 +32,10 @@ type DeleteDayVariables = {
   nextActiveDay: MyRouteDay | undefined;
 };
 
+/**
+ * 삭제 전 다음 활성 DAY를 선택하고 목록 캐시에서 대상 DAY를 먼저 제거한다. 실패하면 이전 캐시와 편집 상태를
+ * 복원하며, 성공하면 서버 응답 경로로 교체하고 과거 경로 Query를 무효화한다. 읽기 전용 상태에서는 요청하지 않는다.
+ */
 export function useRouteDayDeleteMutation({
   routeId,
   activeDay,

@@ -1,3 +1,4 @@
+/** 홈·내 루트·공유 루트·내 정보 화면의 공통 본문을 렌더링하고 현재 경로에 맞는 하단 탭을 활성화한다. */
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import type { IconType } from "react-icons";
 import {

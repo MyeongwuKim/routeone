@@ -14,10 +14,15 @@ import type { PlacePhotoReportReason } from "@/generated/graphql";
 import type { UiText } from "@/lib/uiText";
 
 type PhotoReportDialogProps = {
+
   isOpen: boolean;
+
   isSubmitting: boolean;
+
   onClose: () => void;
+
   onSubmit: (reason: PlacePhotoReportReason, details: string | null) => void;
+
   text: UiText["photoReport"];
 };
 

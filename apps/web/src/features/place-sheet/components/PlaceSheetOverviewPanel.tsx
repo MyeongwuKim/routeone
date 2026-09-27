@@ -1,3 +1,4 @@
+
 import { lazy, Suspense } from "react";
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
@@ -24,16 +25,27 @@ import {
 const PlaceTrendChart = lazy(() => import("./PlaceTrendChart"));
 
 type PlaceSheetOverviewPanelProps = {
+
   appLanguage: AppLanguage;
+
   currentLocation: PlaceSheetCoordinates;
+
   data: PlaceSheetData;
+
   directionOrigin: MapSheetDirectionOrigin;
+
   isCurrentLocationLookupPending: boolean;
+
   isDarkMode: boolean;
+
   isVisible: boolean;
+
   onSelectNearbyPlace: (place: NearbyTouristPlace) => void;
+  /** 개요 정보와 길찾기 도착지로 표시할 장소 */
   selectedPlace: MapSheetPlace;
+
   showDirections: boolean;
+
   text: UiText;
 };
 

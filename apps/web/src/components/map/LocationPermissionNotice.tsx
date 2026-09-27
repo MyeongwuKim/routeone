@@ -11,6 +11,7 @@ import { openNativeAppSettings } from "@/native-bridge/permissions";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
 type LocationPermissionNoticeProps = {
+
   text: UiText;
 };
 

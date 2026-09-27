@@ -1,3 +1,4 @@
+
 import { Kind, print, type DocumentNode } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
 import { getAuthToken } from "./authToken";
@@ -18,9 +19,13 @@ const UNEXPECTED_SERVER_ERROR_MESSAGE =
   "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
 
 export type GraphQLRequestOptions = {
+
   authToken?: string | null;
+
   timeoutMs?: number;
+  /** 최초 요청 이후 추가로 허용할 최대 재시도 횟수 */
   maxRetryCount?: number;
+
   retryDelayMs?: number;
 };
 
@@ -34,6 +39,9 @@ type GraphQLResponse<TResult> = {
   }>;
 };
 
+/**
+ * GraphQL 오류 메시지와 오류 코드를 함께 보관하는 요청 오류 클래스다.
+ */
 export class GraphQLRequestError extends Error {
   retryable: boolean;
   status?: number;

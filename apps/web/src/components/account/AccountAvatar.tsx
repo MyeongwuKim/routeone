@@ -1,3 +1,4 @@
+/** 계정 프로필 이미지를 표시하고, URL이 없거나 이미지 로드에 실패하면 이름에서 만든 대체 문자를 보여준다. */
 import { useState } from "react";
 import {
   getAccountAvatarFallback,

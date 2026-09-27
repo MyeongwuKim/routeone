@@ -1,3 +1,4 @@
+
 import { IoClose } from "react-icons/io5";
 import type { UiText } from "@/lib/uiText";
 import { formatRouteMapDate } from "../../models/routeMapModel";
@@ -11,18 +12,31 @@ type CheckoutDayOption = {
 };
 
 type PlaceCartRouteCheckoutScopeDialogProps = {
+
   text: UiText;
+
   dayOptions: CheckoutDayOption[];
+
   routePlanLength: number;
+  /** 전체 경로에 포함된 장소 수 */
   placeCount: number;
+  /** 담기에 포함할 DAY ID 집합 */
   selectedDayIdSet: ReadonlySet<string>;
+  /** 선택한 DAY들로 구성될 일정의 DAY 수 */
   selectedRoutePlanLength: number;
+  /** 선택한 DAY들에 포함된 장소 수 */
   selectedPlaceCount: number;
+
   isAllSelected: boolean;
+
   currentDayOptionId: string | null;
+
   onClose: () => void;
+
   onToggleDay: (dayId: string) => void;
+
   onToggleAll: () => void;
+
   onConfirm: () => void;
 };
 

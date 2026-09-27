@@ -1,3 +1,4 @@
+/** DAY 일정의 분 단위 시각, 날짜, 거리와 이동 구간 상태를 현재 UI 언어에 맞는 표시 문구로 변환한다. */
 import type { UiText } from "@/lib/uiText";
 import { formatRouteDate } from "../routeDisplay";
 import type { MyRoute, MyRouteDay } from "../types";

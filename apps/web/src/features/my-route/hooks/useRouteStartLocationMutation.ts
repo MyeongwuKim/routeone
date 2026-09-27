@@ -1,3 +1,4 @@
+/** 경로 또는 DAY 출발 위치를 저장하고 내 경로 현재·과거 캐시를 동기화한다. */
 import { useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { routeApi } from "@/api/routeApi";
@@ -13,6 +14,10 @@ import {
   upsertMyRouteCache,
 } from "../myRouteCache";
 
+/**
+ * ref 잠금으로 같은 렌더 사이의 중복 저장까지 막는다. 응답 경로를 캐시에 반영하고 dayIndex를 포함한
+ * 성공 문구를 표시하며, 실패는 토스트로 안내한 뒤 false를 반환한다.
+ */
 export function useRouteStartLocationMutation() {
   const text = useUiText();
   const queryClient = useQueryClient();
@@ -33,6 +38,7 @@ export function useRouteStartLocationMutation() {
     },
   });
 
+  /** 저장이 진행 중이면 요청을 추가하지 않고 false를 반환한다. */
   const updateRouteStartLocation = async (
     input: UpdateRouteStartLocationInput,
     dayIndex: number

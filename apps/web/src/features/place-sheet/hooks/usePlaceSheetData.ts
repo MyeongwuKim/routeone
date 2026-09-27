@@ -1,3 +1,4 @@
+/** 선택 장소의 상세·혼잡도·주변 장소·방문 통계·사진·길찾기 데이터를 조회하고 화면 모델로 조합한다. */
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { placeLocalizationApi } from "@/api/placeLocalizationApi";
@@ -60,16 +61,28 @@ function hasKoreanPlaceTexts(
 }
 
 type UsePlaceSheetDataParams = {
+
   appLanguage: AppLanguage;
+
   currentLocation: PlaceSheetCoordinates;
+
   isOpen: boolean;
+  /** 상세·혼잡도·주변 장소·방문 통계·사진 조회의 기준이 되는 현재 장소 */
   selectedPlace: MapSheetPlace | null;
+
   shouldLoadOverviewData: boolean;
+
   shouldLoadRouteData: boolean;
+
   text: UiText;
+
   updateSelectedPlace: (place: MapSheetPlace) => void;
 };
 
+/**
+ * 관광 데이터는 장소 종류와 API 키가 유효할 때만 조회하고, 영어 화면에서는 장소와 개요 번역을 추가로 요청한다.
+ * 로그인 전용 방문 통계·사진 Query와 길찾기 실패를 서로 분리해 일부 요청 실패 시에도 가능한 상세 정보는 유지한다.
+ */
 export function usePlaceSheetData({
   appLanguage,
   currentLocation,

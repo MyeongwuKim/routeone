@@ -1,3 +1,4 @@
+/** 웹에 주입된 직접 호출 API와 주고받는 앱 정보·위치·미디어·알림 데이터 계약을 정의한다. */
 export type NativePermissionStatus =
   | "granted"
   | "denied"
@@ -26,9 +27,13 @@ export type NativeAppInfo = {
 };
 
 export type NativePosition = {
+  /** WGS84 위도 */
   lat: number;
+  /** WGS84 경도 */
   lng: number;
+  /** 네이티브 위치 측정의 수평 정확도(m). 제공되지 않으면 null */
   accuracyMeters: number | null;
+  /** 위치가 측정된 Unix 밀리초 시각 */
   timestamp: number;
 };
 
@@ -57,8 +62,11 @@ export type NativePhotoUploadResult = {
 };
 
 export type NativeSaveImageOptions = {
+
   dataUrl: string;
+
   fileName: string;
+
   title?: string;
 };
 
@@ -72,12 +80,14 @@ export type NativeArrivalNotificationPlace = {
   routeId: string;
   routeTitle?: string | null;
   dayId: string;
+  /** 경로 안에서 사용자에게 표시하는 1부터 시작하는 DAY 번호 */
   dayIndex: number;
   dayDateKey: string;
   stopId: string;
   title: string;
   lat: number;
   lng: number;
+  /** 장소 도착으로 판정할 반경(m) */
   radiusMeters: number;
 };
 
@@ -150,6 +160,7 @@ export type NativeFestivalNotification = {
   festivalTitles: string[];
   festivalStartDates?: string[];
   festivalEndDates?: string[];
+  /** 네이티브가 예약할 ISO 시각. null이면 즉시 알림 후보로 처리한다. */
   triggerAt?: string | null;
 };
 
@@ -158,6 +169,7 @@ export type NativeFestivalNotificationSyncResult = {
   notificationStatus: string;
 };
 
+/** 여행 종료 후 검토 알림에서 구분하는 완료, 미완료, 미시작 일정 상태 */
 export type NativeRouteReviewNotificationKind =
   | "completed"
   | "incomplete"
@@ -169,7 +181,9 @@ export type NativeRouteReviewNotification = {
   routeId: string;
   routeTitle: string;
   dayId: string;
+  /** 네이티브가 예약할 ISO 시각. 예약 시각이 없는 대상은 null */
   triggerAt?: string | null;
+  /** 방문 기록 수정이 가능한 마지막 ISO 시각 */
   correctionDeadlineAt: string;
 };
 
@@ -180,6 +194,7 @@ export type NativeRouteReviewNotificationSyncResult = {
 
 export type NativeAuthSessionEndReason = "logout" | "expired";
 
+/** 도착 알림 등록 과정에서 네이티브가 웹에 전달하는 대기, 등록, 위치 확인 단계 */
 export type NativeArrivalNotificationProgress = "queued" | "registering" | "locating";
 
 export type NativeBridgeApi = {

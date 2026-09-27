@@ -1,11 +1,8 @@
 /**
  * 진입 경로: 내 정보 → 차단 사용자 관리
  *
- * 용도:
- * 내 화면에서 숨긴 사용자를 확인하고 필요할 때 차단을 해제한다.
- *
- * 구조:
- * 화면 안내, 차단 사용자 목록, 사용자별 차단 해제 버튼으로 구성되어 있다.
+ * 현재 계정이 차단한 사용자 목록을 조회하고 사용자별 차단 해제를 제공한다.
+ * 해제 성공 시 해당 사용자를 목록 캐시에서 즉시 제거하고 공개 경로·좋아요 경로·장소 사진 Query를 다시 조회한다.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";

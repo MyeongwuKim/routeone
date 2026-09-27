@@ -1,3 +1,6 @@
+/**
+ * 경로 결과의 일차별 카드와 장소 행을 구성하고 드래그 이동에 필요한 데이터 구조를 계산한다.
+ */
 import { createElement, type ReactNode } from "react";
 import { IoLocationSharp } from "react-icons/io5";
 import { MIN_PLACE_STAY_SUMMARY_VISIT_COUNT } from "@/lib/routePlaceSnapshot";
@@ -105,12 +108,19 @@ export type RouteStation =
     };
 
 export const ROUTE_STATIONS_PER_ROW = 3;
+
 export const ROUTE_COLUMNS = [18, 50, 82] as const;
+
 export const ROUTE_TURN_LEFT_X = 6;
+
 export const ROUTE_TURN_RIGHT_X = 96;
+
 export const ROUTE_ROW_HEIGHT = 142;
+
 export const ROUTE_ROW_GAP = 18;
+
 export const ROUTE_LINE_Y = 20;
+
 export const ROUTE_NODE_EDGE_OFFSET_X = 6;
 
 export type RouteRowEntry = {

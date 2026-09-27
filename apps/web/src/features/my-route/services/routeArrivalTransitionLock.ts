@@ -29,7 +29,9 @@ const transitionListeners = new Set<() => void>();
 let nextTransitionGeneration = 0;
 
 export const ROUTE_ARRIVAL_TRANSITION_RECONCILIATION_DELAY_MS = 5_000;
+
 export const ROUTE_ARRIVAL_TRANSITION_API_SETTLEMENT_DELAY_MS = 30_000;
+
 export const ROUTE_ARRIVAL_TRANSITION_JOURNAL_STORAGE_KEY =
   "routeone:route-arrival-transition-journal:v1";
 const CORRUPTED_TRANSITION_ROUTE_ID =

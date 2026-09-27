@@ -1,3 +1,4 @@
+/** 일정 만들기 DAY 카드에서 장소 순서를 바꾸거나 인접 DAY의 처음·끝으로 옮기는 포인터 드래그를 관리한다. */
 import { useEffect, useReducer, useRef } from "react";
 import {
   INITIAL_ROUTE_DRAG_STATE,
@@ -10,14 +11,20 @@ import {
 import type { PlannedRouteDay, PlannedRouteItem } from "../models/routePlanTypes";
 
 type UseRouteDayDragOptions = {
+
   day: PlannedRouteDay;
+
   previousDay: PlannedRouteDay | null;
+
   nextDay: PlannedRouteDay | null;
+
   isOrderEditing: boolean;
+
   onReorderDayItems: (
     dayNumber: number,
     nextItems: PlannedRouteItem[]
   ) => void;
+
   onMovePlaceToDay: (
     placeId: string,
     targetDayNumber: number,
@@ -25,6 +32,10 @@ type UseRouteDayDragOptions = {
   ) => void;
 };
 
+/**
+ * 등록된 drop zone의 화면 위치로 삽입 인덱스를 계산하고 reducer에 미리보기 상태를 저장한다.
+ * drop 시 부모 콜백으로 실제 일정을 변경하며 편집 종료·unmount 때 전역 포인터 리스너와 드래그 상태를 정리한다.
+ */
 export function useRouteDayDrag({
   day,
   previousDay,

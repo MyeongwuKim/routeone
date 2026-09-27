@@ -1,3 +1,10 @@
+/**
+ * 진입 경로: 하단 내 정보 탭
+ *
+ * 현재 계정 요약과 다녀온·좋아요·차단 경로 메뉴를 표시하고 계정 관리 화면으로 연결한다.
+ * 다크 모드는 이 화면에서 바로 전환하며 언어·알림·앱 정보·문의는 각 설정 화면으로 이동한다.
+ * OWNER에게만 콘텐츠 관리 메뉴를, 개발·검수 환경에서만 서비스 지역 선택 메뉴를 표시한다.
+ */
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";

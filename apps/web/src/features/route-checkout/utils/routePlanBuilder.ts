@@ -1,3 +1,4 @@
+/** 담은 장소를 여행 일수·운영 시간·이동시간·여행 속도에 맞춰 DAY별 일정으로 배치하고 편집 후 시각을 다시 계산한다. */
 import {
   getRoutePlaceCategory,
   type RoutePlaceCategory,

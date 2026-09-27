@@ -1,7 +1,9 @@
+/** 서버 경로의 날짜·상태·DAY·방문 수를 카드와 상세 화면에서 사용하는 정렬값과 표시 문구로 계산한다. */
 import type { MyRoute, MyRouteDay } from "./types";
 import { getUiText, type UiText } from "@/lib/uiText";
 
 export type RouteDayState = "past" | "today" | "upcoming" | "undated";
+
 export type RouteTimelineState =
   | "current"
   | "upcoming"

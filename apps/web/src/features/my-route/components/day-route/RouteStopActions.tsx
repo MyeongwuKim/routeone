@@ -24,12 +24,19 @@ export type RouteStopPhotoAction = {
 };
 
 type RouteStopActionsProps = {
+  /** 사진·지도·GPS 테스트 버튼의 접근성 문구에 넣을 장소명 */
   placeTitle: string;
+
   photoAction: RouteStopPhotoAction | null;
+
   isPhotoSaving: boolean;
+
   isActiveDestination: boolean;
+
   isGpsTestLocationActive: boolean;
+
   onOpenDirections: () => void;
+
   onOpenGpsTest?: () => void;
 };
 

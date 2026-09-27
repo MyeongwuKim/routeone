@@ -1,3 +1,4 @@
+/** 영어 장소 번역 요청이 250ms 이상 이어질 때만 진행 안내를 표시하고, 전역 로딩 화면이 열리면 중복 노출하지 않는다. */
 import { useEffect, useState } from "react";
 import { MdTranslate } from "react-icons/md";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";

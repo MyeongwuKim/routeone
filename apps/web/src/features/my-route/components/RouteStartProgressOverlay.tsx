@@ -1,13 +1,4 @@
-/**
- * 사용 위치: 내 일정 화면 → 여행 시작 처리
- *
- * 용도:
- * 위치 권한 확인, 도착 알림 준비, 여행 시작 API가 끝날 때까지
- * 사용자가 시작 처리 중임을 알 수 있도록 보여주는 차단형 안내다.
- *
- * 구조:
- * 루트를 따라 이동하는 감자 애니메이션과 진행 안내 문구로 구성되어 있다.
- */
+/** 내 경로에서 위치 권한 확인·도착 알림 준비·시작 API 처리 단계에 맞는 문구와 애니메이션을 차단형 오버레이로 표시한다. */
 import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
 import { useUiText } from "@/lib/uiText";
 

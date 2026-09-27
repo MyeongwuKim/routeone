@@ -1,3 +1,4 @@
+/** 공유 경로의 날짜 범위, DAY·장소 수와 공개 태그를 상세 화면의 요약 정보로 표시한다. */
 import { MdSell } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
 import { getDisplayShareTags, type SharedRoute } from "../sharedRouteCardModel";

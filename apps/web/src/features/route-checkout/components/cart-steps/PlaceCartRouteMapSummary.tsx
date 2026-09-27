@@ -25,14 +25,23 @@ const MAX_DETAILS_HEIGHT = 220;
 const DETAILS_VIEWPORT_RATIO = 0.25;
 
 type PlaceCartRouteMapSummaryProps = {
+
   text: UiText;
+
   hasComparisonRoute: boolean;
+
   routeViewMode: RouteMapViewMode;
+
   isStartPreviewDirty: boolean;
+
   canResetStartPreview: boolean;
+
   onResetStartPreview: () => void;
+
   routePointGroups: RoutePointGroup[];
+  /** 상세 목록과 지도에서 강조할 경로 종류·구간 ID */
   selectedSegment: RouteSegmentSelection | null;
+
   onSelectSegment: (
     variant: RouteDisplayVariant,
     segment: RouteMapSegment,

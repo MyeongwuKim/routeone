@@ -1,3 +1,4 @@
+/** 일정 만들기 단계와 입력값, 저장 잠금을 하위 단계 컴포넌트에 전달하는 Context 진입점이다. */
 import { createContext, useContext } from "react";
 import type {
   RouteStartLocation,
@@ -33,6 +34,7 @@ export type RouteCheckoutContextValue = {
 export const RouteCheckoutContext =
   createContext<RouteCheckoutContextValue | null>(null);
 
+/** RouteCheckoutProvider 내부의 일정 편집 상태를 반환하며 Provider 밖에서 호출하면 즉시 예외를 던진다. */
 export function useRouteCheckout() {
   const context = useContext(RouteCheckoutContext);
   if (!context) {

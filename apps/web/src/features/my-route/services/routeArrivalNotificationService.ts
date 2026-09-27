@@ -22,6 +22,7 @@ import { notificationApi } from "@/api/notificationApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import { resolvePlaceVerificationPolicy } from "@/lib/placeVerificationPolicy";
 
+/** 방문 처리 전에 권한 요청이 필요했는지와 실패 시 사전 등록을 되돌려야 하는지를 호출부에 알린다. */
 export type RouteArrivalVisitTransitionPreparation = {
   requestPermissions: boolean;
   rollbackRequired: boolean;
@@ -30,14 +31,23 @@ export type RouteArrivalVisitTransitionPreparation = {
 type RouteArrivalProgressHandler = (stage: NativeArrivalNotificationProgress) => void;
 
 type RouteArrivalNotificationSyncOptions = {
+
   onProgress?: RouteArrivalProgressHandler;
+
   routeArrivalEnabled?: boolean;
+
   checkCurrentPosition?: boolean;
+
   waitForCurrentPosition?: boolean;
+
   requestPermissions?: boolean;
+
   requireConfirmedRegistration?: boolean;
 };
 
+/**
+ * 방문 상태 전환 전에 도착 알림 준비가 실패한 원인과 오류 코드를 보관하는 오류 클래스다.
+ */
 export class RouteArrivalVisitTransitionPreparationError extends Error {
   readonly requestPermissions: boolean;
   readonly originalError: unknown;

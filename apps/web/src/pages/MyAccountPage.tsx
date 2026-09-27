@@ -1,3 +1,10 @@
+/**
+ * 진입 경로: 내 정보 → 계정 관리
+ *
+ * 현재 로그인 사용자의 프로필과 로그인 이메일을 표시하고 로그아웃·회원 탈퇴를 실행한다.
+ * 푸시 기기와 네이티브 알림을 먼저 해제한 뒤 인증·사용자 Store·Query 캐시를 비우며,
+ * 회원 탈퇴는 확인 단계와 요청 중 잠금을 거친 뒤 같은 정리 흐름을 사용한다.
+ */
 import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -108,19 +115,12 @@ function MyAccountPage() {
   };
 
   const unregisterPushDevice = async (authToken = getAuthToken()) => {
-    try {
-      const pushToken = await nativeBridge.notifications.getPushToken(false);
+    const pushToken = await nativeBridge.notifications.getPushToken(false);
 
-      if (pushToken?.expoPushToken) {
-        await notificationApi.unregisterPushDevice(
-          pushToken.expoPushToken,
-          authToken
-        );
-      }
-    } catch (error) {
-      console.warn(
-        "[push-device] account session cleanup failed",
-        error instanceof Error ? error.message : error
+    if (pushToken?.expoPushToken) {
+      await notificationApi.unregisterPushDevice(
+        pushToken.expoPushToken,
+        authToken
       );
     }
 
@@ -142,7 +142,7 @@ function MyAccountPage() {
     });
   };
 
-  const handleSwitchAccount = () => {
+  const handleSwitchAccount = async () => {
     if (isBusy) {
       return;
     }
@@ -150,28 +150,48 @@ function MyAccountPage() {
     setIsLoggingOut(true);
     const authToken = getAuthToken();
     const isNativeApp = nativeBridge.runtime.isAvailable();
-    finishSession(
-      text.account.switchAccountToast,
-      isNativeApp ? "/home" : "/login"
-    );
-    void unregisterPushDevice(authToken);
 
-    if (isNativeApp) {
-      window.setTimeout(() => {
-        nativeBridge.auth.requestLogin("account-switch");
-      }, 250);
+    try {
+      await unregisterPushDevice(authToken);
+      finishSession(
+        text.account.switchAccountToast,
+        isNativeApp ? "/home" : "/login"
+      );
+
+      if (isNativeApp) {
+        window.setTimeout(() => {
+          nativeBridge.auth.requestLogin("account-switch");
+        }, 250);
+      }
+    } catch (error) {
+      console.warn(
+        "[push-device] account switch cleanup failed",
+        error instanceof Error ? error.message : error
+      );
+      showToast(text.account.sessionEndError, 3000);
+      setIsLoggingOut(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (isBusy) {
       return;
     }
 
     setIsLoggingOut(true);
     const authToken = getAuthToken();
-    finishSession(text.myInfo.logoutToast);
-    void unregisterPushDevice(authToken);
+
+    try {
+      await unregisterPushDevice(authToken);
+      finishSession(text.myInfo.logoutToast);
+    } catch (error) {
+      console.warn(
+        "[push-device] logout cleanup failed",
+        error instanceof Error ? error.message : error
+      );
+      showToast(text.account.sessionEndError, 3000);
+      setIsLoggingOut(false);
+    }
   };
 
   const handleDeleteAccount = async () => {

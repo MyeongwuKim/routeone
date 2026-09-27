@@ -1,3 +1,4 @@
+/** 선택한 시·군·구의 경계 좌표를 네이버 지도 도형으로 변환하고 오버레이 생명주기를 관리한다. */
 import { useCallback, useEffect, useRef } from "react";
 import {
   convertUtmkToWgs84,
@@ -19,11 +20,19 @@ type CoordinateLike = {
 };
 
 type UseHomeRegionBoundaryOverlayOptions = {
+  /** 시·군·구 코드를 키로 갖는 원본 다중 폴리곤 좌표 */
   boundaryBySigunguCode: Record<string, GeoMultiPolygon>;
+  /** 경계 도형과 영역 Bounds를 생성할 지도 runtime */
   runtime: HomeMapRuntime | null;
+  /** boundaryBySigunguCode에서 그릴 경계를 선택하는 현재 시·군·구 코드 */
   selectedSigunguCode: string;
 };
 
+/**
+ * WGS84 좌표는 그대로 사용하고, 투영 좌표는 네이버 변환 API와 로컬 UTMK 변환을 차례로 시도한다.
+ * 국내 범위를 벗어나거나 해석할 수 없는 좌표는 제외하며, 그린 도형이 있으면 지도 이동에 사용할
+ * 전체 Bounds를 반환한다. runtime 변경 또는 훅 정리 시 생성한 폴리곤과 선을 모두 제거한다.
+ */
 export function useHomeRegionBoundaryOverlay({
   boundaryBySigunguCode,
   runtime,
@@ -31,11 +40,13 @@ export function useHomeRegionBoundaryOverlay({
 }: UseHomeRegionBoundaryOverlayOptions) {
   const boundaryPolygonRefs = useRef<HomeMapOverlay[]>([]);
 
+  /** 현재 지도에 추가한 경계 면·외곽선·강조선을 모두 제거한다. */
   const clearBoundaryPolygons = useCallback(() => {
     boundaryPolygonRefs.current.forEach((polygon) => polygon.setMap(null));
     boundaryPolygonRefs.current = [];
   }, []);
 
+  /** 선택 지역 경계를 다시 그린 뒤 유효한 모든 좌표를 포함하는 Bounds를 반환한다. */
   const drawSelectedRegionBoundary = useCallback(() => {
     if (!runtime) {
       return null;

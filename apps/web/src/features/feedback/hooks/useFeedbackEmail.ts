@@ -20,6 +20,7 @@ export function useFeedbackEmail() {
     webVersion: import.meta.env.VITE_APP_VERSION,
   });
 
+  /** 네이티브 외부 URL 열기가 요청을 받으면 브라우저 링크 이동을 막고, 브리지 예외는 실패 안내 상태로 바꾼다. */
   function handleOpenEmail(event: MouseEvent<HTMLAnchorElement>) {
     setOpenFailed(false);
     try {
@@ -32,6 +33,7 @@ export function useFeedbackEmail() {
     }
   }
 
+  /** 이메일 주소를 클립보드에 복사하고, 실패하면 숨은 입력을 선택해 사용자가 직접 복사할 수 있게 한다. */
   async function handleCopyEmail() {
     try {
       await navigator.clipboard.writeText(FEEDBACK_EMAIL);

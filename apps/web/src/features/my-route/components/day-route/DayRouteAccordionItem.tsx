@@ -1,3 +1,4 @@
+
 import { type PointerEvent as ReactPointerEvent } from "react";
 import {
   MdAccessTime,
@@ -162,53 +163,97 @@ function formatRouteStopSchedule(schedule: RouteStopSchedule, text: UiText) {
 }
 
 type DayRouteAccordionItemProps = {
+
   routeDay: MyRouteDay;
+
   isExpanded: boolean;
+
   orderedStops: MyRouteStop[];
+
   startLocation: MyRoute["startLocation"];
+
   dailyStartMinutes: MyRoute["dailyStartMinutes"];
+
   isOrderEditing: boolean;
+  /** 드래그 중 삽입 위치를 표시할 orderedStops 기준 인덱스 */
   activeDropIndex: number | null;
+
   draggedStopId: string | null;
+
   visitSavingStopId: string | null;
+
   staySavingStopId: string | null;
+
   isReadOnly: boolean;
+
   canEditVisitTimes: boolean;
+
   canEditDayStartTime: boolean;
+
   canEditStartLocation: boolean;
+
   canRecordDayStart: boolean;
+
   canEditVerificationPhoto: boolean;
+
   canToggleVisited: boolean;
+
   isVisitDateAllowed: boolean;
+
   showActiveDestination: boolean;
+
   enableVerificationPhotoPreview: boolean;
+
   isGpsTestEnabled: boolean;
+
   gpsTestLocationStopId: string | null;
+
   focusedStopId: string | null;
+
   travelSegmentByKey: Record<string, TravelSegmentState>;
+
   canDeleteDay: boolean;
+
   previousDay: MyRouteDay | null;
+
   nextDay: MyRouteDay | null;
+
   onSelect: (day: MyRouteDay) => void;
+
   onRequestDeleteDay: (day: MyRouteDay) => void;
+
   onRequestPlannedStartEdit: (day: MyRouteDay) => void;
+
   onRequestActualStartEdit: (day: MyRouteDay) => void;
+
   onRequestStartLocationEdit: (day: MyRouteDay) => void;
+
   onRegisterDropZone: (index: number, node: HTMLDivElement | null) => void;
+
   onStartDrag: (
     stop: MyRouteStop,
     fromIndex: number,
     event: ReactPointerEvent<HTMLButtonElement>
   ) => void;
+
   onMoveStopToDay: (stopId: string, targetDayId: string) => void;
+
   onRemoveStop: (stopId: string) => void;
+
   onRequestStayMinutesEdit: (stop: MyRouteStop) => void;
+
   onRequestVisitTimesEdit: (stop: MyRouteStop) => void;
+
   onToggleVisited: (stop: MyRouteStop) => void;
+
   onOpenPlace: (stop: MyRouteStop) => void;
+
   onOpenDirections: (stop: MyRouteStop) => void;
+
   onEditVerificationPhoto: (stop: MyRouteStop) => void;
+
   onOpenGpsTest: (stop: MyRouteStop) => void;
+
   onOpenVerificationPhoto: (target: VerificationPhotoPreviewTarget) => void;
 };
 

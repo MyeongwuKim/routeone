@@ -1,3 +1,4 @@
+/** uiModalStore의 현재 모달 내용을 포털로 표시하고 닫기·확인 액션의 자동 닫힘과 비동기 실행 상태를 처리한다. */
 import { IoAlertCircleOutline, IoClose } from "react-icons/io5";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiModalStore, type UiModalAction } from "@/stores/uiModalStore";

@@ -1,3 +1,4 @@
+/** 저장하려는 여행 시작일과 일수를 기존 경로의 날짜 범위와 비교해 첫 번째 겹침과 양쪽 표시 범위를 계산한다. */
 import type { MyRoutesQuery } from "@/generated/graphql";
 
 type MyRouteItem = MyRoutesQuery["myRoutes"][number];

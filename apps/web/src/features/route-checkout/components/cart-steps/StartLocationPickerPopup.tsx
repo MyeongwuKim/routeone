@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IoClose, IoLocationSharp } from "react-icons/io5";
 import {
@@ -13,10 +14,15 @@ import type {
 } from "../../models/routePlanTypes";
 
 type StartLocationPickerPopupProps = {
+
   title?: string;
+
   routePlan: PlannedRouteDay[];
+  /** 팝업을 열 때 출발지 마커와 지도 중심에 적용할 좌표·이름 */
   initialLocation: RouteStartLocation;
+
   onClose: () => void;
+
   onApply: (
     location: RouteStartLocation
   ) => boolean | void | Promise<boolean | void>;

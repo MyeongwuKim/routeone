@@ -1,3 +1,4 @@
+/** DAY 안의 장소 순서 변경을 낙관적으로 저장하고 편집 기준과 내 경로 캐시를 동기화한다. */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SetStateAction } from "react";
 import { routeApi } from "@/api/routeApi";
@@ -13,14 +14,23 @@ import type { MyRouteStop } from "../types";
 import { restoreStopOrder } from "../utils/dayRouteStops";
 
 type UseRouteDayOrderMutationOptions = {
+
   routeId: string;
+
   dayId: string;
+
   orderedStops: MyRouteStop[];
+
   baseStopIds: string[];
+
   isOrderDirty: boolean;
+
   setOrderedStops: (value: SetStateAction<MyRouteStop[]>) => void;
+
   setBaseStopIds: (value: string[]) => void;
+
   setIsOrderEditing: (value: boolean) => void;
+
   stopCurrentDrag: () => void;
 };
 
@@ -30,6 +40,10 @@ type SaveOrderVariables = {
   baseStopIds: string[];
 };
 
+/**
+ * 변경이 없거나 저장 중이면 요청하지 않는다. 저장 전 드래그를 종료하고 현재 순서를 캐시에 먼저 반영하며,
+ * 실패하면 이전 장소 배열·기준 ID·캐시를 복구하고 성공하면 서버 응답을 최종 기준으로 적용한다.
+ */
 export function useRouteDayOrderMutation({
   routeId,
   dayId,

@@ -1,3 +1,4 @@
+/** 일정 만들기 결과를 새 경로로 저장하거나 기존 경로에 DAY로 추가하는 인증·중복·복구 흐름을 관리한다. */
 import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -25,10 +26,15 @@ import { findRouteDateConflict } from "../utils/routeDateConflict";
 import { useRouteCheckout } from "./useRouteCheckout";
 
 type UseRouteCheckoutSaveOptions = {
+
   input: SaveRoutePlanInput;
+
   canSave: boolean;
+
   onClose: () => void;
+
   onClearPlaces: () => void;
+
   onChooseDate: () => void;
 };
 
@@ -45,6 +51,10 @@ function createRouteRequestId() {
   return `route-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+/**
+ * 저장 전 로그인, 날짜 충돌, 입력 가능 상태를 확인한다. 새 경로 생성은 같은 입력에 같은 requestId를 재사용해
+ * 결과 불명 재시도를 중복 생성으로부터 보호하고, 성공 시 캐시 갱신·장소 비우기·화면 이동을 수행한다.
+ */
 export function useRouteCheckoutSave({
   input,
   canSave,

@@ -1,3 +1,4 @@
+/** 선택 여부·크기·색상 변형에 맞는 pill 스타일을 적용하면서 기본 button 속성과 클릭 처리는 호출부에 그대로 전달한다. */
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 type SelectablePillButtonVariant = "light" | "dark";

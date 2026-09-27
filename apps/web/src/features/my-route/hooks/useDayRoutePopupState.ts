@@ -1,3 +1,4 @@
+/** DAY 상세 팝업의 선택 일차, 펼침 상태, 순서 편집 draft와 각 확인 팝업 대상을 하나의 reducer로 관리한다. */
 import { useMemo, useReducer, type SetStateAction } from "react";
 import type {
   ActualStayMinutesTarget,
@@ -140,6 +141,10 @@ function dayRoutePopupReducer(
   }
 }
 
+/**
+ * 최초 day의 장소 순서를 편집 기준으로 저장한다. set 계열 함수는 React SetStateAction을 reducer action으로
+ * 변환하며 resetDayEditor는 새 일차의 장소와 ID를 기준으로 편집 상태를 함께 초기화한다.
+ */
 export function useDayRoutePopupState(day: MyRouteDay) {
   const [state, dispatch] = useReducer(
     dayRoutePopupReducer,

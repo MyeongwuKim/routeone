@@ -55,6 +55,7 @@ const PIXEL_GLYPHS: Record<string, string[]> = {
   "8": ["01110","10001","10001","01110","10001","10001","01110"],
   "9": ["01110","10001","10001","01111","00001","00001","01110"],
 };
+
 export function renderPixelPosterText(value: string, x: number, y: number, size: number, color: string) {
   return `<g aria-label="${escapePosterText(value)}" fill="${color}" shape-rendering="crispEdges">${Array.from(value).map((char, index) => (PIXEL_GLYPHS[char] ?? []).flatMap((row, rowIndex) => Array.from(row).map((pixel, column) => pixel === "1" ? `<rect x="${x + index * size * 6 + column * size}" y="${y + rowIndex * size}" width="${size}" height="${size}"/>` : "")).join("")).join("")}</g>`;
 }

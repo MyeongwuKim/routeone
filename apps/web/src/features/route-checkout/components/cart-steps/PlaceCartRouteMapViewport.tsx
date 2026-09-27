@@ -1,3 +1,4 @@
+
 import { useMemo, type RefObject } from "react";
 import { SegmentedToggle, type SegmentedToggleOption } from "@/components/inputs";
 import MapLoadingSkeleton from "@/components/map/MapLoadingSkeleton";
@@ -9,19 +10,33 @@ import type {
 import type { SelectedRouteSegmentView } from "../../hooks/usePlaceCartRouteMapPopup";
 
 type PlaceCartRouteMapViewportProps = {
+
   text: UiText;
+
   mapRef: RefObject<HTMLDivElement | null>;
+
   dayOptions: RouteMapDayOption[];
+
   selectedDayOptionId: string | null;
+
   onSelectDay: (dayOptionId: string) => void;
+
   hasDaySelector: boolean;
+
   hasComparisonRoute: boolean;
+
   routeViewMode: RouteMapViewMode;
+
   onRouteViewModeChange: (mode: RouteMapViewMode) => void;
+  /** 선택 구간의 출발·도착 이름과 거리·시간을 지도 위에 표시할 값 */
   selectedRouteSegmentView: SelectedRouteSegmentView;
+
   onClearSelectedSegment: () => void;
+
   routeError: string | null;
+
   isSdkReady: boolean;
+
   isRouteLoading: boolean;
 };
 

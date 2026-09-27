@@ -1,3 +1,7 @@
+/**
+ * 홈 지도에 필요한 지역 경계, 관광지·축제, 혼잡도 순위와 다국어 장소명을 조회하고
+ * 지도 마커와 검색에서 함께 사용할 데이터로 조합한다.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { festivalApi } from "@/api/festivalApi";
@@ -29,18 +33,25 @@ import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import type { HomeAttractionLoadingPhase } from "./homeLoadingPhase";
 
 export type HomeAttractionQueryData = {
+  /** 숨김 대상이 제거되고 현재 언어의 표시값이 반영된 지도·검색용 관광지 목록 */
   allAttractions: GangwonAttraction[];
+  /** 언어가 바뀔 때 다시 번역할 기준으로 보관하는 원본 관광지 목록 */
   sourceAttractions: GangwonAttraction[];
+  /** 이 데이터가 속하는 시·군·구 코드 */
   sigunguCode: string;
+  /** 혼잡도 순위에 포함된 관광지와 트렌드 표시명 목록 */
   topAttractions: Array<{
     attraction: GangwonAttraction;
     touristTrendName: string;
   }>;
+  /** 관광 분류 코드를 키로 갖는 현재 언어의 분류명 조회표 */
   lclsNameByCode: Record<string, string>;
+  /** allAttractions와 분류명이 현재 앱 언어로 변환됐는지 여부 */
   isLocalized: boolean;
 };
 
 type UseHomeAttractionDataOptions = {
+  /** false이면 관광지 Query를 실행하지 않는다. 기본값은 true다. */
   enabled?: boolean;
 };
 

@@ -1,3 +1,4 @@
+/** DAY 장소 순서 비교·복원과 방문 상태 정렬을 입력 배열을 변경하지 않고 수행한다. */
 import type { MyRouteStop } from "../types";
 
 export function isSameStopOrder(left: MyRouteStop[], rightIds: string[]) {

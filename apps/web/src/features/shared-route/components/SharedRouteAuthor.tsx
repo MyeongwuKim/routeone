@@ -1,12 +1,17 @@
+/** 공유 경로 작성자의 프로필 이미지와 표시 이름을 보여주고 현재 사용자 소유 경로에는 내 공유 배지를 덧붙인다. */
 import AccountAvatar from "@/components/account/AccountAvatar";
 import type { SharedRouteOwnerFieldsFragment } from "@/generated/graphql";
 import { getAccountDisplayName } from "@/lib/accountDisplay";
 import { useUiText } from "@/lib/uiText";
 
 type SharedRouteAuthorProps = {
+
   owner: SharedRouteOwnerFieldsFragment;
+
   isMine?: boolean;
+
   compact?: boolean;
+
   className?: string;
 };
 

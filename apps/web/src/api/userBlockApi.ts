@@ -14,6 +14,7 @@ import { requestGraphQL } from "@/lib/graphqlClient";
 
 export const BLOCKED_USERS_QUERY_KEY = ["blocked-users"] as const;
 
+/** 차단 사용자 목록 조회와 사용자 ID 단위 차단·해제 GraphQL 요청을 전달한다. */
 export const userBlockApi = {
   blockedUsers() {
     return requestGraphQL(BlockedUsersDocument);

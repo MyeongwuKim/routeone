@@ -9,6 +9,10 @@ import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { nativeBridge } from "@/native-bridge";
 
+/**
+ * 호출 시 네이티브 로그인 화면 요청을 먼저 시도한다. 네이티브가 처리하지 않은 웹 환경에서는
+ * 현재 pathname과 query를 returnTo로 저장해 로그인 후 같은 작업 위치로 돌아갈 수 있게 한다.
+ */
 export function useLoginRequest() {
   const location = useLocation();
   const navigate = useNavigate();

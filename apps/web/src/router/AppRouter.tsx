@@ -120,10 +120,15 @@ const LikedSharedRoutePage = lazyWithPreload(
 );
 
 type RoutePageShellProps = {
+
   icon: ReactNode;
+
   title: string;
+
   description?: string;
+
   action?: ReactNode;
+
   children: ReactNode;
 };
 

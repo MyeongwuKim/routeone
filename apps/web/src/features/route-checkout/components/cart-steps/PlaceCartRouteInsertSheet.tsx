@@ -1,3 +1,7 @@
+/**
+ * 추천 일정의 두 지점 사이에 넣을 장소 후보를 검색어·카테고리로 좁히고 우회 거리 기준으로 정렬한다.
+ * 이미 일정에 포함된 장소는 제외하며 영어 화면에서는 후보 제목·주소를 번역한 뒤 선택 결과를 삽입 요청과 함께 전달한다.
+ */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -24,11 +28,17 @@ import type { RouteInsertRequest } from "../../models/routePlanTypes";
 type InsertFilter = "all" | RoutePlaceCategory;
 
 type PlaceCartRouteInsertSheetProps = {
+
   request: RouteInsertRequest;
+
   candidatePlaces: MapSheetPlace[];
+
   excludedPlaceKeys: string[];
+
   onClose: () => void;
+
   onSelectPlace: (place: MapSheetPlace, request: RouteInsertRequest) => void;
+
   onRequestSearchPlace: () => void;
 };
 

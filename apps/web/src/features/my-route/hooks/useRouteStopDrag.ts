@@ -1,3 +1,4 @@
+/** DAY 내부 또는 DAY 사이에서 장소 카드를 포인터로 이동하는 드래그 상태와 전역 이벤트를 관리한다. */
 import {
   useEffect,
   useRef,
@@ -31,8 +32,11 @@ type DropZone = RouteStopDropTarget & {
 };
 
 type UseRouteStopDragOptions = {
+
   isOrderEditing: boolean;
+
   stopsByDayId: RouteStopsByDayId;
+
   setStopsByDayId: Dispatch<SetStateAction<RouteStopsByDayId>>;
 };
 
@@ -86,6 +90,10 @@ function moveStop(
   };
 }
 
+/**
+ * 이동 임계값을 넘은 뒤에만 드래그를 활성화하고 포인터 좌표와 drop zone 위치로 삽입 지점을 계산한다.
+ * 완료 시 같은 DAY는 순서를 바꾸고 다른 DAY는 장소를 옮기며, 취소·정리 시 전역 리스너와 선택 상태를 제거한다.
+ */
 export function useRouteStopDrag({
   isOrderEditing,
   stopsByDayId,

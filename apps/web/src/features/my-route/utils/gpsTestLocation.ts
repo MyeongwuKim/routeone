@@ -1,9 +1,6 @@
 /**
- * 용도:
- * GPS 테스트의 지도 범위와 지정한 좌표부터 장소까지 가상 이동할 경로를 계산한다.
- *
- * 동작 방식:
- * 출발 좌표를 첫 단계로 유지하고, 장소와의 거리를 줄이며 방문 인증 반경까지 이동한다.
+ * GPS 테스트 지도 범위와 선택 좌표부터 장소까지의 가상 이동 단계를 계산한다.
+ * 출발 좌표를 첫 단계로 유지하고 거리에 따른 중간 지점을 만든 뒤 방문 인증 반경 안의 마지막 좌표까지 이동한다.
  */
 import { calculateDistanceMeters } from "@/lib/gangwonBoundaryUtils";
 
@@ -93,4 +90,3 @@ export function formatGpsTestDistance(meters: number) {
 
   return `${(meters / 1000).toFixed(1)}km`;
 }
-

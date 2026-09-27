@@ -1,3 +1,9 @@
+/**
+ * 진입 경로: 내 정보 → 서비스 지역 설정
+ *
+ * 개발·검수 환경에서 사용할 수 있는 서비스 지역을 표시하고 선택값을 serviceAreaStore에 저장한다.
+ * 지역을 바꾸면 홈 탐색 조건과 열린 장소 상세를 초기화하고 관광지·축제·주변 장소 Query를 새 지역 기준으로 다시 조회한다.
+ */
 import { useQueryClient } from "@tanstack/react-query";
 import { MdArrowBack, MdCheck, MdLocationOn } from "react-icons/md";
 import { useNavigate } from "react-router-dom";

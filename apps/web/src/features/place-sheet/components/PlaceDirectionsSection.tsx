@@ -52,17 +52,29 @@ type PreviewMapOverlay = {
 type PreviewNaverMapsApi = NonNullable<Window["naver"]>["maps"];
 
 type PlaceDirectionsSectionProps = {
+
   appLanguage: AppLanguage;
+
   currentLocation: PlaceSheetCoordinates;
+
   directionOrigin: MapSheetDirectionOrigin;
+
   isCurrentLocationLookupPending: boolean;
+
   isDarkMode: boolean;
+
   isRouteLoading: boolean;
+
   routeDistanceText: string | null;
+
   routeDurationText: string | null;
+
   routeError: string | null;
+
   routePathPoints: PlaceSheetCoordinates[];
+  /** 미리보기 지도와 외부 길찾기의 도착지로 사용할 장소 */
   selectedPlace: MapSheetPlace;
+
   text: UiText;
 };
 

@@ -1,3 +1,4 @@
+
 type NaverMapInteractionOptionKey = "draggable" | "pinchZoom" | "scrollWheel";
 
 type NaverMapPointerInteractionOptions = Record<

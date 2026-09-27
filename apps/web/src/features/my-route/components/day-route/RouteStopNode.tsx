@@ -89,37 +89,69 @@ function getRouteStopVerificationBadge(stop: MyRouteStop, text: UiText) {
 }
 
 type RouteStopNodeProps = {
+
   stop: MyRouteStop;
+
   index: number;
+
   isLast: boolean;
+
   isOrderEditing: boolean;
+
   isDragging: boolean;
+
   isVisitSaving: boolean;
+
   isStaySaving: boolean;
+
   isReadOnly: boolean;
+
   isActiveDestination: boolean;
+
   canToggleVisited: boolean;
+
   enableVerificationPhotoPreview: boolean;
+
   isGpsTestEnabled: boolean;
+
   isGpsTestLocationActive: boolean;
+
   isNotificationFocused: boolean;
+
   travelSegmentToNext: TravelSegmentState | null;
+
   scheduleLabel: string | null;
+
   canEditVisitTimes: boolean;
+
   canEditVerificationPhoto: boolean;
+  /** 장소를 이전 DAY로 옮길 수 있을 때 그 DAY의 0 기반 인덱스 */
   previousDayIndex: number | null;
+  /** 장소를 다음 DAY로 옮길 수 있을 때 그 DAY의 0 기반 인덱스 */
   nextDayIndex: number | null;
+
   onStartDrag: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+
   onMoveToPreviousDay?: () => void;
+
   onMoveToNextDay?: () => void;
+
   onRemoveFromRoute: () => void;
+
   onRequestStayMinutesEdit: (stop: MyRouteStop) => void;
+
   onRequestVisitTimesEdit: (stop: MyRouteStop) => void;
+
   onToggleVisited: (stop: MyRouteStop) => void;
+
   onOpenPlace: (stop: MyRouteStop) => void;
+
   onOpenDirections: (stop: MyRouteStop) => void;
+
   onEditVerificationPhoto: (stop: MyRouteStop) => void;
+
   onOpenGpsTest: (stop: MyRouteStop) => void;
+
   onOpenVerificationPhoto: (stop: MyRouteStop) => void;
 };
 

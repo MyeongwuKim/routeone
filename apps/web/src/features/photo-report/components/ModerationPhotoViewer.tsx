@@ -20,10 +20,15 @@ import type { UiText } from "@/lib/uiText";
 type ReportItem = PendingPhotoReportsQuery["pendingPhotoReports"][number];
 
 type ModerationPhotoViewerProps = {
+
   isProcessing: boolean;
+
   item: ReportItem;
+
   onAction: (action: PlacePhotoModerationAction) => void;
+
   onClose: () => void;
+
   text: UiText;
 };
 

@@ -1,3 +1,4 @@
+/** 축제 시작·마감 알림을 표시하고 펼쳤을 때 관광 API에서 축제 장소를 찾아 상세 정보와 여행 담기 동작을 제공한다. */
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {

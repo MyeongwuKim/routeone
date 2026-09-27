@@ -1,7 +1,8 @@
 /**
  * 진입 경로: 내 정보 → 불편사항 보내기
- * 용도: 문의할 내용을 안내하고 앱 버전이 채워진 메일 작성창을 연다.
- * 구조: 문의 안내, 메일 앱 열기, 이메일 주소 복사 영역으로 구성되어 있다.
+ *
+ * 확인된 앱·OS 버전을 포함한 문의 메일 링크를 만들어 네이티브 메일 앱 또는 브라우저로 연다.
+ * 메일 앱을 열 수 없으면 문의 주소 복사를 제공하고, 클립보드도 실패하면 사용자가 직접 복사할 수 있게 선택한다.
  */
 import { MdArrowBack, MdContentCopy, MdMailOutline } from "react-icons/md";
 import { useNavigate } from "react-router-dom";

@@ -1,3 +1,4 @@
+/** 내 경로와 DAY에 포함된 장소를 중복 제거해 현재 앱 언어로 번역하고 원래 경로 구조에 다시 합친다. */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -83,6 +84,10 @@ function localizeRoute(
   return hasLocalizedStop ? { ...route, stops, days } : route;
 }
 
+/**
+ * 한국어에서는 요청하지 않고 원본을 반환한다. 다른 언어에서는 외부 장소 ID별 후보를 모아 한 번에 번역하고,
+ * 번역값이 있는 제목·주소만 복사해 route.stops와 days[].stops에 동일하게 반영한다.
+ */
 export function useLocalizedMyRoutes(routes: MyRoute[]) {
   const appLanguage = useAppLanguageStore((state) => state.language);
   const candidatesByRouteId = useMemo(

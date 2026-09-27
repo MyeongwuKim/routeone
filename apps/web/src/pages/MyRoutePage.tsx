@@ -1,12 +1,11 @@
 /**
- * 진입 경로: 하단 내 루트 탭 → 일정 카드 또는 여행 시작
+ * 진입 경로: 하단 내 루트 탭 또는 일정·장소 도착 알림
  *
- * 용도:
- * 저장한 여행 일정을 조회하고 날짜별 장소를 확인하며 여행을 시작한다.
- * 시작 요청이 중단된 경우에는 영속 기록을 이어받아 안전하게 재시도한다.
+ * 저장한 경로를 예정·진행 상태로 나눠 표시하고 DAY 상세 확인, DAY 추가, 경로 삭제와 여행 시작을 제공한다.
+ * 알림 URL의 routeId·dayId·stopId가 있으면 대상 DAY와 장소를 열고 닫을 때 원래 알림함으로 돌아간다.
  *
- * 구조:
- * 일정 상태별 목록, 일정 상세 팝업, 시작 시각 선택과 시작 진행 상태로 구성되어 있다.
+ * 여행 시작 전 시작일·시각과 위치 권한을 확인하고 도착 알림 전환, 시작 API, 관련 캐시 갱신을 순서대로 처리한다.
+ * 앱이 처리 도중 종료된 시작 요청은 영속 시도 기록과 generation을 대조해 중복 시작 없이 복구하거나 재시도한다.
  */
 import {
   useCallback,
@@ -89,8 +88,11 @@ import { DateInput, TimeWheelInput } from "@/components/inputs";
 import { nativeBridge } from "@/native-bridge";
 
 type RouteSectionProps = {
+
   title: string;
+
   count: number;
+
   children: ReactNode;
 };
 

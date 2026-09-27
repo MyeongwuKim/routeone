@@ -1,3 +1,4 @@
+/** 계정 정보 조회 중에는 실제 행 배치와 같은 뼈대를, 실패 시에는 오류 문구와 재시도 버튼을 제공한다. */
 import { useUiText } from "@/lib/uiText";
 
 function AccountInfoSkeletonRow() {

@@ -1,3 +1,4 @@
+/** 공유 경로의 작성자·일정·진행률·태그·장소를 카드로 표시하고 상세 열기, 좋아요와 필터 후보 선택을 연결한다. */
 import { memo, useState } from "react";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import {
@@ -21,11 +22,17 @@ const VISIBLE_SHARE_TAG_COUNT = 2;
 const VISIBLE_PLACE_CHIP_COUNT = 2;
 
 type SharedRouteCardProps = {
+
   route: SharedRoute;
+
   isLiked: boolean;
+
   isLikePending?: boolean;
+
   onToggleLike: (route: SharedRoute) => void | Promise<void>;
+
   onOpen?: (route: SharedRoute) => void;
+
   onRequestFilter?: (filter: SharedRouteFilterCandidate) => void;
 };
 

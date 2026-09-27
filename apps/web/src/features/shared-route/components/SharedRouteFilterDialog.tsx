@@ -1,3 +1,4 @@
+/** 공유 경로 태그·지역·장소 필터 draft를 편집하고, 선택 지역의 추가 장소 분류를 현재 언어로 조회해 후보에 합친다. */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -22,12 +23,19 @@ import {
 } from "../sharedRouteFilters";
 
 type SharedRouteFilterDialogProps = {
+
   filters: SharedRouteFilters;
+
   tagOptions: string[];
+
   placeRegions: SharedRouteFilterOptions["placeRegions"];
+
   onToggle: (filter: SharedRouteFilterCandidate) => void;
+
   onClear: () => void;
+
   onClose: () => void;
+
   onConfirm: () => void;
 };
 

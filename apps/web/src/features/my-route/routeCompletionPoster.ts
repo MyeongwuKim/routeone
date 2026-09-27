@@ -18,6 +18,7 @@ import {
 import type { MyRoute, MyRouteStop } from "./types";
 
 export const ROUTE_COMPLETION_POSTER_WIDTH = 1080;
+
 export const ROUTE_COMPLETION_POSTER_HEIGHT = 1350;
 
 export const ROUTE_COMPLETION_POSTER_BACKGROUNDS = [
@@ -92,7 +93,6 @@ export type RouteCompletionPosterSaveResult = {
   mode: "native" | "web";
   completed: boolean;
 };
-
 
 type PosterTile = {
   index: number;

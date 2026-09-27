@@ -1,3 +1,4 @@
+
 import { GANGWON_REGIONS } from "@/data/gangwonRegions";
 
 const KOREA_UNIFIED_CS = {
@@ -11,7 +12,9 @@ const KOREA_UNIFIED_CS = {
 };
 
 export type GeoRing = [number, number][];
+
 export type GeoPolygon = GeoRing[];
+
 export type GeoMultiPolygon = GeoPolygon[];
 
 export type GangwonBoundaryFeature = {

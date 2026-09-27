@@ -1,3 +1,4 @@
+
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import {
   applyTourCategoryEnglishOverrides,
@@ -157,41 +158,65 @@ export type NearbyTouristPlace = {
 };
 
 type FetchTourAttractionsOptions = {
+
   areaCode?: string;
+
   sigunguCode?: string;
+
   contentTypeIds?: string[];
 };
 
 type FetchGangwonFestivalsOptions = {
+
   sigunguCode?: string;
+
   today?: Date;
+
   lookAheadDays?: number;
 };
 
 type FetchTouristConcentrationOptions = {
+
   areaCode: string;
+
   signguCode: string;
+
   touristName?: string;
+
   numOfRows?: number;
+
   pageNo?: number;
 };
 
 type FetchRelatedTouristPlacesOptions = {
+
   areaCode: string;
+
   signguCode: string;
+
   keyword: string;
+
   baseYm?: string;
+
   numOfRows?: number;
+
   pageNo?: number;
 };
 
 type FetchNearbyTouristPlacesOptions = {
+
   lat: number;
+
   lng: number;
+
   radiusM?: number;
+
   numOfRows?: number;
+
   pageNo?: number;
+
   contentTypeIds?: string[];
+
   excludeContentId?: string;
 };
 

@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MdCheck, MdKeyboardArrowDown } from "react-icons/md";
 
@@ -10,13 +11,21 @@ export type DropdownSelectOption<TValue extends string> = {
 };
 
 type DropdownSelectProps<TValue extends string> = {
+
   options: ReadonlyArray<DropdownSelectOption<TValue>>;
+
   value: TValue;
+
   onChange: (value: TValue) => void;
+
   ariaLabel?: string;
+
   valuePrefix?: ReactNode;
+
   className?: string;
+
   buttonClassName?: string;
+
   menuClassName?: string;
 };
 

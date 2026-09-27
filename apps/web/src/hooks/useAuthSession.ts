@@ -11,6 +11,10 @@ import {
   getAuthToken,
 } from "@/lib/authToken";
 
+/**
+ * 저장된 인증 토큰 존재 여부를 초기값으로 사용한다. 같은 창의 인증 변경 이벤트와 다른 창의 storage
+ * 이벤트를 구독해 로그인 상태를 다시 계산하며, 정리 시 두 리스너를 모두 해제한다.
+ */
 export function useAuthSession() {
   const [isAuthenticated, setIsAuthenticated] = useState(() =>
     Boolean(getAuthToken())

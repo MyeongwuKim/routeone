@@ -1,3 +1,10 @@
+/**
+ * 진입 경로: 홈 상단 알림 버튼
+ *
+ * 서버 알림함의 일정·장소 도착·축제 알림을 페이지 단위로 조회해 발생 시각 순으로 표시한다.
+ * 화면 진입 후 미확인 알림을 읽음 처리하고 네이티브 배지와 알림 Query를 동기화하며,
+ * 일정 알림은 해당 DAY로, 축제 알림은 관광지 상세와 여행 담기로 연결한다.
+ */
 import { useEffect, useMemo, useRef } from "react";
 import {
   useInfiniteQuery,

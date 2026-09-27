@@ -1,3 +1,4 @@
+
 export type MapMarkerBadge = {
   label: string;
   icon: string;
@@ -7,17 +8,24 @@ export type MapMarkerBadge = {
 };
 
 export type BadgeMarkerHighlightOptions = {
+
   highlighted?: boolean;
+
   highlightLabel?: string;
 };
 
 export type PlaceBubbleMarkerVariant = "start" | "place";
 
 export type PlaceBubbleMarkerOptions = {
+
   title: string;
+
   subtitle: string;
+
   sequenceLabel: string;
+
   icon?: string;
+
   variant?: PlaceBubbleMarkerVariant;
 };
 

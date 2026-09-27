@@ -1,3 +1,4 @@
+/** DAY별 draft·저장 출발지를 선택하고, 없으면 경로 출발지 또는 첫 장소 좌표로 편집 대상을 구성한다. */
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
 
 export type DayRouteStartLocations = Record<

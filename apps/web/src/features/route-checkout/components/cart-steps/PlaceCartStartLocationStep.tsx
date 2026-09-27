@@ -1,3 +1,4 @@
+/** 추천 일정의 출발지를 현재 위치 또는 지도 마커로 선택하고, 담은 장소 중심과 30km 이상 떨어지면 거리 경고를 표시한다. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IoLocateOutline, IoLocationSharp } from "react-icons/io5";
 import {
@@ -13,6 +14,7 @@ import { useRouteCheckout } from "../../hooks/useRouteCheckout";
 import type { RouteStartLocation } from "../../models/routePlanTypes";
 
 type PlaceCartStartLocationStepProps = {
+
   savedPlaces: SavedPlaceItem[];
 };
 

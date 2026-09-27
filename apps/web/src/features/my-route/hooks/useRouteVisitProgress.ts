@@ -36,10 +36,15 @@ export type RouteVisitProgressReporter = {
   finish: () => void;
 };
 
+/**
+ * 방문 완료·완료 취소·도착 취소 요청 하나의 진행 상태를 관리한다. begin이 반환한 reporter는
+ * 해당 요청 Symbol이 여전히 최신일 때만 상태를 변경해 이전 요청의 늦은 콜백을 무시한다.
+ */
 export function useRouteVisitProgress() {
   const [progress, setProgress] = useState<RouteVisitProgress | null>(null);
   const activeRequest = useRef<symbol | null>(null);
 
+  /** 새 요청을 preparing 단계로 시작하고 그 요청에만 유효한 단계 보고 함수를 반환한다. */
   const begin = (
     stopId: string,
     operation: RouteVisitProgressOperation

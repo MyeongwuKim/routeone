@@ -1,3 +1,4 @@
+/** 관광 API의 주변 장소를 상세 시트 장소 모델로 바꾸고 거리·카테고리·좌표 표시값을 계산한다. */
 import {
   getPlaceCategoryIcon,
   getPlaceCategoryLabel,
@@ -214,8 +215,11 @@ export function getNearbyPlaceCategoryIcon(place: NearbyTouristPlace) {
 }
 
 type NearbyMapSheetPlaceInput = {
+
   place: NearbyTouristPlace;
+
   areaCode: string;
+
   signguCode: string;
 };
 

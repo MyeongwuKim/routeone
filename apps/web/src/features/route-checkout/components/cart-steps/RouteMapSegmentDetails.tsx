@@ -21,11 +21,17 @@ import {
 import RouteSegmentSelectCard from "./RouteSegmentSelectCard";
 
 type RouteMapSegmentDetailsProps = {
+
   text: UiText;
+
   hasComparisonRoute: boolean;
+
   routeViewMode: RouteMapViewMode;
+
   routePointGroups: RoutePointGroup[];
+  /** 목록에서 선택 표시할 경로 종류·구간 ID */
   selectedSegment: RouteSegmentSelection | null;
+
   onSelectSegment: (
     variant: RouteDisplayVariant,
     segment: RouteMapSegment,

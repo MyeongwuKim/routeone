@@ -1,3 +1,4 @@
+/** DAY 팝업의 읽기 전용 좋아요·포토카드 액션 또는 편집 저장·취소·여행 시작·지도 버튼을 현재 상태에 맞춰 표시한다. */
 import {
   MdCheck,
   MdCheckCircle,
@@ -10,6 +11,7 @@ import {
 import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupController";
 
 type DayRoutePopupFooterProps = {
+
   controller: DayRoutePopupController["footer"];
 };
 

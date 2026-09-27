@@ -1,18 +1,18 @@
 /**
  * 진입 경로: 하단 홈 탭
  *
- * 용도:
- * 지역별 장소를 지도에서 찾고 상세 정보와 여행 담기로 연결한다.
+ * 서비스 지역과 시·군·구, 장소 종류, 검색어를 기준으로 관광지를 조회해 지도와 검색 결과에 표시한다.
+ * 마커나 검색 결과를 선택하면 장소 상세 시트를 열고 여행 장소 담기와 길찾기로 연결한다.
  *
- * 구조:
- * 지도, 검색·필터, 장소 목록을 조합하고 현재 위치는 전역 저장소에서 구독한다.
+ * 현재 위치·선택 지역·검색 조건은 전역 Store에서 읽고, 장소 조회와 검색 결과 계산은 전용 Hook에 맡긴다.
+ * 이 화면은 위치 권한 안내, 검색 팝업, 지도 오버레이와 장소 상세 시트의 열림·선택 흐름을 연결한다.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import MapLoadingSkeleton from "@/components/map/MapLoadingSkeleton";
 import LocationPermissionNotice from "@/components/map/LocationPermissionNotice";
 import { useLocationPermissionDenied } from "@/native-bridge/useLocationPermissionDenied";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   notificationApi,
   NOTIFICATION_INBOX_FIRST_PAGE_QUERY_KEY,
@@ -22,14 +22,16 @@ import RouteCheckoutModal from "@/features/route-checkout/components/RouteChecko
 import HomeMapControls, {
   HomeMapControlsSkeleton,
 } from "@/components/home/HomeMapControls";
+import HomeAppendDayBanner from "@/components/home/HomeAppendDayBanner";
 import PlaceSearchPopup from "@/components/search/PlaceSearchPopup";
 import {
-  isUsableHomeRegionPosition,
-  resolveHomeRegionFromPosition,
-} from "@/features/home/homeCurrentRegion";
-import { resolveHomeLoadingPhase } from "@/features/home/homeLoadingPhase";
+  resolveHomeLoadingPhase,
+} from "@/features/home/homeLoadingPhase";
 import { useHomeAttractionData } from "@/features/home/useHomeAttractionData";
+import { useHomeFestivalSearchNavigation } from "@/features/home/useHomeFestivalSearchNavigation";
+import { useHomeLoadingOverlay } from "@/features/home/useHomeLoadingOverlay";
 import { useHomeMap } from "@/features/home/useHomeMap";
+import { useHomeRegionController } from "@/features/home/useHomeRegionController";
 import {
   useHomeSearch,
   useHomeSearchResults,
@@ -37,7 +39,6 @@ import {
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { useLoginRequest } from "@/hooks/useLoginRequest";
 import { useUiText } from "@/lib/uiText";
-import type { CurrentLocation } from "@/lib/gangwonBoundaryUtils";
 import {
   createMapSheetPlaceFromAttraction,
   resolveMarkerType,
@@ -47,12 +48,7 @@ import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
-import {
-  isTestServiceAreaEnabled,
-  useEffectiveServiceArea,
-} from "@/stores/serviceAreaStore";
-import { useUiLoadingStore } from "@/stores/uiLoadingStore";
-import { useUiToastStore } from "@/stores/uiToastStore";
+import { useEffectiveServiceArea } from "@/stores/serviceAreaStore";
 import { TOUR_API_SERVICE_KEY } from "@/pages/HomePage.constants";
 
 function HomePage() {
@@ -60,13 +56,8 @@ function HomePage() {
   const text = useUiText();
   const navigate = useNavigate();
   const requestLogin = useLoginRequest();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated } = useAuthSession();
   const serviceArea = useEffectiveServiceArea();
-  const canSelectServiceArea = isTestServiceAreaEnabled();
-  const developmentFixedRegion = canSelectServiceArea
-    ? serviceArea.developmentFixedRegion
-    : undefined;
 
   const openSheet = useMapSheetStore((state) => state.openSheet);
   const resetSheet = useMapSheetStore((state) => state.resetSheet);
@@ -79,9 +70,6 @@ function HomePage() {
     removeSavedPlace,
     clearSavedPlaces,
   } = usePlaceCartStore();
-  const showLoading = useUiLoadingStore((state) => state.showLoading);
-  const hideLoading = useUiLoadingStore((state) => state.hideLoading);
-  const showToast = useUiToastStore((state) => state.showToast);
   const appendTarget = useRouteEditFlowStore((state) => state.appendTarget);
   const clearAppendTarget = useRouteEditFlowStore(
     (state) => state.clearAppendTarget
@@ -93,40 +81,28 @@ function HomePage() {
   const isInitialRegionResolved = useHomeExploreStore(
     (state) => state.isInitialRegionResolved
   );
-  const resolveInitialRegion = useHomeExploreStore(
-    (state) => state.resolveInitialRegion
-  );
   const selectRegion = useHomeExploreStore((state) => state.selectRegion);
   const {
     actions: {
-      appendRecentSearch,
-      clearRecentSearches,
       closeSearchPopup,
       loadMore,
       openSearchPopup,
-      removeRecentSearch,
       setSearchFilter,
       setSearchKeyword,
     },
     isSearchPopupOpen,
     placeSearchFilters,
-    recentSearches,
     searchFilter,
     searchInputRef,
     searchKeyword,
     visibleSearchResultCount,
   } = useHomeSearch({
     hasFestivalSource: serviceArea.hasFestivalSource,
-    selectedSigunguCode,
     serviceAreaId: serviceArea.id,
   });
-  const [canLoadHomeAttractions, setCanLoadHomeAttractions] =
-    useState(false);
-  const [pendingCurrentLocationFocus, setPendingCurrentLocationFocus] =
-    useState<{
-      position: CurrentLocation;
-      sigunguCode: string;
-    } | null>(null);
+  useHomeFestivalSearchNavigation({
+    openSearchPopup,
+  });
   const notificationInboxQuery = useQuery({
     queryKey: NOTIFICATION_INBOX_FIRST_PAGE_QUERY_KEY,
     queryFn: () =>
@@ -153,7 +129,7 @@ function HomePage() {
     topRankByAttractionId,
     trendNameByAttractionId,
   } = useHomeAttractionData(selectedSigunguCode, serviceArea, {
-    enabled: canLoadHomeAttractions,
+    enabled: isInitialRegionResolved,
   });
   const handleSelectAttraction = useCallback(
     ({
@@ -230,68 +206,26 @@ function HomePage() {
       trendNameByAttractionId,
       visibleSearchResultCount,
     });
-
-  useEffect(() => {
-    if (
-      (!developmentFixedRegion &&
-        (isCurrentLocationLookupPending || !isBoundaryDataReady)) ||
-      isInitialRegionResolved
-    ) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      const initialRegion =
-        developmentFixedRegion ??
-        (currentLocation
-          ? resolveHomeRegionFromPosition(
-              currentLocation,
-              serviceArea,
-              boundaryBySigunguCode
-            ) ?? serviceArea.defaultRegion
-          : serviceArea.defaultRegion);
-      if (!initialRegion) {
-        return;
-      }
-      resolveInitialRegion(initialRegion.sigunguCode);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [
-    currentLocation,
-    developmentFixedRegion,
+  const {
+    focusCurrentLocation,
+    orderedRegions,
+    selectedRegion,
+    selectedRegionLabel,
+    shouldShowInitialRegionLoader,
+    shouldShowInteractiveMapUi,
+    shouldShowMapSetupSkeleton,
+  } = useHomeRegionController({
     boundaryBySigunguCode,
+    currentLocation,
+    focusLocation,
     isBoundaryDataReady,
     isCurrentLocationLookupPending,
-    isInitialRegionResolved,
-    resolveInitialRegion,
-    serviceArea,
-  ]);
-
-  useEffect(() => {
-    if (
-      canLoadHomeAttractions ||
-      !isInitialRegionResolved ||
-      (!mapReady && !mapError)
-    ) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      setCanLoadHomeAttractions(true);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [
-    canLoadHomeAttractions,
-    isInitialRegionResolved,
     mapError,
     mapReady,
-  ]);
+    refreshCurrentLocation,
+    selectedSigunguCode,
+    serviceArea,
+  });
   const openPlaceSheetFromAttraction = useCallback(
     (options: OpenPlaceSheetFromAttractionOptions) => {
       focusAttraction(options.attraction);
@@ -301,15 +235,9 @@ function HomePage() {
   );
   const canShowAttractionLoading =
     Boolean(TOUR_API_SERVICE_KEY) &&
-    canLoadHomeAttractions &&
+    isInitialRegionResolved &&
     mapReady &&
     !mapError;
-  const shouldShowInitialRegionLoader =
-    !developmentFixedRegion &&
-    !isInitialRegionResolved &&
-    !mapError;
-  const shouldShowMapSetupSkeleton = !isInitialRegionResolved;
-  const shouldShowInteractiveMapUi = isInitialRegionResolved;
   const homeLoadingPhase = resolveHomeLoadingPhase({
     attractionLoadingPhase,
     canShowAttractionLoading,
@@ -319,89 +247,6 @@ function HomePage() {
     isRenderingMarkers,
     isSearchPopupOpen,
   });
-  const orderedRegions = useMemo(
-    () =>
-      [...serviceArea.regions].sort((left, right) =>
-        left.label.localeCompare(right.label, "ko-KR")
-      ),
-    [serviceArea.regions]
-  );
-  const selectedRegion =
-    serviceArea.regions.find(
-      (region) => region.sigunguCode === selectedSigunguCode
-    ) ?? serviceArea.defaultRegion;
-  const selectedRegionLabel =
-    text.labels.regions[selectedRegion.label] ?? selectedRegion.label;
-  const handleSelectRegion = useCallback(
-    (sigunguCode: string) => {
-      selectRegion(sigunguCode);
-    },
-    [selectRegion]
-  );
-  const handleFocusCurrentLocation = useCallback(() => {
-    const focus = async () => {
-      const nextLocation = await refreshCurrentLocation({
-        forceRefresh: true,
-      });
-      if (!nextLocation) {
-        showToast(text.home.currentLocationUnavailable);
-        return;
-      }
-
-      if (!isUsableHomeRegionPosition(nextLocation)) {
-        showToast(text.home.currentLocationUnavailable);
-        return;
-      }
-
-      const nextRegion = resolveHomeRegionFromPosition(
-        nextLocation,
-        serviceArea,
-        boundaryBySigunguCode
-      );
-      if (!nextRegion) {
-        showToast(text.home.currentLocationUnavailable);
-        return;
-      }
-
-      setPendingCurrentLocationFocus({
-        position: nextLocation,
-        sigunguCode: nextRegion.sigunguCode,
-      });
-      selectRegion(nextRegion.sigunguCode);
-    };
-
-    void focus();
-  }, [
-    boundaryBySigunguCode,
-    refreshCurrentLocation,
-    selectRegion,
-    serviceArea,
-    showToast,
-    text,
-  ]);
-  useEffect(() => {
-    if (
-      !mapReady ||
-      !pendingCurrentLocationFocus ||
-      pendingCurrentLocationFocus.sigunguCode !== selectedSigunguCode
-    ) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      focusLocation(pendingCurrentLocationFocus.position);
-      setPendingCurrentLocationFocus(null);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [
-    focusLocation,
-    mapReady,
-    pendingCurrentLocationFocus,
-    selectedSigunguCode,
-  ]);
   const homeOriginLocation = currentLocation;
   const routeStartLocation = homeOriginLocation
     ? {
@@ -414,54 +259,6 @@ function HomePage() {
     label: text.placeSheet.referenceLocation(selectedRegionLabel),
     isCurrentLocation: false,
   };
-  useEffect(() => {
-    const festivalRegionCode = searchParams.get("festivalRegion");
-    const festivalTitle = searchParams.get("festivalTitle")?.trim() ?? "";
-
-    if (!festivalRegionCode) {
-      return;
-    }
-
-    if (!serviceArea.hasFestivalSource) {
-      return;
-    }
-
-    const festivalRegion = serviceArea.regions.find(
-      (region) => region.sigunguCode === festivalRegionCode
-    );
-
-    if (!festivalRegion) {
-      return;
-    }
-
-    const nextSearchParams = new URLSearchParams(searchParams);
-    nextSearchParams.delete("festivalRegion");
-    nextSearchParams.delete("festivalDate");
-    nextSearchParams.delete("festivalTitle");
-    nextSearchParams.delete("source");
-    const frameId = requestAnimationFrame(() => {
-      selectRegion(festivalRegion.sigunguCode);
-      openSearchPopup({
-        filter: "festival",
-        keyword:
-          festivalTitle ||
-          text.labels.regions[festivalRegion.label] ||
-          festivalRegion.label,
-      });
-      setSearchParams(nextSearchParams, { replace: true });
-    });
-
-    return () => {
-      cancelAnimationFrame(frameId);
-    };
-  }, [
-    openSearchPopup,
-    searchParams,
-    selectRegion,
-    setSearchParams,
-    serviceArea,
-    text,
-  ]);
   const routeInsertCandidatePlaces = useMemo(() => {
     if (!attractionData) {
       return [];
@@ -493,56 +290,7 @@ function HomePage() {
     topRankByAttractionId,
     trendNameByAttractionId,
   ]);
-
-  useEffect(() => {
-    if (homeLoadingPhase === "location") {
-      showLoading({
-        title: text.home.loadingLocationTitle,
-        description: text.home.loadingLocationDescription,
-        footerText: text.home.loadingFooter,
-        animation: "map-thinking",
-      });
-      return;
-    }
-
-    if (homeLoadingPhase === "places") {
-      showLoading({
-        title: text.home.loadingPlacesTitle,
-        description: text.home.loadingPlacesDescription,
-        footerText: text.home.loadingFooter,
-        animation: "map-thinking",
-      });
-      return;
-    }
-
-    if (homeLoadingPhase === "ranking") {
-      showLoading({
-        title: text.home.loadingRankingTitle,
-        description: text.home.loadingRankingDescription,
-        footerText: text.home.loadingFooter,
-        animation: "ranking",
-      });
-      return;
-    }
-
-    if (homeLoadingPhase !== "markers") {
-      hideLoading();
-      return;
-    }
-
-    showLoading({
-      title: text.home.loadingMarkersTitle,
-      description: text.home.loadingMarkersDescription,
-      footerText: text.home.loadingFooter,
-      animation: "map-rendering",
-    });
-  }, [homeLoadingPhase, hideLoading, showLoading, text]);
-
-  useEffect(() => {
-    return () => {
-      hideLoading();
-    };
-  }, [hideLoading]);
+  useHomeLoadingOverlay(homeLoadingPhase);
 
   return (
     <section className="relative h-full overflow-hidden bg-brand-50">
@@ -584,8 +332,8 @@ function HomePage() {
             resetSheet();
             openSavedList();
           }}
-          onFocusCurrentLocation={handleFocusCurrentLocation}
-          onSelectRegion={handleSelectRegion}
+          onFocusCurrentLocation={focusCurrentLocation}
+          onSelectRegion={selectRegion}
           onSelectFilter={(filter) => {
             resetSheet();
             setSearchFilter(filter);
@@ -594,45 +342,15 @@ function HomePage() {
       ) : null}
 
       {appendTarget && shouldShowInteractiveMapUi ? (
-        <div className="pointer-events-auto absolute inset-x-3 top-[calc(max(0.75rem,env(safe-area-inset-top))+9rem)] z-30 rounded-2xl border border-brand-200 bg-white/95 p-3 shadow-md backdrop-blur">
-          <div className="flex items-start gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-sm font-black text-brand-700">
-              D{appendTarget.nextDayIndex}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-black text-slate-900">
-                {text.home.appendDayTitle(
-                  appendTarget.routeTitle,
-                  appendTarget.nextDayIndex
-                )}
-              </p>
-              <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                {text.home.appendDayDescription(
-                  appendTarget.nextDayIndex
-                )}
-              </p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetSheet();
-                    openSavedList();
-                  }}
-                  className="rounded-xl bg-brand-600 px-3 py-2 text-xs font-bold text-white"
-                >
-                  {text.home.checkout}
-                </button>
-                <button
-                  type="button"
-                  onClick={clearAppendTarget}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500"
-                >
-                  {text.common.cancel}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <HomeAppendDayBanner
+          appendTarget={appendTarget}
+          onCancel={clearAppendTarget}
+          onOpenCheckout={() => {
+            resetSheet();
+            openSavedList();
+          }}
+          text={text}
+        />
       ) : null}
 
       <RouteCheckoutModal
@@ -663,14 +381,11 @@ function HomePage() {
           searchFilter={searchFilter}
           searchResults={searchResults}
           visibleSearchResults={visibleSearchResults}
-          recentSearches={recentSearches}
           onKeywordChange={setSearchKeyword}
-          onSearchSubmit={appendRecentSearch}
           onSearchFilterChange={setSearchFilter}
           onClose={closeSearchPopup}
           onLoadMore={loadMore}
           onResultClick={(item) => {
-            appendRecentSearch(searchKeyword);
             openPlaceSheetFromAttraction({
               attraction: item.attraction,
               markerType: item.markerType,
@@ -679,9 +394,6 @@ function HomePage() {
               mode: "full-popup",
             });
           }}
-          onRecentSearchSelect={setSearchKeyword}
-          onRecentSearchDelete={removeRecentSearch}
-          onRecentSearchClear={clearRecentSearches}
         />
       ) : null}
 

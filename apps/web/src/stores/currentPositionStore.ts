@@ -24,12 +24,19 @@ export type CurrentPositionStatus =
   | "error";
 
 type CurrentPositionState = {
+  /** 마지막 위치 조회 실패 메시지. 성공·초기화 시 null */
   error: string | null;
+  /** 마지막으로 확인하거나 외부에서 적용한 좌표. 권한 무효화 시 null */
   position: RouteOnePosition | null;
+  /** 위치 요청의 초기·진행·성공·실패 상태 */
   status: CurrentPositionStatus;
+  /** 테스트 위치 등 외부 좌표를 적용하고 진행 중 요청 결과가 이를 덮지 못하게 무효화한다. */
   applyPosition: (position: RouteOnePosition) => void;
+  /** 좌표와 오류를 비우고 idle로 되돌리며 진행 중 요청 결과를 무효화한다. */
   clearPosition: () => void;
+  /** 권한을 사용할 수 없을 때 좌표를 비우고 권한 오류 상태로 전환한다. */
   invalidatePosition: () => void;
+  /** 캐시 또는 네이티브 위치를 반환하며 forceRefresh는 저장 좌표를 재사용하지 않는다. */
   requestCurrentPosition: (options?: {
     forceRefresh?: boolean;
   }) => Promise<RouteOnePosition>;
@@ -91,6 +98,11 @@ export const useCurrentPositionStore = create<CurrentPositionState>(
       cancelPendingPositions();
       set({ error: LOCATION_PERMISSION_ERROR, position: null, status: "error" });
     },
+    /**
+     * 같은 종류의 진행 중 요청을 재사용하고, forceRefresh가 아니면 5분 이내 좌표를 반환한다.
+     * 네이티브에서는 테스트 계정이 아닐 때 권한을 먼저 확인하며, 최신 요청만 Store를 변경한다.
+     * 권한 거부는 좌표를 무효화하고 그 외 조회 실패는 기존 좌표를 보존한 채 error 상태로 전환한다.
+     */
     requestCurrentPosition: ({ forceRefresh = false } = {}) => {
       const pendingRequest = forceRefresh
         ? pendingFreshPositionRequest

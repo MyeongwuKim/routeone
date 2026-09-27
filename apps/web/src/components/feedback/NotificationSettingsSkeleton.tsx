@@ -1,3 +1,4 @@
+/** 알림 설정을 조회하는 동안 실제 설정 화면과 같은 헤더와 행 배치의 로딩 뼈대를 표시한다. */
 import { MdArrowBack } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
 import { useUiText } from "@/lib/uiText";
