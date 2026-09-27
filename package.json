@@ -23,6 +23,7 @@
     "native:ios:local": "pnpm --filter native ios",
     "native:ios:dev": "pnpm --filter native run prebuild:ios:dev",
     "native:ios:prod": "pnpm --filter native run prebuild:ios:prod",
+    "native:ios:prod:clean": "pnpm --filter native run prebuild:ios:prod:clean",
     "native:ios:prod:expo": "pnpm --filter native run eas:release:ios",
     "native:typecheck": "pnpm --filter native typecheck",
     "native:sync:web": "pnpm --filter native sync:web",

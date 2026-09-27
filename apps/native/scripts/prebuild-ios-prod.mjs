@@ -49,6 +49,7 @@ const steps = [
       ...(shouldClean ? ["--clean"] : []),
     ],
   },
+  { command: "pnpm", args: ["run", "sync:ios-version"] },
   {
     command: process.execPath,
     args: ["scripts/sync-xcode-env.mjs", envFileName, "prod"],

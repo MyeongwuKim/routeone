@@ -2,7 +2,7 @@
   "dev": {
     "ios": {
       "enabled": true,
-      "minimumVersion": "1.0.0",
+      "minimumVersion": "1.0.1",
       "storeUrl": "https://testflight.apple.com/"
     },
     "android": {
@@ -13,9 +13,9 @@
   },
   "prod": {
     "ios": {
-      "enabled": false,
-      "minimumVersion": "1.0.0",
-      "storeUrl": null
+      "enabled": true,
+      "minimumVersion": "1.0.1",
+      "storeUrl": "https://apps.apple.com/app/id6804365011"
     },
     "android": {
       "enabled": false,

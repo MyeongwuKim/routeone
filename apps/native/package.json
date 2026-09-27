@@ -17,6 +17,7 @@
     "start:bundle:go": "pnpm run build:webview && expo start",
     "preios": "pnpm run patch:expo-modules-jsi && pnpm run sync:ios-permissions",
     "sync:ios-permissions": "node scripts/sync-ios-permissions.mjs",
+    "sync:ios-version": "node scripts/sync-ios-version.mjs",
     "android": "ROUTEONE_BUILD_PLATFORM=android APP_VARIANT=none EXPO_PUBLIC_APP_VARIANT=none pnpm run build:webview && ROUTEONE_BUILD_PLATFORM=android APP_VARIANT=none EXPO_PUBLIC_APP_VARIANT=none expo run:android",
     "ios": "pnpm run prebuild:ios:local && ROUTEONE_BUILD_PLATFORM=ios APP_VARIANT=none EXPO_PUBLIC_APP_VARIANT=none pnpm run build:webview && ROUTEONE_BUILD_PLATFORM=ios APP_VARIANT=none EXPO_PUBLIC_APP_VARIANT=none expo run:ios",
     "ios:device": "pnpm run patch:expo-modules-jsi && pnpm run prebuild:ios:local && ROUTEONE_BUILD_PLATFORM=ios APP_VARIANT=none EXPO_PUBLIC_APP_VARIANT=none pnpm run build:webview && ROUTEONE_BUILD_PLATFORM=ios APP_VARIANT=none EXPO_PUBLIC_APP_VARIANT=none expo run:ios --device",
