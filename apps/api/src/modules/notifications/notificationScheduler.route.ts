@@ -15,6 +15,7 @@ type NotificationSchedulerMode =
 
 type NotificationSchedulerBody = {
   accountId?: unknown;
+  email?: unknown;
   mode?: unknown;
 };
 
@@ -36,24 +37,35 @@ function readSchedulerMode(value: unknown): NotificationSchedulerMode | null {
     : null;
 }
 
-async function getTestUser(accountIdValue: unknown) {
+/**
+ * 수동 알림 테스트 대상을 일반 가입자의 accountId 또는 OAuth 가입자의 email로 조회한다.
+ * 두 식별자를 동시에 전달하면 서로 다른 사용자를 가리킬 수 있으므로 요청을 거부한다.
+ */
+async function getTestUser({
+  accountId: accountIdValue,
+  email: emailValue,
+}: NotificationSchedulerBody) {
   const accountId =
     typeof accountIdValue === "string"
       ? normalizeAccountId(accountIdValue)
       : "";
+  const email =
+    typeof emailValue === "string" ? emailValue.trim().toLowerCase() : "";
 
-  if (!accountId) {
-    throw new Error("테스트할 RouteOne 계정 ID가 필요합니다.");
+  if (accountId && email) {
+    throw new Error("테스트 계정의 accountId와 email 중 하나만 입력해 주세요.");
+  }
+
+  if (!accountId && !email) {
+    throw new Error("테스트할 RouteOne 계정 ID 또는 이메일이 필요합니다.");
   }
 
   const user = await prisma.user.findFirst({
-    where: {
-      accountId,
-    },
+    where: accountId ? { accountId } : { email },
   });
 
   if (!user) {
-    throw new Error(`테스트 계정을 찾지 못했습니다: ${accountId}`);
+    throw new Error(`테스트 계정을 찾지 못했습니다: ${accountId || email}`);
   }
 
   return user;
@@ -105,7 +117,7 @@ export function registerNotificationSchedulerRoutes(app: FastifyInstance) {
       }
 
       try {
-        const user = await getTestUser(request.body?.accountId);
+        const user = await getTestUser(request.body ?? {});
 
         if (mode === "festival-test") {
           const result = await sendFestivalTestNotification(prisma, user);
@@ -114,6 +126,7 @@ export function registerNotificationSchedulerRoutes(app: FastifyInstance) {
             ok: true,
             mode,
             accountId: user.accountId,
+            email: user.email,
             ...result,
           };
         }
@@ -148,6 +161,7 @@ export function registerNotificationSchedulerRoutes(app: FastifyInstance) {
           ok: true,
           mode,
           accountId: user.accountId,
+          email: user.email,
           ...result,
         };
       } catch (error) {

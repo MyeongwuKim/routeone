@@ -62,6 +62,17 @@ curl -X POST "https://API_HOST/internal/notifications/run" \
   -d '{"mode":"festival-test","accountId":"ACCOUNT_ID"}'
 ```
 
+OAuth 가입자는 `accountId` 대신 이메일을 전달한다.
+
+```bash
+curl -X POST "https://API_HOST/internal/notifications/run" \
+  -H "Authorization: Bearer RANDOM_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"festival-test","email":"USER@example.com"}'
+```
+
+`accountId`와 `email`은 동시에 전달하지 않는다.
+
 루트 회고 알림 테스트:
 
 ```bash

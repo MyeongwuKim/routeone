@@ -258,7 +258,7 @@ export default function App() {
         }}
       />
       <Modal
-        animationType="none"
+        animationType="slide"
         onRequestClose={() => setIsNativeLoginVisible(false)}
         presentationStyle="fullScreen"
         visible={isNativeLoginVisible}

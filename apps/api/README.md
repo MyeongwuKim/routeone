@@ -80,7 +80,7 @@ flowchart LR
 | `POST` | `/graphql` | GraphQL Query와 Mutation을 처리합니다. | operation별로 다름 |
 | `POST` | `/internal/notifications/run` | 예약 알림을 실행하거나 개발용 테스트 알림을 발송합니다. | Scheduler Bearer Token |
 
-`/internal/notifications/run`은 `Authorization: Bearer <NOTIFICATION_SCHEDULER_SECRET>`가 필요합니다. 지원하는 실행 모드는 구현의 `notificationScheduler.route.ts`를 기준으로 확인합니다.
+`/internal/notifications/run`은 `Authorization: Bearer <NOTIFICATION_SCHEDULER_SECRET>`가 필요합니다. 테스트 모드는 일반 가입자의 `accountId` 또는 OAuth 가입자의 `email` 중 하나로 대상을 지정합니다. 지원하는 실행 모드는 구현의 `notificationScheduler.route.ts`를 기준으로 확인합니다.
 
 ## GraphQL 도메인
 
