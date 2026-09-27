@@ -47,6 +47,17 @@ function warmAppFonts() {
   ]);
 }
 
+/** 링크와 이미지의 기본 드래그 고스트를 막되 지도·입력 요소의 포인터 조작은 유지한다. */
+function preventMediaAndLinkDrag() {
+  document.addEventListener("dragstart", (event) => {
+    const target = event.target;
+
+    if (target instanceof Element && target.closest("a, img")) {
+      event.preventDefault();
+    }
+  });
+}
+
 function renderApp() {
   createRoot(
     document.getElementById("root")!,
@@ -64,4 +75,5 @@ function renderApp() {
 }
 
 warmAppFonts();
+preventMediaAndLinkDrag();
 renderApp();

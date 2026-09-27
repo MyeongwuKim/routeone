@@ -130,8 +130,13 @@ select,
 }
 
 img,
-svg {
+svg,
+a {
   -webkit-user-drag: none;
+}
+
+a {
+  -webkit-touch-callout: none;
 }
 
 body {

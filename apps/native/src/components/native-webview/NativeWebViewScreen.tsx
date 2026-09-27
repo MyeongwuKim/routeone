@@ -939,6 +939,7 @@ export default function NativeWebViewScreen({
           javaScriptEnabled
           domStorageEnabled
           allowsInlineMediaPlayback
+          allowsLinkPreview={false}
           allowFileAccess
           allowUniversalAccessFromFileURLs
           mixedContentMode="always"
