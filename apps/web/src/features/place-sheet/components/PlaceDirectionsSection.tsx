@@ -3,12 +3,14 @@
  *
  * 용도:
  * 출발지별 경로를 미리 보여주고 네이버 지도 길찾기로 연결한다.
+ * 자동차는 기존 네이버 경로를, 도보는 공개 보행로를 자체 계산한 결과를 같은 지도에 표시한다.
  * 현재 위치 출발은 실행 시 권한을 다시 확인해 이전 좌표 사용을 막는다.
- * 권한이 꺼지면 경로 영역을 설정 안내로 바꾸고 지도 컴포넌트를 정리한다.
+ * 권한이 꺼지면 현재 위치 경로를 숨기되 지도에서 출발지를 직접 선택할 수 있다.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   IoCarSportOutline,
+  IoFootstepsOutline,
   IoInformationCircleOutline,
   IoNavigate,
 } from "react-icons/io5";
@@ -31,7 +33,16 @@ import { isNativeTestAccountMode } from "@/native-bridge/runtime";
 import { useLocationPermissionDenied } from "@/native-bridge/useLocationPermissionDenied";
 import type { MapSheetPlace } from "@/types/place";
 import type { PlaceSheetCoordinates } from "../placeSheetModel";
+import type { PlaceDirectionMode } from "../placeSheetModel";
+import type { WalkingRouteResult } from "@/features/walking/walkingTypes";
+import { getWalkingRouteText } from "@/features/walking/walkingRouteText";
+import WalkingRouteNotice from "@/features/walking/WalkingRouteNotice";
 import { RouteInfoSkeleton } from "./PlaceSheetPrimitives";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
+import type { PlannedRouteDay } from "@/features/route-checkout/models/routePlanTypes";
+
+const StartLocationPickerPopup = lazy(() => import("@/features/route-checkout/components/cart-steps/StartLocationPickerPopup"));
+const EMPTY_PICKER_PLAN: PlannedRouteDay[] = [];
 
 const NCP_KEY_ID = import.meta.env.VITE_NCP_MAPS_KEY_ID;
 const NAVER_MAP_SCHEME_APP_NAME = "com.routeone.app";
@@ -54,6 +65,11 @@ type PreviewNaverMapsApi = NonNullable<Window["naver"]>["maps"];
 type PlaceDirectionsSectionProps = {
 
   appLanguage: AppLanguage;
+
+  routeMode: PlaceDirectionMode;
+  onRouteModeChange: (mode: PlaceDirectionMode) => void;
+  onOriginChange: (coordinates: PlaceSheetCoordinates) => void;
+  walkingRoute: WalkingRouteResult | null;
 
   currentLocation: PlaceSheetCoordinates;
 
@@ -99,6 +115,9 @@ function fitPreviewMapToBounds(
 
 function PlaceDirectionsContent({
   appLanguage,
+  routeMode,
+  onRouteModeChange,
+  walkingRoute,
   currentLocation,
   directionOrigin,
   isCurrentLocationLookupPending,
@@ -110,7 +129,9 @@ function PlaceDirectionsContent({
   routePathPoints,
   selectedPlace,
   text,
-}: PlaceDirectionsSectionProps) {
+  originControl,
+  isReferenceOrigin,
+}: PlaceDirectionsSectionProps & { originControl: ReactNode; isReferenceOrigin: boolean }) {
   const [isPreviewMapSdkReady, setIsPreviewMapSdkReady] = useState(false);
   const [isOpeningDirections, setIsOpeningDirections] = useState(false);
   const [previewMapError, setPreviewMapError] = useState<string | null>(null);
@@ -119,6 +140,7 @@ function PlaceDirectionsContent({
   const previewMapContainerRef = useRef<HTMLDivElement | null>(null);
   const previewOverlaysRef = useRef<PreviewMapOverlay[]>([]);
   const selectedPlaceKey = `${selectedPlace.contentId}-${selectedPlace.contentTypeId}`;
+  const walkingText = getWalkingRouteText(appLanguage);
   const originLabel = directionOrigin.isCurrentLocation
     ? text.placeSheet.currentLocation
     : directionOrigin.label;
@@ -336,7 +358,7 @@ function PlaceDirectionsContent({
         appname: NAVER_MAP_SCHEME_APP_NAME,
       });
 
-      window.location.href = `nmap://route/car?${params.toString()}`;
+      window.location.href = `nmap://route/${routeMode === "walking" ? "walk" : "car"}?${params.toString()}`;
     } catch {
       useUiToastStore
         .getState()
@@ -349,73 +371,40 @@ function PlaceDirectionsContent({
   return (
     <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
-        <p className="font-trip text-sm text-brand-700">PLACE DIRECTIONS</p>
+        <p className="font-trip text-sm text-brand-700">{text.placeSheet.directions}</p>
       </div>
 
-      {!isCurrentLocationLookupPending && !directionOrigin.isCurrentLocation ? (
-        <div className="mb-3 flex gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
-          <IoInformationCircleOutline className="mt-0.5 shrink-0 text-base text-amber-600" />
-          <div>
-            <p className="font-bold">
-              {text.placeSheet.currentLocationUnavailableTitle}
-            </p>
-            <p className="mt-0.5 font-semibold text-amber-800/80">
-              {text.placeSheet.currentLocationUnavailableDescription(
-                originLabel
-              )}
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="relative overflow-hidden rounded-2xl border border-brand-100 bg-brand-50">
-        <div
-          ref={previewMapRef}
-          className="pointer-events-none h-48 w-full touch-none select-none"
-        />
-        {previewMapError ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/75 px-6 text-center backdrop-blur-[1px] dark:bg-slate-950/45">
-            <p className="rounded-2xl border border-rose-100 bg-white/90 px-4 py-3 text-xs font-bold text-rose-600 shadow-sm dark:border-rose-400/30 dark:bg-slate-950/80 dark:text-rose-200">
-              {previewMapError}
-            </p>
-          </div>
-        ) : !isPreviewMapSdkReady ||
-          isCurrentLocationLookupPending ||
-          isRouteLoading ? (
-          <MapLoadingSkeleton
-            label={
-              isPreviewMapSdkReady && !isCurrentLocationLookupPending
-                ? text.dayRoute.routeCalculating
-                : text.placeSheet.mapPreparing
-            }
-          />
-        ) : null}
+      <div role="group" aria-label={appLanguage === "en" ? "Travel mode" : "이동수단"} className="mb-3 grid grid-cols-2 gap-2">
+        {(["driving", "walking"] as const).map(mode => <button
+          type="button" key={mode} aria-pressed={routeMode === mode} onClick={() => onRouteModeChange(mode)}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-brand-200 px-3 text-sm font-bold text-brand-800 aria-pressed:border-brand-600 aria-pressed:bg-brand-100 dark:border-brand-400/25 dark:text-brand-100 dark:aria-pressed:bg-brand-900"
+        >{mode === "walking" ? <IoFootstepsOutline /> : <IoCarSportOutline />}{walkingText[mode]}</button>)}
       </div>
-
-      <div className="mt-3 rounded-2xl border border-brand-100 bg-brand-50/60 px-3 py-3 text-sm text-slate-700">
-        <p className="font-semibold text-slate-900">{text.placeSheet.address}</p>
-        <p className="mt-1">{selectedPlace.address}</p>
-      </div>
-
-      <div className="mt-3 rounded-2xl border border-brand-100 bg-white px-3 py-3">
+      {originControl}
+      <div aria-live="polite" className="mb-3 rounded-2xl border border-brand-100 bg-white px-3 py-3">
         {isCurrentLocationLookupPending || isRouteLoading ? (
           <RouteInfoSkeleton />
         ) : routeDurationText && routeDistanceText ? (
           <div className="text-sm">
-            <div className="flex items-center gap-2">
-              <IoCarSportOutline className="shrink-0 text-brand-600" />
+            <div className="flex flex-wrap items-center gap-2">
+              {routeMode === "walking" ? <IoFootstepsOutline className="shrink-0 text-brand-600" /> : <IoCarSportOutline className="shrink-0 text-brand-600" />}
               <p className="font-semibold text-slate-900">
-                {directionOrigin.isCurrentLocation
+                {routeMode === "walking"
+                  ? directionOrigin.isCurrentLocation
+                    ? walkingText.fromCurrentLocation(routeDurationText)
+                    : isReferenceOrigin
+                      ? walkingText.fromReferenceLocation(originLabel, routeDurationText)
+                      : walkingText.fromSelectedLocation(originLabel, routeDurationText)
+                  : directionOrigin.isCurrentLocation
                   ? text.placeSheet.routeFromCurrentLocation(routeDurationText)
-                  : text.placeSheet.routeFromReferenceLocation(
+                  : isReferenceOrigin ? text.placeSheet.routeFromReferenceLocation(
                       originLabel,
                       routeDurationText
-                    )}
+                    ) : walkingText.drivingFromSelectedLocation(originLabel, routeDurationText)}
               </p>
-              <span className="text-slate-400">·</span>
               <p className="text-slate-600">{routeDistanceText}</p>
             </div>
-            {!directionOrigin.isCurrentLocation ? (
+            {isReferenceOrigin ? (
               <p className="mt-1 text-[11px] font-semibold leading-5 text-slate-500">
                 {text.placeSheet.referenceRouteNotice}
               </p>
@@ -428,6 +417,29 @@ function PlaceDirectionsContent({
         )}
       </div>
 
+      <div className="relative overflow-hidden rounded-2xl border border-brand-100 bg-brand-50">
+        <div ref={previewMapRef} className="pointer-events-none h-48 w-full touch-none select-none" />
+        {previewMapError ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/75 px-6 text-center backdrop-blur-[1px] dark:bg-slate-950/45">
+            <p className="rounded-2xl border border-rose-100 bg-white/90 px-4 py-3 text-xs font-bold text-rose-600 shadow-sm dark:border-rose-400/30 dark:bg-slate-950/80 dark:text-rose-200">{previewMapError}</p>
+          </div>
+        ) : !isPreviewMapSdkReady || isCurrentLocationLookupPending || isRouteLoading ? (
+          <MapLoadingSkeleton label={isPreviewMapSdkReady && !isCurrentLocationLookupPending ? text.dayRoute.routeCalculating : text.placeSheet.mapPreparing} />
+        ) : null}
+      </div>
+
+      {!isCurrentLocationLookupPending && isReferenceOrigin ? (
+        <div className="mt-3 flex gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
+          <IoInformationCircleOutline className="mt-0.5 shrink-0 text-base text-amber-600" />
+          <div>
+            <p className="font-bold">{text.placeSheet.currentLocationUnavailableTitle}</p>
+            <p className="mt-0.5 font-semibold text-amber-800/80">{text.placeSheet.currentLocationUnavailableDescription(originLabel)}</p>
+          </div>
+        </div>
+      ) : null}
+      {routeMode === "walking" ? <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{walkingText.coverage}</p> : null}
+      {routeMode === "walking" ? <div className="mt-3"><WalkingRouteNotice language={appLanguage} result={walkingRoute} /></div> : null}
+
       <button
         type="button"
         onClick={handleOpenDirections}
@@ -435,30 +447,43 @@ function PlaceDirectionsContent({
         className="mt-3 flex w-full items-center justify-center rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-sm disabled:opacity-50"
       >
         <IoNavigate className="mr-2 text-base" />
-        {text.placeSheet.directions}
+        {walkingText.openNaver}
       </button>
     </section>
   );
 }
 
 function PlaceDirectionsSection(props: PlaceDirectionsSectionProps) {
+  const [isOriginPickerOpen, setIsOriginPickerOpen] = useState(false);
   const isPermissionDenied = useLocationPermissionDenied();
   const explicitOrigin = useMapSheetStore((state) => state.directionOrigin);
   const requiresCurrentLocation =
     !explicitOrigin || explicitOrigin.isCurrentLocation;
+  const walkingText = getWalkingRouteText(props.appLanguage);
+  const originControl = <div className="mb-3 flex items-center justify-between gap-2 rounded-2xl bg-brand-50 px-3 py-2 dark:bg-brand-900/30">
+    <div className="min-w-0 text-xs">
+      <p className="text-slate-500 dark:text-slate-400">{walkingText.start}</p>
+      <p className="mt-1 truncate font-bold text-slate-800 dark:text-slate-100">{props.directionOrigin.isCurrentLocation ? props.text.placeSheet.currentLocation : props.directionOrigin.label}</p>
+    </div>
+    <button type="button" onClick={() => setIsOriginPickerOpen(true)} className="min-h-11 shrink-0 rounded-xl border border-brand-200 bg-white px-3 text-xs font-bold text-brand-700 dark:border-brand-400/30 dark:bg-brand-900 dark:text-brand-100">{walkingText.changeOrigin}</button>
+  </div>;
 
-  if (isPermissionDenied && requiresCurrentLocation) {
-    return (
+  return <>
+    {isPermissionDenied && requiresCurrentLocation ? (
       <section className="rounded-3xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/30 dark:bg-slate-900/70">
         <p className="mb-3 font-trip text-sm text-brand-700">
-          PLACE DIRECTIONS
+          {props.text.placeSheet.directions}
         </p>
+        {originControl}
         <LocationPermissionNotice text={props.text} />
       </section>
-    );
-  }
-
-  return <PlaceDirectionsContent {...props} />;
+    ) : <PlaceDirectionsContent {...props} originControl={originControl} isReferenceOrigin={!props.directionOrigin.isCurrentLocation && !explicitOrigin} />}
+    {isOriginPickerOpen ? <div className={`fixed inset-0 ${UI_LAYER_CLASS.appDialog}`}>
+      <Suspense fallback={<div className="flex h-full items-center justify-center bg-white text-sm text-brand-700">{props.text.placeSheet.mapPreparing}</div>}>
+        <StartLocationPickerPopup title={walkingText.chooseStart} routePlan={EMPTY_PICKER_PLAN} initialLocation={props.currentLocation} onClose={() => setIsOriginPickerOpen(false)} onApply={props.onOriginChange} />
+      </Suspense>
+    </div> : null}
+  </>;
 }
 
 export default PlaceDirectionsSection;

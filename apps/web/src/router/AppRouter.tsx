@@ -3,8 +3,7 @@
  * 비로그인 사용자에게 공개할 탐색 화면과 로그인이 필요한 계정 화면을 구분해 연결한다.
  *
  * 동작 방식:
- * 홈의 지도·장소 탐색은 바로 열고, 공유 루트와 저장 내역·알림·내 정보는
- * 로그인 안내 화면으로 보호한다.
+ * 홈 추천·지도·공유 루트는 바로 열고, 저장 내역·알림·내 정보는 로그인 안내 화면으로 보호한다.
  */
 import {
   lazy,
@@ -38,7 +37,7 @@ import {
   MdPhotoLibrary,
   MdPolicy,
 } from "react-icons/md";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import LoginRequiredCard from "@/components/auth/LoginRequiredCard";
 import FeedbackSkeleton from "@/components/feedback/FeedbackSkeleton";
 import NotificationSettingsSkeleton from "@/components/feedback/NotificationSettingsSkeleton";
@@ -55,10 +54,11 @@ import {
   refreshAuthSessionIfNeeded,
 } from "@/lib/authSession";
 import { useAuthSession } from "@/hooks/useAuthSession";
+import { getLoginNavigation } from "@/hooks/useLoginRequest";
+import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import MyInfoPage from "@/pages/MyInfoPage";
-import { isTestServiceAreaEnabled } from "@/stores/serviceAreaStore";
 
 type PreloadableLazyComponent<T extends ComponentType<Record<string, never>>> =
   LazyExoticComponent<T> & {
@@ -81,6 +81,7 @@ function lazyWithPreload<T extends ComponentType<Record<string, never>>>(
 
 const LoginPage = lazyWithPreload(() => import("@/pages/LoginPage"));
 const HomePage = lazyWithPreload(() => import("@/pages/HomePage"));
+const HomeRecommendationPage = lazyWithPreload(() => import("@/pages/HomeRecommendationPage"));
 const MyRoutePage = lazyWithPreload(() => import("@/pages/MyRoutePage"));
 const SharedRoutePage = lazyWithPreload(async () => {
   const module = await import("@/pages/SharedRoutePage");
@@ -258,7 +259,7 @@ function LoginRouteFallback() {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-brand-50 px-5 py-8 text-slate-900">
       <section className="w-full max-w-md">
-        <PotatoLoadingCard
+        <AppLoadingCard
           title={text.routeShell.loginLoadingTitle}
           description={text.routeShell.loginLoadingDescription}
           animation="running"
@@ -276,7 +277,7 @@ function HomeRouteFallback() {
   return (
     <main className="flex h-full items-center justify-center bg-brand-50 px-5 text-slate-900 dark:bg-[#071718] dark:text-slate-100">
       <section className="w-full max-w-sm">
-        <PotatoLoadingCard
+        <AppLoadingCard
           title={text.routeShell.homeLoadingTitle}
           description={text.routeShell.homeLoadingDescription}
           animation="map-rendering"
@@ -686,35 +687,40 @@ function RequireAuth() {
 
 function LoginRoute() {
   const { isAuthenticated } = useAuthSession();
+  const location = useLocation();
 
   if (isAuthenticated) {
-    return <Navigate to="/home" replace />;
+    return <Navigate to={getLoginNavigation(location.state).returnTo} replace />;
   }
 
   return withRouteSuspense(<LoginPage />, <LoginRouteFallback />);
 }
 
-function AppRouter() {
-  useRoutePreload();
+/** 일정 저장에서 로그인으로 이동하는 동안 현재 경로를 배경에 유지해 편집 상태를 보존한다. */
+function AppRoutes() {
+  const location = useLocation();
   const text = useUiText();
-  const Router =
-    window.RouteOneRuntimeConfig?.routerMode === "hash"
-      ? HashRouter
-      : BrowserRouter;
+  const backgroundLocation = location.pathname === "/login"
+    ? getLoginNavigation(location.state).backgroundLocation
+    : undefined;
 
-  return (
-    <Router>
-      <AuthSessionTracker />
-      <NativeNotificationInboxSync />
-      <RouteStartAttemptRecoveryCoordinator />
-      <RouteArrivalNotificationCoordinator />
-      <Routes>
+  const routeTree = (
+    <div inert={Boolean(backgroundLocation)} className="contents">
+      <Routes location={backgroundLocation ?? location}>
         <Route path="/login" element={<LoginRoute />} />
         <Route element={<BottomTabLayout />}>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route
             path="/home"
+            element={withRouteSuspense(<HomeRecommendationPage />, <div className="h-full bg-brand-50 dark:bg-[#071718]" />)}
+          />
+          <Route
+            path="/home/map"
             element={withRouteSuspense(<HomePage />, <HomeRouteFallback />)}
+          />
+          <Route
+            path="/home/walking"
+            element={<Navigate to="/home/map" replace />}
           />
           <Route
             path="/shared-route"
@@ -795,13 +801,7 @@ function AppRouter() {
             />
             <Route
               path="/me/service-area"
-              element={
-                isTestServiceAreaEnabled() ? (
-                  withRouteSuspense(<ServiceAreaSettingsPage />)
-                ) : (
-                  <Navigate to="/me" replace />
-                )
-              }
+              element={withRouteSuspense(<ServiceAreaSettingsPage />)}
             />
             <Route
               path="/me/notifications"
@@ -838,6 +838,40 @@ function AppRouter() {
           </Route>
         </Route>
       </Routes>
+    </div>
+  );
+
+  return (
+    <>
+      {routeTree}
+      {backgroundLocation ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={text.auth.login}
+          className={`fixed inset-0 ${UI_LAYER_CLASS.loginOverlay} overflow-y-auto`}
+        >
+          <LoginRoute />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function AppRouter() {
+  useRoutePreload();
+  const Router =
+    window.RouteOneRuntimeConfig?.routerMode === "hash"
+      ? HashRouter
+      : BrowserRouter;
+
+  return (
+    <Router>
+      <AuthSessionTracker />
+      <NativeNotificationInboxSync />
+      <RouteStartAttemptRecoveryCoordinator />
+      <RouteArrivalNotificationCoordinator />
+      <AppRoutes />
     </Router>
   );
 }

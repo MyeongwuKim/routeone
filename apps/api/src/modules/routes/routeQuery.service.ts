@@ -11,6 +11,7 @@ import type {
   Route,
   User,
 } from "@prisma/client";
+import { getRouteRegionWhere } from "./routeRegions.js";
 import { getBlockedUserIds } from "../user/userBlock.service.js";
 import { getReportedSharedRouteIds } from "../moderation/sharedRouteReport.service.js";
 
@@ -113,58 +114,6 @@ type RouteConnection = {
     hasNextPage: boolean;
   };
 };
-
-const REGION_QUERY_RULES: Record<
-  string,
-  { areaCodes: string[]; adminCodePrefixes: string[] }
-> = {
-  강원: {
-    areaCodes: ["32", "51"],
-    adminCodePrefixes: ["51"],
-  },
-  서울: {
-    areaCodes: ["1", "11"],
-    adminCodePrefixes: ["11"],
-  },
-};
-
-function getRegionTagWhere(regionTag?: string | null): Prisma.RouteWhereInput {
-  const normalizedRegionTag = regionTag?.trim();
-
-  if (!normalizedRegionTag) {
-    return {};
-  }
-
-  const rule = REGION_QUERY_RULES[normalizedRegionTag];
-
-  if (!rule) {
-    return {
-      shareTags: {
-        has: normalizedRegionTag,
-      },
-    };
-  }
-
-  return {
-    OR: [
-      {
-        shareTags: {
-          has: normalizedRegionTag,
-        },
-      },
-      ...rule.areaCodes.map((areaCode) => ({
-        primaryRegionLabelKey: {
-          startsWith: `${areaCode}:`,
-        },
-      })),
-      ...rule.adminCodePrefixes.map((prefix) => ({
-        primaryRegionCode: {
-          startsWith: prefix,
-        },
-      })),
-    ],
-  };
-}
 
 function getRouteHistoryTodayStart(today?: Date | null) {
   const baseDate = today ?? new Date();
@@ -307,7 +256,7 @@ export async function getLikedRouteConnection(
         visibility: "PUBLIC",
         ...blockedOwnerWhere,
         ...reportedRouteWhere,
-        ...getRegionTagWhere(options.regionTag),
+        ...getRouteRegionWhere(options.regionTag),
       },
     });
     const routeById = new Map(routes.map((route) => [route.id, route]));
@@ -365,7 +314,7 @@ export async function getPublicRoutes(
             primaryRegionCode: options.regionCode,
           }
         : {}),
-      ...getRegionTagWhere(options.regionTag),
+      ...getRouteRegionWhere(options.regionTag),
     },
     orderBy: {
       sharedAt: "desc",
@@ -399,7 +348,7 @@ export async function getPublicRouteConnection(
             primaryRegionCode: options.regionCode,
           }
         : {}),
-      ...getRegionTagWhere(options.regionTag),
+      ...getRouteRegionWhere(options.regionTag),
     },
     orderBy: [
       {

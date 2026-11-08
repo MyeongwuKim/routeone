@@ -8,10 +8,13 @@ import {
   type SharedRoutePlaceFilterOption,
 } from "./sharedRouteCardModel";
 import {
-  SERVICE_AREAS,
+  getServiceArea,
+  resolveServiceRegion,
   type ServiceArea,
+  type ServiceAreaId,
   type ServiceRegion,
 } from "@/data/serviceAreas";
+import type { HomeSelection } from "@/features/home/recommendations/homeRecommendations";
 import {
   cacheTourCategoryLocalizationMap,
   localizeTourPlaces,
@@ -22,7 +25,7 @@ import {
   getPlaceCategoryLabel,
 } from "@/lib/placeCategory";
 import {
-  fetchGangwonFestivals,
+  fetchTourFestivals,
   fetchLclsSystemNameMap,
   fetchTourAttractions,
   type GangwonAttraction,
@@ -84,21 +87,39 @@ function getPlaceCategorySortRank(category: string) {
   return matchedIndex === -1 ? PLACE_CATEGORY_ORDER.length : matchedIndex;
 }
 
-function getServiceRegion(regionLabel: string): {
+/** 필터의 지역명을 지정된 시·도에서 찾고, 시·도가 없으면 전국에서 이름이 유일한 지역만 반환한다. */
+export function resolveSharedRouteFilterRegion(regionLabel: string, areaId?: ServiceAreaId): {
   serviceArea: ServiceArea;
   region: ServiceRegion;
 } | null {
-  for (const serviceArea of Object.values(SERVICE_AREAS)) {
-    const region = serviceArea.regions.find(
-      (candidate) => candidate.label === regionLabel
-    );
-
-    if (region) {
-      return { serviceArea, region };
-    }
+  if (!areaId) {
+    // 전체 지역에서는 시·군·구 이름만으로 한 곳을 확인할 수 있을 때 조회한다.
+    const match = resolveServiceRegion(regionLabel);
+    return match ? { serviceArea: match.area, region: match.region } : null;
   }
 
-  return null;
+  const serviceArea = getServiceArea(areaId);
+  const region = serviceArea.regions.find(
+    (candidate) => candidate.label === regionLabel
+  );
+  return region ? { serviceArea, region } : null;
+}
+
+/** 추천 홈이 조회할 한 시·도를 정하고, 그 안에서 선택된 시·군·구를 모두 넘긴다. */
+export function getSharedRouteRecommendationSelection(areaId: ServiceAreaId, regionLabels: readonly string[]): HomeSelection {
+  const matches = regionLabels.flatMap((label) => {
+    const match = resolveSharedRouteFilterRegion(label, areaId) ?? resolveSharedRouteFilterRegion(label);
+    return match ? [match] : [];
+  });
+  const firstAreaId = matches[0]?.serviceArea.id;
+  const recommendationAreaId = firstAreaId && matches.every(({ serviceArea }) => serviceArea.id === firstAreaId)
+    ? firstAreaId : areaId;
+  return {
+    areaId: recommendationAreaId,
+    regionCodes: matches
+      .filter(({ serviceArea }) => serviceArea.id === recommendationAreaId)
+      .map(({ region }) => region.sigunguCode),
+  };
 }
 
 function getAttractionCategoryName(
@@ -219,9 +240,10 @@ export function mergePlaceCategories(
 
 export async function fetchRegionFilterPlaceCategories(
   region: string,
-  language: AppLanguage
+  language: AppLanguage,
+  areaId?: ServiceAreaId
 ) {
-  const serviceRegion = getServiceRegion(region);
+  const serviceRegion = resolveSharedRouteFilterRegion(region, areaId);
 
   if (!TOUR_API_SERVICE_KEY || !serviceRegion) {
     return [];
@@ -262,9 +284,10 @@ export async function fetchRegionFilterPlaceCategories(
       "ko"
     ),
     serviceArea.hasFestivalSource
-      ? fetchGangwonFestivals(
+      ? fetchTourFestivals(
           TOUR_API_SERVICE_KEY,
           {
+            areaCode: serviceArea.tourAreaCode,
             sigunguCode: matchedRegion.sigunguCode,
             lookAheadDays: 90,
           },

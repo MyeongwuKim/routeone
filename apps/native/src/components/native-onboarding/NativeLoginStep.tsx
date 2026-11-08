@@ -18,7 +18,7 @@ import {
 import type { NativeLoginProvider } from "@/auth/nativeLoginTypes";
 import type { PasswordLoginMode } from "@/auth/passwordLoginMode";
 import { useNativeLoginErrorAlert } from "@/auth/useNativeLoginErrorAlert";
-import { LOGIN_TEXT, LOGIN_THEME } from "@/constants/nativeOnboarding";
+import { LOGIN_TEXT, LOGIN_THEME, NATIVE_BRAND } from "@/constants/nativeOnboarding";
 
 type AppLanguage = "ko" | "en";
 
@@ -180,7 +180,7 @@ export default function NativeLoginStep({
             />
           </View>
           <Text style={[styles.brandName, { color: colors.brandText }]}>
-            RouteOne
+            {NATIVE_BRAND.name[language]}
           </Text>
         </View>
 

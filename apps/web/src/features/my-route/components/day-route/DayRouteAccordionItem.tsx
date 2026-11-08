@@ -9,7 +9,7 @@ import {
   MdExpandMore,
   MdMyLocation,
 } from "react-icons/md";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import { useUiText, type UiText } from "@/lib/uiText";
 import { isVisitedStop } from "../../routeDisplay";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../../types";
@@ -728,7 +728,7 @@ function DayRouteAccordionItem({
           ) : (
             <>
               {startRouteCard}
-              <PotatoLoadingCard
+              <AppLoadingCard
                 title={text.dayRoute.emptyDayTitle}
                 description={text.dayRoute.emptyDayDescription}
                 animation="empty"

@@ -4,7 +4,7 @@
  * 홈 지도·장소 상세에서 담은 장소를 경로 계산 단계까지 유지하고 수정할 때 사용한다.
  *
  * 동작 방식:
- * 장소 추가·삭제·전체 삭제와 번역된 이름 갱신을 처리하고 중복 장소는 하나로 유지한다.
+ * 개별 장소와 추천 코스 장소의 추가, 삭제와 번역된 이름 갱신을 처리하고 중복 장소는 하나로 유지한다.
  * 담은 장소 ID와 상세 정보는 localStorage에 저장해 새로고침 후에도 복원한다.
  */
 import { create } from "zustand";
@@ -13,7 +13,11 @@ import {
   DEFAULT_GANGWON_REGION,
   GANGWON_AREA_CODE,
 } from "@/data/gangwonRegions";
-import { isSamePlaceDuplicate } from "@/lib/placeDuplicate";
+import {
+  createPlaceDuplicateKeySet,
+  getPlaceDuplicateKeys,
+  isSamePlaceDuplicate,
+} from "@/lib/placeDuplicate";
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import type { MapSheetPlace } from "@/types/place";
 
@@ -58,6 +62,11 @@ type PlaceCartState = {
     thumbnailUrl?: string,
     language?: AppLanguage
   ) => void;
+  /** 이미 담은 장소는 유지하고, 새 장소만 입력 순서대로 목록 앞에 한 번에 담는다. */
+  addSavedPlaces: (
+    places: readonly MapSheetPlace[],
+    language?: AppLanguage
+  ) => void;
   /** ID가 일치하는 저장 장소의 제목·주소·번역 언어를 일괄 교체한다. */
   updateSavedPlaceLabels: (updates: SavedPlaceLabelUpdate[]) => void;
   /** placeId를 savedPlaceIds와 savedPlaces 양쪽에서 제거한다. */
@@ -90,6 +99,20 @@ const getSavedPlaceLabelLanguage = (
     ? undefined
     : language;
 };
+
+/** 장소의 썸네일과 번역 여부를 적용해 카트에 보관할 스냅샷을 만든다. */
+const createSavedPlaceItem = (
+  place: MapSheetPlace,
+  thumbnailUrl: string,
+  language: AppLanguage | undefined,
+  savedAt = Date.now()
+): SavedPlaceItem => ({
+  id: place.id,
+  place,
+  thumbnailUrl: getSavedPlaceThumbnailUrl(place, thumbnailUrl),
+  savedAt,
+  labelLanguage: getSavedPlaceLabelLanguage(place, language),
+});
 
 const isPersistedPlaceCartState = (
   value: unknown
@@ -277,13 +300,7 @@ export const usePlaceCartStore = create<PlaceCartState>()(
                 (item) => !isSamePlaceDuplicate(item.place, place)
               )
             : [
-                {
-                  id: place.id,
-                  place,
-                  thumbnailUrl: getSavedPlaceThumbnailUrl(place, thumbnailUrl),
-                  savedAt: Date.now(),
-                  labelLanguage: getSavedPlaceLabelLanguage(place, language),
-                },
+                createSavedPlaceItem(place, thumbnailUrl, language),
                 ...state.savedPlaces.filter(
                   (item) => !isSamePlaceDuplicate(item.place, place)
                 ),
@@ -292,6 +309,41 @@ export const usePlaceCartStore = create<PlaceCartState>()(
           return {
             savedPlaceIds: nextSavedPlaces.map((item) => item.id),
             savedPlaces: nextSavedPlaces,
+          };
+        }),
+      addSavedPlaces: (places, language) =>
+        set((state) => {
+          const duplicateKeys = createPlaceDuplicateKeySet(
+            state.savedPlaces.map((item) => item.place)
+          );
+          const addedPlaces: SavedPlaceItem[] = [];
+          const savedAt = Date.now();
+
+          for (const place of places) {
+            const placeKeys = getPlaceDuplicateKeys(place);
+            if (placeKeys.some((key) => duplicateKeys.has(key))) {
+              continue;
+            }
+
+            placeKeys.forEach((key) => duplicateKeys.add(key));
+            addedPlaces.push(
+              createSavedPlaceItem(
+                place,
+                "",
+                language,
+                savedAt - addedPlaces.length
+              )
+            );
+          }
+
+          if (addedPlaces.length === 0) {
+            return state;
+          }
+
+          const savedPlaces = [...addedPlaces, ...state.savedPlaces];
+          return {
+            savedPlaces,
+            savedPlaceIds: savedPlaces.map((item) => item.id),
           };
         }),
       updateSavedPlaceLabels: (updates) =>

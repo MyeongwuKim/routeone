@@ -4,12 +4,20 @@
  * 용도:
  * 여행 시작일, 여행 일수와 매일의 시작·종료 시간을 정한다.
  * 적용된 여행 일수는 직접 입력 여부와 관계없이 선택 영역 상단에 표시한다.
+ * 추천 기간을 누르면 해당 일수를 선택하고, 3일도 부족하다는 안내를 누르면 직접 입력 창을 연다.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MdEdit } from "react-icons/md";
 import { DateInput, TimeWheelInput } from "@/components/inputs";
 import { useUiText } from "@/lib/uiText";
+import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import { useRouteCheckout } from "../../hooks/useRouteCheckout";
+import { recommendTripDuration } from "../../utils/tripDurationRecommendation";
+
+type PlaceCartScheduleStepProps = {
+  /** 새 코스의 기간을 추천할 때 사용할 장소. 공유 코스 가져오기와 DAY 추가에서는 생략한다. */
+  recommendationPlaces?: readonly SavedPlaceItem[];
+};
 
 function toDateValue(date: Date) {
   const year = date.getFullYear();
@@ -64,7 +72,9 @@ function formatDateLabel(value: string) {
   ).padStart(2, "0")}`;
 }
 
-function PlaceCartScheduleStep() {
+function PlaceCartScheduleStep({
+  recommendationPlaces,
+}: PlaceCartScheduleStepProps) {
   const text = useUiText();
   const {
     travelStartDate,
@@ -73,13 +83,45 @@ function PlaceCartScheduleStep() {
     setTripDays,
     dailyStartTime,
     setDailyStartTime,
+    dailyStartMinutes,
     scheduleEndTime,
     setScheduleEndTime,
+    scheduleEndMinutes,
+    tempo,
     isScheduleValid,
     scheduleValidationMessage,
   } = useRouteCheckout();
   const [isCustomTripDaysOpen, setIsCustomTripDaysOpen] = useState(false);
   const [customTripDaysInput, setCustomTripDaysInput] = useState(String(tripDays));
+
+  const recommendationTempo = tempo ?? "balanced";
+  const recommendation = useMemo(
+    () =>
+      recommendationPlaces
+        ? recommendTripDuration({
+            savedPlaces: recommendationPlaces,
+            dailyStartMinutes,
+            dailyEndMinutes: scheduleEndMinutes,
+            tempo: recommendationTempo,
+          })
+        : null,
+    [
+      recommendationPlaces,
+      dailyStartMinutes,
+      scheduleEndMinutes,
+      recommendationTempo,
+    ]
+  );
+  const recommendationLength = recommendation
+    ? recommendation.days === 1
+      ? text.myRouteCard.dayTrip
+      : text.myRouteCard.nightTrip(recommendation.days - 1, recommendation.days)
+    : "";
+  const tempoLabels = {
+    relaxed: text.cart.tempoRelaxedTitle,
+    balanced: text.cart.tempoBalancedTitle,
+    packed: text.cart.tempoPackedTitle,
+  };
 
   const endDate = (() => {
     const startDate = parseDateValue(travelStartDate);
@@ -99,6 +141,11 @@ function PlaceCartScheduleStep() {
   const startMinutes = toMinutes(dailyStartTime);
   const isPastTodayStartTime =
     isTodayStartTrip && startMinutes >= 0 && startMinutes < getCurrentMinutes();
+
+  const openCustomTripDays = () => {
+    setCustomTripDaysInput(String(tripDays));
+    setIsCustomTripDaysOpen(true);
+  };
 
   return (
     <>
@@ -149,10 +196,7 @@ function PlaceCartScheduleStep() {
                 ? `${text.cart.customTripDaysButton}: ${text.cart.dayCount(tripDays)}`
                 : text.cart.customTripDaysButton}
               title={text.cart.customTripDaysButton}
-              onClick={() => {
-                setCustomTripDaysInput(String(tripDays));
-                setIsCustomTripDaysOpen(true);
-              }}
+              onClick={openCustomTripDays}
               className={`inline-flex min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-xl border px-2 py-2 text-sm font-semibold ${
                 tripDays > 7
                   ? "border-brand-500 bg-brand-600 text-white"
@@ -171,6 +215,42 @@ function PlaceCartScheduleStep() {
               )}
             </button>
           </div>
+          {recommendation && recommendationPlaces ? (
+            <button
+              aria-live="polite"
+              type="button"
+              aria-pressed={
+                recommendation.fitsDailyHours
+                  ? tripDays === recommendation.days
+                  : undefined
+              }
+              onClick={
+                recommendation.fitsDailyHours
+                  ? () => setTripDays(recommendation.days)
+                  : openCustomTripDays
+              }
+              className="mt-2 block w-full cursor-pointer rounded-xl border border-brand-100 bg-brand-50 px-3 py-2 text-left text-xs leading-5"
+            >
+              <span className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-bold text-brand-700">
+                  {recommendation.fitsDailyHours
+                    ? text.cart.tripDurationRecommended(recommendationLength)
+                    : text.cart.tripDurationTight(recommendationLength)}
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  {text.cart.tripDurationBasis(tempoLabels[recommendationTempo])}
+                </span>
+              </span>
+              <span className="block text-slate-600">
+                {recommendation.fitsDailyHours
+                  ? text.cart.tripDurationReason(
+                      recommendationPlaces.length,
+                      recommendation.days
+                    )
+                  : text.cart.tripDurationTightReason(recommendationPlaces.length)}
+              </span>
+            </button>
+          ) : null}
           {travelStartDate ? (
             <p className="mt-2 text-xs text-slate-500">
               {text.cart.scheduleRange(

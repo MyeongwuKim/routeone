@@ -6,15 +6,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import expoConfigPlugins from "@expo/config-plugins";
 
+const { IOSConfig } = expoConfigPlugins;
 const nativeRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const versionsPath = path.join(nativeRoot, "app-versions.json");
-const projectPath = path.join(
-  nativeRoot,
-  "ios",
-  "RouteOne.xcodeproj",
-  "project.pbxproj",
-);
 const appVariant = process.env.APP_VARIANT?.trim();
 
 if (appVariant !== "dev" && appVariant !== "prod") {
@@ -32,6 +28,7 @@ if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) {
   process.exit(1);
 }
 
+const projectPath = IOSConfig.Paths.getPBXProjectPath(nativeRoot);
 const source = readFileSync(projectPath, "utf8");
 const matches = source.match(/MARKETING_VERSION = [^;]+;/g) ?? [];
 

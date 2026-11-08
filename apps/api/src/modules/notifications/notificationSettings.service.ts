@@ -3,32 +3,13 @@ import {
   UserNotificationPushStatus,
   UserNotificationType,
   type PrismaClient,
+  type Prisma,
   type User,
 } from "@prisma/client";
+import { runTransactionWithRetry } from "../../lib/transaction.js";
 import { UserFacingError } from "../../graphql/userFacingError.js";
+import { normalizeFestivalRegionCode } from "./festivalRegions.js";
 
-export const GANGWON_REGION_BY_CODE = {
-  "1": "강릉",
-  "2": "고성",
-  "3": "동해",
-  "4": "삼척",
-  "5": "속초",
-  "6": "양구",
-  "7": "양양",
-  "8": "영월",
-  "9": "원주",
-  "10": "인제",
-  "11": "정선",
-  "12": "철원",
-  "13": "춘천",
-  "14": "태백",
-  "15": "평창",
-  "16": "홍천",
-  "17": "화천",
-  "18": "횡성",
-} as const;
-
-const GANGWON_REGION_CODES = new Set(Object.keys(GANGWON_REGION_BY_CODE));
 const MAX_FESTIVAL_REGION_COUNT = 2;
 const EXPO_PUSH_TOKEN_PATTERN =
   /^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$/;
@@ -50,17 +31,17 @@ export type RegisterPushDeviceInput = {
 
 function normalizeRegionCodes(regionCodes: string[]) {
   const normalized = [
-    ...new Set(regionCodes.map((regionCode) => regionCode.trim())),
+    ...new Set(regionCodes.map(normalizeFestivalRegionCode)),
   ];
 
   if (
     normalized.length > MAX_FESTIVAL_REGION_COUNT ||
-    normalized.some((regionCode) => !GANGWON_REGION_CODES.has(regionCode))
+    normalized.includes(null)
   ) {
-    throw new UserFacingError("축제 알림 지역은 강원 지역 중 최대 2곳까지 선택할 수 있습니다.");
+    throw new UserFacingError("축제 알림 지역은 지원 지역 중 최대 2곳까지 선택할 수 있습니다.");
   }
 
-  return normalized;
+  return normalized.filter((code): code is string => code !== null);
 }
 
 function normalizeExpoPushToken(value: string) {
@@ -106,6 +87,23 @@ export function getNotificationSettings(prisma: PrismaClient, user: User) {
       userId: user.id,
     },
     update: {},
+  });
+}
+
+/** 축제 지역 변경 전의 미발송 알림을 취소한다. 이미 보낸 알림과 테스트 알림은 유지한다. */
+function cancelPendingFestivalNotifications(transaction: Prisma.TransactionClient, userId: string) {
+  return transaction.userNotification.updateMany({
+    where: {
+      userId,
+      type: UserNotificationType.FESTIVAL_SUMMARY,
+      pushStatus: { in: [UserNotificationPushStatus.PENDING, UserNotificationPushStatus.FAILED] },
+      NOT: { notificationKey: { startsWith: "festival:test:" } },
+    },
+    data: {
+      pushStatus: UserNotificationPushStatus.CANCELED,
+      nextPushAttemptAt: null,
+      pushError: "축제 알림 설정이 변경되어 다시 계산합니다.",
+    },
   });
 }
 
@@ -159,28 +157,7 @@ export async function updateNotificationSettings(
       });
 
     if (shouldResetFestivalEvaluation) {
-      await transaction.userNotification.updateMany({
-        where: {
-          userId: user.id,
-          type: UserNotificationType.FESTIVAL_SUMMARY,
-          pushStatus: {
-            in: [
-              UserNotificationPushStatus.PENDING,
-              UserNotificationPushStatus.FAILED,
-            ],
-          },
-          NOT: {
-            notificationKey: {
-              startsWith: "festival:test:",
-            },
-          },
-        },
-        data: {
-          pushStatus: UserNotificationPushStatus.CANCELED,
-          nextPushAttemptAt: null,
-          pushError: "축제 알림 설정이 변경되어 다시 계산합니다.",
-        },
-      });
+      await cancelPendingFestivalNotifications(transaction, user.id);
     }
 
     if (input.routeStartEnabled === false) {
@@ -200,6 +177,24 @@ export async function updateNotificationSettings(
     }
 
     return updatedSetting;
+  });
+}
+
+/**
+ * 설정에서 기본 지역을 바꿀 때 이미 켜져 있는 축제 알림만 새 시군구에 맞춘다.
+ * 활성 여부는 변경하지 않으며, 동시 끄기 요청과 겹쳐도 알림을 다시 켜지 않는다.
+ * 지역 교체·재평가 초기화·기존 미발송 알림 취소는 하나의 트랜잭션으로 처리한다.
+ */
+export async function syncFestivalRegionWithServiceArea(prisma: PrismaClient, user: User, regionCode: string) {
+  const [normalizedCode] = normalizeRegionCodes([regionCode]);
+  await getNotificationSettings(prisma, user);
+  return runTransactionWithRetry(prisma, async transaction => {
+    const result = await transaction.userNotificationSetting.updateMany({
+      where: { userId: user.id, festivalEnabled: true },
+      data: { festivalRegionCodes: [normalizedCode], festivalLastEvaluationKey: null },
+    });
+    if (result.count > 0) await cancelPendingFestivalNotifications(transaction, user.id);
+    return transaction.userNotificationSetting.findUniqueOrThrow({ where: { userId: user.id } });
   });
 }
 

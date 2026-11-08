@@ -1,0 +1,15 @@
+query Festivals($startDate: String!, $endDate: String!, $areaCode: String, $regionCodes: [String!]) {
+  festivals(startDate: $startDate, endDate: $endDate, areaCode: $areaCode, regionCodes: $regionCodes) {
+    id
+    title
+    startDate
+    endDate
+    regionCode
+    areaCode
+    sigunguCode
+    address
+    lat
+    lng
+    imageUrl
+  }
+}

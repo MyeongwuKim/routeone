@@ -1,7 +1,16 @@
+/** 앱 실행과 로그인 화면에서 사용하는 두루의 이름과 색상. */
+export const NATIVE_BRAND = {
+  name: { ko: "두루", en: "Duru" },
+  background: "#104A3E",
+  darkBackground: "#092C25",
+  mint: "#E6F6EE",
+  apricot: "#FFB586"
+} as const;
+
 export const LOGIN_THEME = {
   light: {
-    background: "#0f766e",
-    brandText: "#ffffff",
+    background: NATIVE_BRAND.background,
+    brandText: NATIVE_BRAND.mint,
     mutedText: "rgba(255, 255, 255, 0.76)",
     buttonBorder: "rgba(255, 255, 255, 0.38)",
     googleBackground: "#ffffff",
@@ -17,11 +26,11 @@ export const LOGIN_THEME = {
     placeholder: "#8ba19c",
     passwordBackground: "#ffffff",
     passwordPressed: "#def2ed",
-    passwordText: "#0f766e"
+    passwordText: NATIVE_BRAND.background
   },
   dark: {
-    background: "#061918",
-    brandText: "#f8fafc",
+    background: NATIVE_BRAND.darkBackground,
+    brandText: NATIVE_BRAND.mint,
     mutedText: "rgba(226, 245, 241, 0.72)",
     buttonBorder: "rgba(148, 216, 204, 0.18)",
     googleBackground: "#eef7f4",
@@ -112,10 +121,10 @@ export const ONBOARDING_TEXT = {
   en: {
     locationTitle: "Allow Location",
     locationDescription:
-      "RouteOne uses your location to help confirm arrivals and visit photos.",
+      "Duru uses your location to help confirm arrivals and visit photos.",
     notificationTitle: "Allow Notifications",
     notificationDescription:
-      "RouteOne can notify you when you are near a place on today's route.",
+      "Duru can notify you when you are near a place on today's route.",
     requestPermission: "Request Permission",
     checking: "Checking",
     sessionExpired: "You were signed out after 7 days of inactivity.",

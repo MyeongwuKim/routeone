@@ -12,7 +12,7 @@ import {
   userBlockApi,
 } from "@/api/userBlockApi";
 import AccountAvatar from "@/components/account/AccountAvatar";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import { BlockedUsersListSkeleton } from "../components/BlockedUsersSkeleton";
 import {
   LIKED_SHARED_ROUTES_QUERY_KEY,
@@ -106,7 +106,7 @@ function BlockedUsersPage() {
           </button>
         </div>
       ) : blockedUsers.length === 0 ? (
-        <PotatoLoadingCard
+        <AppLoadingCard
           title={text.userBlock.emptyTitle}
           description={text.userBlock.emptyDescription}
           animation="empty"

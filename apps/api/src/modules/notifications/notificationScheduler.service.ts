@@ -8,12 +8,15 @@ import {
   type PrismaClient,
 } from "@prisma/client";
 import {
-  fetchGangwonFestivalSource,
+  fetchFestivalSource,
   filterFestivalsForRegionAndRange,
   hasFestivalCoordinates,
   type FestivalSourceRecord,
 } from "./festivalSource.service.js";
-import { GANGWON_REGION_BY_CODE } from "./notificationSettings.service.js";
+import {
+  FESTIVAL_REGION_BY_CODE, getFestivalRegionLabel,
+  normalizeFestivalRegionCode, resolveFestivalRegionCode,
+} from "./festivalRegions.js";
 import { deliverPendingNotifications } from "./pushDelivery.service.js";
 
 const KST_OFFSET_MS = 1000 * 60 * 60 * 9;
@@ -27,9 +30,6 @@ const NOTIFICATION_WINDOW_START_HOUR = 9;
 const NOTIFICATION_WINDOW_END_HOUR = 21;
 const MULTIPLE_REGION_CODE = "MULTIPLE";
 const MAX_FESTIVALS_PER_NOTIFICATION = 100;
-const SUPPORTED_REGION_CODES = new Set(
-  Object.keys(GANGWON_REGION_BY_CODE)
-);
 
 function toDateKey(date: Date) {
   return new Date(date.getTime() + KST_OFFSET_MS)
@@ -635,6 +635,7 @@ async function upsertDailyFestivalNotification(
       regionCode: input.regionCode,
       regionLabel: input.regionLabel,
       dateKey: input.dateKey,
+      festivalRegionCodes: input.festivalRegionCodes,
       festivalIds: input.festivalIds,
       festivalTitles: input.festivalTitles,
       festivalStartDates: input.festivalStartDates,
@@ -739,6 +740,7 @@ async function createFestivalNotifications(
           id: true,
           ownerId: true,
           primaryRegionCode: true,
+          primaryRegionLabelKey: true,
         },
       },
       stops: {
@@ -757,11 +759,11 @@ async function createFestivalNotifications(
     const regionCodes = [
       ...new Set(
         [
-          routeDay.route.primaryRegionCode,
-          ...routeDay.stops.map((stop) => stop.place.regionCode),
+          resolveFestivalRegionCode(routeDay.route.primaryRegionCode, routeDay.route.primaryRegionLabelKey),
+          ...routeDay.stops.map((stop) => resolveFestivalRegionCode(stop.place.regionCode, stop.place.regionLabelKey)),
         ].filter(
           (regionCode): regionCode is string =>
-            Boolean(regionCode && SUPPORTED_REGION_CODES.has(regionCode))
+            regionCode !== null
         )
       ),
     ].sort();
@@ -786,9 +788,9 @@ async function createFestivalNotifications(
   }> = [];
 
   for (const setting of settings) {
-    const selectedRegionCodes = setting.festivalRegionCodes
-      .filter((regionCode) => SUPPORTED_REGION_CODES.has(regionCode))
-      .sort();
+    const selectedRegionCodes = [...new Set(setting.festivalRegionCodes
+      .map(normalizeFestivalRegionCode)
+      .filter((code): code is string => code !== null))].sort();
     const tripTarget = tripRegionsByUser.get(setting.userId);
     const tripRegionCodes = [...(tripTarget?.regionCodes ?? [])].sort();
     const evaluationKey = [
@@ -835,19 +837,27 @@ async function createFestivalNotifications(
     return;
   }
 
-  let festivals: FestivalSourceRecord[];
-
-  try {
-    festivals = await fetchGangwonFestivalSource(now);
-  } catch (error) {
-    console.warn(
-      "[notification-scheduler] festival lookup skipped",
-      error instanceof Error ? error.message : error
-    );
-    return;
-  }
+  // 같은 권역은 이번 실행에서 한 번만 조회한다. 실패도 공유하고 재시도는 다음 실행에 맡긴다.
+  const areaRequests = new Map<string, Promise<FestivalSourceRecord[]>>();
+  const getAreaSource = (areaCode: string) => {
+    const existing = areaRequests.get(areaCode);
+    if (existing) return existing;
+    const request = fetchFestivalSource(areaCode, now);
+    areaRequests.set(areaCode, request);
+    return request;
+  };
 
   for (const target of targets) {
+    const areaCodes = [...new Set([...target.selectedRegionCodes, ...target.tripRegionCodes]
+      .map(code => FESTIVAL_REGION_BY_CODE[code].areaCode))];
+    let festivals: FestivalSourceRecord[];
+    try {
+      festivals = (await Promise.all(areaCodes.map(getAreaSource))).flat();
+    } catch (error) {
+      // 조회 실패 시 평가 완료로 저장하지 않아 다음 실행에서 이 사용자의 지역을 다시 조회한다.
+      console.warn("[notification-scheduler] festival lookup skipped", error instanceof Error ? error.message : error);
+      continue;
+    }
     const selectedFestivals = getMatchingFestivals(
       festivals,
       target.selectedRegionCodes,
@@ -880,12 +890,7 @@ async function createFestivalNotifications(
       const kind = hasTripFestival
         ? FestivalNotificationKind.TRIP
         : FestivalNotificationKind.WEEKLY;
-      const regionLabels = matchingRegionCodes.map(
-        (regionCode) =>
-          GANGWON_REGION_BY_CODE[
-            regionCode as keyof typeof GANGWON_REGION_BY_CODE
-          ]
-      );
+      const regionLabels = matchingRegionCodes.map(code => getFestivalRegionLabel(code));
 
       await upsertDailyFestivalNotification(prisma, {
         userId: target.userId,
@@ -897,6 +902,7 @@ async function createFestivalNotifications(
             ? matchingRegionCodes[0]
             : MULTIPLE_REGION_CODE,
         regionLabel: regionLabels.join(", "),
+        festivalRegionCodes: matchingRegionCodes,
         dateKey: todayKey,
         festivalIds: matchingFestivals.map((festival) => festival.id),
         festivalTitles: matchingFestivals.map((festival) => festival.title),

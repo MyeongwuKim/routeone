@@ -6,10 +6,9 @@ import type {
   SharedRouteConnectionQuery,
   SharedRoutesQuery,
 } from "@/generated/graphql";
-import { SERVICE_AREAS } from "@/data/serviceAreas";
+import { SERVICE_AREA_LIST, resolveServiceRegion } from "@/data/serviceAreas";
 import { getUiText, type UiText } from "@/lib/uiText";
 
-const SERVICE_AREA_LIST = Object.values(SERVICE_AREAS);
 const REGION_SHARE_TAGS = new Set(
   SERVICE_AREA_LIST.flatMap((serviceArea) => [
     serviceArea.label,
@@ -145,43 +144,7 @@ function getRegionName(
   regionLabelKey?: string | null,
   regionCode?: string | null
 ) {
-  const [areaCodeOrRegion, sigunguCode] = regionLabelKey?.split(":") ?? [];
-  const serviceArea = sigunguCode
-    ? SERVICE_AREA_LIST.find(
-        (area) =>
-          area.tatsAreaCode === areaCodeOrRegion ||
-          area.tourAreaCode === areaCodeOrRegion
-      )
-    : null;
-  const codedRegion = serviceArea?.regions.find(
-    (region) =>
-      region.sigunguCode === sigunguCode || region.adminCode === sigunguCode
-  );
-
-  if (codedRegion) {
-    return codedRegion.label;
-  }
-
-  const regionCandidates = [regionCode, regionLabelKey].filter(
-    (value): value is string => Boolean(value)
-  );
-
-  for (const area of SERVICE_AREA_LIST) {
-    const region = area.regions.find((candidate) =>
-      regionCandidates.some(
-        (value) =>
-          candidate.adminCode === value ||
-          candidate.sigunguCode === value ||
-          candidate.label === value
-      )
-    );
-
-    if (region) {
-      return region.label;
-    }
-  }
-
-  return null;
+  return resolveServiceRegion(regionLabelKey, regionCode)?.region.label ?? null;
 }
 
 export function getDisplayRegionNames(route: SharedRoute) {

@@ -2,6 +2,7 @@
  * 진입 경로: 하단 내 루트 탭 또는 일정·장소 도착 알림
  *
  * 저장한 경로를 예정·진행 상태로 나눠 표시하고 DAY 상세 확인, DAY 추가, 경로 삭제와 여행 시작을 제공한다.
+ * 진행 중인 오늘 카드를 열면 DAY 상세의 현재 목적지를 먼저 보여준다.
  * 알림 URL의 routeId·dayId·stopId가 있으면 대상 DAY와 장소를 열고 닫을 때 원래 알림함으로 돌아간다.
  *
  * 여행 시작 전 시작일·시각과 위치 권한을 확인하고 도착 알림 전환, 시작 API, 관련 캐시 갱신을 순서대로 처리한다.
@@ -42,6 +43,7 @@ import {
 import {
   formatRouteDate,
   getDateKeyDiffInDays,
+  getRouteDayState,
   getRouteEndDateKey,
   getSelectableRouteDay,
   getRouteStartDateKey,
@@ -344,6 +346,7 @@ function MyRoutePage() {
   const [selectedDayRoute, setSelectedDayRoute] = useState<{
     routeId: string;
     dayId: string;
+    openAtCurrentDestination: boolean;
   } | null>(null);
   const [startDatePickerTarget, setStartDatePickerTarget] =
     useState<StartRouteDatePickerTarget | null>(null);
@@ -909,6 +912,7 @@ function MyRoutePage() {
           )
             ? deepLinkStopId
             : null,
+          openAtCurrentDestination: false,
         }
       : null;
   }, [
@@ -979,6 +983,7 @@ function MyRoutePage() {
           route,
           day,
           focusedStopId: null,
+          openAtCurrentDestination: selectedDayRoute.openAtCurrentDestination,
         }
       : null;
   }, [
@@ -989,14 +994,20 @@ function MyRoutePage() {
   ]);
   const hasRoutes = routeGroups.totalCount > 0;
   const selectDayRoute = useCallback(
-    (routeId: string, dayId: string) => {
+    (routeId: string, dayId: string, openAtCurrentDestination = false) => {
       clearRouteDeepLinkSearchParams();
-      setSelectedDayRoute({ routeId, dayId });
+      setSelectedDayRoute({ routeId, dayId, openAtCurrentDestination });
     },
     [clearRouteDeepLinkSearchParams]
   );
-  const handleSelectDay = (selectedRoute: MyRoute, day: MyRouteDay) =>
-    selectDayRoute(selectedRoute.id, day.id);
+  const handleSelectDay = (selectedRoute: MyRoute, day: MyRouteDay) => {
+    const openAtCurrentDestination =
+      selectedRoute.status !== "COMPLETED" &&
+      Boolean(selectedRoute.startedAt && day.startedAt) &&
+      getRouteDayState(day) === "today";
+
+    selectDayRoute(selectedRoute.id, day.id, openAtCurrentDestination);
+  };
   const handleCloseSelectedDayRoute = () => {
     setSelectedDayRoute(null);
 
@@ -1057,7 +1068,7 @@ function MyRoutePage() {
       suggestedStartDate: nextDateKey,
     });
     showToast(text.myRoute.appendToast);
-    navigate("/home");
+    navigate("/home/map");
   };
   const handlePermissionApprovedRouteStart = useCallback(
     (request: RouteStartRequest, options: RouteStartOptions) => {
@@ -1572,6 +1583,7 @@ function MyRoutePage() {
           route={selectedRouteDay.route}
           day={selectedRouteDay.day}
           focusedStopId={selectedRouteDay.focusedStopId}
+          openAtCurrentDestination={selectedRouteDay.openAtCurrentDestination}
           onClose={handleCloseSelectedDayRoute}
           onRequestStartRoute={handleRequestStartRoute}
           isRouteStartPending={isRouteStartPending}

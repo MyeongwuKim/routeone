@@ -11,6 +11,7 @@ export const UI_LAYER_CLASS = {
   placeDetail: "z-[3400]",
   appDialog: "z-[3500]",
   mediaViewer: "z-[3600]",
+  loginOverlay: "z-[3650]",
   globalModal: "z-[3700]",
   toast: "z-[2147483647]",
 } as const;

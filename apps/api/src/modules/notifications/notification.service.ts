@@ -18,11 +18,11 @@ import { runTransactionWithRetry } from "../../lib/transaction.js";
 import { upsertNotificationsBatch } from "./notificationBatch.repository.js";
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import {
-  fetchGangwonFestivalSource,
+  fetchFestivalSource,
   hasFestivalCoordinates,
 } from "./festivalSource.service.js";
 import { getUserNotificationCutoffAt } from "./notificationCleanup.service.js";
-import { GANGWON_REGION_BY_CODE } from "./notificationSettings.service.js";
+import { FESTIVAL_REGION_BY_CODE, getFestivalRegionLabel, normalizeFestivalRegionCode } from "./festivalRegions.js";
 import { deliverPendingNotifications } from "./pushDelivery.service.js";
 
 export type FestivalNotificationSyncInput = {
@@ -31,6 +31,8 @@ export type FestivalNotificationSyncInput = {
   regionCode: string;
   regionLabel: string;
   dateKey: string;
+  /** 알림에 포함된 전체 시군구 행정 코드. 이전 네이티브 요청은 이 필드를 생략할 수 있다. */
+  festivalRegionCodes?: string[] | null;
   festivalIds: string[];
   festivalTitles: string[];
   festivalStartDates?: string[] | null;
@@ -96,7 +98,14 @@ function normalizeFestivalNotification(
     "알림 키",
     220
   );
-  const regionCode = normalizeRequiredText(input.regionCode, "지역 코드", 40);
+  const rawRegionCode = normalizeRequiredText(input.regionCode, "지역 코드", 40);
+  const regionCode = rawRegionCode === "MULTIPLE" ? rawRegionCode : normalizeFestivalRegionCode(rawRegionCode);
+  if (!regionCode) throw new UserFacingError("축제 알림 지역이 올바르지 않습니다.");
+  const rawRegionCodes = input.festivalRegionCodes ?? (regionCode === "MULTIPLE" ? [] : [regionCode]);
+  if (rawRegionCodes.length > 100) throw new UserFacingError("축제 알림 지역이 너무 많습니다.");
+  const normalizedRegionCodes = rawRegionCodes.map(normalizeFestivalRegionCode);
+  if (normalizedRegionCodes.includes(null)) throw new UserFacingError("축제 알림 지역이 올바르지 않습니다.");
+  const festivalRegionCodes = [...new Set(normalizedRegionCodes.filter((code): code is string => code !== null))];
   const regionLabel = normalizeRequiredText(input.regionLabel, "지역명", 80);
   const dateKey = normalizeRequiredText(input.dateKey, "알림 날짜", 10);
 
@@ -189,6 +198,7 @@ function normalizeFestivalNotification(
     notificationKey,
     kind: input.kind,
     regionCode,
+    festivalRegionCodes,
     regionLabel,
     dateKey,
     festivalIds: festivalEntries.map(([festivalId]) => festivalId),
@@ -400,7 +410,7 @@ function atKst(dateKey: string, hour: number, minute = 0) {
 }
 
 function getFestivalTestCandidates(
-  festivals: Awaited<ReturnType<typeof fetchGangwonFestivalSource>>,
+  festivals: Awaited<ReturnType<typeof fetchFestivalSource>>,
   regionCode: string,
   todayKey: string,
   rangeEndKey: string
@@ -430,10 +440,7 @@ export async function sendFestivalTestNotification(
     },
   });
   const regionCodes = settings?.festivalEnabled
-    ? settings.festivalRegionCodes.filter(
-        (regionCode) =>
-          regionCode in GANGWON_REGION_BY_CODE
-      )
+    ? [...new Set(settings.festivalRegionCodes.map(normalizeFestivalRegionCode).filter((code): code is string => code !== null))]
     : [];
 
   if (regionCodes.length === 0) {
@@ -444,11 +451,12 @@ export async function sendFestivalTestNotification(
   const todayKey = toKstDateKey(now);
   const rangeEndKey = addDateKeyDays(todayKey, 6);
   let festivals: Awaited<
-    ReturnType<typeof fetchGangwonFestivalSource>
+    ReturnType<typeof fetchFestivalSource>
   >;
 
   try {
-    festivals = await fetchGangwonFestivalSource(now);
+    const areaCodes = [...new Set(regionCodes.map(code => FESTIVAL_REGION_BY_CODE[code].areaCode))];
+    festivals = (await Promise.all(areaCodes.map(areaCode => fetchFestivalSource(areaCode, now)))).flat();
   } catch (error) {
     console.warn(
       "[notification-test] festival lookup failed",
@@ -498,14 +506,8 @@ export async function sendFestivalTestNotification(
         matchingRegionCodes.length === 1
           ? matchingRegionCodes[0]
           : "MULTIPLE",
-      regionLabel: matchingRegionCodes
-        .map(
-          (regionCode) =>
-            GANGWON_REGION_BY_CODE[
-              regionCode as keyof typeof GANGWON_REGION_BY_CODE
-            ]
-        )
-        .join(", "),
+      regionLabel: matchingRegionCodes.map(code => getFestivalRegionLabel(code)).join(", "),
+      festivalRegionCodes: matchingRegionCodes,
       dateKey: todayKey,
       festivalIds: matchingFestivals.map((festival) => festival.id),
       festivalTitles: matchingFestivals.map((festival) => festival.title),
@@ -843,6 +845,7 @@ export async function syncFestivalNotificationInbox(
         notificationKey: notification.notificationKey,
         type: UserNotificationType.FESTIVAL_SUMMARY,
         festivalKind: notification.kind,
+        ...(notification.festivalRegionCodes.length ? { festivalRegionCodes: notification.festivalRegionCodes } : {}),
         regionCode: notification.regionCode,
         regionLabel: notification.regionLabel,
         dateKey: notification.dateKey,
@@ -854,6 +857,7 @@ export async function syncFestivalNotificationInbox(
       },
       update: {
         festivalKind: notification.kind,
+        ...(notification.festivalRegionCodes.length ? { festivalRegionCodes: notification.festivalRegionCodes } : {}),
         regionCode: notification.regionCode,
         regionLabel: notification.regionLabel,
         dateKey: notification.dateKey,

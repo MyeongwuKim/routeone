@@ -11,10 +11,10 @@ export type DropdownSelectOption<TValue extends string> = {
 };
 
 type DropdownSelectProps<TValue extends string> = {
+  /** 저장 중에는 메뉴 열기와 항목 선택을 막는다. */
+  disabled?: boolean;
 
   options: ReadonlyArray<DropdownSelectOption<TValue>>;
-
-  value: TValue;
 
   onChange: (value: TValue) => void;
 
@@ -27,15 +27,21 @@ type DropdownSelectProps<TValue extends string> = {
   buttonClassName?: string;
 
   menuClassName?: string;
-};
+} & (
+  | { multiple?: false; value: TValue; selectedLabel?: never }
+  | { multiple: true; value: readonly TValue[]; selectedLabel: ReactNode }
+);
 
 function mergeClasses(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
 function DropdownSelect<TValue extends string>({
+  disabled = false,
+  multiple = false,
   options,
   value,
+  selectedLabel,
   onChange,
   ariaLabel,
   valuePrefix,
@@ -45,7 +51,7 @@ function DropdownSelect<TValue extends string>({
 }: DropdownSelectProps<TValue>) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const selectedOption =
+  const selectedOption = multiple ? undefined :
     options.find((option) => option.value === value) ?? options[0];
 
   useEffect(() => {
@@ -76,6 +82,7 @@ function DropdownSelect<TValue extends string>({
     <div ref={containerRef} className={mergeClasses("relative", className)}>
       <button
         type="button"
+        disabled={disabled}
         aria-label={ariaLabel}
         aria-expanded={isOpen}
         onClick={() => setIsOpen((current) => !current)}
@@ -96,7 +103,7 @@ function DropdownSelect<TValue extends string>({
                 {valuePrefix}
               </span>
             ) : null}
-            {selectedOption?.label}
+            {multiple ? selectedLabel : selectedOption?.label}
           </span>
         </span>
         <MdKeyboardArrowDown
@@ -112,19 +119,21 @@ function DropdownSelect<TValue extends string>({
           )}
         >
           {options.map((option) => {
-            const isSelected = option.value === value;
+            const isSelected = typeof value === "string"
+              ? option.value === value
+              : value.includes(option.value);
 
             return (
               <button
                 key={option.value}
                 type="button"
-                disabled={option.disabled}
+                disabled={disabled || option.disabled}
                 aria-pressed={isSelected}
                 onClick={() => {
-                  if (!isSelected) {
+                  if (multiple || !isSelected) {
                     onChange(option.value);
                   }
-                  setIsOpen(false);
+                  if (!multiple) setIsOpen(false);
                 }}
                 className={mergeClasses(
                   "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left transition disabled:pointer-events-none disabled:opacity-40",

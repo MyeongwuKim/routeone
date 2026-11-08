@@ -4,16 +4,20 @@ import type { GeoMultiPolygon } from "@/lib/gangwonBoundaryUtils";
 import type { RouteOnePosition } from "@/lib/currentPosition";
 import { useUiText } from "@/lib/uiText";
 import { useHomeExploreStore } from "@/stores/homeExploreStore";
-import { isTestServiceAreaEnabled } from "@/stores/serviceAreaStore";
+import { useServiceAreaStore } from "@/stores/serviceAreaStore";
+import { selectExploreRegion as selectServiceRegion } from "@/features/service-area/serviceAreaSelection";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import {
   isUsableHomeRegionPosition,
   resolveHomeRegionFromPosition,
 } from "./homeCurrentRegion";
+import { findServiceRegionAtLocation } from "./map/serviceRegionSelection";
 
 type UseHomeRegionControllerOptions = {
   /** 시군구 코드를 키로 갖는 경계 도형. 현재 좌표가 속한 서비스 지역을 판정할 때 사용한다. */
   boundaryBySigunguCode: Record<string, GeoMultiPolygon>;
+  /** 현재 위치가 다른 권역에 있을 때 도와 시군구를 함께 찾는 전국 행정 경계. */
+  boundaryByAdminCode?: Record<string, GeoMultiPolygon>;
   /** 위치 Store에서 읽은 현재 좌표. 최초 지역을 정하거나 현재 위치 재조회 전의 저장값으로 사용한다. */
   currentLocation: RouteOnePosition | null;
   /** 전달한 좌표로 지도 중심과 줌을 이동하도록 지도 Hook에 요청한다. */
@@ -45,6 +49,7 @@ type UseHomeRegionControllerOptions = {
  */
 export function useHomeRegionController({
   boundaryBySigunguCode,
+  boundaryByAdminCode,
   currentLocation,
   focusLocation,
   isBoundaryDataReady,
@@ -63,34 +68,37 @@ export function useHomeRegionController({
   const resolveInitialRegion = useHomeExploreStore(
     (state) => state.resolveInitialRegion
   );
-  const selectRegion = useHomeExploreStore((state) => state.selectRegion);
-  const developmentFixedRegion = isTestServiceAreaEnabled()
-    ? serviceArea.developmentFixedRegion
+  const savedAreaId = useServiceAreaStore((state) => state.selectedAreaId);
+  const regionSelectionVersion = useHomeExploreStore((state) => state.regionSelectionVersion);
+  const savedRegionCode = useServiceAreaStore((state) => state.selectedRegionCode);
+  const saveSelectedRegion = useServiceAreaStore((state) => state.setSelectedRegion);
+  const savedRegion = savedAreaId === serviceArea.id
+    ? serviceArea.regions.find((region) => region.sigunguCode === savedRegionCode)
     : undefined;
   /**
-   * 현재 위치 버튼으로 새로 얻은 좌표 중 지도 이동을 기다리는 값이다.
-   * 해당 좌표의 지역이 selectedSigunguCode에 반영되고 지도가 준비된 뒤 이동하며, 이동 요청 후 null로 초기화한다.
+   * 현재 위치 버튼으로 얻은 좌표와 이동 대상 권역·시군구다.
+   * 선택 지역이 반영되고 지도가 준비된 뒤 이동한다. 사용자가 다른 지역을 고르면 대기 중인 이동을 취소한다.
    * 화면 표시에 사용하는 값이 아니므로 재렌더링을 발생시키지 않는 ref에 보관한다.
    */
   const pendingCurrentLocationFocusRef =
-    useRef<RouteOnePosition | null>(null);
+    useRef<{ position: RouteOnePosition; areaId: ServiceArea["id"]; regionCode: string; selectionVersion: number } | null>(null);
 
   /**
    * 홈 진입 시 최초 지역이 아직 확정되지 않았으면 한 번 결정한다.
-   * 개발 고정 지역이 있으면 즉시 사용하고, 없으면 위치 조회와 경계 데이터 준비를 기다린 뒤
+   * 저장한 선택 지역이 있으면 즉시 사용하고, 없으면 위치 조회와 경계 데이터 준비를 기다린 뒤
    * 현재 좌표가 속한 지역 또는 가장 가까운 지역을 선택한다. 사용할 좌표가 없으면 서비스 권역의 기본 지역을 사용한다.
    */
   useEffect(() => {
     if (
-      (!developmentFixedRegion &&
+      (!savedRegion &&
         (isCurrentLocationLookupPending || !isBoundaryDataReady)) ||
-      isInitialRegionResolved
+      isInitialRegionResolved || useHomeExploreStore.getState().isInitialRegionResolved
     ) {
       return;
     }
 
     const initialRegion =
-      developmentFixedRegion ??
+      savedRegion ??
       (currentLocation
         ? resolveHomeRegionFromPosition(
             currentLocation,
@@ -100,14 +108,16 @@ export function useHomeRegionController({
         : serviceArea.defaultRegion);
 
     resolveInitialRegion(initialRegion.sigunguCode);
+    saveSelectedRegion(serviceArea.id, initialRegion.sigunguCode);
   }, [
     boundaryBySigunguCode,
     currentLocation,
-    developmentFixedRegion,
+    savedRegion,
     isBoundaryDataReady,
     isCurrentLocationLookupPending,
     isInitialRegionResolved,
     resolveInitialRegion,
+    saveSelectedRegion,
     serviceArea,
   ]);
 
@@ -129,71 +139,79 @@ export function useHomeRegionController({
 
   /**
    * 현재 위치 버튼을 누를 때 저장값을 재사용하지 않고 위치를 새로 조회한다.
-   * 유효한 좌표를 얻으면 좌표가 포함된 지역 또는 가장 가까운 서비스 지역을 선택하고,
-   * 선택 지역이 Store에 반영된 뒤 지도를 이동할 수 있도록 좌표를 pendingCurrentLocationFocus에 보관한다.
+   * 유효한 좌표를 얻으면 전국 경계에서 권역과 시군구를 함께 선택하고,
+   * 선택값이 반영된 뒤 지도를 이동할 수 있도록 좌표와 대상 지역을 ref에 보관한다.
+   * 조회 도중 사용자가 지역을 바꾸었으면 이전 위치 요청의 결과는 적용하지 않는다.
    * 조회 실패, 범위를 벗어난 좌표 또는 지역 판정 실패 시 안내 토스트만 표시하고 선택 지역과 지도는 변경하지 않는다.
    */
   const focusCurrentLocation = useCallback(() => {
     const focus = async () => {
+      const selectionBeforeLookup = useHomeExploreStore.getState();
       const nextLocation = await refreshCurrentLocation({
         forceRefresh: true,
       });
+      const latestSelection = useHomeExploreStore.getState();
+      if (
+        latestSelection.regionSelectionVersion !== selectionBeforeLookup.regionSelectionVersion
+      ) return;
       if (!nextLocation || !isUsableHomeRegionPosition(nextLocation)) {
         showToast(text.home.currentLocationUnavailable);
         return;
       }
 
-      const nextRegion = resolveHomeRegionFromPosition(
-        nextLocation,
-        serviceArea,
-        boundaryBySigunguCode
-      );
-      if (!nextRegion) {
+      const selection = boundaryByAdminCode
+        ? findServiceRegionAtLocation(nextLocation, boundaryByAdminCode)
+        : null;
+      if (!selection) {
         showToast(text.home.currentLocationUnavailable);
         return;
       }
 
-      pendingCurrentLocationFocusRef.current = nextLocation;
-      selectRegion(nextRegion.sigunguCode);
+      pendingCurrentLocationFocusRef.current = {
+        position: nextLocation,
+        areaId: selection.area.id,
+        regionCode: selection.region.sigunguCode,
+        selectionVersion: latestSelection.regionSelectionVersion + 1,
+      };
+      selectServiceRegion(selection.area.id, selection.region.sigunguCode);
     };
 
     void focus();
   }, [
-    boundaryBySigunguCode,
+    boundaryByAdminCode,
     refreshCurrentLocation,
-    selectRegion,
-    serviceArea,
     showToast,
     text,
   ]);
 
   /**
    * 현재 위치로 계산한 지역 선택이 반영되고 지도 runtime도 준비되면 보관한 좌표로 지도를 이동한다.
-   * 선택 지역이 아직 다르면 다음 상태 변경을 기다리며, 이동을 요청한 좌표는 다시 실행되지 않도록 비운다.
+   * 대기 중에 선택 지역이 바뀌면 이동을 취소하며, 이동을 요청한 좌표는 다시 실행되지 않도록 비운다.
    */
   useEffect(() => {
     const pendingCurrentLocationFocus =
       pendingCurrentLocationFocusRef.current;
-    if (!mapReady || !pendingCurrentLocationFocus) {
+    if (!pendingCurrentLocationFocus) {
       return;
     }
 
-    const focusedRegion = resolveHomeRegionFromPosition(
-      pendingCurrentLocationFocus,
-      serviceArea,
-      boundaryBySigunguCode
-    );
-    if (focusedRegion?.sigunguCode !== selectedSigunguCode) {
+    if (
+      pendingCurrentLocationFocus.areaId !== serviceArea.id ||
+      pendingCurrentLocationFocus.regionCode !== selectedSigunguCode ||
+      pendingCurrentLocationFocus.selectionVersion !== regionSelectionVersion
+    ) {
+      pendingCurrentLocationFocusRef.current = null;
       return;
     }
+    if (!mapReady) return;
 
-    focusLocation(pendingCurrentLocationFocus);
+    focusLocation(pendingCurrentLocationFocus.position);
     pendingCurrentLocationFocusRef.current = null;
   }, [
-    boundaryBySigunguCode,
     focusLocation,
     mapReady,
     selectedSigunguCode,
+    regionSelectionVersion,
     serviceArea,
   ]);
 
@@ -203,9 +221,9 @@ export function useHomeRegionController({
     orderedRegions,
     selectedRegion,
     selectedRegionLabel,
-    /** 개발 고정 지역이 없고 최초 지역이 미확정이며 지도 오류도 없을 때 초기 지역 로딩 단계로 처리한다. */
+    /** 저장 지역이 없고 최초 지역이 미확정이며 지도 오류도 없을 때 초기 지역 로딩 단계로 처리한다. */
     shouldShowInitialRegionLoader:
-      !developmentFixedRegion && !isInitialRegionResolved && !mapError,
+      !savedRegion && !isInitialRegionResolved && !mapError,
     /** 최초 지역이 확정된 뒤 지역·검색·저장 장소 조작 UI와 DAY 추가 배너를 표시한다. */
     shouldShowInteractiveMapUi: isInitialRegionResolved,
     /** 최초 지역이 확정되기 전 지도 조작 영역 대신 뼈대 화면을 표시한다. */

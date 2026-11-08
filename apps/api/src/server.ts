@@ -8,6 +8,7 @@ import {
   isDevVerificationBypassEnabled,
 } from "./lib/devVerification.js";
 import { initializeApiMonitoring } from "./monitoring/sentry.js";
+import { warmHomeTourCourses } from "./modules/home-tour-courses/tourCourseIndex.service.js";
 
 function loadLocalFestivalServiceKey() {
   if (
@@ -144,6 +145,7 @@ await app.listen({
   port,
   host: process.env.API_HOST ?? "0.0.0.0",
 });
+warmHomeTourCourses();
 
 const lanGraphqlUrls = getLanGraphqlUrls(port);
 printApiReadyBanner(port, lanGraphqlUrls);

@@ -4,11 +4,12 @@
  * 지도, 상단 컨트롤, 검색 팝업이 같은 탐색 조건으로 동작하도록 유지할 때 사용한다.
  *
  * 동작 방식:
- * 최초 현재 위치가 결정되면 지역을 한 번 확정하고 사용자의 지역 선택을 이후 상태에 반영한다.
+ * 최초 지역을 한 번 확정하고 지도에서 둘러보는 권역·시군구를 임시 보관한다. 기본 지역과 알림 설정은 바꾸지 않는다.
  * 서비스 지역이나 검색 조건이 바뀌면 관련 검색 상태를 초기화하고 더 보기 개수를 조건별로 관리한다.
  */
 import { create } from "zustand";
 import { DEFAULT_GANGWON_REGION } from "@/data/gangwonRegions";
+import type { ServiceAreaId } from "@/data/serviceAreas";
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 
 type VisibleSearchState = {
@@ -19,6 +20,10 @@ type VisibleSearchState = {
 };
 
 type HomeExploreState = {
+  /** 이번 탐색에 적용할 시도. null이면 설정에 저장한 기본 권역을 사용하며 영속 저장하지 않는다. */
+  exploreAreaId: ServiceAreaId | null;
+  /** 지역 선택 명령마다 증가한다. 늦은 저장·위치 조회 결과가 이후의 탐색을 덮어쓰지 않도록 비교한다. */
+  regionSelectionVersion: number;
   /** 홈 지도에서 경계와 관광지를 표시할 현재 시·군·구 코드 */
   selectedSigunguCode: string;
   /** 현재 위치 또는 기본 지역을 이용한 최초 지역 선택이 끝났는지 여부 */
@@ -33,8 +38,10 @@ type HomeExploreState = {
   regionScrollLeft: number | null;
   /** 최초 지역 판정 전일 때만 시·군·구를 적용하고 판정을 완료 처리한다. */
   resolveInitialRegion: (sigunguCode: string) => void;
-  /** 서비스 지역 변경 시 기본 시·군·구를 적용하고 홈 탐색 상태를 초기화한다. */
+  /** 로그아웃 등에서 탐색 권역을 해제하고 시군구·검색 상태를 초기화해 기본 권역으로 돌아간다. */
   resetForArea: (defaultSigunguCode: string) => void;
+  /** 탐색 권역과 시군구를 함께 바꾸고 검색·스크롤을 초기화한다. 기본 지역과 알림은 바꾸지 않는다. */
+  exploreRegion: (areaId: ServiceAreaId, sigunguCode: string) => void;
   /** 사용자가 고른 시·군·구를 적용하고 최초 지역 판정을 완료 처리한다. */
   selectRegion: (sigunguCode: string) => void;
   /** 가로 지역 목록에서 마지막으로 확인한 스크롤 위치를 저장한다. */
@@ -50,6 +57,8 @@ type HomeExploreState = {
 };
 
 export const useHomeExploreStore = create<HomeExploreState>((set) => ({
+  exploreAreaId: null,
+  regionSelectionVersion: 0,
   selectedSigunguCode: DEFAULT_GANGWON_REGION.sigunguCode,
   isInitialRegionResolved: false,
   searchKeyword: "",
@@ -63,22 +72,37 @@ export const useHomeExploreStore = create<HomeExploreState>((set) => ({
         : {
             selectedSigunguCode: sigunguCode,
             isInitialRegionResolved: true,
+            regionSelectionVersion: state.regionSelectionVersion + 1,
           }
     ),
   resetForArea: (defaultSigunguCode) =>
-    set({
+    set((state) => ({
+      exploreAreaId: null,
       selectedSigunguCode: defaultSigunguCode,
       isInitialRegionResolved: false,
       searchKeyword: "",
       searchFilter: "all",
       visibleSearchState: null,
       regionScrollLeft: null,
-    }),
+      regionSelectionVersion: state.regionSelectionVersion + 1,
+    })),
+  exploreRegion: (exploreAreaId, selectedSigunguCode) =>
+    set((state) => ({
+      exploreAreaId,
+      selectedSigunguCode,
+      isInitialRegionResolved: true,
+      searchKeyword: "",
+      searchFilter: "all",
+      visibleSearchState: null,
+      regionScrollLeft: null,
+      regionSelectionVersion: state.regionSelectionVersion + 1,
+    })),
   selectRegion: (sigunguCode) =>
-    set({
+    set((state) => ({
       selectedSigunguCode: sigunguCode,
       isInitialRegionResolved: true,
-    }),
+      regionSelectionVersion: state.regionSelectionVersion + 1,
+    })),
   setRegionScrollLeft: (regionScrollLeft) =>
     set({
       regionScrollLeft,

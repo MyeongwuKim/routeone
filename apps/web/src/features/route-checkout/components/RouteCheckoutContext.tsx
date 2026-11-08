@@ -22,6 +22,7 @@ import {
   createRouteCheckoutState,
   routeCheckoutReducer,
   type RouteCheckoutAction,
+  type RouteStartLocationSource,
 } from "../models/routeCheckoutState";
 import { RouteCheckoutContext } from "../hooks/useRouteCheckout";
 
@@ -36,6 +37,8 @@ type RouteCheckoutProviderProps = {
   initialTripDays?: number;
   /** 추천 일정 계산에 사용할 최초 출발지. 없으면 출발지 선택 단계에서 정한다. */
   initialStartLocation?: RouteStartLocation | null;
+  /** 공유 코스를 가져올 때는 기존 코스의 출발지로 표시한다. */
+  initialStartLocationSource?: RouteStartLocationSource;
 };
 
 export function RouteCheckoutProvider({
@@ -44,6 +47,7 @@ export function RouteCheckoutProvider({
   initialTravelStartDate = "",
   initialTripDays = 1,
   initialStartLocation = null,
+  initialStartLocationSource,
 }: RouteCheckoutProviderProps) {
   const text = useUiText();
   const [isSavingRoute, setIsSavingRoute] = useState(false);
@@ -55,6 +59,7 @@ export function RouteCheckoutProvider({
       initialTravelStartDate,
       initialTripDays,
       initialStartLocation,
+      initialStartLocationSource,
     },
     createRouteCheckoutState
   );
@@ -87,7 +92,7 @@ export function RouteCheckoutProvider({
     dailyStartTime,
     scheduleEndTime,
     tempo,
-    startLocation,
+    startLocationSelection,
   } = state;
   const setStep = useCallback(
     (value: CartFlowStep) => dispatchWhenEditable({ type: "set-step", value }),
@@ -118,8 +123,11 @@ export function RouteCheckoutProvider({
     [dispatchWhenEditable]
   );
   const setStartLocation = useCallback(
-    (value: RouteStartLocation | null) =>
-      dispatchWhenEditable({ type: "set-start-location", value }),
+    (location: RouteStartLocation, source: RouteStartLocationSource) =>
+      dispatchWhenEditable({
+        type: "set-start-location",
+        value: { location, source },
+      }),
     [dispatchWhenEditable]
   );
 
@@ -167,7 +175,8 @@ export function RouteCheckoutProvider({
       setScheduleEndTime,
       tempo,
       setTempo,
-      startLocation,
+      startLocation: startLocationSelection?.location ?? null,
+      startLocationSource: startLocationSelection?.source ?? null,
       setStartLocation,
       dailyStartMinutes,
       scheduleEndMinutes,
@@ -192,7 +201,7 @@ export function RouteCheckoutProvider({
       setTravelStartDate,
       setTripDays,
       startSavingRoute,
-      startLocation,
+      startLocationSelection,
       step,
       tempo,
       travelStartDate,

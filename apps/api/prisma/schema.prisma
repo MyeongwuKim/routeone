@@ -435,6 +435,8 @@ model UserNotification {
   regionCode           String?
   regionLabel          String?
   dateKey              String?
+  /// 이 알림에 포함된 시군구 행정 코드. 여러 권역의 축제 상세 조회에 사용한다.
+  festivalRegionCodes  String[]                     @default([])
   festivalIds          String[]                     @default([])
   festivalTitles       String[]                     @default([])
   festivalStartDates   String[]                     @default([])

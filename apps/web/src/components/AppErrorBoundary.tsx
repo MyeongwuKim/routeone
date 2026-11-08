@@ -14,14 +14,14 @@ type AppErrorBoundaryState = {
 
 const ERROR_TEXT = {
   ko: {
-    eyebrow: "RouteOne",
+    eyebrow: "두루",
     title: "앱 화면을 불러오지 못했어요",
     description:
       "웹 화면을 그리는 중 오류가 발생했습니다. 다시 불러오면 저장된 화면부터 복구를 시도합니다.",
     action: "다시 불러오기",
   },
   en: {
-    eyebrow: "RouteOne",
+    eyebrow: "Duru",
     title: "Could not load the app screen",
     description:
       "Something failed while rendering the web screen. Reloading will try to recover from the saved app state.",

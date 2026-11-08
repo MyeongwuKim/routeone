@@ -8,6 +8,7 @@ query NotificationInbox($first: Int!, $after: String) {
       regionCode
       regionLabel
       dateKey
+      festivalRegionCodes
       festivalIds
       festivalTitles
       festivalStartDates

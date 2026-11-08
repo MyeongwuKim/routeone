@@ -27,13 +27,13 @@ import { useNativeBoot } from "./boot/useNativeBoot";
 import { useNativeLogin } from "./auth/useNativeLogin";
 import { getPasswordLoginMode } from "./auth/passwordLoginMode";
 import { useNativeUpdate } from "./nativeUpdate/useNativeUpdate";
-import { ONBOARDING_TEXT } from "@/constants/nativeOnboarding";
+import { NATIVE_BRAND, ONBOARDING_TEXT } from "@/constants/nativeOnboarding";
 import { WEB_BUNDLE_UPDATE_CONFIG } from "@/config/webBundleUpdateConfig";
 
 export default function App() {
   const colorScheme = useColorScheme();
   const brandBackgroundColor =
-    colorScheme === "dark" ? "#061918" : "#0f766e";
+    colorScheme === "dark" ? NATIVE_BRAND.darkBackground : NATIVE_BRAND.background;
   const onboardingTheme = useNativeOnboardingTheme();
   const {
     appLanguage,
@@ -102,6 +102,7 @@ export default function App() {
           backgroundColor={brandBackgroundColor}
         />
         <RouteOneLaunchScreen
+          language={appLanguage}
           message={text.launchCheckingUpdate}
           progress={0.08}
           showProgress={false}
@@ -135,6 +136,7 @@ export default function App() {
           backgroundColor={brandBackgroundColor}
         />
         <RouteOneLaunchScreen
+          language={appLanguage}
           message={
             bootProgressStage === "location"
               ? text.launchPreparingLocation
@@ -161,7 +163,7 @@ export default function App() {
           backgroundColor={onboardingTheme.background}
         />
         <NativeOnboardingStep
-          description="RouteOne에서 사용할 언어를 선택해 주세요. Choose the language to use in RouteOne."
+          description={"두루에서 사용할 언어를 선택해 주세요.\nChoose the language to use in Duru."}
           primaryAction={{
             label: "English",
             onPress: () => {

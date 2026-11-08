@@ -26,8 +26,7 @@ import { useAccountUser } from "@/components/account/useAccountUser";
 import { useUiText } from "@/lib/uiText";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import {
-  isTestServiceAreaEnabled,
-  useEffectiveServiceArea,
+  useDefaultServiceArea,
 } from "@/stores/serviceAreaStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
 
@@ -113,8 +112,7 @@ function MyInfoPage() {
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const toggleDarkMode = useUiThemeStore((state) => state.toggleDarkMode);
   const language = useAppLanguageStore((state) => state.language);
-  const serviceArea = useEffectiveServiceArea();
-  const canSelectServiceArea = isTestServiceAreaEnabled();
+  const serviceArea = useDefaultServiceArea();
   const { user, isLoading, retry } = useAccountUser();
 
   return (
@@ -199,20 +197,15 @@ function MyInfoPage() {
           onClick={() => navigate("/me/language")}
         />
 
-        {canSelectServiceArea ? (
-          <>
-            <div className="border-b border-brand-50" />
-
-            <MyInfoMenuRow
-              icon={<MdLocationOn />}
-              title={text.myInfo.serviceArea}
-              description={text.myInfo.serviceAreaDescription(
-                text.labels.regions[serviceArea.label] ?? serviceArea.label
-              )}
-              onClick={() => navigate("/me/service-area")}
-            />
-          </>
-        ) : null}
+        <div className="border-b border-brand-50" />
+        <MyInfoMenuRow
+          icon={<MdLocationOn />}
+          title={text.myInfo.serviceArea}
+          description={text.myInfo.serviceAreaDescription(
+            text.labels.regions[serviceArea.label] ?? serviceArea.label
+          )}
+          onClick={() => navigate("/me/service-area")}
+        />
 
         <div className="border-b border-brand-50" />
 

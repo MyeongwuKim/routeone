@@ -1,4 +1,4 @@
-/** 앱 시작과 웹 번들 준비 진행 상태를 표시하는 공용 로딩 화면. */
+/** 앱 시작과 웹 번들 준비 과정에서 시스템 시작 화면과 같은 크기의 심벌과 진행 상태를 표시한다. */
 import { useEffect, useRef } from "react";
 import {
   Animated,
@@ -8,39 +8,29 @@ import {
   useColorScheme,
   View
 } from "react-native";
+import { NATIVE_BRAND } from "@/constants/nativeOnboarding";
 
 type RouteOneLaunchScreenProps = {
+  language: keyof typeof NATIVE_BRAND.name;
   progress: number;
   message: string;
   showProgress?: boolean;
   tagline?: string;
 };
 
+const LAUNCH_LOGO_SIZE = 240;
+
 export default function RouteOneLaunchScreen({
+  language,
   progress,
   message,
   showProgress = true,
   tagline = "여행의 시작부터 도착까지"
 }: RouteOneLaunchScreenProps) {
   const colorScheme = useColorScheme();
-  const colors =
-    colorScheme === "dark"
-      ? {
-          background: "#061918",
-          title: "#f8fafc",
-          muted: "rgba(226, 245, 241, 0.78)",
-          track: "rgba(226, 245, 241, 0.2)",
-          fill: "#e2f5f1",
-          percentage: "#ffb199"
-        }
-      : {
-          background: "#0f766e",
-          title: "#ffffff",
-          muted: "rgba(255, 255, 255, 0.78)",
-          track: "rgba(255, 255, 255, 0.22)",
-          fill: "#ffffff",
-          percentage: "#ffb199"
-        };
+  const backgroundColor = colorScheme === "dark"
+    ? NATIVE_BRAND.darkBackground
+    : NATIVE_BRAND.background;
   const normalizedProgress = Math.max(0, Math.min(1, progress));
   const animatedProgress = useRef(
     new Animated.Value(normalizedProgress)
@@ -60,17 +50,15 @@ export default function RouteOneLaunchScreen({
   });
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <View style={[styles.screen, { backgroundColor }]}>
       <View style={styles.brand}>
         <Image
           accessibilityIgnoresInvertColors
           source={require("../../../assets/splash-brand-icon.png")}
           style={styles.logo}
         />
-        <Text style={[styles.name, { color: colors.title }]}>RouteOne</Text>
-        <Text style={[styles.tagline, { color: colors.muted }]}>
-          {tagline}
-        </Text>
+        <Text style={styles.name}>{NATIVE_BRAND.name[language]}</Text>
+        <Text style={styles.tagline}>{tagline}</Text>
       </View>
 
       {showProgress ? (
@@ -82,23 +70,23 @@ export default function RouteOneLaunchScreen({
               max: 100,
               now: Math.round(normalizedProgress * 100)
             }}
-            style={[styles.progressTrack, { backgroundColor: colors.track }]}
+            style={styles.progressTrack}
           >
             <Animated.View
               style={[
                 styles.progressFill,
-                { backgroundColor: colors.fill, width: progressWidth }
+                { width: progressWidth }
               ]}
             />
           </View>
           <View style={styles.progressCaption}>
             <Text
               numberOfLines={1}
-              style={[styles.message, { color: colors.muted }]}
+              style={styles.message}
             >
               {message}
             </Text>
-            <Text style={[styles.percentage, { color: colors.percentage }]}>
+            <Text style={styles.percentage}>
               {Math.round(normalizedProgress * 100)}%
             </Text>
           </View>
@@ -120,21 +108,23 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: "center",
-    transform: [{ translateY: -140 }]
+    transform: [{ translateY: -LAUNCH_LOGO_SIZE / 2 }]
   },
   logo: {
-    width: 280,
-    height: 280,
+    width: LAUNCH_LOGO_SIZE,
+    height: LAUNCH_LOGO_SIZE,
     resizeMode: "contain"
   },
   name: {
-    marginTop: -42,
+    marginTop: -30,
+    color: NATIVE_BRAND.mint,
     fontSize: 31,
     fontWeight: "800",
     letterSpacing: 0
   },
   tagline: {
     marginTop: 7,
+    color: "rgba(230, 246, 238, 0.8)",
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0
@@ -148,12 +138,14 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     width: "100%",
+    backgroundColor: "rgba(230, 246, 238, 0.22)",
     height: 7,
     overflow: "hidden",
     borderRadius: 4
   },
   progressFill: {
     height: "100%",
+    backgroundColor: NATIVE_BRAND.mint,
     borderRadius: 4
   },
   progressCaption: {
@@ -166,12 +158,14 @@ const styles = StyleSheet.create({
   },
   message: {
     flex: 1,
+    color: "rgba(230, 246, 238, 0.8)",
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0
   },
   percentage: {
     minWidth: 34,
+    color: NATIVE_BRAND.apricot,
     fontSize: 12,
     fontWeight: "800",
     textAlign: "right",

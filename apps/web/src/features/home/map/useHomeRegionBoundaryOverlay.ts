@@ -1,11 +1,10 @@
-/** 선택한 시·군·구의 경계 좌표를 네이버 지도 도형으로 변환하고 오버레이 생명주기를 관리한다. */
+/** 현재 시·군·구에만 강조 면과 외곽선을 표시한다. 권역 전체 외곽선은 지도 지역 선택 훅에서 관리한다. */
 import { useCallback, useEffect, useRef } from "react";
 import {
   convertUtmkToWgs84,
   type GeoMultiPolygon,
 } from "@/lib/gangwonBoundaryUtils";
 import type {
-  HomeMapBounds,
   HomeMapOverlay,
   HomeMapRuntime,
 } from "./homeMapTypes";
@@ -30,8 +29,8 @@ type UseHomeRegionBoundaryOverlayOptions = {
 
 /**
  * WGS84 좌표는 그대로 사용하고, 투영 좌표는 네이버 변환 API와 로컬 UTMK 변환을 차례로 시도한다.
- * 국내 범위를 벗어나거나 해석할 수 없는 좌표는 제외하며, 그린 도형이 있으면 지도 이동에 사용할
- * 전체 Bounds를 반환한다. runtime 변경 또는 훅 정리 시 생성한 폴리곤과 선을 모두 제거한다.
+ * 국내 범위를 벗어나거나 해석할 수 없는 좌표는 제외한다.
+ * 선택 지역이나 지도 인스턴스가 바뀌면 이전 강조 면과 외곽선을 제거한다.
  */
 export function useHomeRegionBoundaryOverlay({
   boundaryBySigunguCode,
@@ -46,21 +45,18 @@ export function useHomeRegionBoundaryOverlay({
     boundaryPolygonRefs.current = [];
   }, []);
 
-  /** 선택 지역 경계를 다시 그린 뒤 유효한 모든 좌표를 포함하는 Bounds를 반환한다. */
-  const drawSelectedRegionBoundary = useCallback(() => {
+  useEffect(() => {
     if (!runtime) {
-      return null;
+      return;
     }
 
     const { map: mapInstance, naverMaps } = runtime;
 
-    clearBoundaryPolygons();
     const multiPolygon = boundaryBySigunguCode[selectedSigunguCode];
     if (!multiPolygon || multiPolygon.length === 0) {
-      return null;
+      return;
     }
 
-    const regionBounds = new naverMaps.LatLngBounds() as HomeMapBounds;
     const isKoreaLatLng = (lat: number, lng: number) =>
       lat >= 32 && lat <= 40 && lng >= 123 && lng <= 133;
     const readLatLng = (coord: unknown) => {
@@ -125,64 +121,36 @@ export function useHomeRegionBoundaryOverlay({
       return null;
     };
 
-    multiPolygon.forEach((polygon) => {
-      const paths = polygon
-        .map((ring) =>
-          ring
-            .map((point) => {
-              const latLng = toLatLng(point);
-              if (latLng) {
-                regionBounds.extend(latLng);
-              }
-              return latLng;
-            })
-            .filter(
-              (point): point is NonNullable<typeof point> => point != null
-            )
-        )
-        .filter((ring) => ring.length > 0);
+    // 섬이 많은 지역도 모든 경로를 두 도형에 묶어 강조한다.
+    const paths = multiPolygon.flatMap((polygon) => polygon.map((ring) =>
+      ring.map(toLatLng).filter((point) => point != null)
+    )).filter((ring) => ring.length >= 3);
+    if (paths.length === 0) return;
 
-      if (paths.length === 0) {
-        return;
-      }
-
-      const boundaryPolygon = new naverMaps.Polygon({
-        map: mapInstance,
-        paths,
-        strokeColor: "#0d9488",
-        strokeWeight: 2,
-        strokeOpacity: 0.95,
-        fillColor: "#14b8a6",
-        fillOpacity: 0.1,
-        zIndex: 880,
-      }) as HomeMapOverlay;
-      boundaryPolygonRefs.current.push(boundaryPolygon);
-
-      paths.forEach((path) => {
-        const boundaryHaloLine = new naverMaps.Polyline({
-          map: mapInstance,
-          path,
-          strokeColor: "#ffffff",
-          strokeWeight: 8,
-          strokeOpacity: 0.9,
-          zIndex: 900,
-          clickable: false,
-        }) as HomeMapOverlay;
-        const boundaryLine = new naverMaps.Polyline({
-          map: mapInstance,
-          path,
-          strokeColor: "#0d9488",
-          strokeWeight: 4,
-          strokeOpacity: 1,
-          zIndex: 901,
-          clickable: false,
-        }) as HomeMapOverlay;
-
-        boundaryPolygonRefs.current.push(boundaryHaloLine, boundaryLine);
-      });
+    const boundaryHalo = new naverMaps.Polygon({
+      map: mapInstance,
+      paths,
+      strokeColor: "#ffffff",
+      strokeWeight: 8,
+      strokeOpacity: 0.9,
+      fillColor: "#14b8a6",
+      fillOpacity: 0.1,
+      clickable: false,
+      zIndex: 880,
     });
+    const boundaryOutline = new naverMaps.Polygon({
+      map: mapInstance,
+      paths,
+      strokeColor: "#0d9488",
+      strokeWeight: 4,
+      strokeOpacity: 1,
+      fillOpacity: 0,
+      clickable: false,
+      zIndex: 901,
+    });
+    boundaryPolygonRefs.current.push(boundaryHalo, boundaryOutline);
 
-    return boundaryPolygonRefs.current.length > 0 ? regionBounds : null;
+    return clearBoundaryPolygons;
   }, [
     boundaryBySigunguCode,
     clearBoundaryPolygons,
@@ -190,14 +158,5 @@ export function useHomeRegionBoundaryOverlay({
     selectedSigunguCode,
   ]);
 
-  useEffect(() => {
-    return () => {
-      clearBoundaryPolygons();
-    };
-  }, [clearBoundaryPolygons, runtime]);
-
-  return {
-    clearBoundaryPolygons,
-    drawSelectedRegionBoundary,
-  };
+  return { clearBoundaryPolygons };
 }

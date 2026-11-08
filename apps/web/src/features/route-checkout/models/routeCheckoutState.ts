@@ -8,6 +8,18 @@ const DEFAULT_TRIP_DAYS = 1;
 const DEFAULT_DAILY_START_TIME = "09:00";
 const DEFAULT_SCHEDULE_END_TIME = "18:00";
 
+export type RouteStartLocationSource =
+  | "current-location"
+  | "saved-places"
+  | "map"
+  | "shared-route";
+
+type RouteStartLocationSelection = {
+  location: RouteStartLocation;
+  /** 출발지를 다시 열 때도 같은 선택 경로를 표시하기 위해 좌표와 함께 보관한다. */
+  source: RouteStartLocationSource;
+};
+
 export type RouteCheckoutState = {
   step: CartFlowStep;
   travelStartDate: string;
@@ -15,7 +27,7 @@ export type RouteCheckoutState = {
   dailyStartTime: string;
   scheduleEndTime: string;
   tempo: TravelTempo | null;
-  startLocation: RouteStartLocation | null;
+  startLocationSelection: RouteStartLocationSelection | null;
 };
 
 export type RouteCheckoutAction =
@@ -25,7 +37,7 @@ export type RouteCheckoutAction =
   | { type: "set-daily-start-time"; value: string }
   | { type: "set-schedule-end-time"; value: string }
   | { type: "set-tempo"; value: TravelTempo | null }
-  | { type: "set-start-location"; value: RouteStartLocation | null };
+  | { type: "set-start-location"; value: RouteStartLocationSelection };
 
 type CreateRouteCheckoutStateOptions = {
   /** 생성할 상태에서 처음 표시할 일정 만들기 단계 */
@@ -36,6 +48,7 @@ type CreateRouteCheckoutStateOptions = {
   initialTripDays?: number;
   /** 생성할 상태에 적용할 추천 일정 출발지 */
   initialStartLocation?: RouteStartLocation | null;
+  initialStartLocationSource?: RouteStartLocationSource;
 };
 
 export function createRouteCheckoutState({
@@ -43,6 +56,7 @@ export function createRouteCheckoutState({
   initialTravelStartDate = "",
   initialTripDays = DEFAULT_TRIP_DAYS,
   initialStartLocation = null,
+  initialStartLocationSource = "current-location",
 }: CreateRouteCheckoutStateOptions): RouteCheckoutState {
   return {
     step: initialStep,
@@ -51,7 +65,9 @@ export function createRouteCheckoutState({
     dailyStartTime: DEFAULT_DAILY_START_TIME,
     scheduleEndTime: DEFAULT_SCHEDULE_END_TIME,
     tempo: null,
-    startLocation: initialStartLocation,
+    startLocationSelection: initialStartLocation
+      ? { location: initialStartLocation, source: initialStartLocationSource }
+      : null,
   };
 }
 
@@ -73,7 +89,7 @@ export function routeCheckoutReducer(
     case "set-tempo":
       return { ...state, tempo: action.value };
     case "set-start-location":
-      return { ...state, startLocation: action.value };
+      return { ...state, startLocationSelection: action.value };
     default:
       return state;
   }

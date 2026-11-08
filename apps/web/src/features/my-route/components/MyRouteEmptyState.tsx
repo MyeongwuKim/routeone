@@ -1,7 +1,7 @@
 /** 저장한 경로가 없을 때 빈 상태를 표시하고 홈 지도로 이동해 장소를 담도록 안내한다. */
 import { Link } from "react-router-dom";
 import { MdArrowForward, MdMap } from "react-icons/md";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import RoutePageEmptyState from "@/components/feedback/RoutePageEmptyState";
 import { useUiText } from "@/lib/uiText";
 
@@ -13,7 +13,7 @@ function MyRouteEmptyState() {
       className="flex-1"
       action={
         <Link
-          to="/home"
+          to="/home/map"
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-sm"
         >
           <MdMap className="text-lg" />
@@ -22,7 +22,7 @@ function MyRouteEmptyState() {
         </Link>
       }
     >
-      <PotatoLoadingCard
+      <AppLoadingCard
         title={text.myRoute.emptyTitle}
         description={text.myRoute.emptyDescription}
         footerText={text.myRoute.emptyFooter}

@@ -7,6 +7,7 @@ type AppVersionConfig = Record<AppVariant, Record<AppPlatform, string>>;
 
 type AppVariantConfig = {
   displayName: string;
+  launcherName: string;
   slug: string;
   scheme: string;
   bundleIdentifier: string;
@@ -19,13 +20,15 @@ type AppVariantResult = {
 
 const APP_VARIANT_CONFIG: Record<AppVariant, AppVariantConfig> = {
   dev: {
-    displayName: "RouteOne(T)",
+    displayName: "Duru(T)",
+    launcherName: "두루(T)",
     slug: "routeone",
     scheme: "routeone-dev",
     bundleIdentifier: "com.routeone.app.dev"
   },
   prod: {
-    displayName: "RouteOne",
+    displayName: "Duru",
+    launcherName: "두루",
     slug: "routeone",
     scheme: "routeone",
     bundleIdentifier: "com.myeongwukim.routeone"
@@ -140,6 +143,7 @@ const { appVariant, isExplicit: hasExplicitAppVariant } = getAppVariant();
 const buildPlatform = getBuildPlatform();
 const appVariantConfig = APP_VARIANT_CONFIG[appVariant];
 const appDisplayName = appVariantConfig.displayName;
+const appLauncherName = appVariantConfig.launcherName;
 const appSlug = appVariantConfig.slug;
 const appScheme = appVariantConfig.scheme;
 const appBundleIdentifier = appVariantConfig.bundleIdentifier;
@@ -184,6 +188,7 @@ const googleIosUrlScheme =
         ""
       )}`
     : "");
+const splashBackgroundColor = "#104A3E";
 const plugins: unknown[] = [
   [
     "@sentry/react-native",
@@ -197,15 +202,16 @@ const plugins: unknown[] = [
       url: process.env.SENTRY_URL?.trim() || "https://sentry.io/"
     }
   ],
+  "./plugins/withDuruLaunchScreen",
   [
     "expo-splash-screen",
     {
-      backgroundColor: "#0f766e",
+      backgroundColor: splashBackgroundColor,
       image: "./assets/splash-brand-icon.png",
-      imageWidth: 280,
+      imageWidth: 240,
       resizeMode: "contain",
       dark: {
-        backgroundColor: "#061918",
+        backgroundColor: "#092C25",
         image: "./assets/splash-brand-icon.png"
       }
     }
@@ -216,13 +222,13 @@ const plugins: unknown[] = [
       isAndroidBackgroundLocationEnabled: true,
       isAndroidForegroundServiceEnabled: true,
       locationWhenInUsePermission:
-        "RouteOne이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다."
+        "두루가 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다."
     }
   ],
   [
     "expo-notifications",
     {
-      color: "#0f766e",
+      color: splashBackgroundColor,
       defaultChannel: "route-arrivals",
       enableBackgroundRemoteNotifications: false
     }
@@ -231,12 +237,13 @@ const plugins: unknown[] = [
     "expo-image-picker",
     {
       cameraPermission:
-        "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
+        "두루가 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
       photosPermission:
-        "RouteOne이 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다."
+        "두루가 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다."
     }
   ],
   "expo-apple-authentication",
+  ["./plugins/withNativeLauncherName", { name: appLauncherName }],
   "./plugins/withGoogleModularHeaders"
 ];
 
@@ -282,11 +289,11 @@ export default {
         },
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
-          "RouteOne이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
+          "두루가 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
         NSCameraUsageDescription:
-          "RouteOne이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
+          "두루가 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
         NSPhotoLibraryUsageDescription:
-          "RouteOne이 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다.",
+          "두루가 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다.",
         LSApplicationQueriesSchemes: ["nmap"]
       }
     },
@@ -295,7 +302,7 @@ export default {
       edgeToEdgeEnabled: true,
       adaptiveIcon: {
         foregroundImage: "./assets/splash-brand-icon.png",
-        backgroundColor: "#0f766e"
+        backgroundColor: splashBackgroundColor
       },
       permissions: [
         "ACCESS_COARSE_LOCATION",

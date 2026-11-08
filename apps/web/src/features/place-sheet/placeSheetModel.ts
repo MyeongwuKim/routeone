@@ -13,6 +13,9 @@ export type PlaceSheetCoordinates = {
   lng: number;
 };
 
+/** 장소 상세에서만 선택하는 길찾기 기준. 저장된 여행 일정의 이동수단은 변경하지 않는다. */
+export type PlaceDirectionMode = "driving" | "walking";
+
 export type PlaceImageViewerTarget = {
   imageUrls: string[];
   index: number;

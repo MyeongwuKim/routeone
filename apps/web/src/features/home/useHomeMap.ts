@@ -9,7 +9,6 @@ import {
   useState,
   type RefObject,
 } from "react";
-import type { ServiceRegion } from "@/data/serviceAreas";
 import type {
   CurrentLocation,
   GeoMultiPolygon,
@@ -29,7 +28,6 @@ import {
   getNaverMapThemeOptions,
 } from "@/lib/naverMapTheme";
 import { useUiText } from "@/lib/uiText";
-import type { GangwonAttraction } from "@/lib/visitKoreaTourApi";
 import { NCP_KEY_ID } from "@/pages/HomePage.constants";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useCurrentPositionStore } from "@/stores/currentPositionStore";
@@ -44,6 +42,7 @@ import type {
 import { useHomeAttractionMarkerOverlay } from "./map/useHomeAttractionMarkerOverlay";
 import { useHomeCurrentLocationOverlay } from "./map/useHomeCurrentLocationOverlay";
 import { useHomeRegionBoundaryOverlay } from "./map/useHomeRegionBoundaryOverlay";
+import { useHomeMapRegionSelection } from "./map/useHomeMapRegionSelection";
 import type { HomeAttractionQueryData } from "./useHomeAttractionData";
 
 const MAP_BOUNDS_RETRY_LIMIT = 6;
@@ -66,10 +65,8 @@ type HomeMapStatus = {
 type UseHomeMapOptions = {
   /** 선택 지역의 관광지와 분류 정보. 관광지 마커 오버레이 생성에 사용한다. */
   attractionData: HomeAttractionQueryData | undefined;
-  /** 시·군·구 코드를 키로 갖는 경계 도형 데이터. 선택 지역 경계 오버레이에 전달한다. */
+  /** 현재 시·도의 시·군·구 코드별 도형. 권역 전체 경계와 선택 지역 강조에 사용한다. */
   boundaryBySigunguCode: Record<string, GeoMultiPolygon>;
-  /** true가 된 뒤 선택 지역 경계를 그리고 해당 영역이 보이도록 지도를 이동한다. */
-  isBoundaryDataReady: boolean;
   /** 언어 변경에 따른 장소명 갱신 중인지 마커 훅과 공유하는 ref */
   isUpdatingPlaceLabelsRef: RefObject<boolean>;
   /** 관광지 마커 클릭 시 선택한 관광지·마커 종류·트렌드명·순위를 전달하는 콜백 */
@@ -80,10 +77,10 @@ type UseHomeMapOptions = {
   searchFilter: SearchFilter;
   /** 지도 세션을 새로 만들 때 적용하는 초기 중심 좌표 */
   mapCenter: CurrentLocation;
-  /** 선택 지역의 경계를 그릴 수 없을 때 사용할 지역별 대체 중심 좌표 목록 */
-  regions: readonly ServiceRegion[];
-  /** 경계와 관광지 마커를 표시할 현재 시·군·구 코드 */
+  /** 경계를 강조하고 관광지 마커를 표시할 현재 시·군·구 코드 */
   selectedSigunguCode: string;
+  /** 지도 탭으로 다른 시·군·구를 선택하면 그 지역 중심을 반환한다. */
+  onSelectMapLocation: (position: CurrentLocation) => CurrentLocation | null;
   /** 관광지 ID를 키로 갖는 혼잡도 순위 조회표. 마커 배지와 겹침 순서에 사용한다. */
   topRankByAttractionId: Map<string, number>;
   /** 관광지 ID를 키로 갖는 트렌드명 조회표. 마커 선택 결과에 포함한다. */
@@ -114,13 +111,12 @@ function isNaverMapModelPendingError(error: unknown) {
 export function useHomeMap({
   attractionData,
   boundaryBySigunguCode,
-  isBoundaryDataReady,
   isUpdatingPlaceLabelsRef,
   onSelectAttraction,
   searchFilter,
   mapCenter,
-  regions,
   selectedSigunguCode,
+  onSelectMapLocation,
   topRankByAttractionId,
   trendNameByAttractionId,
 }: UseHomeMapOptions) {
@@ -179,23 +175,25 @@ export function useHomeMap({
   }, []);
 
   /**
-   * 지도 runtime이 있으면 관광지 좌표로 500ms 이동을 요청한다.
+   * 지도 runtime이 있으면 현재 줌을 유지하며 전달받은 좌표로 500ms 이동을 요청한다.
    * panTo를 제공하지 않는 지도 구현에서는 중심 좌표만 즉시 변경하며, 이동 완료를 기다리지 않는다.
    */
-  const focusAttraction = useCallback((attraction: GangwonAttraction) => {
+  const panMapToLocation = useCallback((location: CurrentLocation) => {
     const mapInstance = mapInstanceRef.current;
     const naverMaps = naverMapsRef.current;
 
     if (!mapInstance || !naverMaps) {
-      return;
+      return false;
     }
 
-    const position = new naverMaps.LatLng(attraction.lat, attraction.lng);
+    const position = new naverMaps.LatLng(location.lat, location.lng);
     if (typeof mapInstance.panTo === "function") {
       mapInstance.panTo(position, { duration: 500 });
     } else {
       mapInstance.setCenter(position);
     }
+
+    return true;
   }, []);
 
   /**
@@ -228,33 +226,17 @@ export function useHomeMap({
    */
   const focusLocation = useCallback((location: CurrentLocation) => {
     const mapInstance = mapInstanceRef.current;
-    const naverMaps = naverMapsRef.current;
-    if (!mapInstance || !naverMaps) {
+    if (!mapInstance || !naverMapsRef.current) {
       return false;
     }
 
     cancelPendingMapBoundsMove();
-    const position = new naverMaps.LatLng(location.lat, location.lng);
     if (mapInstance.getZoom() < 14) {
       mapInstance.setZoom(14);
     }
-    if (typeof mapInstance.panTo === "function") {
-      mapInstance.panTo(position, { duration: 500 });
-    } else {
-      mapInstance.setCenter(position);
-    }
+    return panMapToLocation(location);
+  }, [cancelPendingMapBoundsMove, panMapToLocation]);
 
-    return true;
-  }, [cancelPendingMapBoundsMove]);
-
-  const {
-    clearBoundaryPolygons,
-    drawSelectedRegionBoundary,
-  } = useHomeRegionBoundaryOverlay({
-    boundaryBySigunguCode,
-    runtime,
-    selectedSigunguCode,
-  });
   const { clearCurrentLocationOverlays } =
     useHomeCurrentLocationOverlay({
       currentLocation,
@@ -264,7 +246,7 @@ export function useHomeMap({
   const { clearMarkers, isRenderingMarkers } =
     useHomeAttractionMarkerOverlay({
       attractionData,
-      focusAttraction,
+      focusAttraction: panMapToLocation,
       isUpdatingPlaceLabelsRef,
       onSelectAttraction,
       runtime,
@@ -291,7 +273,7 @@ export function useHomeMap({
         }
 
         try {
-          mapInstance.fitBounds(bounds);
+          mapInstance.fitBounds(bounds, { top: 152, right: 16, bottom: 32, left: 16 });
         } catch (error) {
           if (
             attempt < MAP_BOUNDS_RETRY_LIMIT &&
@@ -317,46 +299,33 @@ export function useHomeMap({
     []
   );
 
-  /**
-   * 선택한 시·군·구 경계를 다시 그리고 경계 전체가 보이도록 지도를 맞춘다.
-   * 경계 좌표를 만들 수 없으면 선택 지역 또는 첫 지역의 중심 좌표와 줌 10을 적용한다.
-   */
-  const fitMapToSelectedRegion = useCallback(() => {
-    if (!runtime) {
-      return;
-    }
+  /** 권역 도형이 준비되면 이전 이동을 취소하고 전체 경계가 화면에 들어오도록 맞춘다. */
+  const fitMapToArea = useCallback((bounds: HomeMapBounds) => {
+    cancelPendingMapBoundsMove();
+    moveMapToBounds(bounds, mapBoundsMoveRequestRef.current);
+  }, [cancelPendingMapBoundsMove, moveMapToBounds]);
 
-    const currentRegion =
-      regions.find(
-        (region) => region.sigunguCode === selectedSigunguCode
-      ) ?? regions[0];
-    if (!currentRegion) {
-      return;
-    }
+  /** 경계 탭으로 바꾼 지역의 중심을 이동 대상으로 삼고, 이전 카메라 이동은 중지한다. */
+  const selectMapLocation = useCallback((position: CurrentLocation) => {
+    const regionCenter = onSelectMapLocation(position);
+    if (!regionCenter) return;
 
     cancelPendingMapBoundsMove();
-    const moveRequestId = mapBoundsMoveRequestRef.current + 1;
-    mapBoundsMoveRequestRef.current = moveRequestId;
-    const regionBounds = drawSelectedRegionBoundary();
-    if (regionBounds) {
-      moveMapToBounds(regionBounds, moveRequestId);
-      return;
-    }
+    mapInstanceRef.current?.stop?.();
+    panMapToLocation(regionCenter);
+  }, [cancelPendingMapBoundsMove, onSelectMapLocation, panMapToLocation]);
 
-    const center = new runtime.naverMaps.LatLng(
-      currentRegion.center.lat,
-      currentRegion.center.lng
-    );
-    runtime.map.setCenter(center);
-    runtime.map.setZoom(10);
-  }, [
-    cancelPendingMapBoundsMove,
-    drawSelectedRegionBoundary,
-    moveMapToBounds,
-    regions,
+  useHomeMapRegionSelection({
+    runtime,
+    boundaryBySigunguCode,
+    onFitAreaBounds: fitMapToArea,
+    onSelectLocation: selectMapLocation,
+  });
+  const { clearBoundaryPolygons } = useHomeRegionBoundaryOverlay({
+    boundaryBySigunguCode,
     runtime,
     selectedSigunguCode,
-  ]);
+  });
 
   /** 훅이 처음 연결될 때 현재 위치 조회를 시작하며, 실패 상태 처리는 위치 Store에 맡긴다. */
   useEffect(() => {
@@ -463,7 +432,8 @@ export function useHomeMap({
           zoomControl: false,
           mapDataControl: true,
           logoControl: true,
-          minZoom: 8,
+          // 울릉도·독도처럼 본토에서 떨어진 섬까지 좁은 화면에 함께 맞출 수 있어야 한다.
+          minZoom: 6,
         }) as HomeMapInstance;
 
         mapInstanceRef.current = mapInstance;
@@ -574,29 +544,10 @@ export function useHomeMap({
     enableNaverMapPointerInteractions(runtime?.map ?? null);
   }, [isDarkMode, runtime]);
 
-  /**
-   * runtime과 경계 데이터가 준비되면 선택 지역 경계를 기준으로 지도를 이동한다.
-   * 조건이 바뀌거나 정리될 때 이전 경계 이동과 재시도를 취소한다.
-   */
-  useEffect(() => {
-    if (runtime && isBoundaryDataReady) {
-      fitMapToSelectedRegion();
-    }
-
-    return () => {
-      cancelPendingMapBoundsMove();
-    };
-  }, [
-    cancelPendingMapBoundsMove,
-    fitMapToSelectedRegion,
-    isBoundaryDataReady,
-    runtime,
-  ]);
-
   return {
     /** 위치 Store가 보관하는 최근 현재 위치. 아직 조회되지 않았거나 사용할 수 없으면 null */
     currentLocation,
-    focusAttraction,
+    focusAttraction: panMapToLocation,
     focusLocation,
     /** 최초 상태이거나 위치 조회 중이어서 초기 지역 판정을 기다려야 하는지 여부 */
     isCurrentLocationLookupPending,

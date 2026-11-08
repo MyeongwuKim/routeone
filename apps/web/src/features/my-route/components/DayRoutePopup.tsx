@@ -19,7 +19,10 @@ function DayRoutePopupContent(props: DayRoutePopupProps) {
     <div className="fixed inset-0 z-[2300] bg-white">
       <div className="flex h-full flex-col">
         <DayRoutePopupHeader controller={controller.header} />
-        <DayRouteScheduleList controller={controller.schedule} />
+        <DayRouteScheduleList
+          controller={controller.schedule}
+          openAtCurrentDestination={props.openAtCurrentDestination}
+        />
         <DayRoutePopupFooter controller={controller.footer} />
       </div>
       <DayRoutePopupOverlays controller={controller.overlays} />

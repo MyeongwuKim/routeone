@@ -11,7 +11,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   IoBagAdd,
   IoBagAddOutline,
+  IoArrowBack,
   IoClose,
+  IoFootstepsOutline,
   IoInformationCircleOutline,
   IoSearch,
 } from "react-icons/io5";
@@ -23,6 +25,8 @@ import {
   createMapSheetPlaceFromNearbyPlace,
   getTopRankBadgeStyle,
   type PlaceImageViewerTarget,
+  type PlaceDirectionMode,
+  type PlaceSheetCoordinates,
 } from "../placeSheetModel";
 import PlaceImageViewer from "./PlaceImageViewer";
 import PlaceDirectionsSection from "./PlaceDirectionsSection";
@@ -33,7 +37,8 @@ import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { formatFestivalPeriod } from "@/lib/festivalDate";
 import type { NearbyTouristPlace } from "@/lib/visitKoreaTourApi";
-import { useMapSheetStore } from "@/stores/mapSheetStore";
+import { useMapSheetStore, type MapSheetMode } from "@/stores/mapSheetStore";
+import { getWalkingRouteText } from "@/features/walking/walkingRouteText";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
@@ -45,6 +50,7 @@ const SHEET_HEADLINE_MIN_HEIGHT_PX = 108;
 function PlaceBottomSheet() {
   const appLanguage = useAppLanguageStore((state) => state.language);
   const text = useUiText();
+  const walkingText = getWalkingRouteText(appLanguage);
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const {
     isOpen,
@@ -55,12 +61,16 @@ function PlaceBottomSheet() {
     contextAction,
     selectedPlace,
     openSheet,
+    setSheetMode,
     updateSelectedPlace,
     resetSheet,
   } = useMapSheetStore();
   const { savedPlaceIds, toggleSavedPlace } = usePlaceCartStore();
   const showToast = useUiToastStore((state) => state.showToast);
   const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
+  // 상세 길찾기의 선택 기준만 보관한다. 여행 일정 생성·저장의 자동차 기준은 변경하지 않는다.
+  const [routeMode, setRouteMode] = useState<PlaceDirectionMode>("driving");
+  const previousInfoModeRef = useRef<Exclude<MapSheetMode, "directions-popup">>("full-popup");
   const [cartAddAnimationPlaceId, setCartAddAnimationPlaceId] = useState<
     string | null
   >(null);
@@ -128,6 +138,7 @@ function PlaceBottomSheet() {
   const placeSheetData = usePlaceSheetData({
     appLanguage,
     currentLocation,
+    routeMode,
     isOpen,
     selectedPlace,
     shouldLoadOverviewData: shouldShowOverviewPanel,
@@ -195,6 +206,23 @@ function PlaceBottomSheet() {
     });
   };
   const closeImageViewer = () => setImageViewerTarget(null);
+  const handleOpenWalkingDirections = () => {
+    if (sheetMode !== "directions-popup") {
+      previousInfoModeRef.current = sheetMode;
+    }
+    setRouteMode("walking");
+    setSheetMode("directions-popup");
+  };
+  // 출발지만 바꾸고 장소 정보로 돌아올 때 필요한 선택 장소와 호출 화면의 동작은 유지한다.
+  const handleChangeDirectionOrigin = (coordinates: PlaceSheetCoordinates) => {
+    if (!selectedPlace) return;
+    openSheet(selectedPlace, {
+      mode: sheetMode,
+      directionOrigin: { coordinates, label: walkingText.selectedOnMap, isCurrentLocation: false },
+      fallbackDirectionOrigin: fallbackDirectionOrigin ?? undefined,
+      contextAction: contextAction ?? undefined,
+    });
+  };
   const handleImageViewerStep = (direction: -1 | 1) => {
     setImageViewerTarget((target) => {
       if (!target || target.imageUrls.length === 0) {
@@ -275,9 +303,9 @@ function PlaceBottomSheet() {
         >
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-brand-100 bg-white px-5 pb-4 pt-5 dark:border-brand-400/20 dark:bg-[#0b211f]">
             <div className="min-w-0">
-              <p className="text-[11px] font-black text-brand-600">
-                {text.placeSheet.directions}
-              </p>
+              <button type="button" onClick={() => setSheetMode(previousInfoModeRef.current)} className="inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-brand-700 dark:text-brand-200">
+                <IoArrowBack aria-hidden="true" />{walkingText.backToDetails}
+              </button>
               <p className="mt-1 truncate text-lg font-black text-slate-900 dark:text-white">
                 {selectedPlace.title}
               </p>
@@ -299,6 +327,10 @@ function PlaceBottomSheet() {
           <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <PlaceDirectionsSection
               appLanguage={appLanguage}
+              routeMode={routeMode}
+              onRouteModeChange={setRouteMode}
+              onOriginChange={handleChangeDirectionOrigin}
+              walkingRoute={placeSheetData.walkingRoute}
               currentLocation={currentLocation}
               directionOrigin={resolvedDirectionOrigin}
               isCurrentLocationLookupPending={isCurrentLocationLookupPending}
@@ -513,6 +545,9 @@ function PlaceBottomSheet() {
 
             <PlaceSheetOverviewPanel
               appLanguage={appLanguage}
+              routeMode={routeMode}
+              onRouteModeChange={setRouteMode}
+              onOriginChange={handleChangeDirectionOrigin}
               currentLocation={currentLocation}
               data={placeSheetData}
               directionOrigin={resolvedDirectionOrigin}
@@ -536,7 +571,13 @@ function PlaceBottomSheet() {
                 {contextAction.label}
               </button>
             </div>
-          ) : null}
+          ) : (
+            <div className="shrink-0 border-t border-brand-100 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:border-brand-400/20 dark:bg-[#071718]">
+              <button type="button" onClick={handleOpenWalkingDirections} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 active:scale-[0.99]">
+                <IoFootstepsOutline aria-hidden="true" className="text-lg" />{walkingText.title}
+              </button>
+            </div>
+          )}
         </div>
       </section>
 

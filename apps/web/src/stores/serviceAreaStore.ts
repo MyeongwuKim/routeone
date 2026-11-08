@@ -1,14 +1,7 @@
-/**
- * 용도:
- * 개발·검수 환경에서 홈 지도와 관광지 조회에 적용할 서비스 지역을 공유한다.
- * 지역 선택 화면, 홈 데이터 조회, 지도 중심과 지역 목록이 같은 지역 설정을 사용할 때 참조한다.
- *
- * 동작 방식:
- * 선택한 지역 ID를 localStorage에 저장하고 유효한 값만 복원한다.
- * 일반 운영 환경에서는 저장된 선택과 무관하게 기본 서비스 지역을 반환한다.
- */
+/** 설정에서 정한 기본 권역·시군구를 저장하고 앱 재실행 시 복원한다. 일시적인 지도 탐색은 homeExploreStore에 맡긴다. */
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import {
   DEFAULT_SERVICE_AREA,
   getServiceArea,
@@ -17,74 +10,65 @@ import {
 } from "@/data/serviceAreas";
 
 type ServiceAreaState = {
-  /** 개발·검수 환경에서 선택한 서비스 지역 ID. 운영 환경의 실제 적용값과는 구분된다. */
+  /** 설정에 저장한 기본 시·도. 처음에는 강원을 사용한다. */
   selectedAreaId: ServiceAreaId;
-  /** 선택 지역을 교체하고 localStorage 영속 저장 대상에 반영한다. */
-  setSelectedAreaId: (areaId: ServiceAreaId) => void;
+  /** 기본 권역에 속하는 관광공사 시군구 코드. null이면 최초 진입 시 현재 위치로 결정한다. */
+  selectedRegionCode: string | null;
+  /** 권역과 시군구를 함께 변경한다. 다른 권역의 코드는 저장하지 않는다. */
+  setSelectedRegion: (areaId: ServiceAreaId, regionCode: string) => void;
 };
 
-type PersistedServiceAreaState = Pick<ServiceAreaState, "selectedAreaId">;
+type PersistedServiceAreaState = Pick<ServiceAreaState, "selectedAreaId" | "selectedRegionCode">;
 
-/** Vite 개발 모드 또는 네이티브 개발 번들에서만 서비스 지역 선택 기능을 활성화한다. */
-export function isDevelopmentServiceAreaEnabled() {
-  if (import.meta.env.DEV) {
-    return true;
-  }
-
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  const runtimeVariant =
-    window.RouteOneRuntimeConfig?.nativeAppVariant?.trim().toLowerCase() ||
-    window.RouteOneRuntimeConfig?.webBundleChannel?.trim().toLowerCase();
-
-  return runtimeVariant === "dev";
-}
-
-/** 개발용 지역 선택 가능 여부를 서비스 지역 화면에서 사용하는 이름으로 반환한다. */
-export function isTestServiceAreaEnabled() {
-  return isDevelopmentServiceAreaEnabled();
-}
-
-/** 지역 선택 기능이 비활성화된 운영 환경에서는 저장값 대신 기본 서비스 지역 ID를 반환한다. */
+/** 실행 환경과 관계없이 사용자가 선택한 권역을 적용한다. */
 export function getEffectiveServiceAreaId(selectedAreaId: ServiceAreaId) {
-  return isTestServiceAreaEnabled()
-    ? selectedAreaId
-    : DEFAULT_SERVICE_AREA.id;
+  return selectedAreaId;
 }
 
 export const useServiceAreaStore = create<ServiceAreaState>()(
   persist(
     (set) => ({
       selectedAreaId: DEFAULT_SERVICE_AREA.id,
-      setSelectedAreaId: (selectedAreaId) => set({ selectedAreaId }),
+      selectedRegionCode: null,
+      setSelectedRegion: (selectedAreaId, selectedRegionCode) => {
+        if (getServiceArea(selectedAreaId).regions.some((region) => region.sigunguCode === selectedRegionCode)) {
+          set({ selectedAreaId, selectedRegionCode });
+        }
+      },
     }),
     {
+      // 기존 개발용 선택값도 이어서 복원한다.
       name: "routeone-dev-service-area",
       storage: createJSONStorage(() => window.localStorage),
       partialize: (state): PersistedServiceAreaState => ({
         selectedAreaId: state.selectedAreaId,
+        selectedRegionCode: state.selectedRegionCode,
       }),
       merge: (persistedState, currentState) => {
-        const persisted = persistedState as Partial<PersistedServiceAreaState>;
-
-        return {
-          ...currentState,
-          selectedAreaId: isServiceAreaId(persisted.selectedAreaId)
-            ? persisted.selectedAreaId
-            : currentState.selectedAreaId,
-        };
+        const persisted = persistedState as Partial<PersistedServiceAreaState> | null;
+        const selectedAreaId = isServiceAreaId(persisted?.selectedAreaId)
+          ? persisted.selectedAreaId
+          : currentState.selectedAreaId;
+        const savedRegionCode = persisted?.selectedRegionCode;
+        const selectedRegionCode = typeof savedRegionCode === "string" &&
+          getServiceArea(selectedAreaId).regions.some((region) => region.sigunguCode === savedRegionCode)
+          ? savedRegionCode
+          : null;
+        return { ...currentState, selectedAreaId, selectedRegionCode };
       },
     }
   )
 );
 
-/** Store의 선택값과 실행 환경을 반영해 홈 화면이 실제 사용할 서비스 지역 설정을 반환한다. */
-export function useEffectiveServiceArea() {
-  const selectedAreaId = useServiceAreaStore(
-    (state) => state.selectedAreaId
-  );
-
+/** 내 정보·지역 설정·알림 지역 선택의 초기값에 사용할 저장된 기본 권역을 반환한다. */
+export function useDefaultServiceArea() {
+  const selectedAreaId = useServiceAreaStore((state) => state.selectedAreaId);
   return getServiceArea(getEffectiveServiceAreaId(selectedAreaId));
+}
+
+/** 홈과 공유 루트에서는 일시적인 탐색 권역을 우선하고, 아직 탐색하지 않았으면 기본 권역을 사용한다. */
+export function useEffectiveServiceArea() {
+  const defaultArea = useDefaultServiceArea();
+  const exploreAreaId = useHomeExploreStore((state) => state.exploreAreaId);
+  return exploreAreaId ? getServiceArea(exploreAreaId) : defaultArea;
 }

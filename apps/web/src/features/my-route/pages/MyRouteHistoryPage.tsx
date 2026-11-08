@@ -26,7 +26,7 @@ import {
 } from "react-icons/md";
 import { NOTIFICATION_INBOX_QUERY_KEY } from "@/api/notificationApi";
 import { routeApi } from "@/api/routeApi";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
 import MyRouteCard from "@/features/my-route/components/MyRouteCard";
@@ -412,7 +412,7 @@ function MyRouteHistoryPage() {
       !historyRoutesQuery.isError &&
       sourceHistoryRoutes.length === 0 ? (
         <div className="flex min-h-0 flex-1 flex-col justify-center">
-          <PotatoLoadingCard
+          <AppLoadingCard
             title={text.routeHistory.emptyTitle}
             description={text.routeHistory.emptyDescription}
             footerText={text.routeHistory.emptyFooter}
@@ -442,7 +442,7 @@ function MyRouteHistoryPage() {
 
           {isFetchingNextHistoryPage || isHistoryLocalizationUpdating ? (
             <div className="py-2">
-              <PotatoLoadingCard
+              <AppLoadingCard
                 title={text.routeHistory.nextLoadingTitle}
                 animation="running"
                 compact

@@ -80,7 +80,7 @@ function RouteCheckoutModalContent({
   savedPlaces,
   insertCandidatePlaces,
   appendRouteTitle,
-  headerLabel = "ROUTE CHECKOUT",
+  headerLabel,
   contextBanner,
   initialStep = "cart",
   initialRoutePlan,
@@ -204,8 +204,11 @@ function RouteCheckoutModalContent({
     (step === "cart" && savedPlaces.length === 0) ||
     (step === "tempo" && !tempo) ||
     (step === "start-location" && !startLocation);
-  const nextButtonLabel =
-    step === "start-location" ? text.cart.buildRoute : text.cart.next;
+  const stepTitle =
+    step === "cart"
+      ? text.cart.savedPlacesTitle(savedPlaces.length)
+      : text.cart.stepTitles[step];
+  const progressLabel = `${stepIndex} / ${totalStepCount}`;
 
   return (
     <section
@@ -235,11 +238,11 @@ function RouteCheckoutModalContent({
             </button>
             <div className="ml-3 min-w-0">
               <p className="font-trip truncate text-sm text-brand-700">
-                {headerLabel}
+                {headerLabel ? `${progressLabel} · ${headerLabel}` : progressLabel}
               </p>
-              <p className="text-base font-semibold text-slate-900">
-                {stepIndex} / {totalStepCount}
-              </p>
+              <h2 className="truncate text-base font-semibold text-slate-900">
+                {stepTitle}
+              </h2>
             </div>
           </div>
 
@@ -302,7 +305,15 @@ function RouteCheckoutModalContent({
                   />
                 ) : null}
 
-                {step === "schedule" ? <PlaceCartScheduleStep /> : null}
+                {step === "schedule" ? (
+                  <PlaceCartScheduleStep
+                    recommendationPlaces={
+                      appendRouteTitle || initialRoutePlan
+                        ? undefined
+                        : savedPlaces
+                    }
+                  />
+                ) : null}
 
                 {step === "tempo" ? <PlaceCartTempoStep /> : null}
 
@@ -319,7 +330,7 @@ function RouteCheckoutModalContent({
                 disabled={nextDisabled}
                 className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
               >
-                {nextButtonLabel}
+                {text.cart.nextStepLabels[step]}
               </button>
             </footer>
           </>
@@ -360,6 +371,9 @@ function RouteCheckoutModal({
       initialTravelStartDate={initialTravelStartDate}
       initialTripDays={initialTripDays}
       initialStartLocation={contentProps.currentLocation}
+      initialStartLocationSource={
+        contentProps.initialRoutePlan ? "shared-route" : "current-location"
+      }
     >
       <RouteCheckoutModalContent {...contentProps} initialStep={initialStep} />
     </RouteCheckoutProvider>

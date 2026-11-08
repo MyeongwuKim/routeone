@@ -1,0 +1,11 @@
+mutation SyncFestivalRegionWithServiceArea($regionCode: String!) {
+  syncFestivalRegionWithServiceArea(regionCode: $regionCode) {
+    festivalEnabled
+    festivalRegionCodes
+    routeStartEnabled
+    routeReviewEnabled
+    routeArrivalEnabled
+    createdAt
+    updatedAt
+  }
+}

@@ -11,7 +11,7 @@ import {
   IoRestaurantOutline,
   IoSearch,
 } from "react-icons/io5";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
 import { calculateDistanceMeters } from "@/lib/gangwonBoundaryUtils";
 import {
@@ -338,7 +338,7 @@ function PlaceCartRouteInsertSheet({
               </button>
             ))
           ) : (
-            <PotatoLoadingCard
+            <AppLoadingCard
               title={text.cart.insertEmptyTitle}
               description={text.cart.insertEmptyDescription}
               animation="empty"

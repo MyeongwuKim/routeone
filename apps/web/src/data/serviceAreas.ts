@@ -15,8 +15,12 @@ import {
   SEOUL_TATS_AREA_CODE,
   SEOUL_TOUR_AREA_CODE,
 } from "@/data/seoulRegions";
+import { PROVINCIAL_SERVICE_AREAS } from "@/data/provincialServiceAreas";
 
-export type ServiceAreaId = "gangwon" | "seoul";
+export type ServiceAreaId =
+  | "gangwon" | "seoul" | "busan" | "daegu" | "gwangju" | "daejeon"
+  | "ulsan" | "sejong" | "chungbuk" | "chungnam" | "jeonbuk"
+  | "jeonnam" | "gyeongbuk" | "gyeongnam" | "jeju";
 
 export type ServiceRegion = {
   label: string;
@@ -38,7 +42,6 @@ export type ServiceArea = {
     lng: number;
   };
   defaultRegion: ServiceRegion;
-  developmentFixedRegion?: ServiceRegion;
   regions: readonly ServiceRegion[];
   hasBoundaryAsset: boolean;
   boundaryAssetPath?: string;
@@ -53,9 +56,6 @@ export const SERVICE_AREAS: Record<ServiceAreaId, ServiceArea> = {
     tatsAreaCode: GANGWON_TATS_AREA_CODE,
     center: GANGWON_CENTER,
     defaultRegion: DEFAULT_GANGWON_REGION,
-    developmentFixedRegion:
-      GANGWON_REGIONS.find((region) => region.label === "춘천") ??
-      DEFAULT_GANGWON_REGION,
     regions: GANGWON_REGIONS,
     hasBoundaryAsset: true,
     boundaryAssetPath: "/gangwon-sigungu-boundary.json",
@@ -71,18 +71,51 @@ export const SERVICE_AREAS: Record<ServiceAreaId, ServiceArea> = {
     regions: SEOUL_REGIONS,
     hasBoundaryAsset: true,
     boundaryAssetPath: "/seoul-sigungu-boundary.json",
-    hasFestivalSource: false,
+    hasFestivalSource: true,
   },
+  ...PROVINCIAL_SERVICE_AREAS,
 };
 
 export const DEFAULT_SERVICE_AREA = SERVICE_AREAS.gangwon;
 
+/** 지역 선택 UI와 전국 경계 판정에서 사용하는 권역 목록. */
+export const SERVICE_AREA_LIST = Object.values(SERVICE_AREAS);
+
+/** 전국 경계 조회 키인 행정 코드와 해당 권역·시군구를 연결한다. 관광공사 코드는 권역 안에서만 고유하다. */
+export const SERVICE_REGION_LIST = SERVICE_AREA_LIST.flatMap((area) =>
+  area.regions.map((region) => ({ area, region }))
+);
+
+/** 선택한 권역의 지도 중심과 시·군·구 목록을 반환한다. */
 export function getServiceArea(id: ServiceAreaId) {
   return SERVICE_AREAS[id];
 }
 
 export function isServiceAreaId(value: unknown): value is ServiceAreaId {
-  return value === "gangwon" || value === "seoul";
+  return typeof value === "string" && Object.hasOwn(SERVICE_AREAS, value);
+}
+
+/**
+ * 저장된 장소의 행정 코드 또는 권역:시군구 키로 지역을 찾는다.
+ * 36이 경남 관광 코드와 세종 행정 코드에 함께 쓰이므로 전체 행정 코드를 우선하고, 짧은 코드는 관광 권역 안에서 찾는다.
+ */
+export function resolveServiceRegion(regionLabelKey?: string | null, regionCode?: string | null) {
+  const [areaCode, localCode] = regionLabelKey?.split(":") ?? [];
+  const adminCode = [regionCode, localCode].find((code) => code && /^\d{5}$/.test(code));
+  if (adminCode) {
+    const match = SERVICE_REGION_LIST.find(({ region }) => region.adminCode === adminCode);
+    if (match) return match;
+  }
+  if (areaCode && localCode) {
+    const area = SERVICE_AREA_LIST.find((area) => area.tourAreaCode === areaCode)
+      ?? SERVICE_AREA_LIST.find((area) => area.tatsAreaCode === areaCode);
+    const region = area?.regions.find((region) => region.sigunguCode === localCode);
+    if (area && region) return { area, region };
+  }
+  const candidates = SERVICE_REGION_LIST.filter(({ region }) =>
+    region.label === regionCode || region.label === regionLabelKey
+  );
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 function calculateDistanceMeters(

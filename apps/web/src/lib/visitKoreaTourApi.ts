@@ -47,12 +47,14 @@ type TourApiItem = {
   eventStartDate?: string;
   eventEndDate?: string;
   sigungucode?: string;
+  lDongRegnCd?: string;
+  lDongSignguCd?: string;
   overview?: string;
   originimgurl?: string;
   smallimageurl?: string;
 };
 
-type TourApiResponse = {
+type TourApiResponse<TItem = TourApiItem> = {
   response?: {
     header?: {
       resultCode?: string;
@@ -61,10 +63,24 @@ type TourApiResponse = {
     body?: {
       totalCount?: string | number;
       items?: {
-        item?: TourApiItem[] | TourApiItem;
+        item?: TItem[] | TItem;
       };
     };
   };
+};
+
+type TourCourseStopItem = {
+  subnum?: string;
+  subname?: string;
+  subcontentid?: string;
+  subdetailimg?: string;
+};
+
+type TourCourseStopPlace = {
+  attraction: GangwonAttraction;
+  areaCode: string;
+  sigunguCode: string;
+  adminCode: string;
 };
 
 type LclsSystemItem = {
@@ -166,7 +182,8 @@ type FetchTourAttractionsOptions = {
   contentTypeIds?: string[];
 };
 
-type FetchGangwonFestivalsOptions = {
+type FetchTourFestivalsOptions = {
+  areaCode?: string;
 
   sigunguCode?: string;
 
@@ -220,8 +237,8 @@ type FetchNearbyTouristPlacesOptions = {
   excludeContentId?: string;
 };
 
-type TourApiListPage = {
-  items: TourApiItem[];
+type TourApiListPage<TItem = TourApiItem> = {
+  items: TItem[];
   totalCount: number;
 };
 
@@ -731,12 +748,13 @@ async function requestRelatedTouristPlaces(
   return toArray(data.response?.body?.items?.item) as Record<string, unknown>[];
 }
 
-async function requestTourApiListPage(
+async function requestTourApiListPage<TItem = TourApiItem>(
   endpoint: string,
   params: URLSearchParams,
-  errorPrefix: string
-): Promise<TourApiListPage> {
-  const response = await fetch(`${endpoint}?${params.toString()}`);
+  errorPrefix: string,
+  signal?: AbortSignal
+): Promise<TourApiListPage<TItem>> {
+  const response = await fetch(`${endpoint}?${params.toString()}`, signal ? { signal } : undefined);
 
   if (!response.ok) {
     const errorText = (await response.text()).trim();
@@ -747,7 +765,7 @@ async function requestTourApiListPage(
     );
   }
 
-  const data = (await response.json()) as TourApiResponse;
+  const data = (await response.json()) as TourApiResponse<TItem>;
   const resultCode = data.response?.header?.resultCode;
 
   if (resultCode && resultCode !== "0000") {
@@ -782,6 +800,66 @@ function getPageNumbers(startPage: number, endPage: number) {
     { length: endPage - startPage + 1 },
     (_, index) => startPage + index
   );
+}
+
+const TOUR_COURSE_CONTENT_TYPE = "25";
+const TOUR_COURSE_PAGE_SIZE = 200;
+
+function requestTourCoursePage<TItem = TourApiItem>(
+  serviceKey: string,
+  operation: string,
+  options: Record<string, string>,
+  signal?: AbortSignal
+) {
+  return requestTourApiListPage<TItem>(getTourApiUrl("ko", operation), new URLSearchParams({
+    serviceKey: normalizeServiceKey(serviceKey),
+    MobileOS: "ETC",
+    MobileApp: "RouteOne",
+    _type: "json",
+    pageNo: "1",
+    numOfRows: `${TOUR_COURSE_PAGE_SIZE}`,
+    ...options,
+  }), "Tour course", signal);
+}
+
+function getTourCourseLocation(item: TourApiItem) {
+  const lat = Number(item.mapy);
+  const lng = Number(item.mapx);
+  return lat >= 32 && lat <= 40 && lng >= 123 && lng <= 133 ? { lat, lng } : null;
+}
+
+/** 공식 방문 순서를 복원한다. 원본 장소 상세가 없는 항목도 순서와 장소명을 남긴다. */
+export async function fetchTourCourseStops(serviceKey: string, courseId: string, signal?: AbortSignal) {
+  const options = { contentId: courseId, contentTypeId: TOUR_COURSE_CONTENT_TYPE };
+  const getPage = (pageNo: number) => requestTourCoursePage<TourCourseStopItem>(serviceKey, "detailInfo2", {
+    ...options,
+    pageNo: `${pageNo}`,
+  }, signal);
+  const firstPage = await getPage(1);
+  const totalPages = resolveKnownTotalPages(firstPage.totalCount, TOUR_COURSE_PAGE_SIZE, 100) ?? 1;
+  const remainingPages = await Promise.all(getPageNumbers(2, totalPages).map(getPage));
+  const items = [firstPage, ...remainingPages].flatMap((page) => page.items);
+  return items.map((item, index) => ({
+    order: item.subnum?.trim() && Number.isFinite(Number(item.subnum)) ? Number(item.subnum) : index,
+    contentId: item.subcontentid?.trim() ?? "",
+    title: stripHtml(item.subname),
+    image: item.subdetailimg?.trim() ?? "",
+  })).sort((left, right) => left.order - right.order);
+}
+
+/** 코스 방문 장소를 상세 화면과 장바구니에 연결할 수 있도록 실제 콘텐츠 ID와 유효한 좌표를 확인한다. */
+export async function fetchTourCourseStopPlace(serviceKey: string, contentId: string, signal?: AbortSignal): Promise<TourCourseStopPlace | null> {
+  const { items } = await requestTourCoursePage(serviceKey, "detailCommon2", { contentId, numOfRows: "1" }, signal);
+  const item = items.find((candidate) => candidate.contentid === contentId);
+  if (!item?.contenttypeid || item.contenttypeid === TOUR_COURSE_CONTENT_TYPE || !getTourCourseLocation(item)) return null;
+
+  const attraction = parseGangwonAttraction(item, item.contenttypeid, 0);
+  return attraction ? {
+    attraction,
+    areaCode: item.areacode?.trim() ?? "",
+    sigunguCode: item.sigungucode?.trim() ?? "",
+    adminCode: `${item.lDongRegnCd ?? ""}${item.lDongSignguCd ?? ""}`,
+  } : null;
 }
 
 export async function fetchTourAttractions(
@@ -898,15 +976,17 @@ export async function fetchTourAttractions(
 
 export const fetchGangwonAttractions = fetchTourAttractions;
 
-export async function fetchGangwonFestivals(
+/** 권역별 축제를 조회하고 오늘부터 lookAheadDays 안에 기간이 겹치는 축제만 반환한다. */
+export async function fetchTourFestivals(
   serviceKey: string,
-  options: FetchGangwonFestivalsOptions = {},
+  options: FetchTourFestivalsOptions = {},
   language: AppLanguage = "ko"
 ) {
   if (!serviceKey) {
     throw new Error("VisitKorea service key is missing.");
   }
 
+  const areaCode = options.areaCode ?? GANGWON_AREA_CODE;
   const today = options.today ?? new Date();
   const todayYmd = formatTourApiYmd(today);
   const lookAheadDays = Math.max(0, Math.min(366, options.lookAheadDays ?? 90));
@@ -924,6 +1004,7 @@ export async function fetchGangwonFestivals(
       pageNo: `${pageNo}`,
       arrange: "A",
       eventStartDate: searchStartYmd,
+      areaCode,
     });
 
   const firstPage = await requestTourApiListPage(
@@ -970,7 +1051,7 @@ export async function fetchGangwonFestivals(
   const unique = new Map<string, GangwonAttraction>();
   [firstPage, ...remainingPages]
     .flatMap((page) => page.items)
-    .filter(isGangwonTourApiItem)
+    .filter(item => areaCode === GANGWON_AREA_CODE ? isGangwonTourApiItem(item) : item.areacode === areaCode)
     .map((item, index) =>
       parseGangwonAttraction(
         item,

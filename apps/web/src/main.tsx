@@ -38,12 +38,12 @@ function warmAppFonts() {
   }
 
   void Promise.allSettled([
-    document.fonts.load('400 16px "Roboto"', "RouteOne"),
-    document.fonts.load('500 16px "Roboto"', "RouteOne"),
-    document.fonts.load('700 16px "Roboto"', "RouteOne"),
-    document.fonts.load('900 16px "Roboto"', "RouteOne"),
-    document.fonts.load('400 16px "Jua"', "RouteOne"),
-    document.fonts.load('400 16px "Jua"', "감자"),
+    document.fonts.load('400 16px "Roboto"', "Duru"),
+    document.fonts.load('500 16px "Roboto"', "Duru"),
+    document.fonts.load('700 16px "Roboto"', "Duru"),
+    document.fonts.load('900 16px "Roboto"', "Duru"),
+    document.fonts.load('400 16px "Jua"', "Duru"),
+    document.fonts.load('400 16px "Jua"', "두루"),
   ]);
 }
 

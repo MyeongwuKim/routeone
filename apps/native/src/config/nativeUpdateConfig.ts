@@ -55,6 +55,8 @@ const configuredChecksEnabled = readBoolean(
 export const NATIVE_UPDATE_CONFIG = {
   appVariant,
   checksEnabled:
+    // Metro로 실행하는 로컬 개발 앱은 배포 채널 설정과 관계없이 최소 버전 검사를 건너뛴다.
+    !__DEV__ &&
     (configuredChecksEnabled ?? Boolean(explicitRuntimeAppVariant)) &&
     Boolean(policyUrl),
   currentVersion: readString(Constants.expoConfig?.version) || "0.0.0",

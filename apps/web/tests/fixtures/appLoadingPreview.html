@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>두루 · 공통 상태 아이콘</title>
+    <link rel="stylesheet" href="/src/index.css" />
+    <style>
+      body { margin: 0; background: #f4f8f7; color: #134e4a; font-family: system-ui, sans-serif; }
+      main { max-width: 920px; margin: 0 auto; padding: 28px 20px; }
+      h1 { font-size: 24px; font-weight: 750; }
+      .intro { margin-top: 8px; color: #64748b; font-size: 14px; }
+      .samples { display: grid; gap: 16px; margin-top: 24px; }
+      .sample { border: 1px solid #dce8e3; border-radius: 24px; padding: 20px; background: #eaf3ef; }
+      .sample.dark { background: #071718; border-color: #1d4540; color: #99f6e4; }
+      .label { font-size: 12px; font-weight: 650; margin-bottom: 20px; }
+      .card { display: flex; justify-content: center; padding-bottom: 4px; }
+      @media(min-width: 760px) { .samples { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import { createElement as h } from "react";
+      import { createRoot } from "react-dom/client";
+      import { AppLoadingCard } from "/src/components/feedback/AppLoadingOverlay.tsx";
+
+      const samples = [
+        { label: "진행 중 · 밝은 화면", theme: "", title: "주변 장소를 찾고 있어요", description: "잠시만 기다려주세요", animation: "generic" },
+        { label: "진행 중 · 어두운 화면", theme: "dark", title: "여행 코스를 정리하고 있어요", description: "장소를 차례로 연결하고 있어요", animation: "running" },
+        { label: "빈 화면 · 움직임 없음", theme: "", title: "아직 담은 장소가 없어요", description: "가고 싶은 장소를 골라보세요", animation: "empty" },
+      ];
+
+      createRoot(document.getElementById("root")).render(h("main", null,
+        h("h1", null, "두루의 새로운 상태 아이콘"),
+        h("p", { className: "intro" }, "진행 중에는 가볍게 움직이고, 빈 화면에서는 멈춰 있어요."),
+        h("div", { className: "samples" }, samples.map(sample => h("section", { key: sample.label, className: `sample ${sample.theme}`, "aria-label": sample.label },
+          h("p", { className: "label" }, sample.label),
+          h("div", { className: "card" }, h(AppLoadingCard, { title: sample.title, description: sample.description, animation: sample.animation, compact: true })),
+        ))),
+      ));
+    </script>
+  </body>
+</html>

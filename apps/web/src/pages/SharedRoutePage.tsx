@@ -3,7 +3,7 @@
  *
  * 공개 경로를 정렬·지역·일수·태그 조건으로 무한 조회하고, 선택한 경로의 DAY 일정을 상세 팝업에 표시한다.
  * 좋아요는 목록과 상세 캐시에 낙관적으로 반영하며, 경로 담기·작성자 차단·신고 후 관련 목록을 갱신한다.
- * mode가 liked이면 전체 공개 목록 대신 현재 사용자가 좋아요한 경로만 조회한다.
+ * 좋아요 목록은 전체 지역에서 시작하고, 탐색 지역과 별도로 시·도 필터를 적용한다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -12,10 +12,11 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import {
   MdArrowBack,
+  MdArrowForward,
   MdBlock,
   MdClose,
   MdFilterAlt,
@@ -29,12 +30,16 @@ import {
   BLOCKED_USERS_QUERY_KEY,
   userBlockApi,
 } from "@/api/userBlockApi";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import RoutePageEmptyState from "@/components/feedback/RoutePageEmptyState";
 import RouteListSkeleton from "@/components/feedback/RouteListSkeleton";
 import { DropdownSelect } from "@/components/inputs";
+import ServiceAreaSelect from "@/components/inputs/ServiceAreaSelect";
+import { createHomeSelectionParams, HOME_RECOMMENDATIONS_ANCHOR } from "@/features/home/recommendations/homeRecommendations";
+import { selectExploreRegion as selectServiceRegion } from "@/features/service-area/serviceAreaSelection";
 import {
-  SERVICE_AREAS,
+  getServiceArea,
+  resolveServiceRegion,
   type ServiceAreaId,
 } from "@/data/serviceAreas";
 import DayRoutePopup from "@/features/my-route/components/DayRoutePopup";
@@ -56,6 +61,7 @@ import {
   getActiveFilterCount,
   getFilterLabel,
   getSharedRouteFilterOptions,
+  getSharedRouteRecommendationSelection,
   routeMatchesFilters,
 } from "@/features/shared-route/sharedRouteFilters";
 import {
@@ -82,6 +88,7 @@ import {
 } from "@/features/shared-route/queries/sharedRouteCache";
 import {
   getRouteDetailQueryKey,
+  getSharedRouteListQueryKey,
   LIKED_SHARED_ROUTES_QUERY_KEY,
   SHARED_ROUTES_QUERY_KEY,
 } from "@/features/shared-route/queries/sharedRouteQueryKeys";
@@ -97,13 +104,8 @@ import { useLoginRequest } from "@/hooks/useLoginRequest";
 import { getAccountDisplayName } from "@/lib/accountDisplay";
 import { localizeTourPlaces } from "@/lib/placeLocalization";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
-import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
-import {
-  isTestServiceAreaEnabled,
-  useEffectiveServiceArea,
-  useServiceAreaStore,
-} from "@/stores/serviceAreaStore";
+import { useEffectiveServiceArea } from "@/stores/serviceAreaStore";
 import { useUiText } from "@/lib/uiText";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -114,7 +116,8 @@ type SharedRoutePageProps = {
   mode?: SharedRoutePageMode;
 };
 
-const SERVICE_AREA_OPTION_VALUES: ServiceAreaId[] = ["seoul", "gangwon"];
+const EMPTY_ROUTE_ACTION_CLASS =
+  "flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-sm";
 
 function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const text = useUiText();
@@ -125,12 +128,28 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
   const requestLogin = useLoginRequest();
   const openModal = useUiModalStore((state) => state.openModal);
   const showToast = useUiToastStore((state) => state.showToast);
-  const serviceArea = useEffectiveServiceArea();
-  const canSelectServiceArea = isTestServiceAreaEnabled();
-  const setSelectedAreaId = useServiceAreaStore(
-    (state) => state.setSelectedAreaId
-  );
-  const resetForArea = useHomeExploreStore((state) => state.resetForArea);
+  const effectiveArea = useEffectiveServiceArea();
+  const {
+    areaId: selectedAreaId,
+    selectArea: selectFilterArea,
+    activeFilters,
+    draftFilters,
+    isFilterDialogOpen,
+    applyFilters: handleApplyFilters,
+    clearActiveFilters: handleClearActiveFilters,
+    clearDraftFilters: handleClearDraftFilters,
+    closeFilterDialog,
+    openFilterDialog,
+    openFilterDialogWithCandidate,
+    replaceActiveFiltersWithCandidate,
+    removeActiveFilter: handleRemoveActiveFilter,
+    toggleDraftFilter: handleToggleDraftFilter,
+  } = useSharedRouteFilters(appLanguage, mode, effectiveArea.id);
+  const selectedArea = selectedAreaId ? getServiceArea(selectedAreaId) : null;
+  const exploreArea = mode === "feed" ? selectedArea ?? effectiveArea : effectiveArea;
+  const likedArea = mode === "liked" ? selectedArea : null;
+  const serviceArea = mode === "liked" ? likedArea : exploreArea;
+  const serviceAreaId = serviceArea?.id ?? null;
   const resetMapSheet = useMapSheetStore((state) => state.resetSheet);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [reportRouteId, setReportRouteId] = useState<string | null>(null);
@@ -213,20 +232,6 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       );
     },
   });
-  const {
-    activeFilters,
-    draftFilters,
-    isFilterDialogOpen,
-    applyFilters: handleApplyFilters,
-    clearActiveFilters: handleClearActiveFilters,
-    clearDraftFilters: handleClearDraftFilters,
-    closeFilterDialog,
-    openFilterDialog,
-    openFilterDialogWithCandidate,
-    replaceActiveFiltersWithCandidate,
-    removeActiveFilter: handleRemoveActiveFilter,
-    toggleDraftFilter: handleToggleDraftFilter,
-  } = useSharedRouteFilters(appLanguage);
   const routeListScrollRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const previousAuthStateRef = useRef(isAuthenticated);
@@ -248,9 +253,30 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     });
   }, [isAuthenticated, queryClient]);
   const pageCopy = getSharedRoutePageCopy(text, mode);
+  const isLikedAreaFiltered = mode === "liked" && likedArea !== null;
+  const recommendationSelection = getSharedRouteRecommendationSelection(exploreArea.id, activeFilters.regions);
+  const recommendedCoursesLink = {
+    to: {
+      pathname: "/home",
+      search: createHomeSelectionParams(recommendationSelection).toString(),
+      hash: HOME_RECOMMENDATIONS_ANCHOR,
+    },
+    onClick: () => {
+      if (selectedAreaId === null) selectFilterArea(exploreArea.id);
+    },
+    children: <>
+      {text.sharedRoute.browseRecommendedCourses}
+      <MdArrowForward aria-hidden="true" className="shrink-0 text-base" />
+    </>,
+  };
+  const recommendedCoursesAction = (
+    <Link {...recommendedCoursesLink} className={`pointer-events-auto ${EMPTY_ROUTE_ACTION_CLASS}`} />
+  );
   const emptyRouteCard = (
-    <PotatoLoadingCard
-      title={pageCopy.empty}
+    <AppLoadingCard
+      title={
+        isLikedAreaFiltered ? text.sharedRoute.emptyLikedAreaTitle : pageCopy.empty
+      }
       description={
         mode === "liked"
           ? text.sharedRoute.emptyLikedDescription
@@ -258,8 +284,8 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       }
       footerText={
         mode === "liked"
-          ? text.sharedRoute.emptyLikedFooter
-          : text.sharedRoute.emptyFeedFooter
+          ? isLikedAreaFiltered ? text.sharedRoute.emptyLikedAreaFooter : text.sharedRoute.emptyLikedFooter
+          : undefined
       }
       animation="empty"
       compact
@@ -267,23 +293,19 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     />
   );
   const sortOptions = useMemo(() => getSharedRouteSortOptions(text), [text]);
-  const baseRouteListQueryKey =
-    mode === "liked" ? LIKED_SHARED_ROUTES_QUERY_KEY : SHARED_ROUTES_QUERY_KEY;
-  const routeListQueryKey = canSelectServiceArea
-    ? [...baseRouteListQueryKey, "service-area", serviceArea.id]
-    : baseRouteListQueryKey;
+  const routeListQueryKey = getSharedRouteListQueryKey(mode, serviceAreaId);
   const routeListQuery = useInfiniteQuery({
     queryKey: routeListQueryKey,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) =>
       mode === "liked"
         ? routeApi.likedSharedRouteConnection({
-            regionTag: canSelectServiceArea ? serviceArea.label : null,
+            regionTag: likedArea?.label,
             limit: SHARED_ROUTE_PAGE_SIZE,
             cursor: pageParam,
           })
         : routeApi.sharedRouteConnection({
-            regionTag: canSelectServiceArea ? serviceArea.label : null,
+            regionTag: exploreArea.label,
             limit: SHARED_ROUTE_PAGE_SIZE,
             cursor: pageParam,
           }),
@@ -313,7 +335,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     toggleLike: handleToggleLike,
   } = useSharedRouteLike({
     mode,
-    serviceAreaId: canSelectServiceArea ? serviceArea.id : undefined,
+    serviceAreaId,
   });
   const routePlaceLocalizationCandidates = useMemo(
     () => getSharedRoutePlaceLocalizationCandidates(routes),
@@ -356,18 +378,23 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       getSharedRouteFilterOptions(
         displayRoutes,
         text,
-        serviceArea.regions.map((region) => region.label)
+        serviceArea?.regions.map((region) => region.label)
       ),
-    [displayRoutes, serviceArea.regions, text]
+    [displayRoutes, serviceArea, text]
   );
   const handleRequestPlaceRouteFilter = useCallback(
     (place: MapSheetPlace) => {
-      const codedRegion = serviceArea.regions.find(
-        (region) =>
-          region.sigunguCode === place.signguCode ||
-          region.adminCode === place.signguCode ||
-          place.address.includes(region.label)
-      )?.label;
+      const codedRegion = serviceArea
+        ? serviceArea.regions.find(
+            (region) =>
+              region.sigunguCode === place.signguCode ||
+              region.adminCode === place.signguCode ||
+              place.address.includes(region.label)
+          )?.label
+        : resolveServiceRegion(
+            `${place.areaCode}:${place.signguCode}`,
+            place.signguCode
+          )?.region.label;
       const optionRegion = filterOptions.placeRegions.find((regionOption) =>
         regionOption.categories.some((category) =>
           category.places.includes(place.title)
@@ -377,7 +404,11 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       replaceActiveFiltersWithCandidate({
         type: "place",
         value: place.title,
-        region: codedRegion ?? optionRegion ?? serviceArea.defaultRegion.label,
+        region:
+          codedRegion ??
+          optionRegion ??
+          serviceArea?.defaultRegion.label ??
+          text.sharedRouteCard.unknownRegion,
       });
       resetMapSheet();
       setSelectedRouteId(null);
@@ -393,31 +424,28 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       filterOptions.placeRegions,
       replaceActiveFiltersWithCandidate,
       resetMapSheet,
-      serviceArea.regions,
-      serviceArea.defaultRegion.label,
+      serviceArea,
+      text.sharedRouteCard.unknownRegion,
     ]
   );
 
   const handleSelectServiceArea = useCallback(
-    (nextAreaId: ServiceAreaId) => {
-      if (nextAreaId === serviceArea.id) {
+    (nextAreaId: ServiceAreaId | null) => {
+      if (nextAreaId === serviceAreaId) {
         return;
       }
 
-      const nextArea = SERVICE_AREAS[nextAreaId];
-      const nextInitialRegion =
-        nextArea.developmentFixedRegion ?? nextArea.defaultRegion;
-      setSelectedAreaId(nextAreaId);
-      resetForArea(nextInitialRegion.sigunguCode);
+      selectFilterArea(nextAreaId);
+      if (mode === "feed" && nextAreaId) {
+        selectServiceRegion(nextAreaId);
+        void queryClient.invalidateQueries({ queryKey: ["gangwon-attractions"] });
+        void queryClient.invalidateQueries({ queryKey: ["festivals"] });
+        void queryClient.invalidateQueries({ queryKey: ["nearby-tourist"] });
+      }
+
       resetMapSheet();
-      handleClearActiveFilters();
-      handleClearDraftFilters();
-      closeFilterDialog();
       setSelectedRouteId(null);
       setCheckoutRoutePlan(null);
-      void queryClient.invalidateQueries({ queryKey: ["gangwon-attractions"] });
-      void queryClient.invalidateQueries({ queryKey: ["gangwon-festivals"] });
-      void queryClient.invalidateQueries({ queryKey: ["nearby-tourist"] });
 
       window.requestAnimationFrame(() => {
         routeListScrollRef.current?.scrollTo({
@@ -427,16 +455,14 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       });
     },
     [
-      closeFilterDialog,
-      handleClearActiveFilters,
-      handleClearDraftFilters,
+      mode,
       queryClient,
-      resetForArea,
       resetMapSheet,
-      serviceArea.id,
-      setSelectedAreaId,
+      selectFilterArea,
+      serviceAreaId,
     ]
   );
+  const handleShowAllLikedRegions = () => handleSelectServiceArea(null);
   const activeFilterCount = getActiveFilterCount(activeFilters);
   const filteredRoutes = useMemo(() => {
     return displayRoutes
@@ -721,35 +747,22 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       ) : null}
 
       <div className="space-y-2">
-        {canSelectServiceArea ? (
-          <div
-            role="group"
-            aria-label={text.sharedRoute.areaFilterAria}
-            className="grid grid-cols-2 gap-1 rounded-full border border-brand-200 bg-brand-50 p-1 dark:border-brand-400/25 dark:bg-brand-400/10"
-          >
-            {SERVICE_AREA_OPTION_VALUES.map((areaId) => {
-              const area = SERVICE_AREAS[areaId];
-              const areaLabel = text.labels.regions[area.label] ?? area.label;
-              const isSelected = serviceArea.id === areaId;
-
-              return (
-                <button
-                  key={areaId}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => handleSelectServiceArea(areaId)}
-                  className={`min-h-9 rounded-full px-3 py-2 text-xs font-black transition ${
-                    isSelected
-                      ? "bg-brand-600 text-white shadow-sm"
-                      : "text-brand-700 hover:bg-white/70 dark:text-brand-100 dark:hover:bg-brand-400/10"
-                  }`}
-                >
-                  {areaLabel}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <ServiceAreaSelect
+            value={serviceAreaId}
+            onChange={handleSelectServiceArea}
+            onSelectAll={
+              mode === "liked" ? handleShowAllLikedRegions : undefined
+            }
+            className="w-36"
+          />
+          {mode === "feed" && filteredRoutes.length > 0 ? (
+            <Link
+              {...recommendedCoursesLink}
+              className="inline-flex min-h-10 max-w-full items-center justify-center gap-1.5 rounded-full border border-brand-200 bg-white px-3 py-2 text-xs font-bold text-brand-700 shadow-sm transition hover:bg-brand-50 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-brand-100"
+            />
+          ) : null}
+        </div>
 
         <div className="flex items-center gap-2">
           <DropdownSelect
@@ -851,7 +864,10 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
       </div>
 
       {canShowEmptyRoutes && routes.length === 0 && mode === "feed" ? (
-        <RoutePageEmptyState className="pointer-events-none absolute inset-0 z-10">
+        <RoutePageEmptyState
+          className="pointer-events-none absolute inset-0 z-10"
+          action={recommendedCoursesAction}
+        >
           {emptyRouteCard}
         </RoutePageEmptyState>
       ) : null}
@@ -879,14 +895,39 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         ) : null}
 
         {canShowEmptyRoutes && routes.length === 0 && mode === "liked" ? (
-          <div className="flex min-h-full flex-col justify-center">
+          <RoutePageEmptyState
+            className="min-h-full"
+            action={
+              isLikedAreaFiltered ? (
+                <button
+                  type="button"
+                  onClick={handleShowAllLikedRegions}
+                  className={EMPTY_ROUTE_ACTION_CLASS}
+                >
+                  {text.sharedRoute.viewAllLikedRegions}
+                  <MdArrowForward aria-hidden="true" className="text-lg" />
+                </button>
+              ) : (
+                <Link
+                  to="/shared-route"
+                  className={EMPTY_ROUTE_ACTION_CLASS}
+                >
+                  {text.sharedRoute.browseSharedRoutes}
+                  <MdArrowForward aria-hidden="true" className="text-lg" />
+                </Link>
+              )
+            }
+          >
             {emptyRouteCard}
-          </div>
+          </RoutePageEmptyState>
         ) : null}
 
         {canShowEmptyRoutes && routes.length > 0 && filteredRoutes.length === 0 ? (
-          <div className="flex min-h-full flex-col justify-center">
-            <PotatoLoadingCard
+          <RoutePageEmptyState
+            className="min-h-full"
+            action={mode === "feed" ? recommendedCoursesAction : undefined}
+          >
+            <AppLoadingCard
               title={text.sharedRoute.noFilteredTitle}
               description={text.sharedRoute.noFilteredDescription}
               footerText={text.sharedRoute.noFilteredFooter}
@@ -894,7 +935,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
               compact
               className="shadow-sm"
             />
-          </div>
+          </RoutePageEmptyState>
         ) : null}
 
         {filteredRoutes.map((route) => (
@@ -915,7 +956,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
 
         {shouldShowBottomLoadingCard ? (
           <div className="py-2">
-            <PotatoLoadingCard
+            <AppLoadingCard
               title={
                 activeFilterCount > 0 && filteredRoutes.length === 0
                   ? text.sharedRoute.searchingConditions
@@ -947,6 +988,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           filters={draftFilters}
           tagOptions={filterOptions.tags}
           placeRegions={filterOptions.placeRegions}
+          serviceAreaId={serviceArea?.id}
           onToggle={handleToggleDraftFilter}
           onClear={handleClearDraftFilters}
           onClose={closeFilterDialog}

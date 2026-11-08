@@ -1,7 +1,7 @@
 /**
  * 홈 화면의 장소 검색을 두 단계로 나눈다.
  * useHomeSearch는 팝업과 검색 조건을 제어하고, useHomeSearchResults는 조회된 관광지를
- * 해당 조건에 맞게 정렬한 뒤 팝업에 표시할 범위까지 계산한다.
+ * 해당 조건에 맞게 정렬한 뒤 지도 아래 목록과 검색 팝업에 표시할 범위까지 계산한다.
  */
 import {
   useCallback,
@@ -173,7 +173,7 @@ export function useHomeSearch({
     searchInputRef,
     /** 팝업 input에 표시하고 장소명·주소 검색에 사용하는 Store의 검색어 */
     searchKeyword,
-    /** 현재 조건에서 visibleSearchResults로 잘라낼 최대 항목 수 */
+    /** 현재 조건에서 지도 아래 목록·검색 팝업에 노출할 최대 항목 수 */
     visibleSearchResultCount,
   };
 }
@@ -191,7 +191,7 @@ type UseHomeSearchResultsOptions = {
   topRankByAttractionId: Map<string, number>;
   /** 관광지 ID를 키로 갖는 트렌드 표시 이름 조회표. 값이 없으면 관광지명을 사용한다. */
   trendNameByAttractionId: Map<string, string>;
-  /** 정렬된 전체 결과의 앞부분에서 팝업에 노출할 최대 항목 수 */
+  /** 정렬된 전체 결과의 앞부분에서 지도 아래 목록·검색 팝업에 노출할 최대 항목 수 */
   visibleSearchResultCount: number;
 };
 
@@ -237,7 +237,7 @@ export function useHomeSearchResults({
   return {
     /** 현재 검색 조건을 통과해 표시 우선순위대로 정렬된 전체 결과 */
     searchResults,
-    /** searchResults의 처음부터 visibleSearchResultCount개까지 자른 팝업 렌더링 목록 */
+    /** searchResults의 처음부터 visibleSearchResultCount개까지 자른 목록·검색 팝업 공통 결과 */
     visibleSearchResults,
   };
 }

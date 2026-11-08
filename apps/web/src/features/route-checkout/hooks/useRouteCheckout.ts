@@ -5,6 +5,7 @@ import type {
   TravelTempo,
 } from "../models/routePlanTypes";
 import type { CartFlowStep } from "../models/routeCheckoutFlow";
+import type { RouteStartLocationSource } from "../models/routeCheckoutState";
 
 export type RouteCheckoutContextValue = {
   isSavingRoute: boolean;
@@ -24,7 +25,11 @@ export type RouteCheckoutContextValue = {
   tempo: TravelTempo | null;
   setTempo: (value: TravelTempo | null) => void;
   startLocation: RouteStartLocation | null;
-  setStartLocation: (value: RouteStartLocation | null) => void;
+  startLocationSource: RouteStartLocationSource | null;
+  setStartLocation: (
+    location: RouteStartLocation,
+    source: RouteStartLocationSource
+  ) => void;
   dailyStartMinutes: number;
   scheduleEndMinutes: number;
   isScheduleValid: boolean;

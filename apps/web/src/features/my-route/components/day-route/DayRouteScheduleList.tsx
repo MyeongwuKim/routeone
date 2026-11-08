@@ -1,4 +1,5 @@
 /** DAY 일정 팝업에서 날짜별 출발지와 장소를 아코디언으로 표시하고 controller의 순서·방문·시간 편집 동작을 각 행에 연결한다. */
+import { useEffect, useRef } from "react";
 import { MdDirectionsWalk } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
 import DayRouteAccordionItem from "./DayRouteAccordionItem";
@@ -9,10 +10,15 @@ import { getDayRouteStartLocation } from "../../utils/dayRouteStartLocation";
 type DayRouteScheduleListProps = {
 
   controller: DayRoutePopupController["schedule"];
+  openAtCurrentDestination?: boolean;
 };
 
-function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
+function DayRouteScheduleList({
+  controller,
+  openAtCurrentDestination,
+}: DayRouteScheduleListProps) {
   const text = useUiText();
+  const scheduleRef = useRef<HTMLDivElement>(null);
   const todayKey = getTodayDateKey();
   const {
     sortedDays,
@@ -59,8 +65,38 @@ function DayRouteScheduleList({ controller }: DayRouteScheduleListProps) {
     setVerificationPhotoPreviewTarget,
   } = controller;
 
+  // 펼침 애니메이션이 끝나기 전에는 뒤쪽 장소가 잘릴 수 있어 이동을 기다린다.
+  useEffect(() => {
+    if (!openAtCurrentDestination) {
+      return;
+    }
+
+    const destination = scheduleRef.current?.querySelector<HTMLElement>(
+      '[aria-current="step"]'
+    );
+    if (!destination) {
+      return;
+    }
+
+    const animations =
+      destination.closest(".route-day-accordion-enter")?.getAnimations?.() ??
+      [];
+    let didClose = false;
+    void Promise.allSettled(animations.map((animation) => animation.finished))
+      .then(() => {
+        if (!didClose && destination.isConnected) {
+          destination.scrollIntoView({ block: "center" });
+          destination.focus({ preventScroll: true });
+        }
+      });
+
+    return () => {
+      didClose = true;
+    };
+  }, [openAtCurrentDestination]);
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+    <div ref={scheduleRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
       <div className="space-y-3">
         {isGpsTestEnabled && indoorTestTarget ? (
           <section className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white p-4 shadow-sm dark:border-violet-400/30 dark:from-violet-400/10 dark:to-slate-950">

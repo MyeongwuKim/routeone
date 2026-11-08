@@ -6,7 +6,7 @@
 import { useRef, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { MdClose, MdDownload, MdPhotoLibrary, MdShare } from "react-icons/md";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -296,7 +296,7 @@ export function RoutePosterGeneratingModal() {
       aria-live="polite"
       className="fixed inset-0 z-[3300] flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-[2px]"
     >
-      <PotatoLoadingCard
+      <AppLoadingCard
         title={text.routeHistory.generatingTitle}
         description={text.routeHistory.generatingDescription}
         footerText={text.routeHistory.generatingFooter}

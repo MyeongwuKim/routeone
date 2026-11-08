@@ -13,6 +13,8 @@ export type DayRoutePopupProps = {
   day: MyRouteDay;
 
   focusedStopId?: string | null;
+  /** 진행 중인 오늘 카드에서 열 때 현재 목적지로 한 번 이동한다. */
+  openAtCurrentDestination?: boolean;
 
   onClose: () => void;
 

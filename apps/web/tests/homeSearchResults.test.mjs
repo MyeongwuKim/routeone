@@ -49,6 +49,7 @@ function createAttraction(overrides) {
 
 function buildResults({
   attractions,
+  sourceAttractions = attractions,
   currentLocation = null,
   searchFilter = "all",
   searchKeyword = "",
@@ -58,7 +59,7 @@ function buildResults({
   return buildHomeSearchResults({
     attractionData: {
       allAttractions: attractions,
-      sourceAttractions: attractions,
+      sourceAttractions,
       sigunguCode: "1",
       topAttractions: [],
       lclsNameByCode: {
@@ -90,6 +91,62 @@ test("검색어는 제목 일치, 제목 시작, 주소 일치 순으로 정렬�
     results.map((result) => result.attraction.id),
     ["exact", "prefix", "address"]
   );
+});
+
+test("영문 화면에서도 한글 장소명과 주소를 검색해 영문 장소를 표시한다", () => {
+  const localized = createAttraction({
+    id: "beach",
+    title: "Gyeongpo Beach",
+    address: "514 Changhae-ro, Gangneung",
+  });
+  const source = {
+    ...localized,
+    title: "경포해변",
+    address: "강원특별자치도 강릉시 창해로 514",
+  };
+
+  for (const searchKeyword of [" 경포해변\n", source.address, localized.title]) {
+    const results = buildResults({
+      attractions: [localized],
+      sourceAttractions: [source],
+      searchKeyword,
+    });
+
+    assert.deepEqual(results.map((result) => result.attraction), [localized]);
+  }
+});
+
+test("영문 표시값과 한글 원문 중 더 정확한 검색 일치도로 정렬한다", () => {
+  const beach = createAttraction({
+    id: "beach",
+    title: "Gyeongpo Beach",
+    address: "경포해변 인근",
+  });
+  const trail = createAttraction({ id: "trail", title: "Gyeongpo Beach Trail" });
+
+  const results = buildResults({
+    attractions: [trail, beach],
+    sourceAttractions: [
+      { ...beach, title: "경포해변" },
+      { ...trail, title: "경포해변 산책로" },
+    ],
+    searchKeyword: "경포해변",
+  });
+
+  assert.deepEqual(results.map((result) => result.attraction), [beach, trail]);
+});
+
+test("ID가 같아도 장소 유형이 다르거나 영문 목록에 없으면 원문을 매칭하지 않는다", () => {
+  const results = buildResults({
+    attractions: [createAttraction({ id: "shared", title: "Beach" })],
+    sourceAttractions: [
+      createAttraction({ id: "shared", title: "한글 검색어", contentTypeId: "39" }),
+      createAttraction({ id: "source-only", title: "한글 검색어" }),
+    ],
+    searchKeyword: "한글 검색어",
+  });
+
+  assert.deepEqual(results, []);
 });
 
 test("선택한 장소 유형과 일치하지 않는 결과는 제외한다", () => {

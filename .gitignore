@@ -27,3 +27,6 @@ apps/image-analyzer/
 # Editor
 .idea/
 .vscode/
+
+# Local browser verification artifacts
+.playwright-mcp/

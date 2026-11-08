@@ -10,7 +10,7 @@ import AppRouter from "./router/AppRouter";
 import GlobalModal from "./components/feedback/GlobalModal";
 import PlaceLocalizationStatus from "./components/feedback/PlaceLocalizationStatus";
 import TopToast from "./components/feedback/TopToast";
-import PotatoLoadingOverlay from "./components/feedback/PotatoLoadingOverlay";
+import AppLoadingOverlay from "./components/feedback/AppLoadingOverlay";
 import { usePlaceCartLanguageSync } from "./features/route-checkout/hooks/usePlaceCartLanguageSync";
 import { startNativePermissionSync } from "./native-bridge/permissionSync";
 import { initializeUiTheme } from "./stores/uiThemeStore";
@@ -33,7 +33,7 @@ function App() {
       <GlobalModal />
       <TopToast />
       <PlaceLocalizationStatus />
-      <PotatoLoadingOverlay />
+      <AppLoadingOverlay />
       <AppRouter />
       <Suspense fallback={null}>
         <PlaceBottomSheet />

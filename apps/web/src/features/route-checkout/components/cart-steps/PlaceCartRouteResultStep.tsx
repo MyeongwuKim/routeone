@@ -435,7 +435,7 @@ function PlaceCartRouteResultStep({
                   ? text.dayRoute.routeCalculating
                   : appendTarget
                     ? text.cart.addDay
-                    : text.cart.done}
+                    : text.cart.saveToMyRoutes}
             </button>
           </div>
         )}

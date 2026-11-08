@@ -15,6 +15,8 @@ import {
 } from "react-icons/io5";
 import { MdCelebration, MdMyLocation } from "react-icons/md";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
+import ServiceAreaSelect from "@/components/inputs/ServiceAreaSelect";
+import type { ServiceAreaId } from "@/data/serviceAreas";
 import TabHelpButton from "@/components/help/TabHelpButton";
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import { useUiText } from "@/lib/uiText";
@@ -31,6 +33,9 @@ type SearchFilterOption = {
 };
 
 type HomeMapControlsProps = {
+  /** 현재 권역과 권역 변경 콜백. 시군구 목록과 함께 도 → 시 선택을 제공한다. */
+  serviceAreaId: ServiceAreaId;
+  onSelectServiceArea: (areaId: ServiceAreaId) => void;
   /** 사용자가 선택할 수 있는 시·군·구 이름과 코드 목록 */
   regions: ReadonlyArray<RegionOption>;
   /** 지역 버튼의 선택 상태와 가로 스크롤 위치를 결정하는 현재 시·군·구 코드 */
@@ -95,6 +100,8 @@ function SearchFilterIcon({ filter }: { filter: SearchFilter }) {
 }
 
 function HomeMapControls({
+  serviceAreaId,
+  onSelectServiceArea,
   regions,
   selectedSigunguCode,
   selectedRegionLabel,
@@ -244,40 +251,48 @@ function HomeMapControls({
         <TabHelpButton topic="home" className="pointer-events-auto ml-2" />
       </div>
 
-      <div
-        ref={regionScrollRef}
-        onScroll={(event) => {
-          latestRegionScrollLeftRef.current = event.currentTarget.scrollLeft;
-        }}
-        className="scrollbar-hide pointer-events-auto absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+3.4rem)] z-20 overflow-x-auto px-3 pb-1"
-      >
-        <div className="flex w-max min-w-full gap-2 pr-3">
-          {regions.map((region) => {
-            const isActive = selectedSigunguCode === region.sigunguCode;
-            const festivalCount =
-              festivalCountBySigunguCode.get(region.sigunguCode) ?? 0;
+      <div className="pointer-events-auto absolute inset-x-0 top-[calc(max(0.75rem,env(safe-area-inset-top))+3.4rem)] z-30 flex items-start gap-2 pl-3">
+        <ServiceAreaSelect
+          value={serviceAreaId}
+          onChange={onSelectServiceArea}
+          className="max-w-28 shrink-0"
+          buttonClassName="h-8 min-h-0! rounded-full py-0! text-xs"
+        />
+        <div
+          ref={regionScrollRef}
+          onScroll={(event) => {
+            latestRegionScrollLeftRef.current = event.currentTarget.scrollLeft;
+          }}
+          className="scrollbar-hide min-w-0 flex-1 overflow-x-auto pb-1"
+        >
+          <div className="flex w-max min-w-full gap-2 pr-3">
+            {regions.map((region) => {
+              const isActive = selectedSigunguCode === region.sigunguCode;
+              const festivalCount =
+                festivalCountBySigunguCode.get(region.sigunguCode) ?? 0;
 
-            return (
-              <SelectablePillButton
-                key={region.sigunguCode || "all"}
-                selected={isActive}
-                onClick={() => onSelectRegion(region.sigunguCode)}
-              >
-                <span>{text.labels.regions[region.label] ?? region.label}</span>
-                {festivalCount > 0 ? (
-                  <span
-                    className={`inline-flex h-5 items-center rounded-full px-1.5 text-[10px] font-bold ${
-                      isActive
-                        ? "bg-white/20 text-white"
-                        : "bg-rose-50 text-rose-700"
-                    }`}
-                  >
-                    🎉 {festivalCount}
-                  </span>
-                ) : null}
-              </SelectablePillButton>
-            );
-          })}
+              return (
+                <SelectablePillButton
+                  key={region.sigunguCode || "all"}
+                  selected={isActive}
+                  onClick={() => onSelectRegion(region.sigunguCode)}
+                >
+                  <span>{text.labels.regions[region.label] ?? region.label}</span>
+                  {festivalCount > 0 ? (
+                    <span
+                      className={`inline-flex h-5 items-center rounded-full px-1.5 text-[10px] font-bold ${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : "bg-rose-50 text-rose-700"
+                      }`}
+                    >
+                      🎉 {festivalCount}
+                    </span>
+                  ) : null}
+                </SelectablePillButton>
+              );
+            })}
+          </div>
         </div>
       </div>
 

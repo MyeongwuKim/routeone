@@ -1,5 +1,5 @@
 export type HomeMapInstance = {
-  fitBounds: (bounds: unknown) => void;
+  fitBounds: (bounds: unknown, margin?: { top: number; right: number; bottom: number; left: number }) => void;
   getZoom: () => number;
   panTo?: (position: unknown, options?: { duration: number }) => void;
   setCenter: (position: unknown) => void;
@@ -8,6 +8,7 @@ export type HomeMapInstance = {
     value?: unknown
   ) => void;
   setZoom: (zoom: number) => void;
+  stop?: () => void;
 };
 
 export type HomeMapOverlay = {

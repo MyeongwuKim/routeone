@@ -31,6 +31,10 @@ import {
   sharedRouteReportResolvers,
   sharedRouteReportTypeDefs,
 } from "./modules/moderation/sharedRouteReport.resolver.js";
+import {
+  homeTourCourseResolvers,
+  homeTourCourseTypeDefs,
+} from "./modules/home-tour-courses/homeTourCourses.resolver.js";
 
 type ResolverRecord = Record<string, unknown>;
 type TypeDefsServerOptions = Extract<
@@ -89,6 +93,7 @@ export const typeDefs = [
   notificationTypeDefs,
   photoReportTypeDefs,
   sharedRouteReportTypeDefs,
+  homeTourCourseTypeDefs,
 ];
 
 export const resolvers = mergeResolvers(
@@ -102,5 +107,6 @@ export const resolvers = mergeResolvers(
   placeLocalizationResolvers,
   notificationResolvers,
   photoReportResolvers,
-  sharedRouteReportResolvers
+  sharedRouteReportResolvers,
+  homeTourCourseResolvers
 );

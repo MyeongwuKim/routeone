@@ -28,7 +28,7 @@ import { useAuthUserStore } from "@/stores/authUserStore";
 import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
-import { useEffectiveServiceArea } from "@/stores/serviceAreaStore";
+import { useDefaultServiceArea } from "@/stores/serviceAreaStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -108,7 +108,7 @@ function AccountActionRow({
 
 function MyAccountPage() {
   const text = useUiText();
-  const serviceArea = useEffectiveServiceArea();
+  const serviceArea = useDefaultServiceArea();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);

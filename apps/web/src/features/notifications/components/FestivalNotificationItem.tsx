@@ -8,15 +8,9 @@ import {
   MdExpandMore,
 } from "react-icons/md";
 import { festivalApi } from "@/api/festivalApi";
-import {
-  GANGWON_REGIONS,
-  GANGWON_SIGNGU_ADMIN_CODES,
-  GANGWON_TATS_AREA_CODE,
-} from "@/data/gangwonRegions";
-import type {
-  FestivalNotificationKind,
-  GangwonFestivalsQuery,
-} from "@/generated/graphql";
+import { normalizeFestivalRegionCodes, resolveFestivalRegion } from "@/lib/festivalRegions";
+import { createFestivalAttraction } from "@/lib/festivalAttraction";
+import type { FestivalNotificationKind } from "@/generated/graphql";
 import type { FestivalNotificationInboxItem } from "@/features/notifications/notificationItemTypes";
 import { formatFestivalPeriod } from "@/lib/festivalDate";
 import {
@@ -25,7 +19,6 @@ import {
 } from "@/lib/gangwonAttractionMap";
 import { localizeTourPlaces } from "@/lib/placeLocalization";
 import { useUiText } from "@/lib/uiText";
-import type { GangwonAttraction } from "@/lib/visitKoreaTourApi";
 import type { NativeFestivalNotificationKind } from "@/native-bridge";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
@@ -37,31 +30,6 @@ function getUiFestivalNotificationKind(
   kind: FestivalNotificationKind
 ): NativeFestivalNotificationKind {
   return kind.toLowerCase() as NativeFestivalNotificationKind;
-}
-
-function createFestivalAttraction(
-  festival: GangwonFestivalsQuery["gangwonFestivals"][number]
-): GangwonAttraction {
-  const eventStartDate = festival.startDate.replaceAll("-", "");
-  const eventEndDate = festival.endDate.replaceAll("-", "");
-
-  return {
-    id: festival.id,
-    title: festival.title,
-    address: festival.address,
-    lat: festival.lat,
-    lng: festival.lng,
-    contentTypeId: "15",
-    lclsSystm1: "",
-    lclsSystm2: "",
-    lclsSystm3: "",
-    firstImage: festival.imageUrl,
-    secondImage: "",
-    eventStartDate,
-    eventEndDate,
-    isTodayFestival: false,
-    tourApiSigunguCode: festival.regionCode,
-  };
 }
 
 function addDateKeyDays(dateKey: string, days: number) {
@@ -109,14 +77,15 @@ function FestivalNotificationItem({
   const [openingFestivalId, setOpeningFestivalId] = useState<string | null>(
     null
   );
-  const region = GANGWON_REGIONS.find(
-    (candidate) => candidate.sigunguCode === item.regionCode
+  const festivalRegionCodes = normalizeFestivalRegionCodes(
+    item.festivalRegionCodes?.length ? item.festivalRegionCodes : [item.regionCode]
   );
-  const regionLabel = region
-    ? (text.labels.regions[region.label] ?? region.label)
-    : item.regionCode === "MULTIPLE" && appLanguage === "en"
-      ? "Gangwon"
-      : item.regionLabel;
+  const regionLabel = festivalRegionCodes.length
+    ? festivalRegionCodes.map(code => {
+      const selection = resolveFestivalRegion(code)!;
+      return `${text.labels.regions[selection.area.label] ?? selection.area.label} ${text.labels.regions[selection.region.label] ?? selection.region.label}`;
+    }).join(", ")
+    : item.regionLabel;
   const kindLabel =
     text.notifications.kinds[getUiFestivalNotificationKind(item.festivalKind)];
   const festivalLocalizationCandidates = item.festivalTitles.flatMap(
@@ -205,13 +174,14 @@ function FestivalNotificationItem({
     try {
       const result = await queryClient.fetchQuery({
         queryKey: [
-          "gangwon-festivals",
+          "festivals",
+          festivalRegionCodes.join(","),
           "notification-detail",
           lookupStartDate,
           lookupEndDate,
         ],
         queryFn: () =>
-          festivalApi.list(lookupStartDate, lookupEndDate),
+          festivalApi.list(lookupStartDate, lookupEndDate, festivalRegionCodes.length ? { regionCodes: festivalRegionCodes } : { areaCode: "32" }),
         staleTime: 1000 * 60 * 60 * 6,
       });
 
@@ -220,17 +190,17 @@ function FestivalNotificationItem({
       }
 
       const festival =
-        result.gangwonFestivals.find(
+        result.festivals.find(
           (candidate) =>
             candidate.id === festivalId &&
-            candidate.regionCode === item.regionCode
+            festivalRegionCodes.includes(candidate.regionCode)
         ) ??
-        result.gangwonFestivals.find(
+        result.festivals.find(
           (candidate) => candidate.id === festivalId
         ) ??
-        result.gangwonFestivals.find(
+        result.festivals.find(
           (candidate) =>
-            candidate.regionCode === item.regionCode &&
+            festivalRegionCodes.includes(candidate.regionCode) &&
             candidate.title.trim() === festivalTitle
         );
 
@@ -238,6 +208,8 @@ function FestivalNotificationItem({
         throw new Error("Festival detail was not found.");
       }
 
+      const selection = resolveFestivalRegion(festival.regionCode);
+      if (!selection) throw new Error("Festival region was not found.");
       const attraction = createFestivalAttraction(festival);
       const markerType = resolveMarkerType(attraction, {});
 
@@ -245,9 +217,8 @@ function FestivalNotificationItem({
         createMapSheetPlaceFromAttraction({
           attraction,
           markerType,
-          areaCode: GANGWON_TATS_AREA_CODE,
-          signguCode:
-            GANGWON_SIGNGU_ADMIN_CODES[festival.regionCode] ?? "",
+          areaCode: selection.area.tatsAreaCode,
+          signguCode: selection.region.adminCode,
           touristTrendName: festival.title,
           topRank: null,
         }),

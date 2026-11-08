@@ -4,10 +4,10 @@
  * 이메일·비밀번호를 검증해 로그인 API를 호출하고 성공한 사용자를 인증 Store와 사용자 Query에 반영한다.
  * 로그인 후에는 요청 전 위치로 돌아가며, 처리 중 중복 제출과 화면 이탈을 막고 서버 오류를 입력 폼에 표시한다.
  */
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
-import { MdLogin, MdPassword, MdRoute } from "react-icons/md";
+import { MdLogin, MdPassword } from "react-icons/md";
 import { authApi, ME_QUERY_KEY } from "@/api/authApi";
 import {
   NOTIFICATION_INBOX_QUERY_KEY,
@@ -19,6 +19,9 @@ import {
 } from "@/lib/authToken";
 import { clearRouteArrivalTransitions } from "@/features/my-route/services/routeArrivalTransitionLock";
 import { clearRouteStartAttempts } from "@/features/my-route/services/routeStartAttemptJournal";
+import { getLoginNavigation } from "@/hooks/useLoginRequest";
+import { useUiText } from "@/lib/uiText";
+import { APP_DISPLAY_NAMES, useAppLanguageStore } from "@/stores/appLanguageStore";
 import { useAuthUserStore } from "@/stores/authUserStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 
@@ -31,6 +34,9 @@ function getAuthErrorMessage(error: unknown) {
 function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { returnTo, backgroundLocation } = getLoginNavigation(location.state);
+  const language = useAppLanguageStore((state) => state.language);
+  const text = useUiText();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
   const setAuthUser = useAuthUserStore((state) => state.setUser);
@@ -38,11 +44,14 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isLoginScreenActiveRef = useRef(false);
 
   useEffect(() => {
+    isLoginScreenActiveRef.current = true;
     if (consumeAuthSessionExpired()) {
       showToast("7일 동안 접속하지 않아 로그아웃되었어요.", 3200);
     }
+    return () => { isLoginScreenActiveRef.current = false; };
   }, [showToast]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -61,6 +70,9 @@ function LoginPage() {
         displayName: displayName.trim() || undefined,
       });
 
+      // 응답 전에 브라우저 뒤로가기로 나갔다면 일정 화면에 늦게 도착한 로그인 결과를 적용하지 않는다.
+      if (!isLoginScreenActiveRef.current) return;
+
       clearRouteArrivalTransitions();
       clearRouteStartAttempts();
       setAuthToken(payload.loginWithPassword.token);
@@ -78,20 +90,13 @@ function LoginPage() {
         queryKey: ["my-routes"],
       });
       showToast(`${payload.loginWithPassword.user.displayName ?? accountId} 계정으로 로그인했어요.`);
-      const requestedReturnTo = (location.state as { returnTo?: unknown } | null)
-        ?.returnTo;
-      const returnTo =
-        typeof requestedReturnTo === "string" && requestedReturnTo.startsWith("/")
-          ? requestedReturnTo
-          : "/home";
-
       navigate(returnTo, {
         replace: true,
       });
     } catch (error) {
-      showToast(getAuthErrorMessage(error), 2600);
+      if (isLoginScreenActiveRef.current) showToast(getAuthErrorMessage(error), 2600);
     } finally {
-      setIsSubmitting(false);
+      if (isLoginScreenActiveRef.current) setIsSubmitting(false);
     }
   };
 
@@ -99,11 +104,9 @@ function LoginPage() {
     <main className="flex min-h-dvh items-center justify-center bg-brand-50 px-5 py-8 text-slate-900">
       <section className="w-full max-w-md rounded-2xl border border-brand-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-3">
-          <span className="flex size-12 items-center justify-center rounded-full bg-brand-600 text-2xl text-white">
-            <MdRoute />
-          </span>
+          <img src={`${import.meta.env.BASE_URL}duru-icon.png`} alt="" className="size-12 rounded-xl" />
           <div>
-            <p className="font-trip text-sm text-brand-700">ROUTE ONE</p>
+            <p className="font-trip text-sm text-brand-700">{APP_DISPLAY_NAMES[language]}</p>
             <h1 className="text-xl font-bold text-slate-900">로그인</h1>
           </div>
         </div>
@@ -116,7 +119,7 @@ function LoginPage() {
               onChange={(event) => setAccountId(event.target.value)}
               autoComplete="username"
               className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-brand-500"
-              placeholder="routeone"
+              placeholder="duru"
               required
               minLength={3}
             />
@@ -158,6 +161,16 @@ function LoginPage() {
             <MdLogin className="text-lg" />
             {isSubmitting ? "처리 중..." : "계정 만들기 / 로그인"}
           </button>
+          {backgroundLocation ? (
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              disabled={isSubmitting}
+              className="w-full rounded-2xl border border-brand-200 px-4 py-3 text-sm font-bold text-slate-600 disabled:opacity-40"
+            >
+              {text.common.cancel}
+            </button>
+          ) : null}
         </form>
       </section>
     </main>

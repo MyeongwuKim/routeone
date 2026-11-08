@@ -10,6 +10,7 @@ import {
   SyncRouteArrivalNotificationInboxDocument,
   SyncRouteReviewNotificationInboxDocument,
   UpdateNotificationSettingsDocument,
+  SyncFestivalRegionWithServiceAreaDocument,
   UnregisterPushDeviceDocument,
   type FestivalNotificationSyncInput,
   type NotificationInboxQueryVariables,
@@ -55,6 +56,10 @@ export const notificationApi = {
     return requestGraphQL(UpdateNotificationSettingsDocument, {
       input,
     });
+  },
+  /** 기본 지역 변경에 맞춰 이미 켜진 축제 알림의 지역만 갱신한다. 요청을 시작한 계정의 토큰을 명시한다. */
+  syncFestivalRegionWithServiceArea(regionCode: string, authToken: string) {
+    return requestGraphQL(SyncFestivalRegionWithServiceAreaDocument, { regionCode }, { authToken });
   },
   registerPushDevice(input: RegisterPushDeviceInput) {
     return requestGraphQL(RegisterPushDeviceDocument, {

@@ -1,0 +1,21 @@
+query HomeTourCourses($areaCode: String!, $sigunguCode: String, $page: Int!) {
+  homeTourCourses(areaCode: $areaCode, sigunguCode: $sigunguCode, page: $page) {
+    courses {
+      id
+      title
+      image
+    }
+    totalCount
+  }
+}
+
+query HomeTourCoursesByDistricts($areaCode: String!, $sigunguCodes: [String!]!, $page: Int!) {
+  homeTourCourses(areaCode: $areaCode, sigunguCodes: $sigunguCodes, page: $page) {
+    courses {
+      id
+      title
+      image
+    }
+    totalCount
+  }
+}

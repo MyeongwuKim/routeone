@@ -13,6 +13,7 @@ import type {
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import type { PlaceSnapshotInput } from "./route.types.js";
 import { resolvePlaceVerificationPolicy } from "./routePlaceVerificationPolicy.js";
+import { findRouteRegionTag } from "./routeRegions.js";
 
 type RouteSharedPrisma = PrismaClient | Prisma.TransactionClient;
 
@@ -228,19 +229,6 @@ const REGION_TAG_RULES = [
   { token: "경남", tag: "경남" },
 ];
 
-const REGION_CODE_TAG_RULES = [
-  {
-    tag: "강원",
-    areaCodes: ["32", "51"],
-    adminCodePrefixes: ["51"],
-  },
-  {
-    tag: "서울",
-    areaCodes: ["1", "11"],
-    adminCodePrefixes: ["11"],
-  },
-];
-
 function getRouteRegionTag(route: Route, stops: RouteStop[]) {
   const regionLabelKeys = [
     route.primaryRegionLabelKey,
@@ -250,21 +238,8 @@ function getRouteRegionTag(route: Route, stops: RouteStop[]) {
     route.primaryRegionCode,
     ...stops.map((stop) => stop.place.regionCode),
   ].filter((value): value is string => Boolean(value));
-  const codedRegionRule = REGION_CODE_TAG_RULES.find(
-    (rule) =>
-      regionLabelKeys.some((labelKey) => {
-        const [areaCode, sigunguCode] = labelKey.split(":");
-
-        return Boolean(sigunguCode && rule.areaCodes.includes(areaCode));
-      }) ||
-      regionCodes.some((regionCode) =>
-        rule.adminCodePrefixes.some((prefix) => regionCode.startsWith(prefix))
-      )
-  );
-
-  if (codedRegionRule) {
-    return codedRegionRule.tag;
-  }
+  const codedRegionTag = findRouteRegionTag(regionCodes, regionLabelKeys);
+  if (codedRegionTag) return codedRegionTag;
 
   const sourceText = [
     route.primaryRegionLabelKey,

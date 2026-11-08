@@ -44,7 +44,7 @@ function renderJournalShell(input: RoutePosterThemeInput) {
     <text x="112" y="1177" font-size="26" font-weight="700" fill="#40584d">${input.stopCount}곳을 둘러본 하루</text>
     <text x="112" y="1211" font-size="21" fill="#718075">${input.photoCount ? `사진 ${input.photoCount}장과 함께 남긴 여행` : "장소마다 쌓인 오늘의 기억"}</text>
     <text x="966" y="1192" text-anchor="end" font-size="23" fill="#597366">DAY ${String(input.dayIndex).padStart(2, "0")}</text>
-    <text x="540" y="1280" text-anchor="middle" class="brand" fill="#637669">ROUTEONE · MY TRAVEL MEMORY</text>`;
+    <text x="540" y="1280" text-anchor="middle" class="brand" fill="#637669">Duru · MY TRAVEL MEMORY</text>`;
 }
 
 function renderBlockShell(input: RoutePosterThemeInput, colors: ThemePalette) {
@@ -59,7 +59,7 @@ function renderBlockShell(input: RoutePosterThemeInput, colors: ThemePalette) {
     <text x="120" y="1195" class="footer" fill="#24475d">${input.stopCount} PLACES · ${input.photoCount} PHOTOS</text>
     <rect x="759" y="1153" width="211" height="58" rx="6" fill="${colors.soft}"/>
     <text x="865" y="1190" text-anchor="middle" font-size="23" font-weight="900" fill="#24475d">DAY BUILT!</text>
-    <text x="540" y="1280" text-anchor="middle" class="brand" fill="#38536a">ROUTEONE · BUILD YOUR JOURNEY</text>`;
+    <text x="540" y="1280" text-anchor="middle" class="brand" fill="#38536a">Duru · BUILD YOUR JOURNEY</text>`;
 }
 
 function renderPixelShell(input: RoutePosterThemeInput, colors: ThemePalette) {
@@ -71,7 +71,7 @@ function renderPixelShell(input: RoutePosterThemeInput, colors: ThemePalette) {
     <path d="M84 1126H996" stroke="#8294ab" stroke-width="4" stroke-dasharray="12 12"/>
     ${renderPixelPosterText("STAGE CLEAR", 86, 1160, 6, colors.accent)}
     <text x="995" y="1200" text-anchor="end" font-size="25" fill="#d5deeb">${input.photoCount} PHOTOS</text>
-    <text x="540" y="1280" text-anchor="middle" class="brand" fill="#aebed2">ROUTEONE / TRAVEL SAVE DATA</text>`;
+    <text x="540" y="1280" text-anchor="middle" class="brand" fill="#aebed2">Duru / TRAVEL SAVE DATA</text>`;
 }
 
 function renderFantasyShell(input: RoutePosterThemeInput) {
@@ -93,7 +93,7 @@ function renderFantasyShell(input: RoutePosterThemeInput) {
     <path d="M84 1148H744" stroke="#bea473" stroke-width="2"/>
     <text x="84" y="1197" class="footer" fill="#795c3d">${input.stopCount}곳의 발자취 · ${input.photoCount}장의 기억</text>
     <g transform="translate(900 1178) rotate(-9)"><circle r="64" fill="#844951"/><circle r="53" fill="none" stroke="#bd8580" stroke-width="3"/><text y="-6" text-anchor="middle" font-size="22" fill="#fff0cb">모험 완료</text><text y="25" text-anchor="middle" font-size="20" fill="#efd8b8">DAY ${input.dayIndex}</text></g>
-    <text x="540" y="1280" text-anchor="middle" class="brand" fill="#8d6e43">ROUTEONE · A JOURNEY TO REMEMBER</text>`;
+    <text x="540" y="1280" text-anchor="middle" class="brand" fill="#8d6e43">Duru · A JOURNEY TO REMEMBER</text>`;
 }
 
 function renderPhotoFrame(item: RoutePosterThemeItem, rect: PosterPhotoRect, index: number, theme: RoutePosterThemeId, dayIndex: number) {

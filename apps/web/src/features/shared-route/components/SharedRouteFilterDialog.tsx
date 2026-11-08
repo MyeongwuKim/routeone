@@ -9,6 +9,7 @@ import {
 } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import type { ServiceAreaId } from "@/data/serviceAreas";
 import type { SharedRouteFilterCandidate } from "../sharedRouteCardModel";
 import {
   SHARED_ROUTE_FILTER_PLACE_SOURCE_ENABLED,
@@ -29,6 +30,7 @@ type SharedRouteFilterDialogProps = {
   tagOptions: string[];
 
   placeRegions: SharedRouteFilterOptions["placeRegions"];
+  serviceAreaId?: ServiceAreaId;
 
   onToggle: (filter: SharedRouteFilterCandidate) => void;
 
@@ -43,6 +45,7 @@ function SharedRouteFilterDialog({
   filters,
   tagOptions,
   placeRegions,
+  serviceAreaId,
   onToggle,
   onClear,
   onClose,
@@ -64,6 +67,7 @@ function SharedRouteFilterDialog({
   const focusedRegionPlaceCategoriesQuery = useQuery({
     queryKey: [
       "shared-route-filter-places",
+      serviceAreaId,
       resolvedFocusedRegion,
       appLanguage,
     ],
@@ -71,7 +75,7 @@ function SharedRouteFilterDialog({
       resolvedFocusedRegion && SHARED_ROUTE_FILTER_PLACE_SOURCE_ENABLED
     ),
     queryFn: () =>
-      fetchRegionFilterPlaceCategories(resolvedFocusedRegion ?? "", appLanguage),
+      fetchRegionFilterPlaceCategories(resolvedFocusedRegion ?? "", appLanguage, serviceAreaId),
     staleTime: 1000 * 60 * 60 * 12,
     gcTime: 1000 * 60 * 60 * 24,
   });

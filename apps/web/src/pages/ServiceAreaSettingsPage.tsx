@@ -1,134 +1,71 @@
 /**
- * 진입 경로: 내 정보 → 서비스 지역 설정
- *
- * 개발·검수 환경에서 사용할 수 있는 서비스 지역을 표시하고 선택값을 serviceAreaStore에 저장한다.
- * 지역을 바꾸면 홈 탐색 조건과 열린 장소 상세를 초기화하고 관광지·축제·주변 장소 Query를 새 지역 기준으로 다시 조회한다.
+ * 진입 경로: 내 정보 → 기본 지역 설정
+ * 기본 시·도와 시군구를 저장하고 켜진 축제 알림을 해당 지역으로 맞춘다. 일시적인 지도 탐색은 기본 지역을 바꾸지 않는다.
  */
-import { useQueryClient } from "@tanstack/react-query";
 import { MdArrowBack, MdCheck, MdLocationOn } from "react-icons/md";
 import { useNavigate } from "react-router-dom";
-import {
-  SERVICE_AREAS,
-  type ServiceAreaId,
-} from "@/data/serviceAreas";
+import { SERVICE_AREA_LIST, type ServiceAreaId } from "@/data/serviceAreas";
+import DropdownSelect from "@/components/inputs/DropdownSelect";
+import { useDefaultServiceAreaSelection } from "@/features/service-area/hooks/useDefaultServiceAreaSelection";
 import { useUiText } from "@/lib/uiText";
-import { useHomeExploreStore } from "@/stores/homeExploreStore";
-import { useMapSheetStore } from "@/stores/mapSheetStore";
-import { useServiceAreaStore } from "@/stores/serviceAreaStore";
-import { useUiToastStore } from "@/stores/uiToastStore";
-
-const SERVICE_AREA_OPTION_VALUES: ServiceAreaId[] = ["seoul", "gangwon"];
+import { useDefaultServiceArea, useServiceAreaStore } from "@/stores/serviceAreaStore";
 
 function ServiceAreaSettingsPage() {
   const text = useUiText();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const selectedAreaId = useServiceAreaStore(
-    (state) => state.selectedAreaId
-  );
-  const setSelectedAreaId = useServiceAreaStore(
-    (state) => state.setSelectedAreaId
-  );
-  const resetForArea = useHomeExploreStore((state) => state.resetForArea);
-  const resetSheet = useMapSheetStore((state) => state.resetSheet);
-  const showToast = useUiToastStore((state) => state.showToast);
+  const serviceArea = useDefaultServiceArea();
+  const savedRegionCode = useServiceAreaStore((state) => state.selectedRegionCode);
+  const { selectDefaultRegion, isSaving } = useDefaultServiceAreaSelection();
+  const selectedRegionCode = savedRegionCode ?? serviceArea.defaultRegion.sigunguCode;
 
-  const handleSelectArea = (nextAreaId: ServiceAreaId) => {
-    if (nextAreaId === selectedAreaId) {
-      return;
-    }
-
-    const nextArea = SERVICE_AREAS[nextAreaId];
-    const nextAreaLabel =
-      text.labels.regions[nextArea.label] ?? nextArea.label;
-    const nextInitialRegion =
-      nextArea.developmentFixedRegion ?? nextArea.defaultRegion;
-    setSelectedAreaId(nextAreaId);
-    resetForArea(nextInitialRegion.sigunguCode);
-    resetSheet();
-    void queryClient.invalidateQueries({ queryKey: ["gangwon-attractions"] });
-    void queryClient.invalidateQueries({ queryKey: ["gangwon-festivals"] });
-    void queryClient.invalidateQueries({ queryKey: ["nearby-tourist"] });
-    showToast(text.serviceArea.changedToast(nextAreaLabel));
+  /** 권역을 바꾸면 기본 시군구를 적용하고, 시군구 선택 시에는 현재 권역을 유지한다. */
+  const handleSelect = (areaId: ServiceAreaId, regionCode?: string) => {
+    if (!isSaving) selectDefaultRegion({ areaId, regionCode });
   };
 
   return (
-    <section className="space-y-4 pb-4 text-slate-900 dark:text-slate-100">
+    <section aria-busy={isSaving} className="space-y-5 pb-4 text-slate-900 dark:text-slate-100">
       <header className="flex items-center gap-3">
-        <button
-          type="button"
-          aria-label={text.common.backToMyInfo}
-          onClick={() => navigate("/me")}
-          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
-        >
+        <button type="button" aria-label={text.common.backToMyInfo} onClick={() => navigate("/me")}
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200">
           <MdArrowBack />
         </button>
         <div className="min-w-0">
-          <p className="text-xs font-black leading-4 text-brand-700 dark:text-brand-200">
-            {text.routeShell.appSettings}
-          </p>
-          <h1 className="truncate text-base font-bold leading-6 text-slate-900 dark:text-white">
-            {text.routeShell.serviceAreaTitle}
-          </h1>
+          <p className="text-xs font-black leading-4 text-brand-700 dark:text-brand-200">{text.routeShell.appSettings}</p>
+          <h1 className="text-base font-bold leading-6">{text.routeShell.serviceAreaTitle}</h1>
         </div>
       </header>
 
-      <section
-        className="space-y-3"
-        aria-label={text.serviceArea.selectAreaAria}
-      >
-        {SERVICE_AREA_OPTION_VALUES.map((areaId) => {
-          const area = SERVICE_AREAS[areaId];
-          const areaLabel = text.labels.regions[area.label] ?? area.label;
-          const isSelected = selectedAreaId === areaId;
+      <div className="space-y-3">
+        <h2 className="text-sm font-bold">{text.serviceArea.selectAreaAria}</h2>
+        <div role="group" aria-label={text.serviceArea.selectAreaAria} className="grid grid-cols-3 gap-2">
+          {SERVICE_AREA_LIST.map((area) => {
+            const isSelected = serviceArea.id === area.id;
+            return (
+              <button key={area.id} type="button" aria-pressed={isSelected} disabled={isSaving}
+                onClick={() => handleSelect(area.id, isSelected ? selectedRegionCode : undefined)}
+                className={`flex min-h-12 items-center justify-center gap-1 rounded-xl border px-2 py-3 text-sm font-bold transition ${isSelected
+                  ? "border-brand-600 bg-brand-600 text-white dark:border-brand-300 dark:bg-brand-300 dark:text-[#0b211f]"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-brand-300 dark:border-brand-400/20 dark:bg-[#0b211f] dark:text-slate-200"}`}>
+                {isSelected ? <MdCheck aria-hidden="true" className="shrink-0" /> : <MdLocationOn aria-hidden="true" className="shrink-0 text-brand-500" />}
+                <span>{text.labels.regions[area.label] ?? area.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-          return (
-            <button
-              key={areaId}
-              type="button"
-              aria-pressed={isSelected}
-              onClick={() => handleSelectArea(areaId)}
-              className={`flex min-h-24 w-full items-center gap-3 rounded-lg border bg-white px-4 py-4 text-left shadow-sm transition active:scale-[0.99] dark:bg-[#0b211f] ${
-                isSelected
-                  ? "border-brand-500 ring-1 ring-brand-500/20 dark:border-brand-300"
-                  : "border-slate-200 hover:border-brand-300 dark:border-brand-400/20 dark:hover:border-brand-300/60"
-              }`}
-            >
-              <span
-                className={`flex size-11 shrink-0 items-center justify-center rounded-lg text-xl ${
-                  isSelected
-                    ? "bg-brand-600 text-white"
-                    : "bg-brand-50 text-brand-700 dark:bg-brand-400/10 dark:text-brand-200"
-                }`}
-              >
-                <MdLocationOn />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-slate-900 dark:text-white">
-                  {areaLabel}
-                </span>
-                <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500 dark:text-slate-300">
-                  {text.serviceArea.optionDescription(areaLabel)}
-                </span>
-              </span>
-              <span
-                className={`flex size-7 shrink-0 items-center justify-center rounded-full border text-lg transition ${
-                  isSelected
-                    ? "border-brand-600 bg-brand-600 text-white dark:border-brand-300 dark:bg-brand-300 dark:text-[#0b211f]"
-                    : "border-slate-200 text-transparent dark:border-brand-400/25"
-                }`}
-                aria-hidden="true"
-              >
-                <MdCheck />
-              </span>
-            </button>
-          );
-        })}
-      </section>
-
-      <p className="px-1 text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400">
-        {text.serviceArea.note}
-      </p>
+      <div className="space-y-3">
+        <h2 className="text-sm font-bold">{text.serviceArea.selectRegionAria}</h2>
+        <DropdownSelect disabled={isSaving} value={selectedRegionCode} onChange={(regionCode) => handleSelect(serviceArea.id, regionCode)}
+          options={[...serviceArea.regions].sort((a, b) => a.label.localeCompare(b.label, "ko-KR")).map((region) => ({ value: region.sigunguCode, label: text.labels.regions[region.label] ?? region.label }))}
+          ariaLabel={text.serviceArea.selectRegionAria}
+          menuClassName="bottom-[calc(100%+0.5rem)] top-auto max-h-64 overflow-y-auto overscroll-contain"
+        />
+      </div>
+      {isSaving ? <p role="status" className="text-xs font-bold text-brand-700 dark:text-brand-200">{text.serviceArea.saving}</p> : null}
+      <p className="text-xs font-semibold leading-6 text-slate-500 dark:text-slate-400">{text.serviceArea.note}</p>
+      <a href="https://github.com/KnellBalm/kr-admin-geojson" target="_blank" rel="noreferrer" className="block text-xs text-slate-400 underline">{text.serviceArea.boundarySource}</a>
     </section>
   );
 }

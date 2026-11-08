@@ -12,10 +12,12 @@ import { updateNativeAppLanguage } from "@/native-bridge/language";
 
 export type AppLanguage = "ko" | "en";
 
+export const APP_DISPLAY_NAMES = { ko: "두루", en: "Duru" } as const;
+
 type AppLanguageState = {
   /** UI 문구와 장소 번역 요청에 적용할 현재 언어. 저장값이 없거나 유효하지 않으면 ko */
   language: AppLanguage;
-  /** 문서 lang, localStorage, 네이티브 언어와 Store 값을 전달한 언어로 맞춘다. */
+  /** 문서 언어와 제목, localStorage, 네이티브 언어와 Store 값을 전달한 언어로 맞춘다. */
   setLanguage: (language: AppLanguage) => void;
 };
 
@@ -39,6 +41,7 @@ const initialLanguage = readInitialLanguage();
 
 if (typeof document !== "undefined") {
   document.documentElement.lang = initialLanguage;
+  document.title = APP_DISPLAY_NAMES[initialLanguage];
 }
 
 export const useAppLanguageStore = create<AppLanguageState>((set) => ({
@@ -46,6 +49,7 @@ export const useAppLanguageStore = create<AppLanguageState>((set) => ({
   setLanguage: (language) => {
     if (typeof document !== "undefined") {
       document.documentElement.lang = language;
+      document.title = APP_DISPLAY_NAMES[language];
     }
 
     try {

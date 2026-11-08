@@ -1,6 +1,6 @@
 /** 공유 경로 좋아요를 낙관적으로 변경하고 목록·좋아요 목록·상세 캐시와 요청 중 상태를 함께 관리한다. */
 import { useCallback, useMemo } from "react";
-import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "zustand";
 import { routeApi } from "@/api/routeApi";
 import { useLoginRequest } from "@/hooks/useLoginRequest";
@@ -20,23 +20,25 @@ import { getSharedRouteLikeStore } from "../stores/sharedRouteLikeStore";
 import type { SharedRoutePageMode } from "../sharedRouteListModel";
 import {
   getRouteDetailQueryKey,
-  LIKED_SHARED_ROUTES_QUERY_KEY,
+  getSharedRouteListQueryKey,
   SHARED_ROUTE_LIKE_MUTATION_KEY,
-  SHARED_ROUTES_QUERY_KEY,
 } from "../queries/sharedRouteQueryKeys";
 
 type UseSharedRouteLikeOptions = {
 
   mode: SharedRoutePageMode;
 
-  serviceAreaId?: ServiceAreaId;
+  /** 현재 목록의 시·도. 전체 좋아요 목록에서는 null이다. */
+  serviceAreaId: ServiceAreaId | null;
 };
+
+type RouteListQueryKey = ReturnType<typeof getSharedRouteListQueryKey>;
 
 type ToggleLikeVariables = {
   route: SharedRoute;
   nextLiked: boolean;
   keepUnlikedRoute: boolean;
-  queryKeys: { shared: QueryKey; liked: QueryKey };
+  queryKeys: { shared: RouteListQueryKey; liked: RouteListQueryKey };
   generation: number;
 };
 
@@ -66,12 +68,8 @@ export function useSharedRouteLike({
   const setPendingLike = useStore(likeStore, (state) => state.setPendingLike);
   const queryKeys = useMemo(
     () => ({
-      shared: serviceAreaId
-        ? [...SHARED_ROUTES_QUERY_KEY, "service-area", serviceAreaId]
-        : SHARED_ROUTES_QUERY_KEY,
-      liked: serviceAreaId
-        ? [...LIKED_SHARED_ROUTES_QUERY_KEY, "service-area", serviceAreaId]
-        : LIKED_SHARED_ROUTES_QUERY_KEY,
+      shared: getSharedRouteListQueryKey("feed", serviceAreaId),
+      liked: getSharedRouteListQueryKey("liked", serviceAreaId),
     }),
     [serviceAreaId]
   );
@@ -218,6 +216,16 @@ export function useSharedRouteLike({
       }
 
       setPendingLike(variables.route.id);
+
+      if (interaction) {
+        // 다른 지역의 캐시는 서버에서 갱신하고 방금 반영한 목록은 그대로 둔다.
+        for (const [listKey, , areaId] of Object.values(variables.queryKeys)) {
+          void queryClient.invalidateQueries({
+            queryKey: [listKey],
+            predicate: ({ queryKey }) => queryKey[2] !== areaId,
+          });
+        }
+      }
     },
   });
 

@@ -10,7 +10,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MdOutlineCheckCircle, MdOutlineRoute, MdVisibilityOff } from "react-icons/md";
 import { moderationApi } from "@/api/moderationApi";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import {
   LIKED_SHARED_ROUTES_QUERY_KEY,
   SHARED_ROUTES_QUERY_KEY,
@@ -208,7 +208,7 @@ function SharedRouteReportQueue() {
 
   if ((reportsQuery.data?.pendingSharedRouteReports.length ?? 0) === 0) {
     return (
-      <PotatoLoadingCard
+      <AppLoadingCard
         title={text.sharedRouteReport.emptyTitle}
         description={text.sharedRouteReport.emptyDescription}
         animation="empty"

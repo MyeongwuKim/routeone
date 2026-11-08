@@ -70,6 +70,21 @@ test("여러 지역을 선택하면 그중 한 지역이 포함된 루트가 표
   assert.equal(filters.routeMatchesFilters(createRoute(["삼척"]), selected, getUiText("ko")), false);
 });
 
+test("추천 코스에 공유 루트에서 선택한 시·군·구를 모두 넘긴다", () => {
+  assert.deepEqual(filters.getSharedRouteRecommendationSelection("gangwon", ["강릉", "속초"]), {
+    areaId: "gangwon", regionCodes: ["1", "5"],
+  });
+  assert.deepEqual(filters.getSharedRouteRecommendationSelection("gangwon", []), {
+    areaId: "gangwon", regionCodes: [],
+  });
+  assert.deepEqual(filters.getSharedRouteRecommendationSelection("gangwon", ["강릉", "종로구"]), {
+    areaId: "gangwon", regionCodes: ["1"],
+  });
+  assert.deepEqual(filters.getSharedRouteRecommendationSelection("gangwon", ["강남구", "종로구"]), {
+    areaId: "seoul", regionCodes: ["1", "23"],
+  });
+});
+
 test("장소 목록이 없는 루트는 대표 지역으로 판별한다", () => {
   const route = { ...createRoute(["철원"]), stops: [] };
   assert.equal(filters.routeMatchesFilters(route, { tags: [], regions: ["철원"], places: [] }, getUiText("ko")), true);
@@ -109,4 +124,41 @@ test("영문 화면에서도 지역 이름의 표시 언어와 무관하게 필�
   assert.equal(filters.routeMatchesFilters(createRoute(["철원"]), selected, getUiText("en")), true);
   assert.equal(filters.routeMatchesFilters(createRoute(["정선"]), selected, getUiText("en")), false);
   assert.equal(filters.getFilterLabel({ type: "region", value: "철원" }, getUiText("en")), "Region: Cheorwon");
+});
+
+test("공개 공유 루트는 재시작 시 시도만 복원하고 좋아요 목록은 별도 선택을 사용한다", async () => {
+  const storageKey = "routeone-shared-route-area";
+  const storage = new Map();
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { localStorage: {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+    } },
+  });
+
+  try {
+    const { createSharedRouteSelectionStore, sharedRouteFeedSelectionStore: feed } = await server.ssrLoadModule(
+      "/src/features/shared-route/stores/sharedRouteSelectionStore.ts"
+    );
+    feed.getState().selectArea("busan");
+    feed.getState().updateFilters("busan", "ko", () => ({ tags: [], regions: ["해운대구"], places: [] }));
+    assert.deepEqual(feed.getState().applied?.filters.regions, ["해운대구"]);
+    const saved = storage.get(storageKey);
+    assert.deepEqual(JSON.parse(saved).state, { areaId: "busan" });
+
+    const liked = createSharedRouteSelectionStore();
+    liked.getState().selectArea("seoul");
+    assert.equal(storage.get(storageKey), saved);
+
+    feed.setState({ areaId: null, applied: null });
+    storage.set(storageKey, saved);
+    await feed.persist.rehydrate();
+    assert.equal(feed.getState().areaId, "busan");
+    assert.equal(feed.getState().applied, null);
+  } finally {
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else delete globalThis.window;
+  }
 });

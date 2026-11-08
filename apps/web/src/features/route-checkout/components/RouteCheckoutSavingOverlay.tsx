@@ -1,7 +1,7 @@
 /** 경로 저장 중 키보드·포커스 이탈을 차단하는 포털 오버레이를 표시하고 10초가 지나면 지연 안내로 바꾼다. */
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText } from "@/lib/uiText";
 
@@ -68,7 +68,7 @@ function RouteCheckoutSavingOverlay({
       className={`fixed inset-0 ${UI_LAYER_CLASS.blockingOverlay} flex touch-none items-center justify-center bg-slate-950/45 px-4 outline-none`}
     >
       <div role="status" aria-live="polite" className="w-full max-w-sm">
-        <PotatoLoadingCard
+        <AppLoadingCard
           title={text.cart.saving}
           description={
             isSlow

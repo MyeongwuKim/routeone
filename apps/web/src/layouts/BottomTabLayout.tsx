@@ -1,8 +1,8 @@
-/** 홈·내 루트·공유 루트·내 정보 화면의 공통 본문을 렌더링하고 현재 경로에 맞는 하단 탭을 활성화한다. */
+/** 홈 추천·지도·내 루트·공유 루트·내 정보의 본문과 하단 탭을 연결한다. 홈 지도만 전체 높이를 사용한다. */
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import type { IconType } from "react-icons";
 import {
-  MdMap,
+  MdHome,
   MdOutlineAccountCircle,
   MdOutlineHub,
   MdOutlineRoute,
@@ -16,7 +16,7 @@ type TabItem = {
 };
 
 const tabs: TabItem[] = [
-  { to: "/home", labelKey: "home", icon: MdMap },
+  { to: "/home", labelKey: "home", icon: MdHome },
   { to: "/my-route", labelKey: "myRoute", icon: MdOutlineRoute },
   { to: "/shared-route", labelKey: "sharedRoute", icon: MdOutlineHub },
   { to: "/me", labelKey: "myInfo", icon: MdOutlineAccountCircle },
@@ -26,6 +26,7 @@ function BottomTabLayout() {
   const text = useUiText();
   const { pathname } = useLocation();
   const isHome = pathname === "/home";
+  const isMap = pathname === "/home/map";
   const isPrimaryTabPage =
     pathname === "/my-route" ||
     pathname === "/shared-route" ||
@@ -39,7 +40,7 @@ function BottomTabLayout() {
       <main className={`absolute inset-x-0 top-0 ${bottomTabOffsetClass}`}>
         <div
           className={
-            isHome
+            isMap
               ? "h-full"
               : "scrollbar-hide h-full overflow-x-hidden overflow-y-auto"
           }
@@ -47,7 +48,7 @@ function BottomTabLayout() {
           <div
             key={pathname}
             className={
-              isHome
+              isHome || isMap
                 ? "h-full"
                 : `mx-auto h-full min-h-0 w-full max-w-md px-5 pt-[calc(env(safe-area-inset-top)+0.75rem)] ${
                     isPrimaryTabPage ? "pb-0" : "pb-3"

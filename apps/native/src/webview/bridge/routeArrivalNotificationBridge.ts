@@ -924,13 +924,13 @@ async function startRouteArrivalLocationTracking(
     foregroundService: {
       notificationTitle:
         language === "en"
-          ? "RouteOne arrival alerts are active"
-          : "RouteOne 장소 도착 알림 사용 중",
+          ? "Duru arrival alerts are active"
+          : "두루 장소 도착 알림 사용 중",
       notificationBody:
         language === "en"
           ? "Checking your location near the next destination."
           : "다음 장소 근처인지 위치를 확인하고 있어요.",
-      notificationColor: "#0f766e",
+      notificationColor: "#104A3E",
       killServiceOnDestroy: false,
     },
   });

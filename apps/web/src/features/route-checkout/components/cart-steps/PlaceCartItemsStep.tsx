@@ -1,6 +1,6 @@
 /** 일정에 담은 장소를 저장 순서대로 표시하고 장소 상세 열기와 개별 제거를 호출부에 전달한다. 목록이 비면 안내 상태를 보여준다. */
 import { IoTrashOutline } from "react-icons/io5";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import type { MapSheetPlace } from "@/types/place";
@@ -24,7 +24,7 @@ function PlaceCartItemsStep({
   if (savedPlaces.length === 0) {
     return (
       <div className="mt-12">
-        <PotatoLoadingCard
+        <AppLoadingCard
           title={text.cart.emptyTitle}
           description={text.cart.emptyDescription}
           footerText={text.cart.emptyFooter}

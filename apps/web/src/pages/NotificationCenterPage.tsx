@@ -26,7 +26,7 @@ import {
   NOTIFICATION_INBOX_PAGE_SIZE,
   type NotificationInboxPageParam,
 } from "@/api/notificationApi";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import FestivalNotificationItem from "@/features/notifications/components/FestivalNotificationItem";
 import ScheduleNotificationItem from "@/features/notifications/components/ScheduleNotificationItem";
 import {
@@ -321,7 +321,7 @@ function NotificationCenterPage() {
     if (orderedItems.length === 0 && !hasNextPage && !isFetchingNextPage) {
       return (
         <section className="flex h-full min-h-72 flex-col justify-center">
-          <PotatoLoadingCard
+          <AppLoadingCard
             title={text.notifications.emptyTitle}
             description={text.notifications.emptyDescription}
             animation="empty"

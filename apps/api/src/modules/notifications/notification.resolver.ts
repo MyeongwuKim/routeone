@@ -19,15 +19,14 @@ import {
   type RouteArrivalNotificationSyncInput,
   type RouteReviewNotificationSyncInput,
 } from "./notification.service.js";
-import {
-  fetchGangwonFestivalSource,
-  filterFestivalsForRegionAndRange,
-} from "./festivalSource.service.js";
+import { getFestivals } from "./festivalLookup.service.js";
+import { normalizeFestivalRegionCode } from "./festivalRegions.js";
 import {
   getNotificationSettings,
   registerPushDevice,
   unregisterPushDevice,
   updateNotificationSettings,
+  syncFestivalRegionWithServiceArea,
   type RegisterPushDeviceInput,
   type UpdateNotificationSettingsInput,
 } from "./notificationSettings.service.js";
@@ -67,6 +66,7 @@ export const notificationTypeDefs = gql`
     regionCode: String
     regionLabel: String
     dateKey: String
+    festivalRegionCodes: [String!]!
     festivalIds: [String!]!
     festivalTitles: [String!]!
     festivalStartDates: [String!]!
@@ -98,9 +98,24 @@ export const notificationTypeDefs = gql`
     imageUrl: String!
   }
 
+  type Festival {
+    id: ID!
+    title: String!
+    startDate: String!
+    endDate: String!
+    regionCode: String!
+    areaCode: String!
+    sigunguCode: String!
+    address: String!
+    lat: Float!
+    lng: Float!
+    imageUrl: String!
+  }
+
   input FestivalNotificationSyncInput {
     notificationKey: String!
     kind: FestivalNotificationKind!
+    festivalRegionCodes: [String!]
     regionCode: String!
     regionLabel: String!
     dateKey: String!
@@ -211,6 +226,7 @@ export const notificationTypeDefs = gql`
     unreadNotificationCount: Int!
     notificationSettings: NotificationSettings!
     gangwonFestivals(startDate: String!, endDate: String!): [GangwonFestival!]!
+    festivals(startDate: String!, endDate: String!, areaCode: String, regionCodes: [String!]): [Festival!]!
   }
 
   extend type Mutation {
@@ -231,6 +247,7 @@ export const notificationTypeDefs = gql`
     updateNotificationSettings(
       input: UpdateNotificationSettingsInput!
     ): NotificationSettings!
+    syncFestivalRegionWithServiceArea(regionCode: String!): NotificationSettings!
     registerPushDevice(input: RegisterPushDeviceInput!): PushDevice!
     unregisterPushDevice(expoPushToken: String!): NotificationReadPayload!
   }
@@ -314,6 +331,11 @@ function requireAuthenticatedNotificationSession(context: GraphQLContext) {
 
 export const notificationResolvers = {
   UserNotification: {
+    festivalRegionCodes(parent: { festivalRegionCodes?: string[]; regionCode?: string | null }) {
+      if (parent.festivalRegionCodes?.length) return parent.festivalRegionCodes;
+      const code = parent.regionCode ? normalizeFestivalRegionCode(parent.regionCode) : null;
+      return code ? [code] : [];
+    },
     festivalStartDates(parent: { festivalStartDates?: string[] | null }) {
       return parent.festivalStartDates ?? [];
     },
@@ -327,59 +349,12 @@ export const notificationResolvers = {
     },
   },
   Query: {
-    async gangwonFestivals(
-      _parent: unknown,
-      args: GangwonFestivalsArgs
-    ) {
-      const dateKeyPattern = /^\d{4}-\d{2}-\d{2}$/;
-
-      if (
-        !dateKeyPattern.test(args.startDate) ||
-        !dateKeyPattern.test(args.endDate) ||
-        args.startDate > args.endDate
-      ) {
-        throw new UserFacingError("축제 조회 기간이 올바르지 않습니다.");
-      }
-
-      const startDate = new Date(`${args.startDate}T00:00:00.000Z`);
-      const endDate = new Date(`${args.endDate}T00:00:00.000Z`);
-
-      if (
-        endDate.getTime() - startDate.getTime() >
-        1000 * 60 * 60 * 24 * 31
-      ) {
-        throw new UserFacingError("축제는 최대 31일 범위까지 조회할 수 있습니다.");
-      }
-
-      const festivals = await fetchGangwonFestivalSource();
-      const regionCodes = [...new Set(
-        festivals.map((festival) => festival.regionCode)
-      )];
-
-      return regionCodes
-        .flatMap((regionCode) =>
-          filterFestivalsForRegionAndRange(
-            festivals,
-            regionCode,
-            args.startDate,
-            args.endDate
-          )
-        )
-        .filter(
-          (festival) =>
-            festival.lat !== null && festival.lng !== null
-        )
-        .map((festival) => ({
-          id: festival.id,
-          title: festival.title,
-          startDate: `${festival.startYmd.slice(0, 4)}-${festival.startYmd.slice(4, 6)}-${festival.startYmd.slice(6, 8)}`,
-          endDate: `${festival.endYmd.slice(0, 4)}-${festival.endYmd.slice(4, 6)}-${festival.endYmd.slice(6, 8)}`,
-          regionCode: festival.regionCode,
-          address: festival.address,
-          lat: festival.lat,
-          lng: festival.lng,
-          imageUrl: festival.imageUrl,
-        }));
+    festivals(_parent: unknown, args: Parameters<typeof getFestivals>[0]) {
+      return getFestivals(args);
+    },
+    async gangwonFestivals(_parent: unknown, args: GangwonFestivalsArgs) {
+      const festivals = await getFestivals({ ...args, areaCode: "32" });
+      return festivals.map(festival => ({ ...festival, regionCode: festival.sigunguCode }));
     },
     notificationInbox(
       _parent: unknown,
@@ -483,6 +458,14 @@ export const notificationResolvers = {
     ) {
       const user = requireUser(context);
       return updateNotificationSettings(context.prisma, user, args.input);
+    },
+    syncFestivalRegionWithServiceArea(
+      _parent: unknown,
+      args: { regionCode: string },
+      context: GraphQLContext
+    ) {
+      const user = requireUser(context);
+      return syncFestivalRegionWithServiceArea(context.prisma, user, args.regionCode);
     },
     registerPushDevice(
       _parent: unknown,

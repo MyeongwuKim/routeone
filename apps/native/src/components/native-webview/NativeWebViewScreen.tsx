@@ -1010,6 +1010,7 @@ export default function NativeWebViewScreen({
       {isLoading || !resolvedBundle ? (
         <View style={styles.overlay}>
           <RouteOneLaunchScreen
+            language={appLanguage}
             message={displayBundleProgress.message}
             progress={displayBundleProgress.progress}
             tagline={text.launchTagline}

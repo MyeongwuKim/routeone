@@ -1,8 +1,10 @@
 
+import { PROVINCIAL_REGION_ENGLISH_LABELS } from "@/data/provincialServiceAreas";
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import type { NativeFestivalNotificationKind } from "@/native-bridge";
 import type { AuthProvider } from "@/generated/graphql";
 import type { CartFlowStep } from "@/features/route-checkout/models/routeCheckoutFlow";
+import type { RouteStartLocationSource } from "@/features/route-checkout/models/routeCheckoutState";
 import {
   useAppLanguageStore,
   type AppLanguage,
@@ -251,9 +253,16 @@ export type UiText = {
   };
   serviceArea: {
     selectAreaAria: string;
+    allAreas: string;
+    selectRegionAria: string;
+    boundaryUnavailable: string;
+    boundarySource: string;
     optionDescription: (area: string) => string;
     note: string;
     changedToast: (area: string) => string;
+    changedWithFestivalToast: (area: string) => string;
+    saving: string;
+    saveError: string;
   };
   appInfo: {
     bridgePendingTitle: string;
@@ -662,9 +671,13 @@ export type UiText = {
     loadingFeed: string;
     loadingLiked: string;
     emptyLikedDescription: string;
+    emptyLikedAreaTitle: string;
+    emptyLikedAreaFooter: string;
+    viewAllLikedRegions: string;
     emptyFeedDescription: string;
     emptyLikedFooter: string;
-    emptyFeedFooter: string;
+    browseSharedRoutes: string;
+    browseRecommendedCourses: string;
     noFilteredTitle: string;
     noFilteredDescription: string;
     noFilteredFooter: string;
@@ -1018,8 +1031,9 @@ export type UiText = {
     validationTimeInvalid: string;
     validationTimeOrder: string;
     apply: string;
-    next: string;
-    buildRoute: string;
+    savedPlacesTitle: (count: number) => string;
+    stepTitles: Record<Exclude<CartFlowStep, "cart">, string>;
+    nextStepLabels: Record<CartFlowStep, string>;
     backAria: string;
     restartCheckout: string;
     restartCheckoutAria: string;
@@ -1039,6 +1053,11 @@ export type UiText = {
     startDateLabel: string;
     tripDaysLabel: string;
     dayCount: (days: number) => string;
+    tripDurationRecommended: (duration: string) => string;
+    tripDurationTight: (duration: string) => string;
+    tripDurationBasis: (tempo: string) => string;
+    tripDurationReason: (placeCount: number, days: 1 | 2 | 3) => string;
+    tripDurationTightReason: (placeCount: number) => string;
     customTripDaysButton: string;
     scheduleRange: (start: string, end: string) => string;
     todayPastWarning: string;
@@ -1065,6 +1084,7 @@ export type UiText = {
     startLocationDescription: string;
     startLocationGuide: string;
     startLocationPreparing: string;
+    startLocationSource: Record<RouteStartLocationSource, string>;
     selectedStartLocation: string;
     startLocationUnavailable: string;
     nearSavedPlaces: string;
@@ -1082,7 +1102,8 @@ export type UiText = {
     dateConflictDetail: string;
     viewMyRoutes: string;
     chooseDateAgain: string;
-    routeSavedToast: (count: number) => string;
+    routeSavedTitle: (count: number) => string;
+    viewSavedRoute: string;
     appendDaySavedToast: (title: string) => string;
     editingBadge: string;
     appendResultTitle: string;
@@ -1105,7 +1126,7 @@ export type UiText = {
     saveRouteDescription: string;
     saveRouteSlowDescription: string;
     addDay: string;
-    done: string;
+    saveToMyRoutes: string;
     addSegmentAria: string;
     drag: string;
     minuteUnit: string;
@@ -1327,7 +1348,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       },
     },
     nav: {
-      home: "지도",
+      home: "홈",
       myRoute: "내 루트",
       sharedRoute: "공유 루트",
       myInfo: "내 정보",
@@ -1340,7 +1361,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "저장한 루트와 계정 정보는 로그인한 뒤 확인할 수 있어요. 지도와 장소 둘러보기는 로그인 없이도 이용할 수 있어요.",
       saveRequiredTitle: "루트를 저장하려면 로그인해 주세요",
       saveRequiredDescription:
-        "작성한 일정은 그대로 유지되며, 로그인이 완료되면 자동으로 저장을 이어가요.",
+        "작성한 일정은 그대로 유지돼요. 로그인 후 이 화면에서 저장할 수 있어요.",
     },
     tabHelp: {
       label: "사용법",
@@ -1445,7 +1466,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
             },
             {
               title: "장소를 확인했으면 다음으로",
-              description: "장소가 한 곳 이상 있으면 ‘다음’으로 여행 날짜와 시간을 정할 수 있어요. 방문 순서는 추천 일정에서 조정해요.",
+              description: "장소가 한 곳 이상 있으면 ‘여행 날짜 정하기’를 눌러 날짜와 시간을 정할 수 있어요. 방문 순서는 추천 일정에서 조정해요.",
             },
           ],
           note: "담은 장소가 없다면 뒤로 돌아가 지도에서 장소를 담아주세요.",
@@ -1501,8 +1522,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
               description: "원하는 곳을 탭하거나 S 마커를 드래그해 옮겨요. ‘장소 근처’를 누르면 담은 장소 주변으로 이동해요.",
             },
             {
-              title: "출발지를 정했으면 루트 짜기",
-              description: "‘루트 짜기’를 누르면 선택한 출발지와 여행 조건을 바탕으로 추천 일정을 만들어요.",
+              title: "출발지를 정했으면 코스 만들기",
+              description: "‘추천 코스 만들기’를 누르면 선택한 출발지와 여행 조건을 바탕으로 일정을 만들어요.",
             },
           ],
           note: "현재 위치와 여행을 시작할 곳이 다를 수 있어요. 출발지가 여행지에서 멀면 이동시간도 길어질 수 있어요.",
@@ -1530,14 +1551,14 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     },
     routeShell: {
       defaultLoadingTitle: "화면 준비 중",
-      defaultLoadingDescription: "감자가 화면 조각을 맞추고 있어요.",
+      defaultLoadingDescription: "필요한 정보를 불러오고 있어요.",
       homeLoadingTitle: "지도 화면 준비 중",
       homeLoadingDescription: "주변 장소와 루트 화면을 맞추고 있어요.",
       loginLoadingTitle: "로그인 화면 준비 중",
       loginLoadingDescription: "계정 화면을 맞추고 있어요.",
       myRouteTitle: "나의 여행 루트",
       myRouteDescription: "진행 중·예정된 여행",
-      myRouteLoadingTitle: "감자가 내 루트 확인 중",
+      myRouteLoadingTitle: "내 루트 확인 중",
       myRouteLoadingDescription: "여행 일정을 정리하고 있어요.",
       sharedRouteTitle: "공유 루트",
       sharedRouteDescription: "완료한 여행 루트를 모아보는 피드",
@@ -1553,7 +1574,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       appSettings: "앱 설정",
       languageTitle: "언어 설정",
       notificationSettingsTitle: "알림 설정",
-      serviceAreaTitle: "테스트 지역 설정",
+      serviceAreaTitle: "기본 지역 설정",
       appInfoTitle: "버전 및 권한",
     },
     myInfo: {
@@ -1574,8 +1595,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       english: "English",
       notificationSettings: "알림 설정",
       notificationSettingsDescription: "축제·루트·장소 도착 알림 관리",
-      serviceArea: "테스트 지역 설정",
-      serviceAreaDescription: (area) => `${area} Open API 장소 사용 중`,
+      serviceArea: "기본 지역 설정",
+      serviceAreaDescription: (area) => `기본 지역: ${area}`,
       appInfo: "버전 및 권한",
       appInfoDescription: "앱 버전과 위치·알림·카메라·앨범 권한 확인",
       logout: "로그아웃",
@@ -1701,16 +1722,23 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       copyEmail: "이메일 주소 복사",
       copied: "이메일 주소를 복사했어요.",
       copyManually: "자동으로 복사하지 못했어요. 위 주소를 길게 누르거나 선택해 복사해주세요.",
-      emailSubject: "[RouteOne] 불편사항 및 개선 의견",
+      emailSubject: "[두루] 불편사항 및 개선 의견",
       emailBody: "불편했던 점을 적어주세요.\r\n\r\n\r\n문제가 생긴 화면과 상황을 알려주세요.\r\n\r\n\r\n필요하면 화면 사진을 첨부해주세요.\r\n",
       environmentLabel: "앱 환경 정보 (문의 확인용)",
     },
     serviceArea: {
-      selectAreaAria: "GPS 테스트 지역 선택",
+      selectAreaAria: "시·도 선택",
+      allAreas: "전체 지역",
+      selectRegionAria: "시·군·구 선택",
+      boundaryUnavailable: "지역 경계를 불러오지 못했어요. 위의 지역 필터로 선택해 주세요.",
+      boundarySource: "지역 경계 출처: 국가공간정보포털 · KnellBalm",
       optionDescription: (area) =>
         `${area}의 시군구별 Open API 장소를 지도에 표시해요.`,
-      note: "개발 빌드에서만 사용하는 설정이에요. 현재 위치와 가까운 시군구가 홈 필터 맨 앞에 표시돼요.",
-      changedToast: (area) => `${area} 테스트 모드로 변경했어요.`,
+      note: "여기서 기본 지역을 바꾸면 지도와 축제 정보, 켜져 있는 축제 알림도 함께 바뀌어요. 지도에서 다른 지역을 둘러볼 때는 기본 지역과 알림 지역이 유지돼요.",
+      changedToast: (area) => `${area} 지역을 기본으로 설정했어요.`,
+      changedWithFestivalToast: (area) => `${area} 지역으로 변경하고 축제 알림도 맞췄어요.`,
+      saving: "지역 설정을 저장하고 있어요.",
+      saveError: "지역 설정을 저장하지 못했어요. 다시 선택해 주세요.",
     },
     appInfo: {
       bridgePendingTitle: "네이티브 버전 연동 준비 중",
@@ -1756,7 +1784,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       title: "계정 정보",
       loading: "계정 정보를 불러오는 중",
       loadError: "계정 정보를 불러오지 못했어요. 다시 시도해 주세요.",
-      fallbackName: "RouteOne 사용자",
+      fallbackName: "두루 사용자",
       accountSection: "현재 계정",
       email: "이메일",
       accountId: "아이디",
@@ -1781,7 +1809,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       sessionEndError: "푸시 알림 해제에 실패했어요. 다시 시도해 주세요.",
       deleteAccount: "회원 탈퇴",
       deleteAccountDescription: "계정과 저장된 데이터를 모두 삭제",
-      deleteConfirmTitle: "RouteOne을 탈퇴할까요?",
+      deleteConfirmTitle: "두루에서 탈퇴할까요?",
       deleteConfirmDescription:
         "내 루트와 방문 기록, 인증 사진, 좋아요와 알림 설정이 모두 삭제돼요.",
       deleteConfirmDetail:
@@ -1815,7 +1843,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       routeArrivalDescription:
         "앱이 닫혀 있어도 다음 장소 유형에 맞는 거리에서 도착 알림",
       regionSectionTitle: "축제 알림 지역",
-      regionSectionDescription: "최대 2곳 선택 · 미선택 시 알림 꺼짐",
+      regionSectionDescription: "최대 2곳 선택 · 미선택 시 알림 꺼짐. 기본 지역을 바꾸면 켜진 알림도 새 지역으로 바뀌어요.",
       finishRegionSelection: "선택 완료",
       selectedRegionCount: (count) => `${count}/2곳 선택`,
       maxRegionToast: "축제 알림 지역은 최대 2곳까지 선택할 수 있어요.",
@@ -1852,12 +1880,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       concentrationRank: (rank) => `예측 집중률 ${rank}위`,
       more: (visible, total) => `더 보기 ${visible}/${total}`,
       noResultsTitle: "검색 결과가 없어요",
-      noResultsDescription: "감자가 다른 장소도 꼼꼼히 찾아봤어요.",
+      noResultsDescription: "입력한 검색어와 맞는 장소를 찾지 못했어요.",
       noResultsFooter: "검색어나 카테고리를 바꿔보세요.",
       recentTitle: "최근 검색",
       clearRecent: "전체 비우기",
       noRecentTitle: "아직 최근 검색어가 없어요",
-      noRecentDescription: "감자가 첫 번째 검색을 기다리고 있어요.",
+      noRecentDescription: "명소나 카페 이름으로 찾아보세요.",
       noRecentFooter: "장소를 검색하면 여기에 기록돼요.",
       deleteRecentAria: (keyword) => `${keyword} 최근 검색 삭제`,
     },
@@ -1867,7 +1895,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loadingMapDescription: "지도를 다시 연결하는 중",
       loadingLocationTitle: "내 위치를 확인하고 있어요",
       loadingLocationDescription: "가까운 지역 필터를 준비하는 중",
-      loadingFooter: "감자 분석 모드 진행 중",
+      loadingFooter: "잠시만 기다려주세요",
       loadingPlacesTitle: "장소 데이터를 찾고 있어요",
       loadingPlacesDescription: "지도를 보면서 장소 후보를 찾는 중",
       loadingEnglishTitle: "영문 장소 정보를 준비하고 있어요",
@@ -2045,7 +2073,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       deleteDetail: "삭제한 일정은 다시 되돌릴 수 없어요.",
       delete: "삭제",
       loadError: "내 루트를 불러오지 못했어요.",
-      loadingTitle: "감자가 내 루트 확인 중",
+      loadingTitle: "내 루트 확인 중",
       loadingDescription: "여행 일정을 정리하고 있어요.",
       needsReviewSection: "시작 확인 필요",
       upcomingSection: "다가오는 일정",
@@ -2062,7 +2090,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startTimeReviewDetail:
         "DAY 1은 현재 시간부터 시작해요. 이후 DAY의 계획 시작 시간은 유지돼요.",
       emptyTitle: "아직 만든 루트가 없어요",
-      emptyDescription: "감자가 빈 여행 가방을 보고 있어요.",
+      emptyDescription: "만든 여행 일정은 여기에 모여요.",
       emptyFooter: "지도에서 장소를 담고 루트를 만들어 보세요.",
       createFromMap: "지도에서 루트 만들기",
     },
@@ -2134,7 +2162,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       backgroundDawn: "새벽",
       backgroundAlbum: "앨범",
       backgroundChangeErrorToast: "포토카드 배경을 바꾸지 못했어요.",
-      generatingTitle: "감자가 DAY 카드를 만드는 중...",
+      generatingTitle: "DAY 카드를 만드는 중...",
       generatingDescription: "사진과 여행 기록을 카드에 담고 있어요.",
       generatingFooter: "잠시만 기다려주세요",
       missingPhotoToast: (count) => `사진 ${count}장을 카드에 넣지 못했어요.`,
@@ -2151,7 +2179,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loadError: "다녀온 루트를 불러오지 못했어요.",
       loadingTitle: "기록 찾는 중",
       emptyTitle: "아직 다녀온 루트가 없어요.",
-      emptyDescription: "감자가 빈 여행 기록을 보고 있어요.",
+      emptyDescription: "여행을 마치면 기록을 다시 둘러볼 수 있어요.",
       emptyFooter: "완료했거나 종료된 일정이 여기에 모여요.",
       nextLoadingTitle: "다음 기록 찾는 중",
       making: "제작 중",
@@ -2212,11 +2240,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loadingFeed: "공유 루트 찾는 중",
       loadingLiked: "하트 루트 찾는 중",
       emptyLikedDescription: "좋아요한 루트는 여기서 볼 수 있어요.",
-      emptyFeedDescription: "공개된 여행 루트를 찾고 있어요.",
+      emptyLikedAreaTitle: "이 지역에 좋아요한 루트가 없어요.",
+      emptyLikedAreaFooter: "전체 지역을 선택하면 다른 지역의 루트를 볼 수 있어요.",
+      viewAllLikedRegions: "전체 지역 보기",
+      emptyFeedDescription: "이 지역의 여행 코스를 둘러보세요.",
       emptyLikedFooter: "공유 루트에서 하트를 눌러보세요.",
-      emptyFeedFooter: "공유된 루트가 여기에 모여요.",
+      browseSharedRoutes: "공유 루트 둘러보기",
+      browseRecommendedCourses: "추천 코스 보기",
       noFilteredTitle: "조건에 맞는 공유 루트가 없어요.",
-      noFilteredDescription: "감자가 필터 안을 다시 살펴보고 있어요.",
+      noFilteredDescription: "선택한 조건에 맞는 여행 루트를 찾지 못했어요.",
       noFilteredFooter: "필터를 줄이면 더 많은 루트가 보여요.",
       searchingConditions: "조건 찾는 중",
       loadingNext: "다음 루트 찾는 중",
@@ -2639,7 +2671,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     },
     cart: {
       emptyTitle: "아직 담은 장소가 없어요",
-      emptyDescription: "감자가 여행 가방을 비워두고 기다리고 있어요.",
+      emptyDescription: "가고 싶은 장소를 골라 나만의 코스를 만들어 보세요.",
       emptyFooter: "지도에서 가고 싶은 장소를 담아주세요.",
       thumbnailAlt: (title) => `${title} 썸네일`,
       removeAria: (title) => `${title} 삭제`,
@@ -2649,8 +2681,20 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       validationTimeInvalid: "시작/종료 시간을 다시 확인해요.",
       validationTimeOrder: "하루 일정의 종료 시간은 시작 시간보다 늦어야 해요.",
       apply: "적용",
-      next: "다음",
-      buildRoute: "루트 짜기",
+      savedPlacesTitle: (count) => (count > 0 ? `담은 장소 ${count}곳` : "담은 장소"),
+      stepTitles: {
+        schedule: "여행 날짜와 시간",
+        tempo: "여행 템포",
+        "start-location": "출발지",
+        result: "추천 코스",
+      },
+      nextStepLabels: {
+        cart: "여행 날짜 정하기",
+        schedule: "여행 템포 고르기",
+        tempo: "출발지 정하기",
+        "start-location": "추천 코스 만들기",
+        result: "닫기",
+      },
       backAria: "뒤로가기",
       restartCheckout: "1단계로",
       restartCheckoutAria: "체크아웃 1단계로 돌아가기",
@@ -2673,6 +2717,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startDateLabel: "여행 시작일",
       tripDaysLabel: "여행 일수",
       dayCount: (days) => `${days}일`,
+      tripDurationRecommended: (duration) => `${duration} 추천`,
+      tripDurationTight: (duration) => `${duration}도 빠듯해요`,
+      tripDurationBasis: (tempo) => `예상 차량 이동 · 템포 ${tempo}`,
+      tripDurationReason: (placeCount, days) =>
+        days === 1
+          ? `담은 ${placeCount}곳을 하루 일정 안에 둘러볼 수 있어요.`
+          : `담은 ${placeCount}곳을 ${days === 2 ? "하루" : "이틀"}에 둘러보기엔 빠듯해요.`,
+      tripDurationTightReason: (placeCount) =>
+        `담은 ${placeCount}곳을 둘러보려면 하루 일정에 시간이 더 필요해요.`,
       customTripDaysButton: "직접 입력",
       scheduleRange: (start, end) => `일정 범위: ${start} ~ ${end}`,
       todayPastWarning:
@@ -2704,6 +2757,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "여행을 실제로 시작할 위치로 마커를 옮기면 그 지점 기준으로 루트를 계산해요.",
       startLocationGuide: "지도를 탭하거나 출발 마커를 드래그해서 위치를 맞춰요.",
       startLocationPreparing: "출발 위치를 준비하고 있어요.",
+      startLocationSource: {
+        "current-location": "출발지 · 현재 위치",
+        "saved-places": "출발지 · 담은 장소 근처",
+        map: "출발지 · 지도에서 선택",
+        "shared-route": "출발지 · 공유 코스 기준",
+      },
       selectedStartLocation: "선택한 출발 위치",
       startLocationUnavailable: "출발 위치를 확인할 수 없어요.",
       nearSavedPlaces: "장소 근처",
@@ -2728,7 +2787,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "내 루트에서 기존 일정을 확인하거나 여행 날짜를 다시 선택해 주세요.",
       viewMyRoutes: "내 루트 보기",
       chooseDateAgain: "날짜 다시 선택",
-      routeSavedToast: (count) => `${count}개 장소로 루트를 저장했어요.`,
+      routeSavedTitle: (count) => `${count}곳을 담은 루트를 저장했어요.`,
+      viewSavedRoute: "내 루트에서 보기",
       appendDaySavedToast: (title) => `${title}에 DAY를 추가했어요.`,
       editingBadge: "수정 중",
       appendResultTitle: "추가할 DAY를 만들었어요",
@@ -2759,7 +2819,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       saveRouteSlowDescription:
         "저장에 조금 더 시간이 걸리고 있어요. 이 화면에서 잠시만 기다려 주세요.",
       addDay: "DAY 추가",
-      done: "완료",
+      saveToMyRoutes: "내 루트에 저장",
       addSegmentAria: "이 구간에 장소 추가",
       drag: "드래그",
       minuteUnit: "분",
@@ -2854,6 +2914,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     },
     labels: {
       regions: {
+        ...PROVINCIAL_REGION_ENGLISH_LABELS,
         서울: "Seoul",
         강남구: "Gangnam-gu",
         강동구: "Gangdong-gu",
@@ -3001,7 +3062,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       },
     },
     nav: {
-      home: "Map",
+      home: "Home",
       myRoute: "My Routes",
       sharedRoute: "Shared",
       myInfo: "My Info",
@@ -3014,7 +3075,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "Saved routes and account details are available after login. You can browse the map and places without an account.",
       saveRequiredTitle: "Log in to save this route",
       saveRequiredDescription:
-        "Your itinerary will stay here, and saving will continue automatically after login.",
+        "Your itinerary will stay here. You can save it from this screen after you log in.",
     },
     tabHelp: {
       label: "How to use",
@@ -3119,7 +3180,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
             },
             {
               title: "Continue to your travel dates",
-              description: "With at least one place saved, tap Next to set your dates and times. You can adjust the visit order in the recommended itinerary.",
+              description: "With at least one place saved, tap Choose trip dates to set your dates and times. You can adjust the visit order in the recommended itinerary.",
             },
           ],
           note: "If your list is empty, go back to the map and add places first.",
@@ -3175,8 +3236,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
               description: "Tap a point or drag the S marker to move it. Near places moves it closer to the places you’ve collected.",
             },
             {
-              title: "Build your route",
-              description: "Tap Build route to create a recommended itinerary using this start point and your travel preferences.",
+              title: "Build your itinerary",
+              description: "Tap Build itinerary to create an itinerary using this start point and your travel preferences.",
             },
           ],
           note: "Your current location may differ from your trip’s start point. Starting far from your destinations can mean longer travel times.",
@@ -3204,7 +3265,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     },
     routeShell: {
       defaultLoadingTitle: "Preparing screen",
-      defaultLoadingDescription: "Putting the screen together.",
+      defaultLoadingDescription: "Loading the information you need.",
       homeLoadingTitle: "Preparing map",
       homeLoadingDescription: "Loading nearby places and routes.",
       loginLoadingTitle: "Preparing login",
@@ -3227,7 +3288,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       appSettings: "App Settings",
       languageTitle: "Language",
       notificationSettingsTitle: "Notifications",
-      serviceAreaTitle: "Test Region",
+      serviceAreaTitle: "Default Region",
       appInfoTitle: "Version & Permissions",
     },
     myInfo: {
@@ -3249,8 +3310,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       notificationSettings: "Notifications",
       notificationSettingsDescription:
         "Manage festival, route, and arrival alerts",
-      serviceArea: "Test Region",
-      serviceAreaDescription: (area) => `Using ${area} Open API places`,
+      serviceArea: "Default Region",
+      serviceAreaDescription: (area) => `Default region: ${area}`,
       appInfo: "Version & Permissions",
       appInfoDescription:
         "Check app versions, location, notification, camera, and photo library permissions",
@@ -3377,16 +3438,23 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       copyEmail: "Copy email address",
       copied: "Email address copied.",
       copyManually: "Couldn't copy automatically. Press and hold or select the address above to copy it.",
-      emailSubject: "[RouteOne] Feedback",
+      emailSubject: "[Duru] Feedback",
       emailBody: "Tell us what went wrong or what could be improved.\r\n\r\n\r\nWhich screen were you on, and what were you doing?\r\n\r\n\r\nAttach screenshots if helpful.\r\n",
       environmentLabel: "App environment (for troubleshooting)",
     },
     serviceArea: {
-      selectAreaAria: "Select a GPS test region",
+      selectAreaAria: "Select a province or city",
+      allAreas: "All regions",
+      selectRegionAria: "Select a district",
+      boundaryUnavailable: "Region boundaries couldn't load. Please use the region filters above.",
+      boundarySource: "Boundaries: V-World · KnellBalm",
       optionDescription: (area) =>
         `Show Open API places for each district in ${area}.`,
-      note: "This setting is available only in development builds. The district nearest your current location appears first on Home.",
-      changedToast: (area) => `Changed the test region to ${area}.`,
+      note: "Changing your default region here updates the map, festivals, and festival alerts that are already on. Exploring another area on the map keeps your default region and alert areas.",
+      changedToast: (area) => `Default region set to ${area}.`,
+      changedWithFestivalToast: (area) => `Default region and festival alerts changed to ${area}.`,
+      saving: "Saving your region.",
+      saveError: "Couldn't save the region. Please select it again.",
     },
     appInfo: {
       bridgePendingTitle: "Preparing native version details",
@@ -3432,7 +3500,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       title: "Account",
       loading: "Loading account information",
       loadError: "Couldn't load your account. Please try again.",
-      fallbackName: "RouteOne user",
+      fallbackName: "Duru user",
       accountSection: "Current Account",
       email: "Email",
       accountId: "Account ID",
@@ -3458,7 +3526,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "Couldn't turn off push notifications. Please try again.",
       deleteAccount: "Delete Account",
       deleteAccountDescription: "Delete the account and all saved data",
-      deleteConfirmTitle: "Delete your RouteOne account?",
+      deleteConfirmTitle: "Delete your Duru account?",
       deleteConfirmDescription:
         "Your routes, visit records, verification photos, likes, and notification settings will be deleted.",
       deleteConfirmDetail:
@@ -3496,7 +3564,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "Arrival alerts near the next stop, adjusted for the place type",
       regionSectionTitle: "Festival Alert Areas",
       regionSectionDescription:
-        "Choose up to two areas. Leave all unselected to turn alerts off.",
+        "Choose up to two areas. Leave all unselected to turn alerts off. Changing your default region also updates alerts that are on.",
       finishRegionSelection: "Done",
       selectedRegionCount: (count) => `${count}/2 selected`,
       maxRegionToast: "You can select up to two festival alert areas.",
@@ -3535,12 +3603,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       concentrationRank: (rank) => `Predicted crowd rank #${rank}`,
       more: (visible, total) => `Show more ${visible}/${total}`,
       noResultsTitle: "No search results",
-      noResultsDescription: "We checked other places too.",
+      noResultsDescription: "No places matched your search.",
       noResultsFooter: "Try another keyword or category.",
       recentTitle: "Recent Searches",
       clearRecent: "Clear all",
       noRecentTitle: "No recent searches yet",
-      noRecentDescription: "Your first place search will appear here.",
+      noRecentDescription: "Search for a sight or a café.",
       noRecentFooter: "Search for a place to save it here.",
       deleteRecentAria: (keyword) => `Delete recent search ${keyword}`,
     },
@@ -3550,7 +3618,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loadingMapDescription: "Reconnecting the map",
       loadingLocationTitle: "Finding your location",
       loadingLocationDescription: "Preparing the nearest region filter",
-      loadingFooter: "Analysis mode in progress",
+      loadingFooter: "Just a moment",
       loadingPlacesTitle: "Finding place data",
       loadingPlacesDescription: "Looking for place candidates on the map",
       loadingEnglishTitle: "Preparing English place info",
@@ -3762,7 +3830,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startTimeReviewDetail:
         "DAY 1 starts now. Later days keep their planned start times.",
       emptyTitle: "No routes yet",
-      emptyDescription: "Your travel bag is still empty.",
+      emptyDescription: "Your routes will appear here.",
       emptyFooter: "Save places on the map and create a route.",
       createFromMap: "Create route from map",
     },
@@ -3914,11 +3982,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       loadingFeed: "Finding shared routes",
       loadingLiked: "Finding liked routes",
       emptyLikedDescription: "View liked routes here.",
-      emptyFeedDescription: "Looking for public travel routes.",
+      emptyLikedAreaTitle: "No liked routes in this region",
+      emptyLikedAreaFooter: "Choose All regions to see routes from other areas.",
+      viewAllLikedRegions: "View all regions",
+      emptyFeedDescription: "Explore travel courses in this region.",
       emptyLikedFooter: "Tap a heart to save a route.",
-      emptyFeedFooter: "Shared routes collect here.",
+      browseSharedRoutes: "Browse shared routes",
+      browseRecommendedCourses: "View recommended courses",
       noFilteredTitle: "No shared routes match the filters",
-      noFilteredDescription: "Checking inside the current filters.",
+      noFilteredDescription: "No routes match your current filters.",
       noFilteredFooter: "Try removing a filter to see more routes.",
       searchingConditions: "Searching filters",
       loadingNext: "Finding more routes",
@@ -4348,7 +4420,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
     },
     cart: {
       emptyTitle: "No saved places yet",
-      emptyDescription: "Your travel bag is waiting empty.",
+      emptyDescription: "Choose places to build your own route.",
       emptyFooter: "Add places from the map.",
       thumbnailAlt: (title) => `${title} thumbnail`,
       removeAria: (title) => `Remove ${title}`,
@@ -4358,8 +4430,23 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       validationTimeInvalid: "Check the start and end times again.",
       validationTimeOrder: "The daily end time must be later than the start time.",
       apply: "Apply",
-      next: "Next",
-      buildRoute: "Build route",
+      savedPlacesTitle: (count) => {
+        if (count === 0) return "Saved places";
+        return `${count} saved ${count === 1 ? "place" : "places"}`;
+      },
+      stepTitles: {
+        schedule: "Dates and times",
+        tempo: "Travel pace",
+        "start-location": "Start point",
+        result: "Itinerary",
+      },
+      nextStepLabels: {
+        cart: "Choose trip dates",
+        schedule: "Choose travel pace",
+        tempo: "Set start point",
+        "start-location": "Build itinerary",
+        result: "Close",
+      },
       backAria: "Go back",
       restartCheckout: "Step 1",
       restartCheckoutAria: "Go back to checkout step 1",
@@ -4382,6 +4469,15 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       startDateLabel: "Trip start date",
       tripDaysLabel: "Trip length",
       dayCount: (days) => `${days}D`,
+      tripDurationRecommended: (duration) => `${duration} recommended`,
+      tripDurationTight: (duration) => `${duration} looks tight`,
+      tripDurationBasis: (tempo) => `Estimated driving · ${tempo.toLowerCase()} pace`,
+      tripDurationReason: (placeCount, days) =>
+        days === 1
+          ? `${placeCount} saved ${placeCount === 1 ? "stop fits" : "stops fit"} in one day.`
+          : `${placeCount} saved ${placeCount === 1 ? "stop" : "stops"} may not fit in ${days === 2 ? "one day" : "two days"}.`,
+      tripDurationTightReason: (placeCount) =>
+        `You may need more time each day for ${placeCount} saved ${placeCount === 1 ? "stop" : "stops"}.`,
       customTripDaysButton: "Custom",
       scheduleRange: (start, end) => `Schedule range: ${start} - ${end}`,
       todayPastWarning:
@@ -4413,6 +4509,12 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "Move the marker to where you will actually start, and the route will be calculated from there.",
       startLocationGuide: "Tap the map or drag the start marker to adjust it.",
       startLocationPreparing: "Preparing start point.",
+      startLocationSource: {
+        "current-location": "Start point · Current location",
+        "saved-places": "Start point · Near saved places",
+        map: "Start point · Selected on map",
+        "shared-route": "Start point · From shared itinerary",
+      },
       selectedStartLocation: "Selected start point",
       startLocationUnavailable: "Could not confirm the start point.",
       nearSavedPlaces: "Near places",
@@ -4436,7 +4538,8 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "Check the existing schedule in My Routes or choose different travel dates.",
       viewMyRoutes: "View My Routes",
       chooseDateAgain: "Choose date again",
-      routeSavedToast: (count) => `Saved a route with ${count} places.`,
+      routeSavedTitle: (count) => `Saved a route with ${count} ${count === 1 ? "place" : "places"}.`,
+      viewSavedRoute: "View in My Routes",
       appendDaySavedToast: (title) => `Added a DAY to ${title}.`,
       editingBadge: "Editing",
       appendResultTitle: "New DAY is ready",
@@ -4467,7 +4570,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       saveRouteSlowDescription:
         "Saving is taking a little longer. Please stay on this screen for a moment.",
       addDay: "Add DAY",
-      done: "Done",
+      saveToMyRoutes: "Save to My Routes",
       addSegmentAria: "Add a place to this segment",
       drag: "Drag",
       minuteUnit: "m",

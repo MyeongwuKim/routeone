@@ -5,11 +5,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { festivalApi } from "@/api/festivalApi";
+import { createFestivalAttraction } from "@/lib/festivalAttraction";
 import type { ServiceArea } from "@/data/serviceAreas";
-import {
-  buildBoundaryMapByRegions,
-  type GangwonBoundaryCollection,
-} from "@/lib/gangwonBoundaryUtils";
+import { useServiceRegionBoundaries } from "@/hooks/useServiceRegionBoundaries";
 import {
   getTouristNameMatchScore,
   shouldHideAttraction,
@@ -76,17 +74,6 @@ function getFestivalDateWindow() {
   };
 }
 
-function getBoundaryAssetUrl(assetPath: string) {
-  if (assetPath.startsWith("data:")) {
-    return assetPath;
-  }
-
-  return new URL(
-    assetPath.replace(/^\/+/, ""),
-    document.baseURI
-  ).toString();
-}
-
 export function useHomeAttractionData(
   selectedSigunguCode: string,
   serviceArea: ServiceArea,
@@ -104,48 +91,28 @@ export function useHomeAttractionData(
   const festivalQueryKey = useMemo(
     () =>
       [
-        "gangwon-festivals",
+        "festivals",
+        serviceArea.tourAreaCode,
         "official-7-days",
         festivalDateWindow.startDateKey,
         festivalDateWindow.endDateKey,
         appLanguage,
       ] as const,
-    [appLanguage, festivalDateWindow]
+    [appLanguage, festivalDateWindow, serviceArea.tourAreaCode]
   );
   const loadFestivals = useCallback(async () => {
     const result = await festivalApi.list(
       festivalDateWindow.startDateKey,
-      festivalDateWindow.endDateKey
+      festivalDateWindow.endDateKey,
+      { areaCode: serviceArea.tourAreaCode }
     );
     const todayYmd = festivalDateWindow.startDateKey.replaceAll("-", "");
-    const festivals = result.gangwonFestivals.map((festival) => {
-      const eventStartDate = festival.startDate.replaceAll("-", "");
-      const eventEndDate = festival.endDate.replaceAll("-", "");
-
-      return {
-        id: festival.id,
-        title: festival.title,
-        address: festival.address || "주소 정보 없음",
-        lat: festival.lat,
-        lng: festival.lng,
-        contentTypeId: "15",
-        lclsSystm1: "",
-        lclsSystm2: "",
-        lclsSystm3: "",
-        firstImage: festival.imageUrl,
-        secondImage: "",
-        eventStartDate,
-        eventEndDate,
-        isTodayFestival:
-          eventStartDate <= todayYmd && eventEndDate >= todayYmd,
-        tourApiSigunguCode: festival.regionCode,
-      } satisfies GangwonAttraction;
-    });
+    const festivals = result.festivals.map(festival => createFestivalAttraction(festival, todayYmd));
 
     return localizeTourPlaces(festivals, appLanguage, {
       waitForFresh: true,
     });
-  }, [appLanguage, festivalDateWindow]);
+  }, [appLanguage, festivalDateWindow, serviceArea.tourAreaCode]);
 
   const loadLclsNameByCode = useCallback(async () => {
     try {
@@ -171,7 +138,7 @@ export function useHomeAttractionData(
     () =>
       [
         "tour-attractions",
-        "source-first-v2",
+        "source-first-v3",
         serviceArea.id,
         selectedSigunguCode,
         festivalDateWindow.startDateKey,
@@ -185,26 +152,12 @@ export function useHomeAttractionData(
     ]
   );
 
-  const boundaryQuery = useQuery({
-    queryKey: ["service-area-boundary", serviceArea.id],
-    enabled: Boolean(serviceArea.boundaryAssetPath),
-    queryFn: async () => {
-      if (!serviceArea.boundaryAssetPath) {
-        return {};
-      }
-
-      const response = await fetch(
-        getBoundaryAssetUrl(serviceArea.boundaryAssetPath)
-      );
-      if (!response.ok) {
-        throw new Error("Failed to load boundary data.");
-      }
-      const data = (await response.json()) as GangwonBoundaryCollection;
-      return buildBoundaryMapByRegions(data, serviceArea.regions);
-    },
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
+  const {
+    boundaryBySigunguCode,
+    boundaryByAdminCode,
+    isBoundaryDataReady,
+    boundaryError,
+  } = useServiceRegionBoundaries(serviceArea);
 
   const attractionsQuery = useQuery<HomeAttractionQueryData>({
     queryKey: attractionQueryKey,
@@ -490,11 +443,6 @@ export function useHomeAttractionData(
 
     return countByCode;
   }, [festivalsQuery.data, serviceArea.hasFestivalSource]);
-  const boundaryBySigunguCode = useMemo(
-    () =>
-      serviceArea.hasBoundaryAsset ? boundaryQuery.data ?? {} : {},
-    [boundaryQuery.data, serviceArea.hasBoundaryAsset]
-  );
 
   const topRankByAttractionId = useMemo(() => {
     const rankById = new Map<string, number>();
@@ -523,6 +471,8 @@ export function useHomeAttractionData(
       ? "idle"
       : attractionLoadingPhase,
     boundaryBySigunguCode,
+    boundaryByAdminCode,
+    boundaryError,
     festivalCountBySigunguCode,
     festivals: serviceArea.hasFestivalSource
       ? festivalsQuery.data ?? []
@@ -531,10 +481,7 @@ export function useHomeAttractionData(
       !serviceArea.hasFestivalSource || festivalsQuery.isSuccess,
     isAttractionLoading: attractionsQuery.isFetching,
     isAttractionFetching: attractionsQuery.isFetching,
-    isBoundaryDataReady:
-      !serviceArea.hasBoundaryAsset ||
-      boundaryQuery.isSuccess ||
-      boundaryQuery.isError,
+    isBoundaryDataReady,
     isUpdatingPlaceLabelsRef,
     topRankByAttractionId,
     trendNameByAttractionId,

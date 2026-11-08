@@ -3,7 +3,7 @@
  *
  * 여행 시작·장소 도착·축제 알림의 서버 설정을 조회하고 각 수신 여부를 즉시 저장한다.
  * 알림을 켤 때 네이티브 푸시 권한과 토큰 등록을 요청하며, 권한이 거부되면 앱 설정으로 이동하도록 안내한다.
- * 축제 알림은 강원 지역을 최대 두 곳까지 임시 선택한 뒤 완료 시 활성 여부와 지역 코드를 함께 저장한다.
+ * 축제 알림은 지원 시도의 시군구를 최대 두 곳까지 임시 선택한 뒤 완료 시 활성 여부와 지역 코드를 함께 저장한다.
  * 장소 도착 알림을 끄면 네이티브에 등록된 도착 대상도 빈 목록으로 동기화한다.
  */
 import {
@@ -32,7 +32,9 @@ import {
   NOTIFICATION_SETTINGS_QUERY_KEY,
 } from "@/api/notificationApi";
 import NotificationSettingsSkeleton from "@/components/feedback/NotificationSettingsSkeleton";
-import { GANGWON_REGIONS } from "@/data/gangwonRegions";
+import FestivalRegionPicker from "@/features/notifications/components/FestivalRegionPicker";
+import { normalizeFestivalRegionCodes, resolveFestivalRegion } from "@/lib/festivalRegions";
+import { useDefaultServiceArea } from "@/stores/serviceAreaStore";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -336,6 +338,7 @@ function FestivalNotificationSettingRow({
 }
 
 function NotificationSettingsPage() {
+  const serviceArea = useDefaultServiceArea();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const text = useUiText();
@@ -360,26 +363,13 @@ function NotificationSettingsPage() {
     updateMutation.data?.updateNotificationSettings ??
     settingsQuery.data?.notificationSettings ??
     null;
-  const savedFestivalRegionCodes =
-    settings?.festivalEnabled ? settings.festivalRegionCodes : [];
-  const selectedRegionLabels =
-    savedFestivalRegionCodes
-      .map(
-        (regionCode) =>
-          GANGWON_REGIONS.find(
-            (region) => region.sigunguCode === regionCode
-          )
-      )
-      .filter(
-        (
-          region
-        ): region is NonNullable<typeof region> =>
-          region !== undefined
-      ) ??
-    [];
-  const localizedSelectedRegionLabels = selectedRegionLabels.map(
-    (region) => text.labels.regions[region.label] ?? region.label
+  const savedFestivalRegionCodes = normalizeFestivalRegionCodes(
+    settings?.festivalEnabled ? settings.festivalRegionCodes : []
   );
+  const localizedSelectedRegionLabels = savedFestivalRegionCodes.map(code => {
+    const selection = resolveFestivalRegion(code)!;
+    return `${text.labels.regions[selection.area.label] ?? selection.area.label} ${text.labels.regions[selection.region.label] ?? selection.region.label}`;
+  });
   const activeDraftRegionCodes =
     draftRegionCodes ?? savedFestivalRegionCodes;
 
@@ -601,32 +591,13 @@ function NotificationSettingsPage() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 pt-4">
-                {GANGWON_REGIONS.map((region) => {
-                  const isSelected = activeDraftRegionCodes.includes(
-                    region.sigunguCode
-                  );
-
-                  return (
-                    <button
-                      key={region.sigunguCode}
-                      type="button"
-                      aria-pressed={isSelected}
-                      onClick={() =>
-                        handleRegionToggle(region.sigunguCode)
-                      }
-                      className={`flex min-h-11 items-center justify-center gap-1 rounded-lg border px-2 text-sm font-bold transition ${
-                        isSelected
-                          ? "border-brand-600 bg-brand-600 text-white"
-                          : "border-slate-200 bg-white text-slate-700 dark:border-brand-400/25 dark:bg-[#0b211f] dark:text-slate-100"
-                      }`}
-                    >
-                      {isSelected ? <MdCheck /> : null}
-                      {text.labels.regions[region.label] ?? region.label}
-                    </button>
-                  );
-                })}
-              </div>
+              {isRegionPickerOpen ? (
+                <FestivalRegionPicker
+                  initialAreaId={serviceArea.id}
+                  selectedRegionCodes={activeDraftRegionCodes}
+                  onToggle={handleRegionToggle}
+                />
+              ) : null}
 
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button

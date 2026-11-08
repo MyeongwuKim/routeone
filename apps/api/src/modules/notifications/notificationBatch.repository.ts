@@ -10,7 +10,7 @@ import type { Prisma } from "@prisma/client";
 import { mongoId, mongoUpsert, runMongoUpdates } from "../../lib/mongoBatch.js";
 
 const NOTIFICATION_DEFAULTS = {
-  festivalIds: [], festivalTitles: [], festivalStartDates: [], festivalEndDates: [],
+  festivalRegionCodes: [], festivalIds: [], festivalTitles: [], festivalStartDates: [], festivalEndDates: [],
   pushTicketIds: [], pushAttemptCount: 0,
   festivalKind: null, regionCode: null, regionLabel: null, dateKey: null,
   routeReviewKind: null, routeId: null, routeTitle: null, dayId: null,

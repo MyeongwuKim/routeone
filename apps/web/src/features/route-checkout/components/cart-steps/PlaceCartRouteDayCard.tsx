@@ -5,7 +5,7 @@
  */
 import { useState } from "react";
 import { IoLocationSharp, IoMapOutline } from "react-icons/io5";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import { useUiText } from "@/lib/uiText";
 import type { MapSheetPlace } from "@/types/place";
 import { PlaceCartRouteItemSheet, StayMinutesPopup } from "./RouteDayDialogs";
@@ -278,7 +278,7 @@ function PlaceCartRouteDayCard({
         </div>
       ) : (
         <div className="m-4">
-          <PotatoLoadingCard
+          <AppLoadingCard
             title={text.cart.noPlacedPlaces}
             animation="empty"
             compact

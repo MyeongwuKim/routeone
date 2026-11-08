@@ -11,7 +11,7 @@ import { MdArrowBack, MdFlag, MdHideImage, MdOutlineCheckCircle, MdDeleteOutline
 import { useNavigate } from "react-router-dom";
 import { moderationApi } from "@/api/moderationApi";
 import { useAccountUser } from "@/components/account/useAccountUser";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import ModerationPhotoViewer from "../components/ModerationPhotoViewer";
 import SharedRouteReportQueue from "../components/SharedRouteReportQueue";
 import {
@@ -277,7 +277,7 @@ function PhotoReportManagementPage() {
       </header>
 
       {!isUserLoading && !isOwner ? (
-        <PotatoLoadingCard title={text.photoReport.ownerOnly} description="" animation="empty" />
+        <AppLoadingCard title={text.photoReport.ownerOnly} description="" animation="empty" />
       ) : (
         <>
           <div className="grid grid-cols-3 gap-1 rounded-2xl border border-brand-100 bg-brand-50 p-1 dark:border-brand-400/25 dark:bg-brand-400/10">
@@ -325,7 +325,7 @@ function PhotoReportManagementPage() {
                 {[0, 1, 2, 3].map((item) => <div key={item} className="skeleton-shimmer h-44 rounded-3xl bg-slate-200 dark:bg-slate-800" />)}
               </div>
             ) : photoItems.length === 0 ? (
-              <PotatoLoadingCard
+              <AppLoadingCard
                 title={
                   activeTab === "publication"
                     ? text.photoReport.publicationEmptyTitle

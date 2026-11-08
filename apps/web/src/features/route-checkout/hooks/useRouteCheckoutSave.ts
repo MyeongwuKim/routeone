@@ -1,5 +1,5 @@
 /** 일정 만들기 결과를 새 경로로 저장하거나 기존 경로에 DAY로 추가하는 인증·중복·복구 흐름을 관리한다. */
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
@@ -13,12 +13,12 @@ import {
   MY_ROUTES_QUERY_KEY,
   upsertMyRouteCache,
 } from "@/features/my-route/myRouteCache";
+import { getSelectableRouteDay } from "@/features/my-route/routeDisplay";
 import type { MyRoutesQuery } from "@/generated/graphql";
 import { isGraphQLRequestError } from "@/lib/graphqlClient";
 import { getAuthToken } from "@/lib/authToken";
 import { useUiText } from "@/lib/uiText";
 import { useLoginRequest } from "@/hooks/useLoginRequest";
-import { useAuthSession } from "@/hooks/useAuthSession";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
@@ -52,8 +52,10 @@ function createRouteRequestId() {
 }
 
 /**
- * 저장 전 로그인, 날짜 충돌, 입력 가능 상태를 확인한다. 새 경로 생성은 같은 입력에 같은 requestId를 재사용해
- * 결과 불명 재시도를 중복 생성으로부터 보호하고, 성공 시 캐시 갱신·장소 비우기·화면 이동을 수행한다.
+ * 비로그인 사용자는 일정 결과를 유지한 채 로그인으로 안내한다. 다시 저장을 누르면 날짜 충돌과 입력 가능 상태를 확인한다.
+ * 새 경로 생성은 같은 입력에 같은 requestId를 재사용해
+ * 결과 불명 재시도를 중복 생성으로부터 보호한다. 성공 시 캐시를 갱신하고 담은 장소를 비우며,
+ * 새로 만든 루트는 저장 완료 안내에서 해당 DAY 상세를 열 수 있게 한다.
  */
 export function useRouteCheckoutSave({
   input,
@@ -65,7 +67,6 @@ export function useRouteCheckoutSave({
   const text = useUiText();
   const navigate = useNavigate();
   const requestLogin = useLoginRequest();
-  const { isAuthenticated } = useAuthSession();
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
   const openModal = useUiModalStore((state) => state.openModal);
@@ -76,7 +77,6 @@ export function useRouteCheckoutSave({
   const { isRouteSaveInFlight, startSavingRoute, finishSavingRoute } =
     useRouteCheckout();
   const createAttemptRef = useRef<RouteCreateAttempt | null>(null);
-  const shouldSaveAfterLoginRef = useRef(false);
 
   const saveAuthenticatedRoute = useCallback(async () => {
     if (!canSave || isRouteSaveInFlight()) {
@@ -178,11 +178,35 @@ export function useRouteCheckoutSave({
           input,
           attempt.requestId
         );
+        const savedRoute = result.createRoute;
+        // 저장 전에 시작된 목록 조회가 새 루트를 덮어쓰지 않도록 정리한다.
+        await queryClient.cancelQueries({
+          queryKey: MY_ROUTES_QUERY_KEY,
+          exact: true,
+        });
         queryClient.setQueryData<MyRoutesQuery>(
           MY_ROUTES_QUERY_KEY,
-          (currentData) => upsertMyRouteCache(currentData, result.createRoute)
+          (currentData) => upsertMyRouteCache(currentData, savedRoute)
         );
-        showToast(text.cart.routeSavedToast(result.createRoute.totalStopCount));
+        const savedDay = getSelectableRouteDay(savedRoute);
+        const savedRoutePath = savedDay
+          ? `/my-route?${new URLSearchParams({
+              routeId: savedRoute.id,
+              dayId: savedDay.id,
+            })}`
+          : "/my-route";
+
+        openModal({
+          title: text.cart.routeSavedTitle(savedRoute.totalStopCount),
+          actions: [
+            { label: text.common.close, variant: "secondary" },
+            {
+              label: text.cart.viewSavedRoute,
+              variant: "primary",
+              onClick: () => navigate(savedRoutePath),
+            },
+          ],
+        });
       }
 
       clearAppendTarget();
@@ -221,26 +245,6 @@ export function useRouteCheckoutSave({
     text,
   ]);
 
-  useEffect(() => {
-    if (
-      !isAuthenticated ||
-      !canSave ||
-      !shouldSaveAfterLoginRef.current
-    ) {
-      return;
-    }
-
-    shouldSaveAfterLoginRef.current = false;
-    void saveAuthenticatedRoute();
-  }, [canSave, isAuthenticated, saveAuthenticatedRoute]);
-
-  useEffect(
-    () => () => {
-      shouldSaveAfterLoginRef.current = false;
-    },
-    []
-  );
-
   const handleSaveRoute = () => {
     if (!canSave || isRouteSaveInFlight()) {
       return;
@@ -263,10 +267,7 @@ export function useRouteCheckoutSave({
           {
             label: text.auth.login,
             variant: "primary",
-            onClick: () => {
-              shouldSaveAfterLoginRef.current = true;
-              requestLogin("route-save");
-            },
+            onClick: () => requestLogin("route-save", { preserveCurrentScreen: true }),
           },
         ],
       });

@@ -1,4 +1,4 @@
-/** 추천 일정의 출발지를 현재 위치 또는 지도 마커로 선택하고, 담은 장소 중심과 30km 이상 떨어지면 거리 경고를 표시한다. */
+/** 추천 일정의 출발지가 어디에서 정해졌는지 표시하고, 지도나 담은 장소 근처로 변경할 수 있게 한다. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IoLocateOutline, IoLocationSharp } from "react-icons/io5";
 import {
@@ -11,6 +11,7 @@ import { calculateDistanceMeters } from "@/lib/gangwonBoundaryUtils";
 import { useUiText } from "@/lib/uiText";
 import type { SavedPlaceItem } from "@/stores/placeCartStore";
 import { useRouteCheckout } from "../../hooks/useRouteCheckout";
+import type { RouteStartLocationSource } from "../../models/routeCheckoutState";
 import type { RouteStartLocation } from "../../models/routePlanTypes";
 
 type PlaceCartStartLocationStepProps = {
@@ -115,17 +116,19 @@ function PlaceCartStartLocationStep({
   savedPlaces,
 }: PlaceCartStartLocationStepProps) {
   const text = useUiText();
-  const { startLocation, setStartLocation } = useRouteCheckout();
+  const { startLocation, startLocationSource, setStartLocation } =
+    useRouteCheckout();
   const mapInstanceRef = useRef<NaverMapInstance | null>(null);
   const startMarkerRef = useRef<NaverMarkerInstance | null>(null);
-  const [draftLocation, setDraftLocation] =
-    useState<RouteStartLocation | null>(startLocation);
-  const [mapInitialLocation, setMapInitialLocation] =
-    useState<RouteStartLocation | null>(startLocation);
   const savedPlaceCenter = useMemo(
     () => getSavedPlaceCenter(savedPlaces),
     [savedPlaces]
   );
+  const displayedLocation = startLocation ?? savedPlaceCenter;
+  const displayedSource =
+    startLocationSource ?? (savedPlaceCenter ? "saved-places" : null);
+  const [mapInitialLocation, setMapInitialLocation] =
+    useState(displayedLocation);
   const mapResetKey = useMemo(
     () =>
       mapInitialLocation
@@ -143,17 +146,20 @@ function PlaceCartStartLocationStep({
     [mapInitialLocation, savedPlaces]
   );
   const distanceFromPlaces =
-    draftLocation && savedPlaceCenter
-      ? calculateDistanceMeters(draftLocation, savedPlaceCenter)
+    displayedLocation && savedPlaceCenter
+      ? calculateDistanceMeters(displayedLocation, savedPlaceCenter)
       : null;
   const isFarFromPlaces =
     distanceFromPlaces != null &&
     distanceFromPlaces >= FAR_START_DISTANCE_METERS;
 
   const updateStartLocation = useCallback(
-    (nextLocation: RouteStartLocation, options: { pan?: boolean } = {}) => {
-      setDraftLocation(nextLocation);
-      setStartLocation(nextLocation);
+    (
+      nextLocation: RouteStartLocation,
+      source: RouteStartLocationSource,
+      options: { pan?: boolean } = {}
+    ) => {
+      setStartLocation(nextLocation, source);
 
       if (!window.naver?.maps) {
         return;
@@ -173,23 +179,30 @@ function PlaceCartStartLocationStep({
   );
 
   useEffect(() => {
+    if (mapInitialLocation && startLocation) {
+      return;
+    }
+
     const frameId = window.requestAnimationFrame(() => {
-      if (!mapInitialLocation && savedPlaceCenter) {
-        setMapInitialLocation(savedPlaceCenter);
+      if (!mapInitialLocation && displayedLocation) {
+        setMapInitialLocation(displayedLocation);
       }
 
       if (!startLocation && savedPlaceCenter) {
-        updateStartLocation(savedPlaceCenter);
-        return;
+        updateStartLocation(savedPlaceCenter, "saved-places");
       }
-
-      setDraftLocation(startLocation);
     });
 
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, [mapInitialLocation, savedPlaceCenter, startLocation, updateStartLocation]);
+  }, [
+    displayedLocation,
+    mapInitialLocation,
+    savedPlaceCenter,
+    startLocation,
+    updateStartLocation,
+  ]);
 
   const handleMapReady = useCallback(
     ({ map, naverMaps, center }: NaverMapReadyContext) => {
@@ -219,10 +232,10 @@ function PlaceCartStartLocationStep({
         "dragend",
         () => {
           const position = startMarker.getPosition();
-          updateStartLocation({
-            lat: position.lat(),
-            lng: position.lng(),
-          });
+          updateStartLocation(
+            { lat: position.lat(), lng: position.lng() },
+            "map"
+          );
         }
       );
       const clickListener = naverMaps.Event.addListener(
@@ -234,6 +247,7 @@ function PlaceCartStartLocationStep({
               lat: event.coord.lat(),
               lng: event.coord.lng(),
             },
+            "map",
             { pan: true }
           );
         }
@@ -296,7 +310,11 @@ function PlaceCartStartLocationStep({
   return (
     <div className="space-y-4">
       <div>
-        <p className="font-trip text-sm text-brand-700">START POINT</p>
+        <p aria-live="polite" className="font-trip text-sm text-brand-700">
+          {displayedSource
+            ? text.cart.startLocationSource[displayedSource]
+            : text.cart.startLocationLabel}
+        </p>
         <h2 className="mt-1 text-xl font-semibold text-slate-900">
           {text.cart.startLocationTitle}
         </h2>
@@ -331,8 +349,8 @@ function PlaceCartStartLocationStep({
                 {text.cart.selectedStartLocation}
               </p>
               <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                {draftLocation
-                  ? `${draftLocation.lat.toFixed(5)}, ${draftLocation.lng.toFixed(5)}`
+                {displayedLocation
+                  ? `${displayedLocation.lat.toFixed(5)}, ${displayedLocation.lng.toFixed(5)}`
                   : text.cart.startLocationUnavailable}
               </p>
             </div>
@@ -341,7 +359,7 @@ function PlaceCartStartLocationStep({
               <button
                 type="button"
                 onClick={() =>
-                  updateStartLocation(savedPlaceCenter, {
+                  updateStartLocation(savedPlaceCenter, "saved-places", {
                     pan: true,
                   })
                 }

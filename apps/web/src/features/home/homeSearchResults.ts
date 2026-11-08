@@ -1,10 +1,11 @@
-/** 홈 관광지 데이터를 검색 팝업 카드에 필요한 표시값과 정렬 기준으로 변환한다. */
+/** 홈 관광지 데이터를 지도 아래 목록과 검색 팝업에 사용할 표시값·정렬 기준으로 변환한다. */
 import {
   calculateDistanceMeters,
   type CurrentLocation,
 } from "@/lib/gangwonBoundaryUtils";
 import {
   formatDistanceLabel,
+  getAttractionMarkerKey,
   getMarkerTypeIcon,
   getPlaceSearchMatchPriority,
   matchesPlaceFilter,
@@ -16,7 +17,7 @@ import type { GangwonAttraction } from "@/lib/visitKoreaTourApi";
 import type { HomeAttractionQueryData } from "./useHomeAttractionData";
 
 export type HomeSearchResult = {
-  /** 결과를 선택할 때 지도 이동과 장소 상세 열기에 전달하는 원본 관광지 */
+  /** 현재 언어로 표시하며, 선택 시 지도 이동과 장소 상세 열기에 전달하는 관광지 */
   attraction: GangwonAttraction;
   /** 장소 종류 필터 판정과 카드 분류명에 사용하는 해석된 마커 정보 */
   markerType: ResolvedMarkerType;
@@ -42,7 +43,8 @@ type BuildHomeSearchResultsOptions = {
 };
 
 /**
- * 전체 관광지를 장소 종류와 검색어로 거른 뒤 제목 일치도 순으로 정렬한다.
+ * 현재 언어의 장소명·주소와 같은 관광지의 원문을 검색해 더 잘 맞는 쪽의 우선순위로 정렬한다.
+ * 결과에는 현재 언어의 관광지를 담고, 장소 종류 필터도 해당 표시 데이터를 사용한다.
  * 같은 일치도에서는 현재 위치가 있으면 가까운 장소를 먼저 배치한다. 현재 위치가 없으면
  * 혼잡도 순위를 비교하고, 순위도 같거나 없을 때 한국어 장소명으로 정렬한다.
  * 원본 관광지 배열은 변경하지 않는다.
@@ -60,20 +62,44 @@ export function buildHomeSearchResults({
   }
 
   const keyword = searchKeyword.trim();
+  const { allAttractions, sourceAttractions } = attractionData;
+  const sourceAttractionByKey =
+    keyword && sourceAttractions && sourceAttractions !== allAttractions
+      ? new Map(
+          sourceAttractions.map((place) => [getAttractionMarkerKey(place), place])
+        )
+      : null;
 
-  return attractionData.allAttractions
+  return allAttractions
     .map((attraction) => {
       const markerType = resolveMarkerType(
         attraction,
         attractionData.lclsNameByCode
       );
       const rank = topRankByAttractionId.get(attraction.id) ?? null;
-      const searchMatchPriority = getPlaceSearchMatchPriority(
+      let searchMatchPriority = getPlaceSearchMatchPriority(
         attraction.title,
         attraction.address,
         markerType.typeName,
         keyword
       );
+      const sourceAttraction = sourceAttractionByKey?.get(
+        getAttractionMarkerKey(attraction)
+      );
+      if (sourceAttraction && searchMatchPriority !== 0) {
+        const sourceMatchPriority = getPlaceSearchMatchPriority(
+          sourceAttraction.title,
+          sourceAttraction.address,
+          "",
+          keyword
+        );
+        if (sourceMatchPriority !== null) {
+          searchMatchPriority = Math.min(
+            searchMatchPriority ?? sourceMatchPriority,
+            sourceMatchPriority
+          );
+        }
+      }
       const distanceM = currentLocation
         ? calculateDistanceMeters(currentLocation, {
             lat: attraction.lat,

@@ -80,15 +80,16 @@ export function buildBoundaryMapByRegions(
   const mapByCode: Record<string, GeoMultiPolygon> = {};
 
   regions.forEach((region) => {
-    const matchedFeature = features.find((feature) => {
-      const properties = feature.properties;
-
-      return (
-        properties?.SIG_CD === region.adminCode ||
-        properties?.SIG_KOR_NM === region.label ||
-        properties?.title?.startsWith(region.label)
-      );
-    });
+    // 전국의 동명 지역은 행정 코드로 구분하고, 코드가 없는 기존 경계만 이름으로 연결한다.
+    const matchedFeature =
+      features.find((feature) => feature.properties?.SIG_CD === region.adminCode) ??
+      features.find((feature) => {
+        const properties = feature.properties;
+        return !properties?.SIG_CD && (
+          properties?.SIG_KOR_NM === region.label ||
+          properties?.title?.startsWith(region.label)
+        );
+      });
 
     if (matchedFeature) {
       mapByCode[region.sigunguCode] = toMultiPolygonCoordinates(matchedFeature);
@@ -178,9 +179,9 @@ function isLocationInsidePolygon(
   );
 }
 
-export function findRegionContainingLocation(
+export function findRegionContainingLocation<TRegion extends BoundaryRegion>(
   location: CurrentLocation,
-  regions: readonly BoundaryRegion[],
+  regions: readonly TRegion[],
   boundaryBySigunguCode: Record<string, GeoMultiPolygon>
 ) {
   return (

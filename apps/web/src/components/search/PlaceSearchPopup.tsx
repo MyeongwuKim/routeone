@@ -9,7 +9,7 @@
  */
 import type { RefObject } from "react";
 import { IoClose, IoSearch, IoTrashOutline } from "react-icons/io5";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import SelectablePillButton from "@/components/inputs/SelectablePillButton";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
 import RecentSearchItem from "@/components/search/RecentSearchItem";
@@ -17,7 +17,7 @@ import { useRecentPlaceSearches } from "@/components/search/useRecentPlaceSearch
 import type { HomeSearchResult } from "@/features/home/homeSearchResults";
 import type { SearchFilter } from "@/lib/gangwonAttractionMap";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
-import { useUiText } from "@/lib/uiText";
+import { localizePlaceCategoryLabel, useUiText } from "@/lib/uiText";
 
 type PlaceSearchPopupProps = {
 
@@ -152,7 +152,10 @@ function PlaceSearchPopup({
                       <PlaceResultCard
                         title={item.attraction.title}
                         address={item.attraction.address}
-                        categoryLabel={item.markerType.contentTypeLabel}
+                        categoryLabel={localizePlaceCategoryLabel(
+                          item.markerType.contentTypeLabel,
+                          text
+                        )}
                         thumbnailUrl={item.thumbnailUrl}
                         fallbackIcon={item.icon}
                         distanceLabel={item.distanceLabel}
@@ -184,11 +187,11 @@ function PlaceSearchPopup({
                   ) : null}
                 </>
               ) : (
-                <PotatoLoadingCard
+                <AppLoadingCard
                   title={text.search.noResultsTitle}
                   description={text.search.noResultsDescription}
                   footerText={text.search.noResultsFooter}
-                  animation="searching"
+                  animation="empty"
                   compact
                   className="shadow-sm"
                 />
@@ -224,7 +227,7 @@ function PlaceSearchPopup({
                   ))}
                 </div>
               ) : (
-                <PotatoLoadingCard
+                <AppLoadingCard
                   title={text.search.noRecentTitle}
                   description={text.search.noRecentDescription}
                   footerText={text.search.noRecentFooter}

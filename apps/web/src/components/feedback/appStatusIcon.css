@@ -1,0 +1,33 @@
+.duru-status-needle,
+.duru-status-orbit {
+  transform-origin: 56px 56px;
+}
+
+.duru-status-needle {
+  transform: rotate(-12deg);
+}
+
+.duru-status-icon[data-animated="true"] .duru-status-needle {
+  animation: duru-compass-sway 2.6s ease-in-out infinite;
+}
+
+.duru-status-icon[data-animated="true"] .duru-status-orbit {
+  animation: duru-compass-orbit 12s linear infinite;
+}
+
+@keyframes duru-compass-sway {
+  0%, 100% { transform: rotate(-12deg); }
+  45% { transform: rotate(24deg); }
+  65% { transform: rotate(16deg); }
+}
+
+@keyframes duru-compass-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .duru-status-icon[data-animated="true"] .duru-status-needle,
+  .duru-status-icon[data-animated="true"] .duru-status-orbit {
+    animation: none;
+  }
+}

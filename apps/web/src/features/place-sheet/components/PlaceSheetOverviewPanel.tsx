@@ -1,6 +1,6 @@
 
 import { lazy, Suspense } from "react";
-import { PotatoLoadingCard } from "@/components/feedback/PotatoLoadingOverlay";
+import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
 import { localizePlaceCategoryLabel, type UiText } from "@/lib/uiText";
 import type { NearbyTouristPlace } from "@/lib/visitKoreaTourApi";
@@ -13,6 +13,7 @@ import {
   getNearbyPlaceCategoryIcon,
   getNearbyPlaceCategoryLabel,
   type PlaceSheetCoordinates,
+  type PlaceDirectionMode,
 } from "../placeSheetModel";
 import PlaceDirectionsSection from "./PlaceDirectionsSection";
 import {
@@ -27,6 +28,10 @@ const PlaceTrendChart = lazy(() => import("./PlaceTrendChart"));
 type PlaceSheetOverviewPanelProps = {
 
   appLanguage: AppLanguage;
+
+  routeMode: PlaceDirectionMode;
+  onRouteModeChange: (mode: PlaceDirectionMode) => void;
+  onOriginChange: (coordinates: PlaceSheetCoordinates) => void;
 
   currentLocation: PlaceSheetCoordinates;
 
@@ -66,6 +71,9 @@ function PlaceTrendChartFallback() {
 
 function PlaceSheetOverviewPanel({
   appLanguage,
+  routeMode,
+  onRouteModeChange,
+  onOriginChange,
   currentLocation,
   data,
   directionOrigin,
@@ -157,6 +165,10 @@ function PlaceSheetOverviewPanel({
         {showDirections ? (
           <PlaceDirectionsSection
             appLanguage={appLanguage}
+            routeMode={routeMode}
+            onRouteModeChange={onRouteModeChange}
+            onOriginChange={onOriginChange}
+            walkingRoute={data.walkingRoute}
             currentLocation={currentLocation}
             directionOrigin={directionOrigin}
             isCurrentLocationLookupPending={isCurrentLocationLookupPending}
@@ -214,7 +226,7 @@ function PlaceSheetOverviewPanel({
               {nearbyTouristError}
             </div>
           ) : (
-            <PotatoLoadingCard
+            <AppLoadingCard
               title={text.placeSheet.nearbyEmpty}
               animation="empty"
               compact

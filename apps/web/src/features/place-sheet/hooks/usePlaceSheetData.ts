@@ -4,7 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { placeLocalizationApi } from "@/api/placeLocalizationApi";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { routeApi } from "@/api/routeApi";
-import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
+import { fetchDrivingRouteFromCurrentLocation, type DrivingRouteResult } from "@/lib/naverDirectionsApi";
+import { fetchWalkingRoute } from "@/features/walking/walkingDirections";
+import { WalkingRoutingError, type WalkingRouteResult } from "@/features/walking/walkingTypes";
+import { getWalkingRouteText, formatWalkingDistance } from "@/features/walking/walkingRouteText";
 import { isTouristPlace } from "@/lib/placeCategory";
 import { localizeTourPlaces } from "@/lib/placeLocalization";
 import {
@@ -32,6 +35,7 @@ import {
   localizeTourDetailValue,
   preloadImageUrls,
   type PlaceSheetCoordinates,
+  type PlaceDirectionMode,
 } from "../placeSheetModel";
 
 const TOUR_API_SERVICE_KEY = import.meta.env.VITE_VISITKOREA_SERVICE_KEY;
@@ -40,6 +44,8 @@ const FRESH_LOCALIZATION_RETRY_ATTEMPTS = 2;
 const LOCALIZATION_RETRY_DELAY_MS = 1500;
 const LOCALIZATION_REFETCH_INTERVAL_MS = 3000;
 const LOCALIZATION_MAX_BACKGROUND_REFETCHES = 6;
+
+type PlaceRouteResult = WalkingRouteResult | (DrivingRouteResult & { mode: "driving" });
 
 type PlaceTextCandidate = {
   title: string;
@@ -66,6 +72,8 @@ type UsePlaceSheetDataParams = {
 
   currentLocation: PlaceSheetCoordinates;
 
+  routeMode: PlaceDirectionMode;
+
   isOpen: boolean;
   /** 상세·혼잡도·주변 장소·방문 통계·사진 조회의 기준이 되는 현재 장소 */
   selectedPlace: MapSheetPlace | null;
@@ -82,10 +90,12 @@ type UsePlaceSheetDataParams = {
 /**
  * 관광 데이터는 장소 종류와 API 키가 유효할 때만 조회하고, 영어 화면에서는 장소와 개요 번역을 추가로 요청한다.
  * 로그인 전용 방문 통계·사진 Query와 길찾기 실패를 서로 분리해 일부 요청 실패 시에도 가능한 상세 정보는 유지한다.
+ * 길찾기는 선택한 기준별로 캐시를 나누며 도보는 정적 보행로 데이터에서 자체 계산한다.
  */
 export function usePlaceSheetData({
   appLanguage,
   currentLocation,
+  routeMode,
   isOpen,
   selectedPlace,
   shouldLoadOverviewData,
@@ -264,29 +274,41 @@ export function usePlaceSheetData({
     gcTime: 1000 * 60 * 60 * 24 * 7,
   });
 
-  const routeQuery = useQuery({
+  const routeQuery = useQuery<PlaceRouteResult>({
     queryKey: [
       "place-route",
+      routeMode,
       selectedPlaceKey,
+      selectedPlace?.lat,
+      selectedPlace?.lng,
       currentLocation.lat,
       currentLocation.lng,
       appLanguage,
     ],
     enabled: isOpen && shouldLoadRouteData && Boolean(selectedPlace),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!selectedPlace) {
         throw new Error(text.placeSheet.selectedPlaceMissing);
       }
-      return fetchDrivingRouteFromCurrentLocation({
+      if (routeMode === "walking") {
+        return fetchWalkingRoute({
+          start: currentLocation,
+          goal: { lat: selectedPlace.lat, lng: selectedPlace.lng },
+          signal,
+        });
+      }
+      const route = await fetchDrivingRouteFromCurrentLocation({
         startLat: currentLocation.lat,
         startLng: currentLocation.lng,
         goalLat: selectedPlace.lat,
         goalLng: selectedPlace.lng,
         language: appLanguage,
       });
+      return { ...route, mode: "driving" as const };
     },
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
+    ...(routeMode === "walking" ? { retry: false as const } : {}),
   });
 
   const placeStaySummaryQuery = useQuery({
@@ -464,11 +486,15 @@ export function usePlaceSheetData({
     () => userPlacePhotos.map((photo) => photo.imageUrl),
     [userPlacePhotos]
   );
-  const routeDurationText = routeQuery.data
-    ? formatDurationMinutes(routeQuery.data.durationMs, text)
+  const routeData = routeQuery.data;
+  const walkingRoute: WalkingRouteResult | null = routeData && routeData.mode === "walking" ? routeData : null;
+  const routeDurationText = routeData
+    ? walkingRoute
+      ? text.placeSheet.durationMinutes(Math.ceil(walkingRoute.durationMs / 60_000))
+      : formatDurationMinutes(routeData.durationMs, text)
     : null;
-  const routeDistanceText = routeQuery.data
-    ? formatDistance(routeQuery.data.distanceM)
+  const routeDistanceText = routeData
+    ? walkingRoute ? formatWalkingDistance(walkingRoute.distanceM) : formatDistance(routeData.distanceM)
     : null;
   const routePathPoints = useMemo(
     () => routeQuery.data?.path ?? [],
@@ -535,7 +561,12 @@ export function usePlaceSheetData({
     placeStaySummaryLabel,
     routeDistanceText,
     routeDurationText,
-    routeError: routeQuery.isError ? text.placeSheet.routeLoadError : null,
+    routeError: routeQuery.isError
+      ? routeMode === "walking"
+        ? getWalkingRouteText(appLanguage).errors[routeQuery.error instanceof WalkingRoutingError ? routeQuery.error.code : "DATA_UNAVAILABLE"]
+        : text.placeSheet.routeLoadError
+      : null,
+    walkingRoute,
     routePathPoints,
     selectedPlaceKey,
     userPlacePhotos,

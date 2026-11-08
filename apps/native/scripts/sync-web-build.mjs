@@ -304,11 +304,13 @@ function rewriteJsImportSpecifiers(source, assetPath) {
     );
 }
 
+/** WebView의 가상 호스트로 요청할 수 없는 공개 파일을 빌드에서 읽어 모듈에 포함한다. */
 function rewriteJsPublicAssets(source, publicAssetDataUrls) {
-  return source.replaceAll(
-    "/gangwon-sigungu-boundary.json",
-    publicAssetDataUrls.gangwonBoundary
-  );
+  let rewritten = source;
+  for (const [assetUrl, dataUrl] of publicAssetDataUrls) {
+    rewritten = rewritten.replaceAll(assetUrl, dataUrl);
+  }
+  return rewritten;
 }
 
 function rewriteJsSource(source, assetPath, publicAssetDataUrls) {
@@ -326,9 +328,14 @@ async function buildNativeModuleScripts(entryScriptPaths) {
   const jsAssetPaths = distFiles
     .filter((assetPath) => assetPath.endsWith(".js"))
     .sort();
-  const publicAssetDataUrls = {
-    gangwonBoundary: await toDataUrl("gangwon-sigungu-boundary.json")
-  };
+  const publicAssetPaths = [
+    "/gangwon-sigungu-boundary.json",
+    "./service-region-boundary.json",
+    "./duru-icon.png"
+  ];
+  const publicAssetDataUrls = await Promise.all(
+    publicAssetPaths.map(async (assetUrl) => [assetUrl, await toDataUrl(assetUrl)])
+  );
   const imports = {};
 
   for (const assetPath of jsAssetPaths) {

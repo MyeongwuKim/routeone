@@ -1,3 +1,4 @@
+import { isFestivalRegionSelected, getFestivalRegionLabel } from "./festivalRegions.js";
 import {
   UserNotificationPushStatus,
   UserNotificationType,
@@ -35,27 +36,6 @@ const MAX_NOTIFICATIONS_PER_RUN = 100;
 const MAX_NOTIFICATION_CANDIDATE_SCAN = 500;
 
 type PushLocale = "ko" | "en";
-
-const GANGWON_REGION_LABELS_EN: Record<string, string> = {
-  "1": "Gangneung",
-  "2": "Goseong",
-  "3": "Donghae",
-  "4": "Samcheok",
-  "5": "Sokcho",
-  "6": "Yanggu",
-  "7": "Yangyang",
-  "8": "Yeongwol",
-  "9": "Wonju",
-  "10": "Inje",
-  "11": "Jeongseon",
-  "12": "Cheorwon",
-  "13": "Chuncheon",
-  "14": "Taebaek",
-  "15": "Pyeongchang",
-  "16": "Hongcheon",
-  "17": "Hwacheon",
-  "18": "Hoengseong",
-};
 
 function getPushLocale(locale?: string | null): PushLocale {
   return locale?.trim().toLowerCase() === "en" ? "en" : "ko";
@@ -259,10 +239,13 @@ function createPushMessage(
   now: Date
 ): ExpoPushMessage | null {
   if (notification.type === UserNotificationType.FESTIVAL_SUMMARY) {
-    const regionLabel =
-      locale === "en"
-        ? GANGWON_REGION_LABELS_EN[notification.regionCode ?? ""] ?? "Gangwon"
-        : notification.regionLabel ?? "강원";
+    const codes = notification.festivalRegionCodes?.length
+      ? notification.festivalRegionCodes
+      : notification.regionCode ? [notification.regionCode] : [];
+    const labels = codes.map(code => getFestivalRegionLabel(code, locale)).filter(Boolean);
+    const regionLabel = labels.length ? labels.join(", ") : locale === "en"
+      ? "your selected regions"
+      : notification.regionLabel ?? "선택한 지역";
     const title =
       locale === "en"
         ? notification.festivalKind === "TODAY"
@@ -481,9 +464,7 @@ async function deliverClaimedNotification(
         (!isDailyFestivalNotification &&
           notification.festivalKind !== "TRIP" &&
           (!notification.regionCode ||
-            !settings.festivalRegionCodes.includes(
-              notification.regionCode
-            ))))) ||
+            !isFestivalRegionSelected(notification.regionCode, settings.festivalRegionCodes))))) ||
     (notification.type === UserNotificationType.ROUTE_REVIEW &&
       !isRouteReviewTestNotification &&
       !settings?.routeReviewEnabled) ||

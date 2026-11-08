@@ -86,7 +86,8 @@ function calculateDistanceKm(from: RouteStartLocation, to: RouteStartLocation) {
   return earthRadiusKm * c;
 }
 
-function estimateTravelMinutes(
+/** 좌표 사이의 직선거리를 평균 시속 35km와 최소 8분 기준의 이동시간으로 환산한다. */
+export function estimateTravelMinutes(
   from: RouteStartLocation,
   to: RouteStartLocation
 ) {

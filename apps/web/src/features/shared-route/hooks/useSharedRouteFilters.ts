@@ -1,7 +1,9 @@
-/** 공유 경로의 적용 필터와 필터 팝업 draft를 분리해 열기·토글·적용·초기화 동작을 관리한다. */
-import { useCallback, useReducer } from "react";
+import { useCallback, useState } from "react";
+import { useStore } from "zustand";
+import type { ServiceAreaId } from "@/data/serviceAreas";
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import type { SharedRouteFilterCandidate } from "../sharedRouteCardModel";
+import type { SharedRoutePageMode } from "../sharedRouteListModel";
 import {
   EMPTY_SHARED_ROUTE_FILTERS,
   addFilterCandidate,
@@ -9,191 +11,88 @@ import {
   toggleFilterCandidate,
   type SharedRouteFilters,
 } from "../sharedRouteFilters";
+import { createSharedRouteSelectionStore, sharedRouteFeedSelectionStore } from "../stores/sharedRouteSelectionStore";
 
-type SharedRouteFilterState = {
-  language: AppLanguage;
-  activeFilters: SharedRouteFilters;
-  draftFilters: SharedRouteFilters;
-  isDialogOpen: boolean;
-};
-
-type SharedRouteFilterAction =
-  | { type: "open"; language: AppLanguage }
-  | {
-      type: "open-with-candidate";
-      language: AppLanguage;
-      filter: SharedRouteFilterCandidate;
-    }
-  | {
-      type: "replace-with-candidate";
-      language: AppLanguage;
-      filter: SharedRouteFilterCandidate;
-    }
-  | {
-      type: "toggle-draft";
-      language: AppLanguage;
-      filter: SharedRouteFilterCandidate;
-    }
-  | { type: "apply"; language: AppLanguage }
-  | {
-      type: "remove-active";
-      language: AppLanguage;
-      filter: SharedRouteFilterCandidate;
-    }
-  | { type: "clear-active"; language: AppLanguage }
-  | { type: "clear-draft"; language: AppLanguage }
-  | { type: "close"; language: AppLanguage };
-
-function createInitialFilterState(language: AppLanguage): SharedRouteFilterState {
-  return {
-    language,
-    activeFilters: EMPTY_SHARED_ROUTE_FILTERS,
-    draftFilters: EMPTY_SHARED_ROUTE_FILTERS,
-    isDialogOpen: false,
-  };
-}
-
-function sharedRouteFilterReducer(
-  storedState: SharedRouteFilterState,
-  action: SharedRouteFilterAction
-): SharedRouteFilterState {
-  const state =
-    storedState.language === action.language
-      ? storedState
-      : createInitialFilterState(action.language);
-
-  switch (action.type) {
-    case "open":
-      return {
-        ...state,
-        draftFilters: state.activeFilters,
-        isDialogOpen: true,
-      };
-    case "open-with-candidate":
-      return {
-        ...state,
-        draftFilters: addFilterCandidate(state.activeFilters, action.filter),
-        isDialogOpen: true,
-      };
-    case "replace-with-candidate": {
-      const filters = addFilterCandidate(
-        EMPTY_SHARED_ROUTE_FILTERS,
-        action.filter
-      );
-
-      return {
-        ...state,
-        activeFilters: filters,
-        draftFilters: filters,
-        isDialogOpen: false,
-      };
-    }
-    case "toggle-draft":
-      return {
-        ...state,
-        draftFilters: toggleFilterCandidate(state.draftFilters, action.filter),
-      };
-    case "apply":
-      return {
-        ...state,
-        activeFilters: state.draftFilters,
-        isDialogOpen: false,
-      };
-    case "remove-active":
-      return {
-        ...state,
-        activeFilters: removeFilterCandidate(
-          state.activeFilters,
-          action.filter
-        ),
-      };
-    case "clear-active":
-      return {
-        ...state,
-        activeFilters: EMPTY_SHARED_ROUTE_FILTERS,
-      };
-    case "clear-draft":
-      return {
-        ...state,
-        draftFilters: EMPTY_SHARED_ROUTE_FILTERS,
-      };
-    case "close":
-      return {
-        ...state,
-        isDialogOpen: false,
-      };
-    default:
-      return state;
-  }
-}
+type FilterDraft = { language: AppLanguage; filters: SharedRouteFilters };
 
 /**
- * 팝업을 열 때 적용 필터를 draft로 복사하고 적용 전 변경은 목록 조회에 반영하지 않는다.
- * 언어가 바뀌면 이전 언어의 표시값을 유지하지 않고 빈 필터 상태로 다시 시작한다.
+ * 공개 피드는 Zustand에 적용 조건을 보관하고, 좋아요 목록은 별도 인스턴스를 사용한다.
+ * 팝업을 열 때 적용 필터를 복사하며, 확인하기 전까지 편집 중인 값은 화면에만 남는다.
  */
-export function useSharedRouteFilters(language: AppLanguage) {
-  const [storedState, dispatch] = useReducer(
-    sharedRouteFilterReducer,
-    language,
-    createInitialFilterState
+export function useSharedRouteFilters(
+  language: AppLanguage,
+  mode: SharedRoutePageMode,
+  defaultAreaId: ServiceAreaId
+) {
+  const [selectionStore] = useState(() =>
+    mode === "feed" ? sharedRouteFeedSelectionStore : createSharedRouteSelectionStore()
   );
-  const state =
-    storedState.language === language
-      ? storedState
-      : createInitialFilterState(language);
+  const [draft, setDraft] = useState<FilterDraft | null>(null);
+  const areaId = useStore(selectionStore, (state) => state.areaId);
+  const applied = useStore(selectionStore, (state) => state.applied);
+  const activeFilters = applied?.language === language ? applied.filters : EMPTY_SHARED_ROUTE_FILTERS;
+  const currentDraft = draft?.language === language ? draft : null;
+
+  const selectArea = useCallback((nextAreaId: ServiceAreaId | null) => {
+    selectionStore.getState().selectArea(nextAreaId);
+    setDraft(null);
+  }, [selectionStore]);
+
+  /** 기본 시·도를 보고 있었다면 필터 적용 시 그 시·도도 고정해 함께 복원한다. */
+  const updateActiveFilters = useCallback((update: (filters: SharedRouteFilters) => SharedRouteFilters) => {
+    const { areaId: currentAreaId, updateFilters } = selectionStore.getState();
+    updateFilters(currentAreaId ?? (mode === "feed" ? defaultAreaId : null), language, update);
+  }, [defaultAreaId, language, mode, selectionStore]);
 
   const openFilterDialog = useCallback(() => {
-    dispatch({ type: "open", language });
+    setDraft({ language, filters: activeFilters });
+  }, [activeFilters, language]);
+
+  const openFilterDialogWithCandidate = useCallback((filter: SharedRouteFilterCandidate) => {
+    setDraft({ language, filters: addFilterCandidate(activeFilters, filter) });
+  }, [activeFilters, language]);
+
+  const toggleDraftFilter = useCallback((filter: SharedRouteFilterCandidate) => {
+    setDraft((current) => current?.language === language
+      ? { ...current, filters: toggleFilterCandidate(current.filters, filter) }
+      : current);
   }, [language]);
 
-  const openFilterDialogWithCandidate = useCallback(
-    (filter: SharedRouteFilterCandidate) => {
-      dispatch({ type: "open-with-candidate", language, filter });
-    },
-    [language]
-  );
-
-  const toggleDraftFilter = useCallback(
-    (filter: SharedRouteFilterCandidate) => {
-      dispatch({ type: "toggle-draft", language, filter });
-    },
-    [language]
-  );
-
-  const replaceActiveFiltersWithCandidate = useCallback(
-    (filter: SharedRouteFilterCandidate) => {
-      dispatch({ type: "replace-with-candidate", language, filter });
-    },
-    [language]
-  );
+  const replaceActiveFiltersWithCandidate = useCallback((filter: SharedRouteFilterCandidate) => {
+    updateActiveFilters(() => addFilterCandidate(EMPTY_SHARED_ROUTE_FILTERS, filter));
+    setDraft(null);
+  }, [updateActiveFilters]);
 
   const applyFilters = useCallback(() => {
-    dispatch({ type: "apply", language });
-  }, [language]);
+    if (!currentDraft) return;
+    updateActiveFilters(() => currentDraft.filters);
+    setDraft(null);
+  }, [currentDraft, updateActiveFilters]);
 
-  const removeActiveFilter = useCallback(
-    (filter: SharedRouteFilterCandidate) => {
-      dispatch({ type: "remove-active", language, filter });
-    },
-    [language]
-  );
+  const removeActiveFilter = useCallback((filter: SharedRouteFilterCandidate) => {
+    updateActiveFilters((filters) => removeFilterCandidate(filters, filter));
+  }, [updateActiveFilters]);
 
   const clearActiveFilters = useCallback(() => {
-    dispatch({ type: "clear-active", language });
-  }, [language]);
+    updateActiveFilters(() => EMPTY_SHARED_ROUTE_FILTERS);
+  }, [updateActiveFilters]);
 
   const clearDraftFilters = useCallback(() => {
-    dispatch({ type: "clear-draft", language });
+    setDraft((current) => current?.language === language
+      ? { ...current, filters: EMPTY_SHARED_ROUTE_FILTERS }
+      : current);
   }, [language]);
 
   const closeFilterDialog = useCallback(() => {
-    dispatch({ type: "close", language });
-  }, [language]);
+    setDraft(null);
+  }, []);
 
   return {
-    activeFilters: state.activeFilters,
-    draftFilters: state.draftFilters,
-    isFilterDialogOpen: state.isDialogOpen,
+    areaId,
+    selectArea,
+    activeFilters,
+    draftFilters: currentDraft?.filters ?? EMPTY_SHARED_ROUTE_FILTERS,
+    isFilterDialogOpen: currentDraft !== null,
     applyFilters,
     clearActiveFilters,
     clearDraftFilters,
