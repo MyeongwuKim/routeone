@@ -1722,7 +1722,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       copyEmail: "이메일 주소 복사",
       copied: "이메일 주소를 복사했어요.",
       copyManually: "자동으로 복사하지 못했어요. 위 주소를 길게 누르거나 선택해 복사해주세요.",
-      emailSubject: "[두루] 불편사항 및 개선 의견",
+      emailSubject: "[마실] 불편사항 및 개선 의견",
       emailBody: "불편했던 점을 적어주세요.\r\n\r\n\r\n문제가 생긴 화면과 상황을 알려주세요.\r\n\r\n\r\n필요하면 화면 사진을 첨부해주세요.\r\n",
       environmentLabel: "앱 환경 정보 (문의 확인용)",
     },
@@ -1784,7 +1784,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       title: "계정 정보",
       loading: "계정 정보를 불러오는 중",
       loadError: "계정 정보를 불러오지 못했어요. 다시 시도해 주세요.",
-      fallbackName: "두루 사용자",
+      fallbackName: "마실 사용자",
       accountSection: "현재 계정",
       email: "이메일",
       accountId: "아이디",
@@ -1809,7 +1809,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       sessionEndError: "푸시 알림 해제에 실패했어요. 다시 시도해 주세요.",
       deleteAccount: "회원 탈퇴",
       deleteAccountDescription: "계정과 저장된 데이터를 모두 삭제",
-      deleteConfirmTitle: "두루에서 탈퇴할까요?",
+      deleteConfirmTitle: "마실에서 탈퇴할까요?",
       deleteConfirmDescription:
         "내 루트와 방문 기록, 인증 사진, 좋아요와 알림 설정이 모두 삭제돼요.",
       deleteConfirmDetail:
@@ -3438,7 +3438,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       copyEmail: "Copy email address",
       copied: "Email address copied.",
       copyManually: "Couldn't copy automatically. Press and hold or select the address above to copy it.",
-      emailSubject: "[Duru] Feedback",
+      emailSubject: "[Masil] Feedback",
       emailBody: "Tell us what went wrong or what could be improved.\r\n\r\n\r\nWhich screen were you on, and what were you doing?\r\n\r\n\r\nAttach screenshots if helpful.\r\n",
       environmentLabel: "App environment (for troubleshooting)",
     },
@@ -3500,7 +3500,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       title: "Account",
       loading: "Loading account information",
       loadError: "Couldn't load your account. Please try again.",
-      fallbackName: "Duru user",
+      fallbackName: "Masil user",
       accountSection: "Current Account",
       email: "Email",
       accountId: "Account ID",
@@ -3526,7 +3526,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "Couldn't turn off push notifications. Please try again.",
       deleteAccount: "Delete Account",
       deleteAccountDescription: "Delete the account and all saved data",
-      deleteConfirmTitle: "Delete your Duru account?",
+      deleteConfirmTitle: "Delete your Masil account?",
       deleteConfirmDescription:
         "Your routes, visit records, verification photos, likes, and notification settings will be deleted.",
       deleteConfirmDetail:

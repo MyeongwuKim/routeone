@@ -1,33 +1,33 @@
-.duru-status-needle,
-.duru-status-orbit {
+.masil-status-needle,
+.masil-status-orbit {
   transform-origin: 56px 56px;
 }
 
-.duru-status-needle {
+.masil-status-needle {
   transform: rotate(-12deg);
 }
 
-.duru-status-icon[data-animated="true"] .duru-status-needle {
-  animation: duru-compass-sway 2.6s ease-in-out infinite;
+.masil-status-icon[data-animated="true"] .masil-status-needle {
+  animation: masil-compass-sway 2.6s ease-in-out infinite;
 }
 
-.duru-status-icon[data-animated="true"] .duru-status-orbit {
-  animation: duru-compass-orbit 12s linear infinite;
+.masil-status-icon[data-animated="true"] .masil-status-orbit {
+  animation: masil-compass-orbit 12s linear infinite;
 }
 
-@keyframes duru-compass-sway {
+@keyframes masil-compass-sway {
   0%, 100% { transform: rotate(-12deg); }
   45% { transform: rotate(24deg); }
   65% { transform: rotate(16deg); }
 }
 
-@keyframes duru-compass-orbit {
+@keyframes masil-compass-orbit {
   to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .duru-status-icon[data-animated="true"] .duru-status-needle,
-  .duru-status-icon[data-animated="true"] .duru-status-orbit {
+  .masil-status-icon[data-animated="true"] .masil-status-needle,
+  .masil-status-icon[data-animated="true"] .masil-status-orbit {
     animation: none;
   }
 }

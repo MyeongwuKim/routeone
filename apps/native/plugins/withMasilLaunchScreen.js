@@ -7,14 +7,14 @@ const {
   withXcodeProject
 } = require("expo/config-plugins");
 
-const LAUNCH_STORYBOARD = "DuruLaunchScreen";
+const LAUNCH_STORYBOARD = "MasilLaunchScreen";
 const LAUNCH_ASSETS = [
-  { source: "SplashScreenLogo", name: "DuruLaunchLogo", kind: "imageset" },
-  { source: "SplashScreenBackground", name: "DuruLaunchBackground", kind: "colorset" }
+  { source: "SplashScreenLogo", name: "MasilLaunchLogo", kind: "imageset" },
+  { source: "SplashScreenBackground", name: "MasilLaunchBackground", kind: "colorset" }
 ];
 
-/** Expo가 생성한 시작 화면을 두루 전용 이름으로 등록해 이전 앱의 시작 화면과 구분한다. */
-module.exports = function withDuruLaunchScreen(config) {
+/** Expo가 생성한 시작 화면을 마실 전용 이름으로 등록해 이전 앱의 시작 화면과 구분한다. */
+module.exports = function withMasilLaunchScreen(config) {
   // Expo 스플래시 플러그인보다 먼저 등록해야 기본 설정 이후에 실행된다.
   config = withInfoPlist(config, (nextConfig) => {
     nextConfig.modResults.UILaunchStoryboardName = LAUNCH_STORYBOARD;

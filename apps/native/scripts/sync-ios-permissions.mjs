@@ -20,27 +20,27 @@ const permissionEntries = [
   {
     key: "NSCameraUsageDescription",
     value:
-      "두루가 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
+      "마실이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
   },
   {
     key: "NSPhotoLibraryUsageDescription",
     value:
-      "두루가 지난 방문 사진 인증을 위해 선택한 사진을 사용합니다.",
+      "마실이 지난 방문 사진 인증을 위해 선택한 사진을 사용합니다.",
   },
   {
     key: "NSLocationWhenInUseUsageDescription",
     value:
-      "두루가 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
+      "마실이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
   },
   {
     key: "NSLocationAlwaysAndWhenInUseUsageDescription",
     value:
-      "두루가 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
+      "마실이 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
   },
   {
     key: "NSLocationAlwaysUsageDescription",
     value:
-      "두루가 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
+      "마실이 장소 근처에 도착했을 때 알림을 보내기 위해 위치를 사용합니다.",
   },
 ];
 

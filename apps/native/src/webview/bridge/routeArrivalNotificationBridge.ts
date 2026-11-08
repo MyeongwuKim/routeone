@@ -924,8 +924,8 @@ async function startRouteArrivalLocationTracking(
     foregroundService: {
       notificationTitle:
         language === "en"
-          ? "Duru arrival alerts are active"
-          : "두루 장소 도착 알림 사용 중",
+          ? "Masil arrival alerts are active"
+          : "마실 장소 도착 알림 사용 중",
       notificationBody:
         language === "en"
           ? "Checking your location near the next destination."

@@ -1,6 +1,6 @@
-/** 앱 실행과 로그인 화면에서 사용하는 두루의 이름과 색상. */
+/** 앱 실행과 로그인 화면에서 사용하는 마실의 이름과 색상. */
 export const NATIVE_BRAND = {
-  name: { ko: "두루", en: "Duru" },
+  name: { ko: "마실", en: "Masil" },
   background: "#104A3E",
   darkBackground: "#092C25",
   mint: "#E6F6EE",
@@ -121,10 +121,10 @@ export const ONBOARDING_TEXT = {
   en: {
     locationTitle: "Allow Location",
     locationDescription:
-      "Duru uses your location to help confirm arrivals and visit photos.",
+      "Masil uses your location to help confirm arrivals and visit photos.",
     notificationTitle: "Allow Notifications",
     notificationDescription:
-      "Duru can notify you when you are near a place on today's route.",
+      "Masil can notify you when you are near a place on today's route.",
     requestPermission: "Request Permission",
     checking: "Checking",
     sessionExpired: "You were signed out after 7 days of inactivity.",

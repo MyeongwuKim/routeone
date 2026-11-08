@@ -2,7 +2,7 @@ export const UPDATE_TEXT = {
   ko: {
     title: "앱 업데이트가 필요해요",
     description:
-      "안정적인 사용을 위해 두루를 최신 버전으로\n업데이트해 주세요.",
+      "안정적인 사용을 위해 마실을 최신 버전으로\n업데이트해 주세요.",
     currentVersion: "현재 버전",
     minimumVersion: "필요 버전",
     openStore: "스토어에서 업데이트",
@@ -13,7 +13,7 @@ export const UPDATE_TEXT = {
   en: {
     title: "App update required",
     description:
-      "Update Duru to the latest version to continue using the app.",
+      "Update Masil to the latest version to continue using the app.",
     currentVersion: "Current version",
     minimumVersion: "Required version",
     openStore: "Update in store",

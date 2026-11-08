@@ -12,13 +12,13 @@ export default function AppStatusIcon({ animated = true, compact = false }: {
       aria-hidden="true"
       focusable="false"
       data-animated={animated}
-      className={`duru-status-icon shrink-0 ${compact ? "size-16" : "size-20"}`}
+      className={`masil-status-icon shrink-0 ${compact ? "size-16" : "size-20"}`}
     >
       <circle cx="56" cy="56" r="47" fill="#ccfbf1" fillOpacity="0.35" />
-      <circle className="duru-status-orbit" cx="56" cy="56" r="46" stroke="#14b8a6" strokeOpacity="0.45" strokeWidth="2" strokeDasharray="2 9" strokeLinecap="round" />
+      <circle className="masil-status-orbit" cx="56" cy="56" r="46" stroke="#14b8a6" strokeOpacity="0.45" strokeWidth="2" strokeDasharray="2 9" strokeLinecap="round" />
       <circle cx="56" cy="56" r="34" fill="#0f766e" />
       <circle cx="56" cy="56" r="28" stroke="#5eead4" strokeOpacity="0.45" strokeWidth="1.5" />
-      <g className="duru-status-needle">
+      <g className="masil-status-needle">
         <path d="M74 38L62 62L38 74L50 50Z" fill="#5eead4" stroke="#99f6e4" strokeWidth="2" strokeLinejoin="round" />
         <path d="M74 38L62 62L50 50Z" fill="#ffffff" />
         <circle cx="56" cy="56" r="3" fill="#0f766e" />

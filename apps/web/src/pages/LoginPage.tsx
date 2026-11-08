@@ -104,7 +104,7 @@ function LoginPage() {
     <main className="flex min-h-dvh items-center justify-center bg-brand-50 px-5 py-8 text-slate-900">
       <section className="w-full max-w-md rounded-2xl border border-brand-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-3">
-          <img src={`${import.meta.env.BASE_URL}duru-icon.png`} alt="" className="size-12 rounded-xl" />
+          <img src={`${import.meta.env.BASE_URL}masil-icon.png`} alt="" className="size-12 rounded-xl" />
           <div>
             <p className="font-trip text-sm text-brand-700">{APP_DISPLAY_NAMES[language]}</p>
             <h1 className="text-xl font-bold text-slate-900">로그인</h1>
@@ -119,7 +119,7 @@ function LoginPage() {
               onChange={(event) => setAccountId(event.target.value)}
               autoComplete="username"
               className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-brand-500"
-              placeholder="duru"
+              placeholder="masil"
               required
               minLength={3}
             />

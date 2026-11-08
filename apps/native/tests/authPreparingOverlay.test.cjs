@@ -57,7 +57,7 @@ test("로그인 대기 아이콘은 중복 생성되지 않으며 완료하면 �
   assert.equal(overlay.style.pointerEvents, "auto");
   const icon = overlay.children[0].children[0];
   assert.match(icon.innerHTML, /<svg/);
-  assert.match(icon.innerHTML, /duru-auth-needle/);
+  assert.match(icon.innerHTML, /masil-auth-needle/);
   assert.doesNotMatch(icon.innerHTML, /potato|🥔|감자/i);
   const styles = harness.document.getElementById("routeone-auth-preparing-style").textContent;
   assert.match(styles, /prefers-reduced-motion:reduce/);

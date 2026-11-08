@@ -12,7 +12,7 @@ import { updateNativeAppLanguage } from "@/native-bridge/language";
 
 export type AppLanguage = "ko" | "en";
 
-export const APP_DISPLAY_NAMES = { ko: "두루", en: "Duru" } as const;
+export const APP_DISPLAY_NAMES = { ko: "마실", en: "Masil" } as const;
 
 type AppLanguageState = {
   /** UI 문구와 장소 번역 요청에 적용할 현재 언어. 저장값이 없거나 유효하지 않으면 ko */

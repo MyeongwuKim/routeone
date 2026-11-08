@@ -16,7 +16,7 @@ function sanitizeFileName(fileName: string) {
     .replace(/\s+/g, "-")
     .slice(0, 80);
 
-  return sanitized || `duru-card-${Date.now()}.png`;
+  return sanitized || `masil-card-${Date.now()}.png`;
 }
 
 function assertPngDataUrl(dataUrl: string) {
@@ -38,7 +38,7 @@ async function saveNativeImage(
     compress: 1,
     format: SaveFormat.PNG
   });
-  const title = message.title?.trim() || "두루 포토카드";
+  const title = message.title?.trim() || "마실 포토카드";
   const fileName = sanitizeFileName(message.fileName);
   const shareResult = await Share.share(
     {

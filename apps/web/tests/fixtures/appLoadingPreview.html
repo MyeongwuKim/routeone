@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>두루 · 공통 상태 아이콘</title>
+    <title>마실 · 공통 상태 아이콘</title>
     <link rel="stylesheet" href="/src/index.css" />
     <style>
       body { margin: 0; background: #f4f8f7; color: #134e4a; font-family: system-ui, sans-serif; }
@@ -32,7 +32,7 @@
       ];
 
       createRoot(document.getElementById("root")).render(h("main", null,
-        h("h1", null, "두루의 새로운 상태 아이콘"),
+        h("h1", null, "마실의 새로운 상태 아이콘"),
         h("p", { className: "intro" }, "진행 중에는 가볍게 움직이고, 빈 화면에서는 멈춰 있어요."),
         h("div", { className: "samples" }, samples.map(sample => h("section", { key: sample.label, className: `sample ${sample.theme}`, "aria-label": sample.label },
           h("p", { className: "label" }, sample.label),

@@ -37,7 +37,7 @@ export function NativeOnboardingLoading() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ActivityIndicator color={colors.brandText} />
       <Text style={[styles.loadingText, { color: colors.mutedText }]}>
-        두루를 준비하는 중이에요.
+        마실을 준비하는 중이에요.
       </Text>
     </View>
   );

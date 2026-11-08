@@ -830,7 +830,7 @@ function renderPosterSvg({
   <path d="M72 224 C220 194 308 218 456 188 C616 158 730 176 1004 126" fill="none" stroke="#0f766e" stroke-width="5" stroke-dasharray="14 14" opacity="0.26"/>
   <path d="M74 980 C245 1038 396 992 532 1026 C686 1066 786 1028 1002 1076" fill="none" stroke="#b45309" stroke-width="5" stroke-dasharray="10 14" opacity="0.22"/>
 
-  <text x="78" y="118" class="kicker">Duru TRAVEL BOARD</text>
+  <text x="78" y="118" class="kicker">Masil TRAVEL BOARD</text>
   ${renderTextLines({
     lines: titleLines,
     x: 78,
@@ -866,7 +866,7 @@ function renderPosterSvg({
 
   ${photoSlots}
 
-  <text x="540" y="1288" class="footer" text-anchor="middle">Duru · MY TRAVEL ACHIEVEMENT</text>
+  <text x="540" y="1288" class="footer" text-anchor="middle">Masil · MY TRAVEL ACHIEVEMENT</text>
 </svg>
 `.trim();
 }
@@ -1281,13 +1281,13 @@ export function getRouteCompletionPosterFileName(
 
   const daySuffix = dayIndex ? `-day-${String(dayIndex).padStart(2, "0")}` : "";
 
-  return `duru-${safeTitle}${daySuffix}-${route.id.slice(0, 8)}.png`;
+  return `masil-${safeTitle}${daySuffix}-${route.id.slice(0, 8)}.png`;
 }
 
 export async function downloadRouteCompletionPoster(
   dataUrl: string,
   fileName: string,
-  title = "두루 포토카드"
+  title = "마실 포토카드"
 ): Promise<RouteCompletionPosterSaveResult> {
   const nativeSaveRequest = nativeBridge.media.saveImage({
     dataUrl,

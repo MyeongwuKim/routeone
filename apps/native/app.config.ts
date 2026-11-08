@@ -20,15 +20,15 @@ type AppVariantResult = {
 
 const APP_VARIANT_CONFIG: Record<AppVariant, AppVariantConfig> = {
   dev: {
-    displayName: "Duru(T)",
-    launcherName: "두루(T)",
+    displayName: "Masil(T)",
+    launcherName: "마실(T)",
     slug: "routeone",
     scheme: "routeone-dev",
     bundleIdentifier: "com.routeone.app.dev"
   },
   prod: {
-    displayName: "Duru",
-    launcherName: "두루",
+    displayName: "Masil",
+    launcherName: "마실",
     slug: "routeone",
     scheme: "routeone",
     bundleIdentifier: "com.myeongwukim.routeone"
@@ -202,7 +202,7 @@ const plugins: unknown[] = [
       url: process.env.SENTRY_URL?.trim() || "https://sentry.io/"
     }
   ],
-  "./plugins/withDuruLaunchScreen",
+  "./plugins/withMasilLaunchScreen",
   [
     "expo-splash-screen",
     {
@@ -222,7 +222,7 @@ const plugins: unknown[] = [
       isAndroidBackgroundLocationEnabled: true,
       isAndroidForegroundServiceEnabled: true,
       locationWhenInUsePermission:
-        "두루가 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다."
+        "마실이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다."
     }
   ],
   [
@@ -237,9 +237,9 @@ const plugins: unknown[] = [
     "expo-image-picker",
     {
       cameraPermission:
-        "두루가 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
+        "마실이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
       photosPermission:
-        "두루가 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다."
+        "마실이 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다."
     }
   ],
   "expo-apple-authentication",
@@ -289,11 +289,11 @@ export default {
         },
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
-          "두루가 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
+          "마실이 장소 근처 도착 여부와 방문 인증을 확인하기 위해 현재 위치를 사용합니다.",
         NSCameraUsageDescription:
-          "두루가 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
+          "마실이 방문한 장소의 사진 인증을 남기기 위해 카메라를 사용합니다.",
         NSPhotoLibraryUsageDescription:
-          "두루가 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다.",
+          "마실이 방문 기록과 포토카드에 사용할 사진을 선택하기 위해 사진 보관함을 사용합니다.",
         LSApplicationQueriesSchemes: ["nmap"]
       }
     },
@@ -301,7 +301,7 @@ export default {
       package: appBundleIdentifier,
       edgeToEdgeEnabled: true,
       adaptiveIcon: {
-        foregroundImage: "./assets/splash-brand-icon.png",
+        foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: splashBackgroundColor
       },
       permissions: [

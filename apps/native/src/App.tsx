@@ -163,7 +163,7 @@ export default function App() {
           backgroundColor={onboardingTheme.background}
         />
         <NativeOnboardingStep
-          description={"두루에서 사용할 언어를 선택해 주세요.\nChoose the language to use in Duru."}
+          description={"마실에서 사용할 언어를 선택해 주세요.\nChoose the language to use in Masil."}
           primaryAction={{
             label: "English",
             onPress: () => {

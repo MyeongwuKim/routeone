@@ -161,7 +161,7 @@ export async function resolveWebBundle(
       emitWebBundleProgress(reportProgress, {
         stage: "loading",
         progress: 0.92,
-        message: "로컬 두루를 불러오고 있어요."
+        message: "로컬 마실을 불러오고 있어요."
       });
       return fallback;
     }
@@ -187,7 +187,7 @@ export async function resolveWebBundle(
       emitWebBundleProgress(reportProgress, {
         stage: "loading",
         progress: 0.92,
-        message: "두루를 불러오고 있어요."
+        message: "마실을 불러오고 있어요."
       });
       return fallback;
     }
@@ -214,7 +214,7 @@ export async function resolveWebBundle(
       emitWebBundleProgress(reportProgress, {
         stage: "loading",
         progress: 0.92,
-        message: "두루를 불러오고 있어요."
+        message: "마실을 불러오고 있어요."
       });
       return activeInstalledBundle ? fallback : remoteFallbackBundle ?? fallback;
     }
@@ -236,7 +236,7 @@ export async function resolveWebBundle(
         emitWebBundleProgress(reportProgress, {
           stage: "loading",
           progress: 0.92,
-          message: "두루를 불러오고 있어요."
+          message: "마실을 불러오고 있어요."
         });
         return remoteFallbackBundle;
       }
@@ -252,7 +252,7 @@ export async function resolveWebBundle(
     emitWebBundleProgress(reportProgress, {
       stage: "loading",
       progress: 0.92,
-      message: "저장된 두루를 불러오고 있어요."
+      message: "저장된 마실을 불러오고 있어요."
     });
     return fallback;
   }

@@ -89,7 +89,7 @@ function HomeRecommendationContent() {
     <section className="min-h-full bg-[#f7faf9] text-slate-900 dark:bg-[#071718] dark:text-slate-100">
       <div className="mx-auto max-w-5xl px-5 pb-8 pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-8 sm:pt-[calc(env(safe-area-inset-top)+1.5rem)]">
         <header className="flex min-h-11 items-center justify-between gap-3">
-          <span className="flex items-center gap-2 text-brand-800 dark:text-brand-200"><img src={`${import.meta.env.BASE_URL}duru-icon.png`} alt="" className="size-6 rounded-md" /><span className="font-trip text-2xl">{text.brand}</span></span>
+          <span className="flex items-center gap-2 text-brand-800 dark:text-brand-200"><img src={`${import.meta.env.BASE_URL}masil-icon.png`} alt="" className="size-6 rounded-md" /><span className="font-trip text-2xl">{text.brand}</span></span>
           {!isAuthenticated ? (
             <button
               type="button"
