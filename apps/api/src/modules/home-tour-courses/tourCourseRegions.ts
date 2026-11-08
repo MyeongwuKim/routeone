@@ -28,18 +28,10 @@ type CourseBoundary = CourseRegion & {
 
 const EDGE_TOLERANCE = 1e-9;
 
-async function readBoundaryFile() {
-  try {
-    return await readFile(new URL("../../assets/service-region-boundary.json", import.meta.url), "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    return readFile(new URL("../../../../web/public/service-region-boundary.json", import.meta.url), "utf8");
-  }
-}
-
-/** API 빌드에 포함된 지도 경계를 읽고, 개발 환경에서는 웹과 같은 원본을 사용한다. */
+/** 개발과 배포에서 API에 포함된 시군구 경계를 읽어 코스의 대표 좌표를 지역에 매핑할 때 사용한다. */
 export async function loadTourCourseBoundaries(): Promise<CourseBoundary[]> {
-  const { features } = JSON.parse(await readBoundaryFile()) as { features: BoundaryFeature[] };
+  const boundaryFile = new URL("../../assets/service-region-boundary.json", import.meta.url);
+  const { features } = JSON.parse(await readFile(boundaryFile, "utf8")) as { features: BoundaryFeature[] };
   return features.flatMap(({ properties, geometry }) => {
     const region = FESTIVAL_REGION_BY_CODE[properties.SIG_CD];
     if (!region) return [];

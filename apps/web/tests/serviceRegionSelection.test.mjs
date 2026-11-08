@@ -23,6 +23,14 @@ before(async () => {
 });
 after(async () => { await server?.close(); });
 
+test("웹 지도와 독립 배포되는 API가 같은 시군구 경계를 사용한다", async () => {
+  const [webBoundary, apiBoundary] = await Promise.all([
+    readFile(new URL("../public/service-region-boundary.json", import.meta.url)),
+    readFile(new URL("../../api/src/assets/service-region-boundary.json", import.meta.url)),
+  ]);
+  assert.ok(webBoundary.equals(apiBoundary), "웹과 API의 시군구 경계 파일을 함께 갱신해야 한다.");
+});
+
 test("지방 14개 시도와 기존 서울의 모든 시군구에 중복 없는 행정 코드와 실제 경계를 제공한다", () => {
   assert.equal(Object.keys(areas).length, 15);
   assert.equal(new Set(regions.map(({ region }) => region.adminCode)).size, regions.length);
