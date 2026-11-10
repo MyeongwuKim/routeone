@@ -23,6 +23,7 @@ const copy = {
     stopsEmpty: "이 코스에 등록된 방문지가 없어요.",
     stopsIncomplete: "일정에 담으려면 모든 방문지의 위치 정보가 필요해요.",
     source: "여행 코스 정보 · 한국관광공사", mapRegion: "이 지역 지도 보기",
+    courseDistance: "총거리", courseDuration: "소요시간", courseTheme: "테마",
   },
   en: {
     brand: "Masil", eyebrow: "A little planning. A new discovery.",
@@ -46,6 +47,7 @@ const copy = {
     stopsEmpty: "This course has no listed stops.",
     stopsIncomplete: "Every stop needs a location before you can add this course to your trip.",
     source: "Travel courses · Korea Tourism Organization", mapRegion: "See this area on the map",
+    courseDistance: "Total distance", courseDuration: "Duration", courseTheme: "Theme",
   },
 };
 

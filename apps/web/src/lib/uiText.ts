@@ -28,6 +28,7 @@ export type UiText = {
     reset: string;
     unknown: string;
     back: string;
+    backToHome: string;
     backToMyInfo: string;
     placeLocalizationLoading: string;
     selectedCount: (count: number) => string;
@@ -117,9 +118,6 @@ export type UiText = {
     darkMode: string;
     darkModeOn: string;
     darkModeOff: string;
-    language: string;
-    korean: string;
-    english: string;
     notificationSettings: string;
     notificationSettingsDescription: string;
     serviceArea: string;
@@ -1194,6 +1192,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       reset: "초기화",
       unknown: "미정",
       back: "이전 화면으로 돌아가기",
+      backToHome: "홈으로 돌아가기",
       backToMyInfo: "내 정보로 돌아가기",
       placeLocalizationLoading: "장소 정보를 영어로 번역하고 있어요",
       selectedCount: (count) => `${count}개 선택`,
@@ -1592,9 +1591,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       darkMode: "다크 모드",
       darkModeOn: "어두운 화면으로 보기",
       darkModeOff: "밝은 화면으로 보기",
-      language: "언어 설정",
-      korean: "한국어",
-      english: "English",
       notificationSettings: "알림 설정",
       notificationSettingsDescription: "축제·루트·장소 도착 알림 관리",
       serviceArea: "기본 지역 설정",
@@ -2890,6 +2886,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       reset: "Reset",
       unknown: "TBD",
       back: "Go back",
+      backToHome: "Back to Home",
       backToMyInfo: "Back to My Info",
       placeLocalizationLoading: "Translating place information…",
       selectedCount: (count) => `${count} selected`,
@@ -3308,9 +3305,6 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       darkMode: "Dark Mode",
       darkModeOn: "Use dark theme",
       darkModeOff: "Use light theme",
-      language: "Language",
-      korean: "Korean",
-      english: "English",
       notificationSettings: "Notifications",
       notificationSettingsDescription:
         "Manage festival, route, and arrival alerts",

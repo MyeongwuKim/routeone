@@ -21,7 +21,6 @@ import {
   Route,
   Routes,
   useLocation,
-  useMatch,
   useNavigate,
 } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";
@@ -290,12 +289,14 @@ function HomeRouteFallback() {
   );
 }
 
-function MyInfoSubpageFallbackHeader({
+function SettingsFallbackHeader({
   eyebrow,
   title,
+  back,
 }: {
   eyebrow: string;
   title: string;
+  back?: { to: string; label: string };
 }) {
   const navigate = useNavigate();
   const text = useUiText();
@@ -304,8 +305,8 @@ function MyInfoSubpageFallbackHeader({
     <header className="flex items-center gap-3">
       <button
         type="button"
-        aria-label={text.common.backToMyInfo}
-        onClick={() => navigate("/me")}
+        aria-label={back?.label ?? text.common.backToMyInfo}
+        onClick={() => navigate(back?.to ?? "/me", { replace: Boolean(back) })}
         className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
       >
         <MdArrowBack />
@@ -355,7 +356,7 @@ function AccountLazyFallback() {
 
   return (
     <section className="space-y-4 pb-8 text-slate-900 dark:text-slate-100">
-      <MyInfoSubpageFallbackHeader
+      <SettingsFallbackHeader
         eyebrow={text.routeShell.myInfoTitle}
         title={text.routeShell.accountTitle}
       />
@@ -409,12 +410,14 @@ function AccountLazyFallback() {
 
 function LanguageLazyFallback() {
   const text = useUiText();
+  const { search } = useLocation();
 
   return (
     <section className="space-y-4 pb-4 text-slate-900 dark:text-slate-100">
-      <MyInfoSubpageFallbackHeader
+      <SettingsFallbackHeader
         eyebrow={text.routeShell.appSettings}
         title={text.routeShell.languageTitle}
+        back={{ to: `/home${search}`, label: text.common.backToHome }}
       />
 
       <section className="space-y-3">
@@ -494,7 +497,7 @@ function AppInfoLazyFallback() {
       aria-busy="true"
       className="space-y-4 pb-4 text-slate-900 dark:text-slate-100"
     >
-      <MyInfoSubpageFallbackHeader
+      <SettingsFallbackHeader
         eyebrow={text.routeShell.appSettings}
         title={text.routeShell.appInfoTitle}
       />
@@ -678,10 +681,9 @@ function AuthSessionTracker() {
 
 function RequireAuth() {
   const { isAuthenticated } = useAuthSession();
-  const isMyInfo = useMatch("/me") !== null;
 
   if (!isAuthenticated) {
-    return <LoginRequiredCard showLanguageLink={isMyInfo} />;
+    return <LoginRequiredCard />;
   }
 
   return <Outlet />;
@@ -741,12 +743,13 @@ function AppRoutes() {
             }
           />
           <Route
-            path="/me/language"
+            path="/home/language"
             element={withRouteSuspense(
               <LanguageSettingsPage />,
               <LanguageLazyFallback />
             )}
           />
+          <Route path="/me/language" element={<Navigate to="/home/language" replace />} />
           <Route element={<RequireAuth />}>
             <Route
               path="/my-route"

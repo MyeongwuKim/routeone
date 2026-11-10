@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { Link, Navigate, useLocation, useSearchParams } from "react-router-dom";
-import { MdArrowForward, MdErrorOutline, MdMap, MdRefresh, MdRoute } from "react-icons/md";
+import { MdArrowForward, MdErrorOutline, MdLanguage, MdMap, MdRefresh, MdRoute } from "react-icons/md";
 import HomeRecommendationForm from "@/features/home/recommendations/HomeRecommendationForm";
 import HomeRecommendedCourseCard from "@/features/home/recommendations/HomeRecommendedCourseCard";
 import HomeMapEntry from "@/features/home/recommendations/HomeMapEntry";
@@ -77,7 +77,7 @@ function HomeRecommendationContent() {
   const isError = query.isError && !query.data;
   const formRef = useRef<HTMLDivElement>(null);
   const recommendationsRef = useRef<HTMLElement>(null);
-  const { hash } = useLocation();
+  const { hash, search } = useLocation();
 
   // 앱의 해시 라우터에서도 홈 상단 대신 추천 결과에 초점과 스크롤을 맞춘다.
   useLayoutEffect(() => {
@@ -92,15 +92,24 @@ function HomeRecommendationContent() {
       <div className="mx-auto max-w-5xl px-5 pb-8 pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-8 sm:pt-[calc(env(safe-area-inset-top)+1.5rem)]">
         <header className="flex min-h-11 items-center justify-between gap-3">
           <span className="flex items-center gap-2 text-brand-800 dark:text-brand-200"><img src={`${import.meta.env.BASE_URL}masil-icon.png`} alt="" className="size-6 rounded-md" /><span className="font-trip text-2xl">{text.brand}</span></span>
-          {!isAuthenticated ? (
-            <button
-              type="button"
-              onClick={() => requestLogin("home-recommendation-header")}
-              className="inline-flex min-h-11 shrink-0 items-center rounded-full px-3 text-xs font-bold text-brand-800 transition hover:bg-brand-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:text-brand-200 dark:hover:bg-brand-900/40"
+          <div className="flex shrink-0 items-center gap-1">
+            {!isAuthenticated ? (
+              <button
+                type="button"
+                onClick={() => requestLogin("home-recommendation-header")}
+                className="inline-flex min-h-11 shrink-0 items-center rounded-full px-3 text-xs font-bold text-brand-800 transition hover:bg-brand-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:text-brand-200 dark:hover:bg-brand-900/40"
+              >
+                {ui.auth.login}
+              </button>
+            ) : null}
+            <Link
+              to={{ pathname: "/home/language", search }}
+              aria-label={ui.routeShell.languageTitle}
+              className="inline-flex size-11 items-center justify-center rounded-full border border-brand-200 bg-white text-xl text-brand-800 transition hover:bg-brand-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:border-brand-400/25 dark:bg-brand-900/40 dark:text-brand-200 dark:hover:bg-brand-900/60"
             >
-              {ui.auth.login}
-            </button>
-          ) : null}
+              <MdLanguage aria-hidden="true" />
+            </Link>
+          </div>
         </header>
         <div className="mb-6 mt-7 sm:mb-8 sm:mt-10">
           <p className="mb-2 text-xs font-bold tracking-wide text-brand-700 dark:text-brand-300">{text.eyebrow}</p>

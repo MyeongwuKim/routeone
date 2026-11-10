@@ -5,19 +5,18 @@
  * 게스트에게 이용 가능한 기능과 계정 기능의 차이를 안내하고 로그인으로 연결한다.
  *
  * 구조:
- * 로그인 요청 버튼을 표시하고, 내 정보에서는 게스트도 열 수 있는 언어 설정을 함께 제공한다.
+ * 본문 높이만큼 공간을 확보해 가운데에 표시하고, 공간이 좁으면 본문 스크롤로 버튼까지 볼 수 있다.
  */
-import { MdLanguage, MdLogin, MdOutlineAccountCircle } from "react-icons/md";
-import { Link } from "react-router-dom";
+import { MdLogin, MdOutlineAccountCircle } from "react-icons/md";
 import { useLoginRequest } from "@/hooks/useLoginRequest";
 import { useUiText } from "@/lib/uiText";
 
-function LoginRequiredCard({ showLanguageLink }: { showLanguageLink: boolean }) {
+function LoginRequiredCard() {
   const text = useUiText();
   const requestLogin = useLoginRequest();
 
   return (
-    <section className="flex h-full min-h-0 items-center justify-center">
+    <section className="flex min-h-full items-center justify-center py-4">
       <div className="w-full max-w-sm rounded-3xl border border-brand-100 bg-white p-6 text-center shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
         <span className="mx-auto flex size-16 items-center justify-center rounded-full bg-brand-50 text-4xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
           <MdOutlineAccountCircle />
@@ -36,15 +35,6 @@ function LoginRequiredCard({ showLanguageLink }: { showLanguageLink: boolean }) 
           <MdLogin className="text-lg" />
           {text.auth.login}
         </button>
-        {showLanguageLink ? (
-          <Link
-            to="/me/language"
-            className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-brand-200 px-4 py-2 text-sm font-bold text-brand-700 transition hover:bg-brand-50 dark:border-brand-400/25 dark:text-brand-100 dark:hover:bg-brand-400/10"
-          >
-            <MdLanguage aria-hidden="true" className="text-lg" />
-            {text.routeShell.languageTitle}
-          </Link>
-        ) : null}
       </div>
     </section>
   );

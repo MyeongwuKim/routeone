@@ -73,7 +73,7 @@ function CourseStop({ title, place, description, number, detailsLabel, unavailab
   );
 }
 
-/** 접힌 카드에는 코스 소개를 두 줄까지 표시하고, 펼치면 전문과 방문 순서를 보여준다. */
+/** 코스 소개와 제공된 코스 정보를 카드에 표시하고, 펼치면 소개 전문과 방문 순서를 보여준다. */
 export default function HomeRecommendedCourseCard({
   course,
   index,
@@ -83,7 +83,13 @@ export default function HomeRecommendedCourseCard({
   onStartCourse,
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
-  const { coverRef, image, title, description, markImageFailed } = useHomeCoursePreview(course, language);
+  const { coverRef, image, title, description, distance, duration, theme, markImageFailed } = useHomeCoursePreview(course, language);
+  const showTheme = theme.text && (language === "ko" || theme.lang === "en");
+  const courseFacts = [
+    { label: text.courseDistance, value: distance },
+    { label: text.courseDuration, value: duration },
+    ...(showTheme ? [{ label: text.courseTheme, value: theme }] : []),
+  ];
   const query = useHomeCourseStops(course.id, language, isOpen);
   const stops = query.data ?? [];
   const places = stops.flatMap(({ place }) => place ? [place] : []);
@@ -118,6 +124,16 @@ export default function HomeRecommendedCourseCard({
             {description.text}
           </p>
         ) : null}
+        <dl className="mt-3 flex flex-wrap gap-2">
+          {courseFacts.map(({ label, value }) => (
+            <div key={label} className="flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs dark:bg-brand-900/40">
+              <dt className="font-semibold text-brand-800 dark:text-brand-200">{label}</dt>
+              <dd lang={value.lang} className="min-w-0 break-words text-slate-700 empty:hidden dark:text-slate-200">
+                {language === "ko" || value.lang === "en" ? value.text : null}
+              </dd>
+            </div>
+          ))}
+        </dl>
         <button type="button" aria-expanded={isOpen} aria-controls={detailsId} onClick={() => setIsOpen(open => !open)} className="mt-4 flex min-h-11 w-full items-center justify-between rounded-xl bg-brand-50 px-3 py-2 text-sm font-bold text-brand-800 transition hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-100">
           {isOpen ? text.courseClose : text.courseOpen}{isOpen ? <MdExpandLess aria-hidden="true" className="text-xl" /> : <MdExpandMore aria-hidden="true" className="text-xl" />}
         </button>

@@ -2,7 +2,7 @@
  * 진입 경로: 하단 내 정보 탭
  *
  * 현재 계정 요약과 다녀온·좋아요·차단 경로 메뉴를 표시하고 계정 관리 화면으로 연결한다.
- * 다크 모드는 이 화면에서 바로 전환하며 언어·알림·앱 정보·문의는 각 설정 화면으로 이동한다.
+ * 다크 모드는 이 화면에서 바로 전환하며 알림·앱 정보·문의는 각 설정 화면으로 이동한다.
  * OWNER에게만 콘텐츠 관리 메뉴를, 개발·검수 환경에서만 서비스 지역 선택 메뉴를 표시한다.
  */
 import type { ReactNode } from "react";
@@ -14,7 +14,6 @@ import {
   MdDarkMode,
   MdHistory,
   MdInfoOutline,
-  MdLanguage,
   MdLightMode,
   MdLocationOn,
   MdMailOutline,
@@ -24,7 +23,6 @@ import {
 import AccountSummaryCard from "@/components/account/AccountSummaryCard";
 import { useAccountUser } from "@/components/account/useAccountUser";
 import { useUiText } from "@/lib/uiText";
-import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import {
   useDefaultServiceArea,
 } from "@/stores/serviceAreaStore";
@@ -111,7 +109,6 @@ function MyInfoPage() {
   const navigate = useNavigate();
   const isDarkMode = useUiThemeStore((state) => state.mode === "dark");
   const toggleDarkMode = useUiThemeStore((state) => state.toggleDarkMode);
-  const language = useAppLanguageStore((state) => state.language);
   const serviceArea = useDefaultServiceArea();
   const { user, isLoading, retry } = useAccountUser();
 
@@ -188,16 +185,6 @@ function MyInfoPage() {
 
         <div className="border-b border-brand-50" />
 
-        <MyInfoMenuRow
-          icon={<MdLanguage />}
-          title={text.myInfo.language}
-          description={
-            language === "ko" ? text.myInfo.korean : text.myInfo.english
-          }
-          onClick={() => navigate("/me/language")}
-        />
-
-        <div className="border-b border-brand-50" />
         <MyInfoMenuRow
           icon={<MdLocationOn />}
           title={text.myInfo.serviceArea}

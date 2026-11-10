@@ -1,5 +1,6 @@
 import { getServiceArea, isServiceAreaId, SERVICE_REGION_LIST, type ServiceAreaId } from "@/data/serviceAreas";
 import type { HomeTourCoursesQuery } from "@/generated/graphql";
+import type { AppLanguage } from "@/stores/appLanguageStore";
 
 /** 홈 추천에서 시·도의 모든 시·군·구를 조회하는 값. */
 export const ALL_HOME_REGIONS = "all";
@@ -14,6 +15,27 @@ export type HomeSelection = {
 };
 
 export type HomeTourCourse = HomeTourCoursesQuery["homeTourCourses"]["courses"][number];
+
+const ENGLISH_COURSE_UNITS: Record<string, string> = {
+  킬로미터: "km",
+  미터: "m",
+  "㎞": "km",
+  시간: "hr",
+  분: "min",
+  초: "sec",
+};
+
+/** 영어 모드에서는 숫자 뒤에 붙은 단위를 변환한다. 문장에 남은 한국어는 번역 요청에서 처리한다. */
+export function formatTourCourseMeasurement(value: string, language: AppLanguage) {
+  if (language === "ko") return value;
+
+  return value
+    .replace(/^약\s*(?=\d)/u, "About ")
+    .replaceAll(/(\d)\s*(킬로미터|미터|㎞|시간|분|초)\s*/gu, (_, digit: string, unit: string) => {
+      return digit + " " + ENGLISH_COURSE_UNITS[unit] + " ";
+    })
+    .trim();
+}
 
 const COURSE_LIST_PAGE_SIZE = 12;
 const COURSE_CHECK_BATCH_SIZE = 4;

@@ -1,11 +1,11 @@
 /**
- * 진입 경로: 내 정보 → 언어 설정
+ * 진입 경로: 홈 오른쪽 위 지구본. 돌아갈 때 홈의 지역 선택을 유지한다.
  *
  * 한국어·영어 중 표시 언어를 선택해 Store, HTML 문서 언어와 네이티브 앱 설정에 함께 반영한다.
  * 변경 후 언어별 장소·경로 캐시를 무효화하고 열린 장소 상세 화면을 닫아 이전 언어 데이터가 남지 않게 한다.
  */
 import { MdArrowBack, MdCheck, MdLanguage } from "react-icons/md";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { getUiText, useUiText } from "@/lib/uiText";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
@@ -20,6 +20,7 @@ const LANGUAGE_OPTION_VALUES: AppLanguage[] = ["ko", "en"];
 function LanguageSettingsPage() {
   const text = useUiText();
   const navigate = useNavigate();
+  const { search } = useLocation();
   const queryClient = useQueryClient();
   const language = useAppLanguageStore((state) => state.language);
   const setLanguage = useAppLanguageStore((state) => state.setLanguage);
@@ -54,8 +55,8 @@ function LanguageSettingsPage() {
       <header className="flex items-center gap-3">
         <button
           type="button"
-          aria-label={text.common.backToMyInfo}
-          onClick={() => navigate("/me")}
+          aria-label={text.common.backToHome}
+          onClick={() => navigate({ pathname: "/home", search }, { replace: true })}
           className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-xl text-brand-700 shadow-sm transition hover:bg-brand-100 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-200 dark:shadow-[0_10px_24px_rgba(0,0,0,0.22)] dark:hover:bg-[#13423e]"
         >
           <MdArrowBack />

@@ -31,7 +31,7 @@ function BottomTabLayout() {
     pathname === "/my-route" ||
     pathname === "/shared-route" ||
     pathname === "/me";
-  const shouldSlideInPage = pathname.startsWith("/me/");
+  const shouldSlideInPage = pathname === "/home/language" || pathname.startsWith("/me/");
   const bottomTabOffsetClass =
     "bottom-[calc(4.5rem+max(0.7rem,env(safe-area-inset-bottom)))]";
 

@@ -11,7 +11,7 @@ import { createMapSheetPlaceFromAttraction, resolveMarkerType } from "@/lib/gang
 import { requestGraphQL } from "@/lib/graphqlClient";
 import { CAFE_LCLS_CODE } from "@/lib/placeCategory";
 import { localizeTourPlaces } from "@/lib/placeLocalization";
-import { fetchTourCourseOverview, fetchTourCourseStopPlace, fetchTourCourseStops } from "@/lib/visitKoreaTourApi";
+import { fetchTourCourseFacts, fetchTourCourseOverview, fetchTourCourseStopPlace, fetchTourCourseStops } from "@/lib/visitKoreaTourApi";
 import { TOUR_API_SERVICE_KEY } from "@/pages/HomePage.constants";
 import { useAppLanguageStore, type AppLanguage } from "@/stores/appLanguageStore";
 import { useHomeExploreStore } from "@/stores/homeExploreStore";
@@ -23,6 +23,7 @@ import type { MapSheetPlace } from "@/types/place";
 import {
   createHomeSelectionParams,
   findTourCourseRegion,
+  formatTourCourseMeasurement,
   loadAvailableHomeCoursePage,
   readHomeSelection,
   type HomeTourCourse,
@@ -160,7 +161,7 @@ export function useHomeRecommendations() {
   };
 }
 
-/** 화면에 가까워진 카드의 소개와 영문 제목·소개를 조회하고, 대표 사진이 없으면 방문지 사진을 찾는다. */
+/** 화면에 가까워진 카드의 소개·코스 정보와 번역을 조회하고, 대표 사진이 없으면 방문지 사진을 찾는다. */
 export function useHomeCoursePreview(course: HomeTourCourse, language: AppLanguage) {
   const queryClient = useQueryClient();
   const coverRef = useRef<HTMLDivElement>(null);
@@ -189,8 +190,27 @@ export function useHomeCoursePreview(course: HomeTourCourse, language: AppLangua
     retry: false,
     queryFn: ({ signal }) => fetchTourCourseOverview(TOUR_API_SERVICE_KEY, course.id, signal),
   });
+  const facts = useQuery({
+    queryKey: ["home-official-tour-course-facts", course.id],
+    enabled: isNearViewport,
+    staleTime: COURSE_DETAIL_STALE_TIME,
+    retry: false,
+    queryFn: ({ signal }) => fetchTourCourseFacts(TOUR_API_SERVICE_KEY, course.id, signal),
+  });
   const title = useTourCourseTitle(course.id, course.title, language, isNearViewport);
-  const description = useTourCourseDescription(`tour-course:${course.id}:overview`, overview.data ?? "", language, isNearViewport);
+  const courseKey = `tour-course:${course.id}`;
+  const description = useTourCourseDescription(`${courseKey}:overview`, overview.data ?? "", language, isNearViewport);
+  const distance = useTourCourseDescription(
+    `${courseKey}:distance`, formatTourCourseMeasurement(facts.data?.distance ?? "", language), language,
+  );
+  const duration = useTourCourseDescription(
+    `${courseKey}:duration`, formatTourCourseMeasurement(facts.data?.duration ?? "", language), language,
+  );
+  const sourceTheme = facts.data?.theme ?? "";
+  const themeText = language === "en" && sourceTheme === "자연여행"
+    ? "Nature travel"
+    : sourceTheme;
+  const theme = useTourCourseDescription(`${courseKey}:theme`, themeText, language);
 
   const needsFallback = isNearViewport && !courseImage;
   const itinerary = useQuery({ ...homeCourseItineraryOptions(course.id), enabled: needsFallback });
@@ -220,12 +240,15 @@ export function useHomeCoursePreview(course: HomeTourCourse, language: AppLangua
     coverRef,
     title,
     description,
+    distance,
+    duration,
+    theme,
     image: courseImage || stopImage || placeCover.data?.find((image) => image && !failedImages.includes(image)),
     markImageFailed: (image: string) => setFailedImages((previous) => [...previous, image]),
   };
 }
 
-/** 펼친 코스의 방문지를 순서대로 정리하고, 번역된 장소 정보와 코스 원문의 방문지 설명을 연결한다. */
+/** 펼친 코스의 방문지를 순서대로 정리한다. 영어 모드에서는 첫 조회부터 이름과 주소 번역을 기다린다. */
 export function useHomeCourseStops(courseId: string, language: AppLanguage, enabled: boolean) {
   const queryClient = useQueryClient();
   return useQuery({
@@ -242,7 +265,12 @@ export function useHomeCourseStops(courseId: string, language: AppLanguage, enab
       const placesById = new Map(results.flatMap((result, index) =>
         result.status === "fulfilled" && result.value ? [[contentIds[index], result.value] as const] : []
       ));
-      const localized = await localizeTourPlaces([...placesById.values()].map(({ attraction }) => attraction), language);
+      const localized = await localizeTourPlaces(
+        [...placesById.values()].map(({ attraction }) => attraction),
+        language,
+        { waitForFresh: true },
+      );
+      signal.throwIfAborted();
       const localizedById = new Map(localized.map((attraction) => [attraction.id, attraction]));
       // 지역 코드가 없는 방문지를 펼칠 때만 경계 데이터로 소속 지역을 보완한다.
       const needsBoundary = [...placesById.values()].some((place) => !findTourCourseRegion(place));

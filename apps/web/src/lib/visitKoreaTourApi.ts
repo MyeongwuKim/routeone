@@ -77,6 +77,13 @@ type TourCourseStopItem = {
   subdetailoverview?: string;
 };
 
+type TourCourseIntroItem = {
+  contentid?: string;
+  distance?: string;
+  taketime?: string;
+  theme?: string;
+};
+
 type TourCourseStopPlace = {
   attraction: GangwonAttraction;
   areaCode: string;
@@ -859,6 +866,26 @@ export async function fetchTourCourseOverview(serviceKey: string, courseId: stri
   const { items } = await requestTourCoursePage(serviceKey, "detailCommon2", { contentId: courseId, numOfRows: "1" }, signal);
   const course = items.find((item) => item.contentid === courseId && item.contenttypeid === TOUR_COURSE_CONTENT_TYPE);
   return readTourCourseDescription(course?.overview);
+}
+
+/** 코스의 거리·시간·테마를 읽고 미등록 값과 테마 칸의 기관 분류값을 비운다. */
+export async function fetchTourCourseFacts(serviceKey: string, courseId: string, signal?: AbortSignal) {
+  const { items } = await requestTourCoursePage<TourCourseIntroItem>(serviceKey, "detailIntro2", {
+    contentId: courseId,
+    contentTypeId: TOUR_COURSE_CONTENT_TYPE,
+    numOfRows: "1",
+  }, signal);
+  const course = items.find((item) => item.contentid === courseId);
+  const readFact = (text?: string) => {
+    const value = readTourCourseDescription(text?.replaceAll(/&(?:nbsp|#160|#xa0);/gi, " "));
+    return /^(?:[-–—]+|없음|미정|정보\s*없음|n\/a)$/i.test(value) ? "" : value;
+  };
+  const theme = readFact(course?.theme);
+  return {
+    distance: readFact(course?.distance),
+    duration: readFact(course?.taketime),
+    theme: /^(?:지자체|local government)$/i.test(theme) ? "" : theme,
+  };
 }
 
 /** 코스 방문 장소를 상세 화면과 장바구니에 연결할 수 있도록 실제 콘텐츠 ID와 유효한 좌표를 확인한다. */

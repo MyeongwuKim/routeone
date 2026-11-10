@@ -7,6 +7,8 @@ let server;
 let readHomeSelection;
 let createHomeSelectionParams;
 let loadAvailableHomeCoursePage;
+let formatTourCourseMeasurement;
+let fetchTourCourseFacts;
 let fetchTourCourseOverview;
 let fetchTourCourseStops;
 let fetchTourCourseStopPlace;
@@ -19,10 +21,10 @@ before(async () => {
     server: { middlewareMode: true, hmr: false, ws: false },
     optimizeDeps: { noDiscovery: true, include: [] },
   });
-  ({ readHomeSelection, createHomeSelectionParams, loadAvailableHomeCoursePage } = await server.ssrLoadModule(
+  ({ readHomeSelection, createHomeSelectionParams, loadAvailableHomeCoursePage, formatTourCourseMeasurement } = await server.ssrLoadModule(
     "/src/features/home/recommendations/homeRecommendations.ts"
   ));
-  ({ fetchTourCourseOverview, fetchTourCourseStops, fetchTourCourseStopPlace } =
+  ({ fetchTourCourseFacts, fetchTourCourseOverview, fetchTourCourseStops, fetchTourCourseStopPlace } =
     await server.ssrLoadModule("/src/lib/visitKoreaTourApi.ts"));
 });
 
@@ -94,6 +96,48 @@ test("코스 전체 소개는 공통 상세에서 읽고 빈 설명은 표시하
   assert.equal(await fetchTourCourseOverview("test-key", "101"), "코스 전체 소개");
   assert.equal(await fetchTourCourseOverview("test-key", "102"), "");
   assert.equal(await fetchTourCourseOverview("test-key", "103"), "");
+});
+
+test("코스 소개 상세에서 거리·시간을 읽고 미등록 값과 기관 분류값은 비운다", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const { pathname, searchParams } = new URL(url, "https://example.test");
+    assert.equal(pathname, "/tour-api/B551011/KorService2/detailIntro2");
+    assert.equal(searchParams.get("contentTypeId"), "25");
+    return tourResponse([{
+      contentid: "101",
+      distance: "<p>5.5㎞</p>",
+      taketime: " 약 2시간30분 ",
+      theme: "<p>&nbsp;</p>",
+    }, {
+      contentid: "103",
+      distance: "7km",
+      theme: "지자체",
+    }, {
+      contentid: "104",
+      theme: "자연여행",
+    }, {
+      contentid: "105",
+      theme: "Local government",
+    }], 4);
+  });
+  assert.deepEqual(await fetchTourCourseFacts("test-key", "101"), {
+    distance: "5.5㎞", duration: "약 2시간30분", theme: "",
+  });
+  assert.deepEqual(await fetchTourCourseFacts("test-key", "102"), {
+    distance: "", duration: "", theme: "",
+  });
+  assert.deepEqual(await fetchTourCourseFacts("test-key", "103"), {
+    distance: "7km", duration: "", theme: "",
+  });
+  assert.equal((await fetchTourCourseFacts("test-key", "104")).theme, "자연여행");
+  assert.equal((await fetchTourCourseFacts("test-key", "105")).theme, "");
+});
+
+test("거리와 시간은 영어 모드에서 숫자를 유지하면서 단위를 변환한다", () => {
+  assert.equal(formatTourCourseMeasurement("약 2시간30분", "en"), "About 2 hr 30 min");
+  assert.equal(formatTourCourseMeasurement("5.5㎞", "en"), "5.5 km");
+  assert.equal(formatTourCourseMeasurement("2~3시간", "en"), "2~3 hr");
+  assert.equal(formatTourCourseMeasurement("약 2시간30분", "ko"), "약 2시간30분");
 });
 
 test("공식 방문 장소의 식별자와 좌표가 확인될 때만 상세를 연결한다", async (t) => {
