@@ -2,10 +2,11 @@
 import { lazy, Suspense } from "react";
 import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import PlaceResultCard from "@/components/place/PlaceResultCard";
+import { useTourCourseDescription } from "@/hooks/useTourCourseLocalization";
 import { localizePlaceCategoryLabel, type UiText } from "@/lib/uiText";
 import type { NearbyTouristPlace } from "@/lib/visitKoreaTourApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
-import type { MapSheetDirectionOrigin } from "@/stores/mapSheetStore";
+import type { MapSheetCourseStopDescription, MapSheetDirectionOrigin } from "@/stores/mapSheetStore";
 import type { MapSheetPlace } from "@/types/place";
 import type { PlaceSheetData } from "../hooks/usePlaceSheetData";
 import {
@@ -28,6 +29,9 @@ const PlaceTrendChart = lazy(() => import("./PlaceTrendChart"));
 type PlaceSheetOverviewPanelProps = {
 
   appLanguage: AppLanguage;
+
+  /** 추천 코스에서 전달한 방문지 설명. 일반 장소 상세에서는 비어 있다. */
+  courseStopDescription: MapSheetCourseStopDescription | null;
 
   routeMode: PlaceDirectionMode;
   onRouteModeChange: (mode: PlaceDirectionMode) => void;
@@ -71,6 +75,7 @@ function PlaceTrendChartFallback() {
 
 function PlaceSheetOverviewPanel({
   appLanguage,
+  courseStopDescription,
   routeMode,
   onRouteModeChange,
   onOriginChange,
@@ -85,6 +90,12 @@ function PlaceSheetOverviewPanel({
   showDirections,
   text,
 }: PlaceSheetOverviewPanelProps) {
+  const courseDescription = useTourCourseDescription(
+    courseStopDescription?.contentId ?? "",
+    courseStopDescription?.text ?? "",
+    appLanguage,
+    isVisible,
+  );
   const {
     concentrationTrendError,
     concentrationTrendPoints,
@@ -114,6 +125,14 @@ function PlaceSheetOverviewPanel({
       }`}
     >
       <div className="space-y-4">
+        {courseDescription.text ? (
+          <section className="rounded-3xl border border-brand-200/80 bg-white p-4 shadow-sm dark:border-brand-400/30 dark:bg-slate-900/70">
+            <h2 className="text-sm font-bold text-brand-700 dark:text-brand-200">{text.placeSheet.courseStopHeading}</h2>
+            <p lang={courseDescription.lang} className="mt-2 break-words text-sm leading-6 text-slate-700 dark:text-slate-200">
+              {courseDescription.text}
+            </p>
+          </section>
+        ) : null}
         <div className="rounded-3xl border border-brand-200/80 bg-white px-4 py-4 shadow-sm dark:border-brand-400/30 dark:bg-slate-900/70">
           <div className="mb-3 flex items-center justify-between">
             <p className="font-trip text-sm text-brand-700">PLACE OVERVIEW</p>

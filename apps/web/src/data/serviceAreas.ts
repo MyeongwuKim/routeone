@@ -18,7 +18,7 @@ import {
 import { PROVINCIAL_SERVICE_AREAS } from "@/data/provincialServiceAreas";
 
 export type ServiceAreaId =
-  | "gangwon" | "seoul" | "busan" | "daegu" | "gwangju" | "daejeon"
+  | "gangwon" | "seoul" | "gyeonggi" | "busan" | "daegu" | "gwangju" | "daejeon"
   | "ulsan" | "sejong" | "chungbuk" | "chungnam" | "jeonbuk"
   | "jeonnam" | "gyeongbuk" | "gyeongnam" | "jeju";
 
@@ -97,13 +97,15 @@ export function isServiceAreaId(value: unknown): value is ServiceAreaId {
 
 /**
  * 저장된 장소의 행정 코드 또는 권역:시군구 키로 지역을 찾는다.
+ * 경기도 일반구는 관광공사 조회 단위인 상위 시로 연결한다.
  * 36이 경남 관광 코드와 세종 행정 코드에 함께 쓰이므로 전체 행정 코드를 우선하고, 짧은 코드는 관광 권역 안에서 찾는다.
  */
 export function resolveServiceRegion(regionLabelKey?: string | null, regionCode?: string | null) {
   const [areaCode, localCode] = regionLabelKey?.split(":") ?? [];
   const adminCode = [regionCode, localCode].find((code) => code && /^\d{5}$/.test(code));
   if (adminCode) {
-    const match = SERVICE_REGION_LIST.find(({ region }) => region.adminCode === adminCode);
+    const serviceCode = adminCode.startsWith("41") ? `${adminCode.slice(0, 4)}0` : adminCode;
+    const match = SERVICE_REGION_LIST.find(({ region }) => region.adminCode === serviceCode);
     if (match) return match;
   }
   if (areaCode && localCode) {

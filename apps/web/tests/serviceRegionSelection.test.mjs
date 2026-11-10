@@ -31,8 +31,10 @@ test("웹 지도와 독립 배포되는 API가 같은 시군구 경계를 사용
   assert.ok(webBoundary.equals(apiBoundary), "웹과 API의 시군구 경계 파일을 함께 갱신해야 한다.");
 });
 
-test("지방 14개 시도와 기존 서울의 모든 시군구에 중복 없는 행정 코드와 실제 경계를 제공한다", () => {
-  assert.equal(Object.keys(areas).length, 15);
+test("지원하는 16개 시도의 모든 시군구에 중복 없는 행정 코드와 실제 경계를 제공한다", () => {
+  assert.equal(Object.keys(areas).length, 16);
+  assert.equal(areas.gyeonggi.regions.length, 31);
+  assert.equal(areas.gyeonggi.defaultRegion.label, "수원시");
   assert.equal(new Set(regions.map(({ region }) => region.adminCode)).size, regions.length);
   for (const area of Object.values(areas)) {
     assert.ok(area.regions.length);
@@ -51,6 +53,7 @@ test("지도 좌표로 도와 시군구를 함께 선택한다", () => {
     [{ lat: 35.8242, lng: 127.148 }, "jeonbuk", "전주시"],
     [{ lat: 37.7519, lng: 128.8761 }, "gangwon", "강릉"],
     [{ lat: 37.5735, lng: 126.979 }, "seoul", "종로구"],
+    [{ lat: 37.2635, lng: 127.0286 }, "gyeonggi", "수원시"],
   ]) {
     const selection = findRegion(position, boundaries);
     assert.equal(selection?.area.id, areaId);

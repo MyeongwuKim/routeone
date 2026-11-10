@@ -6,6 +6,8 @@ import { createServer } from "vite";
 let server;
 let readHomeSelection;
 let createHomeSelectionParams;
+let loadAvailableHomeCoursePage;
+let fetchTourCourseOverview;
 let fetchTourCourseStops;
 let fetchTourCourseStopPlace;
 
@@ -17,10 +19,10 @@ before(async () => {
     server: { middlewareMode: true, hmr: false, ws: false },
     optimizeDeps: { noDiscovery: true, include: [] },
   });
-  ({ readHomeSelection, createHomeSelectionParams } = await server.ssrLoadModule(
+  ({ readHomeSelection, createHomeSelectionParams, loadAvailableHomeCoursePage } = await server.ssrLoadModule(
     "/src/features/home/recommendations/homeRecommendations.ts"
   ));
-  ({ fetchTourCourseStops, fetchTourCourseStopPlace } =
+  ({ fetchTourCourseOverview, fetchTourCourseStops, fetchTourCourseStopPlace } =
     await server.ssrLoadModule("/src/lib/visitKoreaTourApi.ts"));
 });
 
@@ -55,7 +57,7 @@ test("여러 시·군·구를 URL에 담고 선택 순서와 중복에 상관없
   assert.deepEqual(readHomeSelection(new URLSearchParams("area=gangwon&region=5&region=1&region=5")), selection);
 });
 
-test("코스의 공식 방문 순서를 복원하고 상세 ID가 없는 장소도 남긴다", async (t) => {
+test("코스의 공식 방문 순서와 설명을 복원하고 상세 ID가 없는 장소도 남긴다", async (t) => {
   t.mock.method(globalThis, "fetch", async (url) => {
     const { pathname, searchParams } = new URL(url, "https://example.test");
     assert.equal(pathname, "/tour-api/B551011/KorService2/detailInfo2");
@@ -63,17 +65,35 @@ test("코스의 공식 방문 순서를 복원하고 상세 ID가 없는 장소�
     assert.equal(searchParams.get("contentId"), "101");
     return tourResponse([
       { subnum: "10", subcontentid: "201", subname: "마지막 장소" },
-      { subnum: "2", subname: "<b>산책 구간</b>" },
-      { subnum: "0", subcontentid: "202", subname: "첫 장소" },
+      { subnum: "2", subname: "<b>산책 구간</b>", subdetailoverview: "<p>산책 설명</p>" },
+      { subnum: "0", subcontentid: "202", subname: "첫 장소", subdetailoverview: "첫 설명<br>다음 문장\\n" },
     ], 3);
   });
 
   const stops = await fetchTourCourseStops("test-key", "101");
-  assert.deepEqual(stops.map(({ order, contentId, title }) => ({ order, contentId, title })), [
-    { order: 0, contentId: "202", title: "첫 장소" },
-    { order: 2, contentId: "", title: "산책 구간" },
-    { order: 10, contentId: "201", title: "마지막 장소" },
+  assert.deepEqual(stops.map(({ order, contentId, title, description }) => ({ order, contentId, title, description })), [
+    { order: 0, contentId: "202", title: "첫 장소", description: "첫 설명 다음 문장" },
+    { order: 2, contentId: "", title: "산책 구간", description: "산책 설명" },
+    { order: 10, contentId: "201", title: "마지막 장소", description: "" },
   ]);
+});
+
+test("코스 전체 소개는 공통 상세에서 읽고 빈 설명은 표시하지 않는다", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const { pathname, searchParams } = new URL(url, "https://example.test");
+    assert.equal(pathname, "/tour-api/B551011/KorService2/detailCommon2");
+    assert.equal(searchParams.has("contentTypeId"), false);
+    const id = searchParams.get("contentId");
+    return tourResponse({
+      contentid: id,
+      contenttypeid: id === "103" ? "12" : "25",
+      overview: id === "102" ? "<p> </p>" : "<p>코스 전체<br>소개</p>",
+    }, 1);
+  });
+
+  assert.equal(await fetchTourCourseOverview("test-key", "101"), "코스 전체 소개");
+  assert.equal(await fetchTourCourseOverview("test-key", "102"), "");
+  assert.equal(await fetchTourCourseOverview("test-key", "103"), "");
 });
 
 test("공식 방문 장소의 식별자와 좌표가 확인될 때만 상세를 연결한다", async (t) => {
@@ -98,4 +118,46 @@ test("공식 방문 장소의 식별자와 좌표가 확인될 때만 상세를 
   assert.equal(stop?.areaCode, "32");
   assert.equal(await fetchTourCourseStopPlace("test-key", "202"), null);
   assert.equal(await fetchTourCourseStopPlace("test-key", "203"), null);
+});
+
+test("방문지 하나라도 지도에 연결할 수 없으면 코스 전체를 제외하고 다음 페이지를 확인한다", async () => {
+  const sourcePages = [
+    [{ id: "missing-place" }, { id: "missing-id" }, { id: "no-stops" }],
+    [{ id: "complete" }, { id: "also-complete" }],
+    [{ id: "missing-place" }],
+  ];
+  const stopsByCourse = {
+    "missing-place": ["201", "202"],
+    "missing-id": ["201", ""],
+    "no-stops": [],
+    complete: ["201", "203", "201"],
+    "also-complete": ["203"],
+  };
+  const requestedPages = [];
+  const loaders = {
+    signal: new AbortController().signal,
+    loadPage: async (page) => {
+      requestedPages.push(page);
+      return { courses: sourcePages[page - 1], totalCount: 25 };
+    },
+    loadStops: async (id) => stopsByCourse[id].map((contentId) => ({ contentId })),
+    loadPlace: async (id) => id === "202" ? null : { id },
+  };
+
+  assert.deepEqual(await loadAvailableHomeCoursePage(1, loaders), {
+    courses: [{ id: "complete" }, { id: "also-complete" }],
+    nextPage: 3,
+  });
+  assert.deepEqual(await loadAvailableHomeCoursePage(3, loaders), { courses: [], nextPage: undefined });
+  assert.deepEqual(requestedPages, [1, 2, 3]);
+});
+
+test("장소 조회 실패는 장소 정보 누락으로 처리하지 않는다", async () => {
+  const error = new Error("TourAPI unavailable");
+  await assert.rejects(loadAvailableHomeCoursePage(1, {
+    signal: new AbortController().signal,
+    loadPage: async () => ({ courses: [{ id: "course" }], totalCount: 1 }),
+    loadStops: async () => [{ contentId: "201" }],
+    loadPlace: async () => { throw error; },
+  }), error);
 });

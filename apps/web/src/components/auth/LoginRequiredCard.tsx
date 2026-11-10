@@ -5,13 +5,14 @@
  * 게스트에게 이용 가능한 기능과 계정 기능의 차이를 안내하고 로그인으로 연결한다.
  *
  * 구조:
- * 계정 아이콘, 안내 문구, 네이티브 로그인 요청 버튼으로 구성되어 있다.
+ * 로그인 요청 버튼을 표시하고, 내 정보에서는 게스트도 열 수 있는 언어 설정을 함께 제공한다.
  */
-import { MdLogin, MdOutlineAccountCircle } from "react-icons/md";
+import { MdLanguage, MdLogin, MdOutlineAccountCircle } from "react-icons/md";
+import { Link } from "react-router-dom";
 import { useLoginRequest } from "@/hooks/useLoginRequest";
 import { useUiText } from "@/lib/uiText";
 
-function LoginRequiredCard() {
+function LoginRequiredCard({ showLanguageLink }: { showLanguageLink: boolean }) {
   const text = useUiText();
   const requestLogin = useLoginRequest();
 
@@ -35,6 +36,15 @@ function LoginRequiredCard() {
           <MdLogin className="text-lg" />
           {text.auth.login}
         </button>
+        {showLanguageLink ? (
+          <Link
+            to="/me/language"
+            className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-brand-200 px-4 py-2 text-sm font-bold text-brand-700 transition hover:bg-brand-50 dark:border-brand-400/25 dark:text-brand-100 dark:hover:bg-brand-400/10"
+          >
+            <MdLanguage aria-hidden="true" className="text-lg" />
+            {text.routeShell.languageTitle}
+          </Link>
+        ) : null}
       </div>
     </section>
   );

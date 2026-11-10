@@ -21,6 +21,7 @@ import {
   Route,
   Routes,
   useLocation,
+  useMatch,
   useNavigate,
 } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";
@@ -677,9 +678,10 @@ function AuthSessionTracker() {
 
 function RequireAuth() {
   const { isAuthenticated } = useAuthSession();
+  const isMyInfo = useMatch("/me") !== null;
 
   if (!isAuthenticated) {
-    return <LoginRequiredCard />;
+    return <LoginRequiredCard showLanguageLink={isMyInfo} />;
   }
 
   return <Outlet />;
@@ -738,6 +740,13 @@ function AppRoutes() {
               </RoutePageShell>
             }
           />
+          <Route
+            path="/me/language"
+            element={withRouteSuspense(
+              <LanguageSettingsPage />,
+              <LanguageLazyFallback />
+            )}
+          />
           <Route element={<RequireAuth />}>
             <Route
               path="/my-route"
@@ -790,13 +799,6 @@ function AppRoutes() {
               element={withRouteSuspense(
                 <MyAccountPage />,
                 <AccountLazyFallback />
-              )}
-            />
-            <Route
-              path="/me/language"
-              element={withRouteSuspense(
-                <LanguageSettingsPage />,
-                <LanguageLazyFallback />
               )}
             />
             <Route

@@ -26,6 +26,9 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
     ...gangnamCourses.slice(0, 4),
     { contentid: "gangneung", title: "강릉 코스", areacode: "32", sigungucode: "1" },
     { contentid: "gangneung-legacy", title: "강릉 행정코드 코스", lDongRegnCd: "42", lDongSignguCd: "150", mapx: "127.0473", mapy: "37.5172" },
+    { contentid: "suwon-tour-code", title: "수원 관광 코드 코스", areacode: "31", sigungucode: "13" },
+    { contentid: "suwon-district", title: "팔달구 행정 코드 코스", lDongRegnCd: "41", lDongSignguCd: "115" },
+    { contentid: "suwon-location", title: "대표 좌표가 수원인 코스", mapx: "127.0286", mapy: "37.2635" },
     { contentid: "gangnam-location", title: "대표 좌표가 강남과 서초 경계에 있는 코스", mapx: "127.063813", mapy: "37.469001" },
     { contentid: "jongno-location", title: "대표 좌표가 종로인 코스", mapx: "126.979", mapy: "37.5735" },
     { contentid: "mismatched-location", title: "다른 권역이 등록된 코스", areacode: "32", mapx: "127.0473", mapy: "37.5172" },
@@ -96,6 +99,9 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
   assert.deepEqual(next.courses.map(({ id }) => id), ["gangnam-11", "gangnam-12"]);
   assert.equal(province.totalCount, 15);
   assert.deepEqual(gangneung.courses.map(({ id }) => id), ["gangneung", "gangneung-legacy"]);
+  const suwon = await execute("31", "13", 1);
+  assert.equal(suwon.errors, undefined);
+  assert.deepEqual(suwon.data.homeTourCourses.courses.map(({ id }) => id), ["suwon-tour-code", "suwon-district", "suwon-location"]);
   assert.equal(empty.totalCount, 0);
   assert.deepEqual(seocho.courses.map(({ id }) => id), ["gangnam-location"]);
   assert.equal(combinedFirst.totalCount, 15);

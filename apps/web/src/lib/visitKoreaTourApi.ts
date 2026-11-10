@@ -74,6 +74,7 @@ type TourCourseStopItem = {
   subname?: string;
   subcontentid?: string;
   subdetailimg?: string;
+  subdetailoverview?: string;
 };
 
 type TourCourseStopPlace = {
@@ -828,7 +829,12 @@ function getTourCourseLocation(item: TourApiItem) {
   return lat >= 32 && lat <= 40 && lng >= 123 && lng <= 133 ? { lat, lng } : null;
 }
 
-/** 공식 방문 순서를 복원한다. 원본 장소 상세가 없는 항목도 순서와 장소명을 남긴다. */
+/** HTML과 원문에 문자로 들어간 줄바꿈 표기를 정리한다. */
+function readTourCourseDescription(text?: string) {
+  return stripHtml(text?.replaceAll(/\\[rn]/g, " "));
+}
+
+/** 관광공사 코스의 방문 순서와 설명을 복원한다. 장소 상세 ID가 없는 항목도 목록에 남긴다. */
 export async function fetchTourCourseStops(serviceKey: string, courseId: string, signal?: AbortSignal) {
   const options = { contentId: courseId, contentTypeId: TOUR_COURSE_CONTENT_TYPE };
   const getPage = (pageNo: number) => requestTourCoursePage<TourCourseStopItem>(serviceKey, "detailInfo2", {
@@ -844,7 +850,15 @@ export async function fetchTourCourseStops(serviceKey: string, courseId: string,
     contentId: item.subcontentid?.trim() ?? "",
     title: stripHtml(item.subname),
     image: item.subdetailimg?.trim() ?? "",
+    description: readTourCourseDescription(item.subdetailoverview),
   })).sort((left, right) => left.order - right.order);
+}
+
+/** 관광공사 공통 상세에서 같은 ID의 여행 코스 소개를 일반 텍스트로 읽는다. 소개가 없으면 빈 문자열을 반환한다. */
+export async function fetchTourCourseOverview(serviceKey: string, courseId: string, signal?: AbortSignal) {
+  const { items } = await requestTourCoursePage(serviceKey, "detailCommon2", { contentId: courseId, numOfRows: "1" }, signal);
+  const course = items.find((item) => item.contentid === courseId && item.contenttypeid === TOUR_COURSE_CONTENT_TYPE);
+  return readTourCourseDescription(course?.overview);
 }
 
 /** 코스 방문 장소를 상세 화면과 장바구니에 연결할 수 있도록 실제 콘텐츠 ID와 유효한 좌표를 확인한다. */

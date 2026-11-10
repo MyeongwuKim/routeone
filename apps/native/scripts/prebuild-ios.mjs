@@ -1,10 +1,6 @@
 /**
- * 용도:
- * Native의 production 환경값으로 배포용 iOS Xcode 프로젝트를 준비한다.
- *
- * 동작 방식:
- * `.env.production`만 읽어 prod 환경을 구성한 뒤 버전 확인, 웹뷰 번들 생성,
- * Expo prebuild, iOS 권한 동기화를 같은 환경에서 순서대로 실행한다.
+ * dev는 `.env.development`, prod는 `.env.production`에서 Native 환경값을 읽는다.
+ * 웹뷰 번들 생성, Expo prebuild, iOS 권한 동기화와 Xcode Archive에 같은 파일을 적용한다.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -13,13 +9,20 @@ import { fileURLToPath } from "node:url";
 import { readEnvFile } from "./env-file.mjs";
 
 const nativeRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
-const envFileName = ".env.production";
+const appVariant = process.argv[2];
+
+if (appVariant !== "dev" && appVariant !== "prod") {
+  console.error('[env] 앱 variant로 "dev" 또는 "prod"를 지정해주세요.');
+  process.exit(1);
+}
+
+const envFileName = appVariant === "dev" ? ".env.development" : ".env.production";
 const envFilePath = path.join(nativeRoot, envFileName);
 const shouldClean = process.argv.includes("--clean");
 
 if (!existsSync(envFilePath)) {
   console.error(
-    `[env] ${envFileName} 파일이 없습니다. prod 빌드 전에 파일을 생성해주세요.`
+    `[env] ${envFileName} 파일이 없습니다. ${appVariant} 빌드 전에 파일을 생성해주세요.`
   );
   process.exit(1);
 }
@@ -31,8 +34,8 @@ const commandEnv = {
   EXPO_NO_DOTENV: "1",
   ROUTEONE_ENV_FILE: envFileName,
   ROUTEONE_BUILD_PLATFORM: "ios",
-  APP_VARIANT: "prod",
-  EXPO_PUBLIC_APP_VARIANT: "prod",
+  APP_VARIANT: appVariant,
+  EXPO_PUBLIC_APP_VARIANT: appVariant,
 };
 
 const steps = [
@@ -52,7 +55,7 @@ const steps = [
   { command: "pnpm", args: ["run", "sync:ios-version"] },
   {
     command: process.execPath,
-    args: ["scripts/sync-xcode-env.mjs", envFileName, "prod"],
+    args: ["scripts/sync-xcode-env.mjs", envFileName, appVariant],
   },
   { command: "pnpm", args: ["run", "sync:ios-permissions"] },
 ];

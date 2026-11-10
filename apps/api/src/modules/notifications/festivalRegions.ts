@@ -50,6 +50,39 @@ export const FESTIVAL_AREAS: readonly FestivalArea[] = [
     ["11140", "24", "중구", "Jung-gu"],
     ["11260", "25", "중랑구", "Jungnang-gu"],
   ] },
+  { areaCode: "31", label: "경기도", englishLabel: "Gyeonggi-do", regions: [
+    ["41820", "1", "가평군", "Gapyeong-gun"],
+    ["41280", "2", "고양시", "Goyang-si"],
+    ["41290", "3", "과천시", "Gwacheon-si"],
+    ["41210", "4", "광명시", "Gwangmyeong-si"],
+    ["41610", "5", "광주시", "Gwangju-si"],
+    ["41310", "6", "구리시", "Guri-si"],
+    ["41410", "7", "군포시", "Gunpo-si"],
+    ["41570", "8", "김포시", "Gimpo-si"],
+    ["41360", "9", "남양주시", "Namyangju-si"],
+    ["41250", "10", "동두천시", "Dongducheon-si"],
+    ["41190", "11", "부천시", "Bucheon-si"],
+    ["41130", "12", "성남시", "Seongnam-si"],
+    ["41110", "13", "수원시", "Suwon-si"],
+    ["41390", "14", "시흥시", "Siheung-si"],
+    ["41270", "15", "안산시", "Ansan-si"],
+    ["41550", "16", "안성시", "Anseong-si"],
+    ["41170", "17", "안양시", "Anyang-si"],
+    ["41630", "18", "양주시", "Yangju-si"],
+    ["41830", "19", "양평군", "Yangpyeong-gun"],
+    ["41670", "20", "여주시", "Yeoju-si"],
+    ["41800", "21", "연천군", "Yeoncheon-gun"],
+    ["41370", "22", "오산시", "Osan-si"],
+    ["41460", "23", "용인시", "Yongin-si"],
+    ["41430", "24", "의왕시", "Uiwang-si"],
+    ["41150", "25", "의정부시", "Uijeongbu-si"],
+    ["41500", "26", "이천시", "Icheon-si"],
+    ["41480", "27", "파주시", "Paju-si"],
+    ["41220", "28", "평택시", "Pyeongtaek-si"],
+    ["41650", "29", "포천시", "Pocheon-si"],
+    ["41450", "30", "하남시", "Hanam-si"],
+    ["41590", "31", "화성시", "Hwaseong-si"],
+  ] },
   { areaCode: "6", label: "부산", englishLabel: "Busan", regions: [
     ["26440", "1", "강서구", "Gangseo-gu"],
     ["26410", "2", "금정구", "Geumjeong-gu"],
@@ -228,10 +261,11 @@ export const FESTIVAL_REGION_BY_CODE = Object.fromEntries(FESTIVAL_AREAS.flatMap
   area.regions.map(([code, tourCode, label, englishLabel]) => [code, {code, tourCode, label, englishLabel, areaCode: area.areaCode, areaLabel: area.label, areaEnglishLabel: area.englishLabel}])
 ));
 
-/** 1~18의 기존 강원 알림 코드는 행정 코드로 변환하고, 지원하지 않는 값은 null을 반환한다. */
+/** 경기도 일반구는 상위 시로, 기존 강원 단축 코드는 시군 행정 코드로 변환한다. */
 export function normalizeFestivalRegionCode(value: string) {
   const code = value.trim();
-  if (Object.hasOwn(FESTIVAL_REGION_BY_CODE, code)) return code;
+  const serviceCode = /^41\d{3}$/.test(code) ? `${code.slice(0, 4)}0` : code;
+  if (Object.hasOwn(FESTIVAL_REGION_BY_CODE, serviceCode)) return serviceCode;
   return FESTIVAL_AREAS.find(area => area.areaCode === "32")?.regions.find(region => region[1] === code)?.[0] ?? null;
 }
 
@@ -241,7 +275,8 @@ export function resolveFestivalRegionCode(regionCode?: string | null, regionLabe
   for (const code of [regionCode, localCode]) {
     if (code && /^\d{5}$/.test(code)) {
       const normalized = code.startsWith("45") ? "52" + code.slice(2) : code.startsWith("42") ? "51" + code.slice(2) : code;
-      if (Object.hasOwn(FESTIVAL_REGION_BY_CODE, normalized)) return normalized;
+      const region = normalizeFestivalRegionCode(normalized);
+      if (region) return region;
     }
   }
   if (areaCode && localCode) {

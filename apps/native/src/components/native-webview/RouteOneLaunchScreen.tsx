@@ -25,7 +25,7 @@ export default function RouteOneLaunchScreen({
   progress,
   message,
   showProgress = true,
-  tagline = "여행의 시작부터 도착까지"
+  tagline = "오늘은 어디로 마실 갈까요?"
 }: RouteOneLaunchScreenProps) {
   const colorScheme = useColorScheme();
   const backgroundColor = colorScheme === "dark"

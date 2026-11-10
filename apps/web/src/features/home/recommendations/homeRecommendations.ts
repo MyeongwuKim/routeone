@@ -15,6 +15,48 @@ export type HomeSelection = {
 
 export type HomeTourCourse = HomeTourCoursesQuery["homeTourCourses"]["courses"][number];
 
+const COURSE_LIST_PAGE_SIZE = 12;
+const COURSE_CHECK_BATCH_SIZE = 4;
+
+type CoursePage = HomeTourCoursesQuery["homeTourCourses"];
+
+type CoursePageLoaders = {
+  loadPage: (page: number) => Promise<CoursePage>;
+  loadStops: (courseId: string) => Promise<{ contentId: string }[]>;
+  loadPlace: (contentId: string) => Promise<unknown>;
+  signal: AbortSignal;
+};
+
+/** 방문지 전부를 지도에 연결할 수 있는 코스만 남기고, 표시할 코스가 없는 페이지는 건너뛴다. */
+export async function loadAvailableHomeCoursePage(firstPage: number, loaders: CoursePageLoaders) {
+  const { loadPage, loadStops, loadPlace, signal } = loaders;
+  const hasAllPlaces = async ({ id }: HomeTourCourse) => {
+    const stops = await loadStops(id);
+    signal.throwIfAborted();
+    const ids = new Set(stops.map(({ contentId }) => contentId));
+    if (!ids.size || [...ids].some((contentId) => !/^\d+$/.test(contentId))) return false;
+
+    const places = await Promise.all([...ids].map(loadPlace));
+    return places.every(Boolean);
+  };
+
+  let page: number | undefined = firstPage;
+  const courses: HomeTourCourse[] = [];
+  while (page !== undefined && !courses.length) {
+    signal.throwIfAborted();
+    const source = await loadPage(page);
+    for (let start = 0; start < source.courses.length; start += COURSE_CHECK_BATCH_SIZE) {
+      signal.throwIfAborted();
+      const batch = source.courses.slice(start, start + COURSE_CHECK_BATCH_SIZE);
+      const available = await Promise.all(batch.map(hasAllPlaces));
+      courses.push(...batch.filter((_, index) => available[index]));
+    }
+    page = page * COURSE_LIST_PAGE_SIZE < source.totalCount ? page + 1 : undefined;
+  }
+  signal.throwIfAborted();
+  return { courses, nextPage: page };
+}
+
 /** 기존 단일 region과 여러 region 값에서 조회 범위를 복원하고, 같은 조합은 지역 순서로 정규화한다. */
 export function readHomeSelection(params: URLSearchParams): HomeSelection | null {
   const areaId = params.get("area");

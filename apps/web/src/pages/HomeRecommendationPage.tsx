@@ -11,27 +11,29 @@ import { useAuthSession } from "@/hooks/useAuthSession";
 import { useLoginRequest } from "@/hooks/useLoginRequest";
 import { useUiText } from "@/lib/uiText";
 import type { AppLanguage } from "@/stores/appLanguageStore";
+import type { MapSheetCourseStopDescription } from "@/stores/mapSheetStore";
 import type { MapSheetPlace } from "@/types/place";
+
+const courseGridClassName = "grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2";
 
 type CourseListProps = {
   courses: HomeTourCourse[];
   language: AppLanguage;
   text: HomeRecommendationText;
-  nextCount: number;
+  hasMore: boolean;
   isLoadingMore: boolean;
   loadMoreFailed: boolean;
   onLoadMore: () => void;
-  onPlaceSelect: (place: MapSheetPlace) => void;
+  onPlaceSelect: (place: MapSheetPlace, courseStopDescription: MapSheetCourseStopDescription) => void;
   onStartCourse: (places: MapSheetPlace[]) => void;
 };
 
 /** 받은 코스는 유지하고, 더 보기 또는 재시도 버튼으로 다음 페이지를 요청한다. */
 function HomeRecommendationCourseList({
-  courses, language, text, nextCount, isLoadingMore, loadMoreFailed, onLoadMore, onPlaceSelect, onStartCourse,
+  courses, language, text, hasMore, isLoadingMore, loadMoreFailed, onLoadMore, onPlaceSelect, onStartCourse,
 }: CourseListProps) {
   return <>
-    <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">{text.source}</p>
-    <div id="home-recommended-courses" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+    <div id="home-recommended-courses" className={courseGridClassName}>
       {courses.map((course, index) => (
         <HomeRecommendedCourseCard
           key={course.id}
@@ -44,7 +46,7 @@ function HomeRecommendationCourseList({
         />
       ))}
     </div>
-    {nextCount > 0 ? <div className="mt-4 space-y-2">
+    {hasMore ? <div className="mt-4 space-y-2">
       {loadMoreFailed && !isLoadingMore ? <p role="status" className="text-center text-sm text-slate-500 dark:text-slate-400">{text.moreError}</p> : null}
       <button
         type="button"
@@ -53,7 +55,7 @@ function HomeRecommendationCourseList({
         onClick={onLoadMore}
         className="flex min-h-11 w-full items-center justify-center rounded-2xl border border-brand-200 bg-white px-4 text-sm font-bold text-brand-800 hover:bg-brand-50 disabled:opacity-60 dark:border-brand-400/25 dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/60"
       >
-        {isLoadingMore ? text.moreLoading : loadMoreFailed ? text.retry : text.moreCourses(nextCount)}
+        {isLoadingMore ? text.moreLoading : loadMoreFailed ? text.retry : text.moreCourses}
       </button>
     </div> : null}
   </>;
@@ -61,7 +63,7 @@ function HomeRecommendationCourseList({
 
 /** 홈의 로그인 진입점과 누구나 볼 수 있는 지역별 공식 여행 코스를 표시한다. */
 function HomeRecommendationContent() {
-  const { selection, area, selectedRegions, language, resultScope, query, courses, totalCount, nextCount, mapHref, actions } = useHomeRecommendations();
+  const { selection, area, selectedRegions, language, resultScope, query, courses, mapHref, actions } = useHomeRecommendations();
   const text = getHomeRecommendationText(language);
   const ui = useUiText();
   const { isAuthenticated } = useAuthSession();
@@ -114,12 +116,11 @@ function HomeRecommendationContent() {
             tabIndex={-1}
             aria-label={text.results}
             aria-live="polite"
-            aria-busy={isLoading}
             className="min-w-0 scroll-mt-[calc(env(safe-area-inset-top)+1rem)] focus:outline-none"
           >
             <div className="mb-4">
               <p className="text-xs font-semibold text-brand-700 dark:text-brand-300">
-                {regionLabel}{query.data ? ` · ${text.courseCount(totalCount)}` : ""}
+                {regionLabel}{query.data ? ` · ${text.courseCount(courses.length, query.hasNextPage)}` : ""}
               </p>
               <div className="flex items-center justify-between gap-3">
                 <h2 className="mt-1 text-xl font-bold">{text.results}</h2>
@@ -127,32 +128,56 @@ function HomeRecommendationContent() {
               </div>
               <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{text.resultDescription}</p>
             </div>
-            {isLoading ? <div role="status">
-              <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">{text.loading}</p>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">{[0, 1].map(index => <div key={index} aria-hidden="true" className="overflow-hidden rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"><div className="skeleton-shimmer h-40 bg-slate-200 dark:bg-slate-800" /><div className="space-y-3 p-5"><div className="skeleton-shimmer h-5 w-2/3 rounded bg-slate-200 dark:bg-slate-800" /><div className="skeleton-shimmer h-4 w-full rounded bg-slate-100 dark:bg-slate-800" /><div className="skeleton-shimmer h-11 rounded-xl bg-brand-50 dark:bg-brand-900/30" /></div></div>)}</div>
-            </div> : courses.length > 0 ? <>
-              <HomeRecommendationCourseList
-                key={resultScope}
-                courses={courses}
-                language={language}
-                text={text}
-                nextCount={nextCount}
-                isLoadingMore={query.isFetchingNextPage}
-                loadMoreFailed={query.isFetchNextPageError}
-                onLoadMore={() => void query.fetchNextPage({ cancelRefetch: false })}
-                onPlaceSelect={actions.openPlace}
-                onStartCourse={actions.startCourse}
-              />
-              <Link to={mapHref} onClick={actions.prepareMap} className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-brand-700 dark:text-brand-200">{text.mapRegion}<MdArrowForward aria-hidden="true" /></Link>
-            </> : <div className="flex min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed border-brand-200 px-5 py-8 text-center sm:min-h-72 dark:border-brand-400/25">
-              <span className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-brand-100/70 text-3xl text-brand-700 dark:bg-brand-900/50 dark:text-brand-200">
-                {isError ? <MdErrorOutline aria-hidden="true" /> : <MdRoute aria-hidden="true" />}
+            <div className="mb-4 flex min-h-4 items-center justify-between gap-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400">{text.source}</p>
+              <span role="status" className="inline-flex shrink-0">
+                {isLoading ? <>
+                  <span className="sr-only">{text.loading}</span>
+                  <span aria-hidden="true" className="size-3.5 rounded-full border-2 border-brand-200 border-t-brand-600 motion-safe:animate-spin dark:border-brand-800 dark:border-t-brand-300" />
+                </> : null}
               </span>
-              <h2 className="text-base font-bold">{isError ? text.error : text.empty}</h2>
-              <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500 dark:text-slate-400">{isError ? text.errorDescription : text.emptyDescription}</p>
-              {isError ? <button type="button" onClick={() => void query.refetch()} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-200 px-4 text-sm font-semibold text-brand-800 dark:text-brand-100"><MdRefresh aria-hidden="true" />{text.retry}</button> : null}
-              <Link to={mapHref} onClick={actions.prepareMap} className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-brand-700 dark:text-brand-200"><MdMap aria-hidden="true" />{text.map}</Link>
-            </div>}
+            </div>
+            <div aria-busy={isLoading}>
+              {isLoading ? (
+                <div className={courseGridClassName} aria-hidden="true">
+                  {[0, 1].map((index) => (
+                    <div key={index} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-[#0b211f]">
+                      <div className="relative h-40 bg-gradient-to-br from-brand-50 to-sky-50 sm:h-44 dark:from-brand-900/60 dark:to-slate-800">
+                        <div className="absolute left-4 top-4 h-6 w-20 rounded-full bg-white/70 dark:bg-white/10" />
+                      </div>
+                      <div className="p-4 sm:p-5">
+                        <div className="flex h-7 items-center">
+                          <div className="h-4 w-2/3 rounded-full bg-slate-100 dark:bg-white/10" />
+                        </div>
+                        <div className="mt-4 h-11 rounded-xl bg-brand-50/70 dark:bg-brand-900/40" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : courses.length > 0 ? <>
+                <HomeRecommendationCourseList
+                  key={resultScope}
+                  courses={courses}
+                  language={language}
+                  text={text}
+                  hasMore={query.hasNextPage}
+                  isLoadingMore={query.isFetchingNextPage}
+                  loadMoreFailed={query.isFetchNextPageError}
+                  onLoadMore={() => void query.fetchNextPage({ cancelRefetch: false })}
+                  onPlaceSelect={actions.openPlace}
+                  onStartCourse={actions.startCourse}
+                />
+                <Link to={mapHref} onClick={actions.prepareMap} className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-brand-700 dark:text-brand-200">{text.mapRegion}<MdArrowForward aria-hidden="true" /></Link>
+              </> : <div className="flex min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed border-brand-200 px-5 py-8 text-center sm:min-h-72 dark:border-brand-400/25">
+                <span className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-brand-100/70 text-3xl text-brand-700 dark:bg-brand-900/50 dark:text-brand-200">
+                  {isError ? <MdErrorOutline aria-hidden="true" /> : <MdRoute aria-hidden="true" />}
+                </span>
+                <h2 className="text-base font-bold">{isError ? text.error : text.empty}</h2>
+                <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500 dark:text-slate-400">{isError ? text.errorDescription : text.emptyDescription}</p>
+                {isError ? <button type="button" onClick={() => void query.refetch()} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-200 px-4 text-sm font-semibold text-brand-800 dark:text-brand-100"><MdRefresh aria-hidden="true" />{text.retry}</button> : null}
+                <Link to={mapHref} onClick={actions.prepareMap} className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-brand-700 dark:text-brand-200"><MdMap aria-hidden="true" />{text.map}</Link>
+              </div>}
+            </div>
           </section>
         </div>
       </div>

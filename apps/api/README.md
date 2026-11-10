@@ -155,7 +155,7 @@ flowchart TD
 ```bash
 pnpm install
 pnpm --filter api prisma:generate
-pnpm dev:api
+pnpm api:local
 ```
 
 기본 서버 주소는 `http://localhost:4000`이며 GraphQL endpoint는 `http://localhost:4000/graphql`입니다.
@@ -184,7 +184,8 @@ Cloudflare Images account·token과 이미지 variant 환경변수도 이미지 
 
 | 명령어 | 설명 |
 | --- | --- |
-| `pnpm dev:api` | API 개발 서버를 실행합니다. |
+| `pnpm api:local` | `apps/api/.env`로 API 서버를 실행합니다. |
+| `pnpm api:dev` | `.env`를 기본으로 사용하고 `.env.development`에 정의된 값을 덮어씁니다. |
 | `pnpm dev:api:test` | GPS 방문 인증 우회가 활성화된 개발 서버를 실행합니다. |
 | `pnpm build:api` | API TypeScript 빌드를 실행합니다. |
 | `pnpm --filter api start` | 빌드된 `dist/server.js`를 실행합니다. |

@@ -59,6 +59,7 @@ function PlaceBottomSheet() {
     directionOrigin,
     fallbackDirectionOrigin,
     contextAction,
+    courseStopDescription,
     selectedPlace,
     openSheet,
     setSheetMode,
@@ -213,7 +214,7 @@ function PlaceBottomSheet() {
     setRouteMode("walking");
     setSheetMode("directions-popup");
   };
-  // 출발지만 바꾸고 장소 정보로 돌아올 때 필요한 선택 장소와 호출 화면의 동작은 유지한다.
+  // 출발지만 바꾸므로 장소 정보로 돌아올 때 필요한 코스 설명과 문맥 액션은 유지한다.
   const handleChangeDirectionOrigin = (coordinates: PlaceSheetCoordinates) => {
     if (!selectedPlace) return;
     openSheet(selectedPlace, {
@@ -221,6 +222,7 @@ function PlaceBottomSheet() {
       directionOrigin: { coordinates, label: walkingText.selectedOnMap, isCurrentLocation: false },
       fallbackDirectionOrigin: fallbackDirectionOrigin ?? undefined,
       contextAction: contextAction ?? undefined,
+      courseStopDescription,
     });
   };
   const handleImageViewerStep = (direction: -1 | 1) => {
@@ -545,6 +547,7 @@ function PlaceBottomSheet() {
 
             <PlaceSheetOverviewPanel
               appLanguage={appLanguage}
+              courseStopDescription={courseStopDescription}
               routeMode={routeMode}
               onRouteModeChange={setRouteMode}
               onOriginChange={handleChangeDirectionOrigin}

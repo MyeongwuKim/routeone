@@ -1,6 +1,6 @@
 /**
  * 용도:
- * Xcode에서 Archive할 때 사용할 Native 환경값을 선택한 env 파일과 맞춘다.
+ * Xcode 빌드에 사용할 Native 환경값을 선택한 env 파일과 맞춘다.
  *
  * 동작 방식:
  * env 파일 값을 셸에서 안전하게 읽을 수 있는 형태로 변환해 `.xcode.env.local`에
@@ -15,9 +15,9 @@ const nativeRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const envFileName = process.argv[2]?.trim();
 const appVariant = process.argv[3]?.trim();
 
-if (!envFileName || !["dev", "prod"].includes(appVariant)) {
+if (!envFileName || !["none", "dev", "prod"].includes(appVariant)) {
   console.error(
-    "[xcode-env] env 파일 경로와 앱 variant(dev 또는 prod)가 필요합니다."
+    "[xcode-env] env 파일 경로와 앱 variant(none, dev, prod)가 필요합니다."
   );
   process.exit(1);
 }
@@ -33,8 +33,16 @@ function quoteShellValue(value) {
   return `'${String(value).replaceAll("'", `'"'"'`)}'`;
 }
 
+const fileEnv = readEnvFile(envFilePath);
+if (appVariant === "none") {
+  // 로컬 실행에서 셸로 지정한 값도 Metro와 Xcode에서 동일하게 사용한다.
+  for (const key of [...Object.keys(fileEnv), "EXPO_PUBLIC_GRAPHQL_ENDPOINT"]) {
+    if (process.env[key] !== undefined) fileEnv[key] = process.env[key];
+  }
+}
+
 const xcodeEnv = {
-  ...readEnvFile(envFilePath),
+  ...fileEnv,
   NODE_BINARY: process.execPath,
   NODE_ENV: "production",
   EXPO_NO_DOTENV: "1",
@@ -56,5 +64,5 @@ mkdirSync(path.dirname(xcodeEnvPath), { recursive: true });
 writeFileSync(xcodeEnvPath, source, "utf8");
 
 console.log(
-  `[xcode-env] ${envFileName} 기준으로 ${appVariant} Archive 환경을 설정했습니다.`
+  `[xcode-env] ${envFileName} 기준으로 ${appVariant} Xcode 빌드 환경을 설정했습니다.`
 );

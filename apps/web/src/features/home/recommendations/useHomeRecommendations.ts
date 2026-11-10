@@ -6,15 +6,16 @@ import { selectExploreRegion } from "@/features/service-area/serviceAreaSelectio
 import { findServiceRegionAtLocation } from "@/features/home/map/serviceRegionSelection";
 import { HomeTourCoursesByDistrictsDocument, HomeTourCoursesDocument } from "@/generated/graphql";
 import { serviceRegionBoundariesQueryOptions } from "@/hooks/useServiceRegionBoundaries";
+import { useTourCourseDescription, useTourCourseTitle } from "@/hooks/useTourCourseLocalization";
 import { createMapSheetPlaceFromAttraction, resolveMarkerType } from "@/lib/gangwonAttractionMap";
 import { requestGraphQL } from "@/lib/graphqlClient";
 import { CAFE_LCLS_CODE } from "@/lib/placeCategory";
 import { localizeTourPlaces } from "@/lib/placeLocalization";
-import { fetchTourCourseStopPlace, fetchTourCourseStops } from "@/lib/visitKoreaTourApi";
+import { fetchTourCourseOverview, fetchTourCourseStopPlace, fetchTourCourseStops } from "@/lib/visitKoreaTourApi";
 import { TOUR_API_SERVICE_KEY } from "@/pages/HomePage.constants";
 import { useAppLanguageStore, type AppLanguage } from "@/stores/appLanguageStore";
 import { useHomeExploreStore } from "@/stores/homeExploreStore";
-import { useMapSheetStore } from "@/stores/mapSheetStore";
+import { useMapSheetStore, type MapSheetCourseStopDescription } from "@/stores/mapSheetStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { useEffectiveServiceArea, useServiceAreaStore } from "@/stores/serviceAreaStore";
@@ -22,14 +23,14 @@ import type { MapSheetPlace } from "@/types/place";
 import {
   createHomeSelectionParams,
   findTourCourseRegion,
+  loadAvailableHomeCoursePage,
   readHomeSelection,
   type HomeTourCourse,
 } from "./homeRecommendations";
 
-const COURSE_LIST_PAGE_SIZE = 12;
 const COURSE_DETAIL_STALE_TIME = 60 * 60 * 1000;
 
-/** 썸네일과 방문지 상세에서 같은 원본 코스 순서를 재사용한다. */
+/** 추천 목록 검증, 썸네일과 방문지 상세에서 같은 원본 코스 순서를 재사용한다. */
 function homeCourseItineraryOptions(courseId: string) {
   return queryOptions({
     queryKey: ["home-official-tour-course-itinerary", courseId],
@@ -39,7 +40,7 @@ function homeCourseItineraryOptions(courseId: string) {
   });
 }
 
-/** 대표 사진을 찾으면서 조회한 장소 원본을 코스를 펼칠 때도 재사용한다. */
+/** 목록에서 검증한 장소 원본을 대표 사진과 펼친 코스에서도 재사용한다. */
 function homeCoursePlaceOptions(contentId: string) {
   return queryOptions({
     queryKey: ["home-official-tour-course-place", contentId],
@@ -59,10 +60,11 @@ function normalizeCourseCoverUrl(image?: string) {
 }
 
 /**
- * URL에 선택된 시·군·구를 합친 공식 코스를 12개씩 조회한다.
+ * URL에 선택된 시·군·구의 공식 코스 중 모든 방문지를 지도에 연결할 수 있는 코스를 조회한다.
  * 선택이 바뀌면 첫 페이지로 돌아가고, 다음 페이지는 더 보기로 요청한다.
  */
 export function useHomeRecommendations() {
+  const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const defaultArea = useEffectiveServiceArea();
@@ -86,17 +88,20 @@ export function useHomeRecommendations() {
   const query = useInfiniteQuery({
     queryKey: ["home-official-tour-courses", selection.areaId, regionCodes],
     initialPageParam: 1,
-    queryFn: async ({ pageParam, signal }) => {
-      const variables = { areaCode: area.tourAreaCode, page: pageParam };
-      const options = { authToken: null, maxRetryCount: 0 };
-      const result = regionCodes.length > 1
-        ? await requestGraphQL(HomeTourCoursesByDistrictsDocument, { ...variables, sigunguCodes: regionCodes }, options)
-        : await requestGraphQL(HomeTourCoursesDocument, { ...variables, sigunguCode: regionCodes[0] }, options);
-      signal.throwIfAborted();
-      return result.homeTourCourses;
-    },
-    getNextPageParam: (lastPage, _pages, lastPageParam) =>
-      lastPageParam * COURSE_LIST_PAGE_SIZE < lastPage.totalCount ? lastPageParam + 1 : undefined,
+    queryFn: ({ pageParam, signal }) => loadAvailableHomeCoursePage(pageParam, {
+      signal,
+      loadPage: async (page) => {
+        const variables = { areaCode: area.tourAreaCode, page };
+        const options = { authToken: null, maxRetryCount: 0 };
+        const result = regionCodes.length > 1
+          ? await requestGraphQL(HomeTourCoursesByDistrictsDocument, { ...variables, sigunguCodes: regionCodes }, options)
+          : await requestGraphQL(HomeTourCoursesDocument, { ...variables, sigunguCode: regionCodes[0] }, options);
+        return result.homeTourCourses;
+      },
+      loadStops: (courseId) => queryClient.fetchQuery(homeCourseItineraryOptions(courseId)),
+      loadPlace: (contentId) => queryClient.fetchQuery(homeCoursePlaceOptions(contentId)),
+    }),
+    getNextPageParam: (lastPage) => lastPage.nextPage,
     staleTime: Infinity,
     // 같은 지역을 다시 골라도 이전에 펼친 페이지까지 자동으로 불러오지 않는다.
     gcTime: 0,
@@ -106,10 +111,6 @@ export function useHomeRecommendations() {
   const courses = Array.from(new Map(pages.flatMap(({ courses: pageCourses }) =>
     pageCourses.map((course) => [course.id, course] as const)
   )).values());
-  const totalCount = pages.at(-1)?.totalCount ?? 0;
-  const nextCount = query.hasNextPage
-    ? Math.min(COURSE_LIST_PAGE_SIZE, totalCount - pages.length * COURSE_LIST_PAGE_SIZE)
-    : 0;
 
   /** 시·도가 바뀌면 새 시·도 전체를 즉시 조회하고 지도의 시작 지역도 맞춘다. */
   const selectArea = (areaId: ServiceAreaId) => {
@@ -127,11 +128,12 @@ export function useHomeRecommendations() {
     selectExploreRegion(area.id, nextMapCode);
     setParams(createHomeSelectionParams({ areaId: area.id, regionCodes: nextCodes }), { replace: true });
   };
-  /** 추천 장소를 기존 전체 화면 상세로 연다. 방문·저장 요청은 상세 화면의 사용자 조작에 맡긴다. */
-  const openPlace = (place: MapSheetPlace) => {
+  /** 추천 장소의 전체 화면 상세를 열고 해당 코스에서 받은 방문지 설명을 함께 전달한다. */
+  const openPlace = (place: MapSheetPlace, courseStopDescription: MapSheetCourseStopDescription) => {
     const origin = region ?? resolveServiceRegion(null, place.signguCode)?.region ?? mapRegion;
     useMapSheetStore.getState().openSheet(place, {
       mode: "full-popup",
+      courseStopDescription,
       fallbackDirectionOrigin: { coordinates: origin.center, label: origin.label, isCurrentLocation: false },
     });
   };
@@ -152,14 +154,14 @@ export function useHomeRecommendations() {
 
   return {
     selection, area, selectedRegions, language, resultScope,
-    query, courses, totalCount, nextCount,
+    query, courses,
     mapHref,
     actions: { selectArea, selectRegions, openPlace, prepareMap, startCourse },
   };
 }
 
-/** 목록 사진이 없으면 화면 근처에서 방문지 사진을 찾아, 코스를 펼치기 전에도 표시한다. */
-export function useHomeCourseCover(course: HomeTourCourse) {
+/** 화면에 가까워진 카드의 소개와 영문 제목·소개를 조회하고, 대표 사진이 없으면 방문지 사진을 찾는다. */
+export function useHomeCoursePreview(course: HomeTourCourse, language: AppLanguage) {
   const queryClient = useQueryClient();
   const coverRef = useRef<HTMLDivElement>(null);
   const [isNearViewport, setIsNearViewport] = useState(() => typeof IntersectionObserver === "undefined");
@@ -169,7 +171,7 @@ export function useHomeCourseCover(course: HomeTourCourse) {
 
   useEffect(() => {
     const cover = coverRef.current;
-    if (!cover || courseImage || isNearViewport) return;
+    if (!cover || isNearViewport) return;
 
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry?.isIntersecting) return;
@@ -178,7 +180,17 @@ export function useHomeCourseCover(course: HomeTourCourse) {
     }, { rootMargin: "320px 0px" });
     observer.observe(cover);
     return () => observer.disconnect();
-  }, [courseImage, isNearViewport]);
+  }, [isNearViewport]);
+
+  const overview = useQuery({
+    queryKey: ["home-official-tour-course-overview", course.id],
+    enabled: isNearViewport,
+    staleTime: COURSE_DETAIL_STALE_TIME,
+    retry: false,
+    queryFn: ({ signal }) => fetchTourCourseOverview(TOUR_API_SERVICE_KEY, course.id, signal),
+  });
+  const title = useTourCourseTitle(course.id, course.title, language, isNearViewport);
+  const description = useTourCourseDescription(`tour-course:${course.id}:overview`, overview.data ?? "", language, isNearViewport);
 
   const needsFallback = isNearViewport && !courseImage;
   const itinerary = useQuery({ ...homeCourseItineraryOptions(course.id), enabled: needsFallback });
@@ -206,12 +218,14 @@ export function useHomeCourseCover(course: HomeTourCourse) {
 
   return {
     coverRef,
+    title,
+    description,
     image: courseImage || stopImage || placeCover.data?.find((image) => image && !failedImages.includes(image)),
     markImageFailed: (image: string) => setFailedImages((previous) => [...previous, image]),
   };
 }
 
-/** 펼친 코스의 방문지 상세를 조회·번역하고, 연결할 수 없는 방문지도 순서대로 남긴다. */
+/** 펼친 코스의 방문지를 순서대로 정리하고, 번역된 장소 정보와 코스 원문의 방문지 설명을 연결한다. */
 export function useHomeCourseStops(courseId: string, language: AppLanguage, enabled: boolean) {
   const queryClient = useQueryClient();
   return useQuery({
@@ -236,9 +250,13 @@ export function useHomeCourseStops(courseId: string, language: AppLanguage, enab
         ? await queryClient.ensureQueryData(serviceRegionBoundariesQueryOptions).catch(() => undefined)
         : undefined;
 
-      return stops.map((stop) => {
+      return stops.map((stop, index) => {
+        const description = {
+          contentId: `tour-course:${courseId}:stop:${index}:${stop.contentId}`,
+          text: stop.description,
+        };
         const entry = placesById.get(stop.contentId);
-        if (!entry) return { title: stop.title, place: null };
+        if (!entry) return { title: stop.title, place: null, description };
 
         const attraction = localizedById.get(stop.contentId) ?? entry.attraction;
         const location = findTourCourseRegion(entry) ?? (boundaries && findServiceRegionAtLocation(attraction, boundaries));
@@ -251,7 +269,7 @@ export function useHomeCourseStops(courseId: string, language: AppLanguage, enab
           topRank: null,
         });
         const translatedTitle = attraction.title !== entry.attraction.title ? attraction.title : "";
-        return { title: translatedTitle || stop.title || place.title, place };
+        return { title: translatedTitle || stop.title || place.title, place, description };
       });
     },
   });

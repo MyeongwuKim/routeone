@@ -4,7 +4,8 @@
   "packageManager": "pnpm@10.20.0",
   "scripts": {
     "dev": "pnpm --filter web dev",
-    "dev:api": "pnpm --filter api dev",
+    "api:local": "pnpm --filter api local",
+    "api:dev": "pnpm --filter api dev",
     "dev:api:test": "pnpm --filter api dev:test",
     "dev:analyzer": "cd apps/image-analyzer && IMAGE_ANALYZER_TOKEN=${IMAGE_ANALYZER_TOKEN:-local-dev-token} .venv/bin/python -m uvicorn src.main:app --host 127.0.0.1 --port 4100",
     "dev:web": "pnpm --filter web dev",

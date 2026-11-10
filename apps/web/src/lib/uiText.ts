@@ -421,6 +421,7 @@ export type UiText = {
     currentLocation: string;
     focusCurrentLocationAria: string;
     currentLocationUnavailable: string;
+    currentLocationOutsideServiceArea: string;
   };
   notifications: {
     title: string;
@@ -986,6 +987,7 @@ export type UiText = {
     noUserPhotosDescription: string;
     detailTitle: string;
     noOverview: string;
+    courseStopHeading: string;
     operatingHours: string;
     closedDays: string;
     contact: string;
@@ -1926,6 +1928,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "현재 위치",
       focusCurrentLocationAria: "현재 위치로 이동",
       currentLocationUnavailable: "현재 위치를 확인하지 못했어요.",
+      currentLocationOutsideServiceArea: "이 지역의 주변 장소는 아직 지원하지 않아요.",
     },
     notifications: {
       title: "알림함",
@@ -2601,6 +2604,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       noUserPhotosDescription: "이 장소를 사진 인증하면 여기에 모여요.",
       detailTitle: "상세 정보",
       noOverview: "아직 제공된 상세 설명이 없습니다.",
+      courseStopHeading: "이 코스에서",
       operatingHours: "이용시간",
       closedDays: "휴무일",
       contact: "문의",
@@ -3649,6 +3653,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
       currentLocation: "Current location",
       focusCurrentLocationAria: "Move to current location",
       currentLocationUnavailable: "Could not find your current location.",
+      currentLocationOutsideServiceArea: "Nearby places aren't available in this area yet.",
     },
     notifications: {
       title: "Notifications",
@@ -4348,6 +4353,7 @@ const UI_TEXT: Record<AppLanguage, UiText> = {
         "Photos will appear here after users verify visits.",
       detailTitle: "Details",
       noOverview: "No detailed description is available yet.",
+      courseStopHeading: "On this course",
       operatingHours: "Hours",
       closedDays: "Closed Days",
       contact: "Contact",

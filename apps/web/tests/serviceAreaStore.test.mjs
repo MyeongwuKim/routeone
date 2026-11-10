@@ -61,3 +61,9 @@ test("세종과 경남의 겹치는 권역 코드를 장소의 전체 행정 코
   assert.equal(resolveRegion("36:16", "16")?.area.id, "gyeongnam");
   assert.equal(resolveRegion("중구", null), null);
 });
+
+test("경기도 일반구를 상위 시로 연결하고 관광 코드 31과 울산 행정 코드 31을 구분한다", () => {
+  assert.equal(resolveRegion(undefined, "41115")?.region.adminCode, "41110");
+  assert.equal(resolveRegion("31:13")?.region.label, "수원시");
+  assert.equal(resolveRegion("31:31110")?.area.id, "ulsan");
+});

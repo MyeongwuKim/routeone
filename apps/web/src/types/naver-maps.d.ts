@@ -1,4 +1,5 @@
 type NaverMapInstance = {
+  destroy: () => void;
   fitBounds: (bounds: unknown, options?: unknown) => void;
   getZoom?: () => number;
   panTo?: (position: unknown, options?: unknown) => void;

@@ -106,7 +106,7 @@ Native 변경사항은 아래 순서로 확인합니다.
 이 앱은 Expo Go보다 native WebView 앱을 직접 빌드해 확인하는 흐름을 기본으로 사용합니다. 테스트할 API는 먼저 별도 터미널에서 실행해 둡니다.
 
 ```bash
-pnpm dev:api
+pnpm api:local
 ```
 
 로컬 시뮬레이터와 연결된 iPhone의 Metro 개발 앱을 테스트할 때는 `APP_VARIANT`를 비활성 상태인 `none` 또는 미설정으로 두는 것을 권장합니다. 이 상태에서는 `EXPO_PUBLIC_WEB_BUNDLE_BASE_URL`이 있거나 이전에 원격 번들을 설치했어도 이를 무시하고 앱에 내장된 로컬 번들을 사용합니다. `dev`나 `prod`를 사용하면 variant별 앱 식별자와 R2 원격 웹 번들 채널이 적용되어, `native:sync:web`으로 갱신한 로컬 UI 대신 저장되어 있던 번들이나 원격 번들이 열릴 수 있습니다. 이 경우 현재 수정한 화면을 테스트하는지 구분하기 어려워집니다.
@@ -115,21 +115,22 @@ pnpm dev:api
 
 ### iOS 시뮬레이터 빌드 테스트
 
-로컬 iOS 시뮬레이터에서 테스트할 때는 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`에 현재 실행 중인 API의 GraphQL 주소를 넣고 실행합니다. API를 기본 포트로 실행 중이라면 아래처럼 사용할 수 있습니다.
+로컬 iOS 시뮬레이터에서 테스트할 때는 `apps/native/.env`의 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`에 현재 실행 중인 API의 GraphQL 주소를 넣고 실행합니다. 기본 포트로 API를 실행 중이면 `http://127.0.0.1:4000/graphql`을 사용합니다.
 
 ```bash
-EXPO_PUBLIC_GRAPHQL_ENDPOINT=http://127.0.0.1:4000/graphql pnpm native:ios:local
+pnpm native:ios:local
 ```
 
 시뮬레이터에서는 `127.0.0.1`이 현재 Mac을 가리키므로 로컬 API에 바로 연결할 수 있습니다. 다른 포트나 배포 API를 사용하고 있다면 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`를 해당 API 주소로 바꿉니다.
 
 `native:ios:local`은 내부적으로 아래 일을 실행합니다.
 
+- `apps/native/.env`를 읽어 Xcode와 Metro에 같은 환경값 적용
 - `APP_VARIANT=none` 설정
 - `apps/web/dist`를 native WebView 번들로 동기화
 - `expo prebuild --platform ios` 실행
 - iOS 권한 문구 동기화
-- `expo run:ios`로 시뮬레이터 실행
+- 사용 가능한 포트에서 새 Metro를 시작하고 `expo run:ios`로 시뮬레이터 실행
 
 ### iPhone 실기기 빌드 테스트
 
@@ -177,7 +178,7 @@ pnpm native:ios:dev
 
 ```text
 pnpm native:ios:dev
-→ APP_VARIANT=dev, ROUTEONE_BUILD_PLATFORM=ios 설정
+→ apps/native/.env.development 읽기 및 APP_VARIANT=dev, ROUTEONE_BUILD_PLATFORM=ios 설정
 → app-versions.json의 dev.ios 버전 확인
 → apps/web 빌드 및 Native WebView 번들 생성
 → app.config.ts에서 dev 앱 이름·Bundle ID·권한·플러그인 구성
@@ -185,13 +186,13 @@ pnpm native:ios:dev
 → Info.plist, Google URL Scheme, Apple 로그인 entitlement 보정
 ```
 
-명령어를 실행하는 동안에만 dev 설정을 사용하며 `.env` 파일의 값은 변경하지 않습니다. 실행이 끝나면 `apps/native/ios/`에 Xcode에서 열 수 있는 `.xcodeproj`와 `.xcworkspace`가 생성됩니다. 이 단계만으로는 TestFlight에 앱이 올라가지 않습니다.
+`.env.development`의 Native 환경값을 웹뷰 번들 생성과 Expo prebuild에 적용하고 Xcode Archive에도 연결합니다. 파일이 없으면 실행을 중단합니다. 실행이 끝나면 `apps/native/ios/`에 Xcode에서 열 수 있는 `.xcodeproj`와 `.xcworkspace`가 생성됩니다. 이 단계만으로는 TestFlight에 앱이 올라가지 않습니다.
 
 각 단계의 담당 파일은 다음과 같습니다.
 
 | 단계 | 담당 파일 또는 도구 | 역할 |
 | --- | --- | --- |
-| 명령 연결 | 루트 및 `apps/native/package.json` | 환경값을 설정하고 확인·웹 번들·prebuild 명령을 순서대로 실행 |
+| 명령 연결 | 루트 및 `apps/native/package.json`, `scripts/prebuild-ios.mjs` | 선택한 환경 파일의 값으로 확인·웹 번들·prebuild 명령을 순서대로 실행 |
 | 앱 설정 | `app.config.ts` | 앱 이름, Bundle ID, 버전, 권한과 Expo config plugin 구성 |
 | 웹 번들 | `scripts/sync-web-build.mjs` | `apps/web`을 빌드하고 WebView용 번들 생성 |
 | Xcode 프로젝트 | `expo prebuild` | Expo 설정과 플러그인을 바탕으로 `ios/` 생성·갱신 |
@@ -509,7 +510,7 @@ R2 버킷과 API Token은 dev/prod용으로 각각 만들고, 각 Token의 `Obje
 
 ## 환경변수
 
-로컬 개발 값은 `apps/native/.env`에 저장하고, Xcode에서 직접 빌드할 prod 값은 `apps/native/.env.production`에 저장합니다. Expo/EAS 빌드의 dev·prod 값은 EAS 환경변수로 관리합니다. `EXPO_PUBLIC_`으로 시작하는 값은 앱 번들에 포함되므로 서버 비밀키나 R2 Access Key처럼 외부에 노출되면 안 되는 값은 넣지 않습니다.
+로컬 실행 값은 `apps/native/.env`에 저장합니다. Xcode에서 직접 Archive할 때 사용하는 값은 dev용 `apps/native/.env.development`와 prod용 `apps/native/.env.production`에 각각 저장합니다. Expo/EAS 빌드의 dev·prod 값은 EAS 환경변수로 관리합니다. `EXPO_PUBLIC_`으로 시작하는 값은 앱 번들에 포함되므로 서버 비밀키나 R2 Access Key처럼 외부에 노출되면 안 되는 값은 넣지 않습니다.
 
 ### 네이티브 앱 설정
 
@@ -563,7 +564,7 @@ EXPO_PUBLIC_NCP_MAPS_KEY=...
 
 ### 명령어별 자동 설정값
 
-Native 빌드 명령은 실행 목적에 맞게 `APP_VARIANT`와 플랫폼을 자동 설정합니다. `native:ios:prod`는 `apps/native/.env.production` 값을 단독으로 적용하고, 명령어에 지정된 `APP_VARIANT=prod`가 환경변수 파일보다 우선합니다.
+Native 빌드 명령은 실행 목적에 맞게 `APP_VARIANT`와 플랫폼을 자동 설정합니다. `native:ios:dev`와 `native:ios:prod`는 각각 `.env.development`와 `.env.production`의 Native 환경값을 단독으로 적용하고, 명령어에 지정된 `APP_VARIANT`가 환경 파일의 값보다 우선합니다.
 
 | 명령어 | 앱 상태 | 플랫폼 | 실행 결과 |
 | --- | --- | --- | --- |

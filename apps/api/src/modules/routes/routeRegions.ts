@@ -20,6 +20,11 @@ export const ROUTE_REGION_RULES: RegionRule[] = [
     tourRegionCodes: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25"],
   },
   {
+    tag: "경기도", tourAreaCode: "31",
+    adminCodePrefixes: ["41"],
+    tourRegionCodes: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31"],
+  },
+  {
     tag: "부산", tourAreaCode: "6",
     adminCodePrefixes: ["26"],
     tourRegionCodes: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"],
@@ -100,7 +105,7 @@ function getRegionLabelMatchers(rule: RegionRule) {
 /** 저장된 행정 코드 또는 관광공사 지역 키로 루트의 권역 태그를 찾고, 매칭할 수 없으면 null을 반환한다. */
 export function findRouteRegionTag(regionCodes: string[], regionLabelKeys: string[]) {
   const adminRule = ROUTE_REGION_RULES.find((rule) => regionCodes.some((code) =>
-    /^\\d{5}$/.test(code) && rule.adminCodePrefixes.some((prefix) => code.startsWith(prefix))
+    /^\d{5}$/.test(code) && rule.adminCodePrefixes.some((prefix) => code.startsWith(prefix))
   ));
   if (adminRule) return adminRule.tag;
   return ROUTE_REGION_RULES.find((rule) => {

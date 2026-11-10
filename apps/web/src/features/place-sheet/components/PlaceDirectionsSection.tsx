@@ -7,7 +7,7 @@
  * 현재 위치 출발은 실행 시 권한을 다시 확인해 이전 좌표 사용을 막는다.
  * 권한이 꺼지면 현재 위치 경로를 숨기되 지도에서 출발지를 직접 선택할 수 있다.
  */
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   IoCarSportOutline,
   IoFootstepsOutline,
@@ -49,6 +49,7 @@ const NAVER_MAP_SCHEME_APP_NAME = "com.routeone.app";
 const PREVIEW_MAP_RESIZE_RETRY_MS = [0, 80, 240, 600] as const;
 
 type PreviewMapInstance = {
+  destroy: () => void;
   setOptions?: (
     optionsOrKey: Record<string, unknown> | string,
     value?: unknown
@@ -330,13 +331,20 @@ function PlaceDirectionsContent({
     originLabel,
   ]);
 
-  useEffect(() => {
+  // 시트를 닫을 때 지도 SDK에 정리를 맡긴다. SDK에서 예외가 발생해도 목록 복귀는 계속한다.
+  useLayoutEffect(() => {
     return () => {
-      clearPreviewOverlays();
+      const previewMap = previewMapInstanceRef.current;
+      previewOverlaysRef.current = [];
       previewMapInstanceRef.current = null;
       previewMapContainerRef.current = null;
+      try {
+        previewMap?.destroy();
+      } catch (error) {
+        console.warn("Could not dispose the place direction preview map.", error);
+      }
     };
-  }, [clearPreviewOverlays]);
+  }, []);
 
   const handleOpenDirections = async () => {
     if (isCurrentLocationLookupPending || isOpeningDirections) {

@@ -139,10 +139,10 @@ export function useHomeRegionController({
 
   /**
    * 현재 위치 버튼을 누를 때 저장값을 재사용하지 않고 위치를 새로 조회한다.
-   * 유효한 좌표를 얻으면 전국 경계에서 권역과 시군구를 함께 선택하고,
-   * 선택값이 반영된 뒤 지도를 이동할 수 있도록 좌표와 대상 지역을 ref에 보관한다.
+   * 지원 지역 안이면 권역·시군구를 선택한 뒤 새 좌표로 이동한다.
+   * 경계 밖이면 탐색 지역을 유지한 채 새 좌표로 이동하고 주변 장소의 지원 범위를 안내한다.
    * 조회 도중 사용자가 지역을 바꾸었으면 이전 위치 요청의 결과는 적용하지 않는다.
-   * 조회 실패, 범위를 벗어난 좌표 또는 지역 판정 실패 시 안내 토스트만 표시하고 선택 지역과 지도는 변경하지 않는다.
+   * 위치 조회에 실패하거나 좌표가 유효하지 않으면 안내 토스트만 표시한다.
    */
   const focusCurrentLocation = useCallback(() => {
     const focus = async () => {
@@ -163,7 +163,11 @@ export function useHomeRegionController({
         ? findServiceRegionAtLocation(nextLocation, boundaryByAdminCode)
         : null;
       if (!selection) {
-        showToast(text.home.currentLocationUnavailable);
+        pendingCurrentLocationFocusRef.current = null;
+        focusLocation(nextLocation);
+        if (boundaryByAdminCode) {
+          showToast(text.home.currentLocationOutsideServiceArea);
+        }
         return;
       }
 
@@ -179,6 +183,7 @@ export function useHomeRegionController({
     void focus();
   }, [
     boundaryByAdminCode,
+    focusLocation,
     refreshCurrentLocation,
     showToast,
     text,

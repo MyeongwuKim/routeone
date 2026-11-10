@@ -48,6 +48,13 @@ test("전북 전환 전 행정 코드와 기존 강원 관광 코드도 유지�
   assert.equal(matches({ primaryRegionCode: "45110", shareTags: [] }, getRouteRegionWhere("전북")), true);
 });
 
+test("경기도 관광 코드 31과 울산 행정 코드 31을 구분한다", () => {
+  assert.equal(findRouteRegionTag(["41115"], []), "경기도");
+  assert.equal(findRouteRegionTag([], ["31:13"]), "경기도");
+  assert.equal(findRouteRegionTag(["31110"], ["31:31110"]), "울산");
+  assert.equal(matches({ primaryRegionCode: "31110", primaryRegionLabelKey: "31:31110", shareTags: [] }, getRouteRegionWhere("경기도")), false);
+});
+
 test("지역 조건이 없으면 제한하지 않고 미등록 태그는 기존 태그 조건을 사용한다", () => {
   assert.deepEqual(getRouteRegionWhere(null), {});
   assert.deepEqual(getRouteRegionWhere("  "), {});

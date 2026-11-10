@@ -116,7 +116,7 @@ export const ONBOARDING_TEXT = {
     launchCheckingUpdate: "앱 버전을 확인하고 있어요.",
     launchCheckingStorage: "저장된 정보를 확인하고 있어요.",
     launchPreparingLocation: "위치 정보를 가져오고 있어요.",
-    launchTagline: "여행의 시작부터 도착까지"
+    launchTagline: "오늘은 어디로 마실 갈까요?"
   },
   en: {
     locationTitle: "Allow Location",
@@ -131,7 +131,7 @@ export const ONBOARDING_TEXT = {
     launchCheckingUpdate: "Checking the app version.",
     launchCheckingStorage: "Checking saved information.",
     launchPreparingLocation: "Getting your location.",
-    launchTagline: "From first plan to final stop"
+    launchTagline: "Where to today?"
   }
 } as const;
 

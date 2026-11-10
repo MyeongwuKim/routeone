@@ -5,7 +5,7 @@
  *
  * 동작 방식:
  * openSheet가 장소와 호출 화면의 문맥을 저장하면 전역 PlaceBottomSheet가 이를 구독해 표시한다.
- * 닫거나 초기화할 때 선택 장소와 출발점·문맥 액션을 비우고 resetVersion을 증가시킨다.
+ * 닫거나 초기화할 때 선택 장소와 출발점·코스 설명·문맥 액션을 비우고 resetVersion을 증가시킨다.
  */
 import { create } from "zustand";
 import type { MapSheetPlace } from "@/types/place";
@@ -34,6 +34,12 @@ export type MapSheetContextAction = {
   onSelect: (place: MapSheetPlace) => void;
 };
 
+/** 코스와 방문 순서로 구분한 번역 ID와 관광공사 설명 원문. */
+export type MapSheetCourseStopDescription = {
+  contentId: string;
+  text: string;
+};
+
 type MapSheetState = {
   /** 전역 장소 상세 UI의 표시 여부 */
   isOpen: boolean;
@@ -47,6 +53,8 @@ type MapSheetState = {
   fallbackDirectionOrigin: MapSheetDirectionOrigin | null;
   /** 장소 담기처럼 호출 화면이 상세 시트에 추가하는 문맥 액션 */
   contextAction: MapSheetContextAction | null;
+  /** 추천 코스에서 열었을 때만 표시하는 해당 방문지의 설명 원문. */
+  courseStopDescription: MapSheetCourseStopDescription | null;
   /** 상세 조회와 화면 표시의 기준이 되는 현재 장소 */
   selectedPlace: MapSheetPlace | null;
   /** 장소와 호출 문맥을 저장하고 지정한 표시 형태로 상세 UI를 연다. */
@@ -56,6 +64,7 @@ type MapSheetState = {
       directionOrigin?: MapSheetDirectionOrigin;
       fallbackDirectionOrigin?: MapSheetDirectionOrigin;
       contextAction?: MapSheetContextAction;
+      courseStopDescription?: MapSheetCourseStopDescription | null;
       mode?: MapSheetMode;
     }
   ) => void;
@@ -75,6 +84,7 @@ const getClosedSheetState = (sheetResetVersion: number) => ({
   directionOrigin: null,
   fallbackDirectionOrigin: null,
   contextAction: null,
+  courseStopDescription: null,
   selectedPlace: null,
   sheetResetVersion: sheetResetVersion + 1,
 });
@@ -86,6 +96,7 @@ export const useMapSheetStore = create<MapSheetState>((set) => ({
   directionOrigin: null,
   fallbackDirectionOrigin: null,
   contextAction: null,
+  courseStopDescription: null,
   selectedPlace: null,
   openSheet: (place, options) =>
     set({
@@ -94,6 +105,7 @@ export const useMapSheetStore = create<MapSheetState>((set) => ({
       directionOrigin: options?.directionOrigin ?? null,
       fallbackDirectionOrigin: options?.fallbackDirectionOrigin ?? null,
       contextAction: options?.contextAction ?? null,
+      courseStopDescription: options?.courseStopDescription ?? null,
       selectedPlace: place,
     }),
   updateSelectedPlace: (place) =>

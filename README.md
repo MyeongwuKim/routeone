@@ -107,7 +107,7 @@ flowchart TD
 ```bash
 pnpm install
 pnpm --filter api prisma:generate
-pnpm dev:api
+pnpm api:local
 pnpm dev:web
 ```
 
@@ -125,7 +125,8 @@ API는 `apps/api/.env`, Web은 `apps/web/.env`에 필요한 값을 설정합니�
 | 명령어 | 설명 |
 | --- | --- |
 | `pnpm dev:web` | Web 개발 서버를 실행합니다. |
-| `pnpm dev:api` | API 개발 서버를 실행합니다. |
+| `pnpm api:local` | `apps/api/.env`로 API 서버를 실행합니다. |
+| `pnpm api:dev` | `.env`를 기본으로 사용하고 `.env.development`에 정의된 값을 덮어씁니다. |
 | `pnpm dev:api:test` | GPS 방문 인증 우회가 활성화된 API 개발 서버를 실행합니다. |
 | `pnpm dev:analyzer` | 로컬 Image Analyzer를 실행합니다. |
 | `pnpm build:web` | Web 타입 검사와 프로덕션 빌드를 실행합니다. |

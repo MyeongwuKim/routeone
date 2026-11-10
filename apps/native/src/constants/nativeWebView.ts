@@ -28,7 +28,7 @@ export const WEB_VIEW_TEXT = {
       extract: "업데이트 압축을 3번 시도했지만 풀지 못했어요.",
       verify: "업데이트 파일을 3번 시도했지만 확인하지 못했어요."
     },
-    launchTagline: "여행의 시작부터 도착까지",
+    launchTagline: "오늘은 어디로 마실 갈까요?",
     loadErrorTitle: "웹앱을 불러오지 못했어요.",
     loadingRouteOne: "마실을 불러오고 있어요.",
     prepareFailed: "웹 번들을 준비하지 못했어요.",
@@ -62,7 +62,7 @@ export const WEB_VIEW_TEXT = {
       extract: "The update archive could not be extracted after 3 attempts.",
       verify: "The update file could not be verified after 3 attempts."
     },
-    launchTagline: "From first plan to final stop",
+    launchTagline: "Where to today?",
     loadErrorTitle: "Could not load the web app.",
     loadingRouteOne: "Loading Masil.",
     prepareFailed: "Could not prepare the web bundle.",

@@ -160,6 +160,7 @@ async function translateTitleBatch(inputs: TourPlaceLocalizationInput[]) {
         role: "system",
         content: [
           "Translate Korean tourism place names into concise, natural English display names.",
+          "A contentTypeId of 25 indicates a tour course. Translate its title as a natural English itinerary title, preserving its descriptive meaning.",
           "Treat restaurants, cafes, and brands as proper nouns and prefer transliteration.",
           "For Korean place names ending in facility nouns, transliterate the name stem and translate only the facility noun: 해변/해수욕장=Beach, 공원=Park, 항구=Port, 시장=Market, 박물관=Museum.",
           "Do not invent House, Restaurant, Cafe, Store, or similar facility words.",

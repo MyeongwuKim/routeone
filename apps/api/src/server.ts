@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./lib/serverEnv.js";
 import { readFileSync } from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
