@@ -39,4 +39,11 @@ API 환경 선택은 `apps/api/src/lib/serverEnv.ts`에서 확인한다. iOS 환
 
 ## 커밋 전 검사
 
-새로 클론한 저장소에서는 `git config --local core.hooksPath .githooks`로 한 번 연결한다. 이후 터미널과 Fork에서 커밋할 때 스테이징한 내용을 기준으로 변경 영역의 타입과 대표 테스트를 실행한다. 실패하면 커밋이 만들어지지 않고 `[pre-commit]` 로그가 검사 이름과 원인을 보여준다. Fork에서는 Activity Manager에서 실행 출력을 확인한다. 네이티브 타입 검사에는 로컬에서 생성한 WebView 번들이 필요하다.
+새로 클론한 저장소에서는 `git config --local core.hooksPath .githooks`로 한 번 연결한다. 이후 터미널과 Fork에서 커밋할 때 임시 폴더에 스테이징한 내용만 복원해 검사한다. 실패하면 커밋이 만들어지지 않고 `[pre-commit]` 로그가 검사 이름과 원인을 보여준다. Fork에서는 Activity Manager에서 실행 출력을 확인한다.
+
+- 변경 영역의 TypeScript 타입 검사와 변경한 웹 TS·TSX 파일의 ESLint를 실행한다. 네이티브 타입 검사에는 로컬에서 생성한 WebView 번들이 필요하다.
+- `scripts/related-tests.mjs`가 테스트의 import, 웹 SSR 모듈 경로와 소스를 직접 읽는 경로 리터럴을 따라 관련 Node 테스트를 선택한다. 새로 추가·수정한 테스트도 포함하며 다른 앱의 소스를 참조하는 네이티브 테스트도 선택한다. 동적으로 조합한 경로는 추적하지 못하므로 관련 테스트 선택 결과를 확인한다.
+- 앱의 의존성·컴파일 설정은 해당 앱 전체, 루트 의존성 변경은 전체 테스트로 넓힌다. API의 `schema.ts`·Prisma 스키마 변경은 웹·API 전체, 웹 `.graphql` 변경은 웹 전체로 넓힌다. iOS 도착 알림 모듈 변경에는 기존 Swift 테스트도 실행하므로 Swift 컴파일러가 필요하다.
+- 선택한 테스트 파일과 연결된 자동 테스트가 없는 구현을 로그에 표시한다. 실제 DB에 쓰는 `.integration.test.*`는 제외하고 테스트 DB를 지정해 따로 실행한다. 현재 저장소에는 실행 가능한 Playwright 설정·테스트가 없으며 `.playwright-mcp`는 수동 확인 기록이다.
+
+`node scripts/pre-commit.mjs --plan`으로 스테이징한 변경의 선택 결과만 확인하고, `node scripts/pre-commit.mjs --all`로 전체 타입·웹 lint·기존 자동 테스트를 실행할 수 있다. `--all --plan`은 전체 검사 목록만 보여준다. 선택 규칙과 실제 Git 훅의 차단·통과 동작은 `node --test scripts/related-tests.test.mjs scripts/pre-commit.test.mjs`로 검증한다.
