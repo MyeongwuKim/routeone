@@ -136,6 +136,12 @@ function readDisplayBundleProgress(
   text: (typeof WEB_VIEW_TEXT)[AppLanguage]
 ): WebBundleProgress {
   const normalizedProgress = readBundleProgress(progress);
+  if (normalizedProgress.stage === "language") {
+    return {
+      ...normalizedProgress,
+      message: text.progressMessages.language,
+    };
+  }
   const displayProgress =
     WEB_BUNDLE_DISPLAY_PROGRESS_START +
     normalizedProgress.progress * (1 - WEB_BUNDLE_DISPLAY_PROGRESS_START);
@@ -332,6 +338,7 @@ export default function NativeWebViewScreen({
   const fatalExitAlertShownRef = useRef(false);
   const rollbackInProgressRef = useRef(false);
   const readyBundleKeyRef = useRef<string | null>(null);
+  const startupLanguagePendingRef = useRef(false);
   const readyRecoveryFailureRef = useRef<() => void>(() => undefined);
   const readyRecoveryRef = useRef<WebViewReadyRecoveryController | null>(null);
   const [resolvedBundle, setResolvedBundle] =
@@ -571,6 +578,7 @@ export default function NativeWebViewScreen({
 
   const completeWebBundleLoad = useCallback(
     (bundle: ResolvedWebBundle) => {
+      startupLanguagePendingRef.current = false;
       readyRecoveryRef.current?.markReady(bundle.key);
       flushPendingNavigationPath();
 
@@ -604,7 +612,32 @@ export default function NativeWebViewScreen({
       try {
         const message = JSON.parse(event.nativeEvent.data) as {
           type?: unknown;
+          progress?: unknown;
         };
+
+        if (
+          message.type === "routeone:startup-language-progress" &&
+          currentBundle &&
+          readyBundleKeyRef.current !== currentBundle.key
+        ) {
+          startupLanguagePendingRef.current = true;
+          readyRecoveryRef.current?.stopWaiting(currentBundle.key);
+          setBundleProgress({
+            stage: "language",
+            progress: readProgressNumber(message.progress, 0),
+            message: text.progressMessages.language,
+            indeterminate: message.progress === null,
+          });
+          return;
+        }
+
+        if (message.type === "routeone:startup-language-complete" && currentBundle) {
+          startupLanguagePendingRef.current = false;
+          if (readyBundleKeyRef.current !== currentBundle.key) {
+            readyRecoveryRef.current?.waitForReady(currentBundle.key);
+          }
+          return;
+        }
 
         if (message.type === "routeone:web-bundle-ready" && currentBundle) {
           completeWebBundleLoad(currentBundle);
@@ -964,6 +997,7 @@ export default function NativeWebViewScreen({
               return;
             }
 
+            startupLanguagePendingRef.current = false;
             setIsLoading(true);
             setLoadError(null);
             setBundleProgress({
@@ -980,7 +1014,7 @@ export default function NativeWebViewScreen({
             setBundleProgress((current) => {
               const currentProgress = readBundleProgress(current);
 
-              if (currentProgress.stage === "ready") {
+              if (currentProgress.stage === "ready" || currentProgress.stage === "language") {
                 return currentProgress;
               }
 
@@ -999,8 +1033,10 @@ export default function NativeWebViewScreen({
               return;
             }
 
+            if (startupLanguagePendingRef.current) return;
+
             if (resolvedBundle.readySignalRequired) {
-              setBundleProgress({
+              setBundleProgress((current) => current.stage === "language" ? current : {
                 stage: "loading",
                 progress: 0.98,
                 message: text.waitingReadySignal
@@ -1025,6 +1061,7 @@ export default function NativeWebViewScreen({
             language={appLanguage}
             message={displayBundleProgress.message}
             progress={displayBundleProgress.progress}
+            indeterminate={displayBundleProgress.indeterminate}
             tagline={text.launchTagline}
           />
         </View>

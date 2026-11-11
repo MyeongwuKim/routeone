@@ -52,6 +52,7 @@ export type WebBundleProgressStage =
   | "extracting"
   | "applying"
   | "loading"
+  | "language"
   | "ready"
   | "rollback";
 
@@ -59,6 +60,8 @@ export type WebBundleProgress = {
   stage: WebBundleProgressStage;
   progress: number;
   message: string;
+  /** 다운로드 전체 길이를 모르는 영어팩 준비 단계에 표시한다. */
+  indeterminate?: boolean;
 };
 
 export type WebBundleProgressReporter = (

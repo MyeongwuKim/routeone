@@ -22,7 +22,10 @@ type AppLanguageState = {
   languageDownload: { progress: number | null } | null;
   languageDownloadFailed: boolean;
   /** 팩 준비까지 마친 뒤 언어를 적용하고 실제로 변경했는지 반환한다. */
-  setLanguage: (language: AppLanguage) => Promise<boolean>;
+  setLanguage: (
+    language: AppLanguage,
+    onProgress?: (progress: number | null) => void,
+  ) => Promise<boolean>;
 };
 
 const APP_LANGUAGE_STORAGE_KEY = "routeone-app-language";
@@ -50,14 +53,17 @@ export const useAppLanguageStore = create<AppLanguageState>((set, get) => ({
   language: "ko",
   languageDownload: null,
   languageDownloadFailed: false,
-  setLanguage: async (language) => {
+  setLanguage: async (language, onProgress) => {
     if (get().languageDownload) return false;
     if (get().language === language && readPreferredAppLanguage() === language) return false;
 
     if (language === "en") {
       set({ languageDownload: { progress: null }, languageDownloadFailed: false });
       try {
-        await prepareEnglishUiText((progress) => set({ languageDownload: { progress } }));
+        await prepareEnglishUiText((progress) => {
+          set({ languageDownload: { progress } });
+          onProgress?.(progress);
+        });
       } catch {
         set({ languageDownload: null, languageDownloadFailed: true });
         return false;

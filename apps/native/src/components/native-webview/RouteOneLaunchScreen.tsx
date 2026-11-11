@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react";
 import {
   Animated,
+  ActivityIndicator,
   Image,
   StyleSheet,
   Text,
@@ -16,6 +17,7 @@ type RouteOneLaunchScreenProps = {
   message: string;
   showProgress?: boolean;
   tagline?: string;
+  indeterminate?: boolean;
 };
 
 const LAUNCH_LOGO_SIZE = 240;
@@ -25,6 +27,7 @@ export default function RouteOneLaunchScreen({
   progress,
   message,
   showProgress = true,
+  indeterminate = false,
   tagline = "오늘은 어디로 마실 갈까요?"
 }: RouteOneLaunchScreenProps) {
   const colorScheme = useColorScheme();
@@ -65,7 +68,7 @@ export default function RouteOneLaunchScreen({
         <View style={styles.progressArea}>
           <View
             accessibilityRole="progressbar"
-            accessibilityValue={{
+            accessibilityValue={indeterminate ? undefined : {
               min: 0,
               max: 100,
               now: Math.round(normalizedProgress * 100)
@@ -86,9 +89,13 @@ export default function RouteOneLaunchScreen({
             >
               {message}
             </Text>
-            <Text style={styles.percentage}>
-              {Math.round(normalizedProgress * 100)}%
-            </Text>
+            {indeterminate ? (
+              <ActivityIndicator color={NATIVE_BRAND.apricot} size="small" />
+            ) : (
+              <Text style={styles.percentage}>
+                {Math.round(normalizedProgress * 100)}%
+              </Text>
+            )}
           </View>
         </View>
       ) : null}

@@ -1,7 +1,7 @@
 /**
  * 진입 경로: 홈 오른쪽 위 지구본. 돌아갈 때 홈의 지역 선택을 유지한다.
  *
- * 영어팩 다운로드 상태를 표시하고, 준비된 언어를 Store와 네이티브 앱 설정에 반영한다.
+ * 영어팩 준비 중에는 전역 진행 모달로 이동을 막고, 완료한 언어를 앱 설정에 반영한다.
  * 변경 후 언어별 장소·경로 캐시를 무효화하고 열린 장소 상세 화면을 닫아 이전 언어 데이터가 남지 않게 한다.
  */
 import { MdArrowBack, MdCheck, MdLanguage } from "react-icons/md";
@@ -136,12 +136,7 @@ function LanguageSettingsPage() {
         })}
       </section>
 
-      {languageDownload ? (
-        <div className="space-y-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 dark:border-brand-800 dark:bg-[#0b211f]">
-          <p role="status" className="text-sm font-bold text-brand-800 dark:text-brand-200">영어 언어팩을 다운로드하고 있어요.</p>
-          <progress className="h-2 w-full accent-brand-600" aria-label="영어 언어팩 다운로드" max={1} value={languageDownload.progress ?? undefined} />
-        </div>
-      ) : languageDownloadFailed ? (
+      {languageDownloadFailed ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-200 px-4 py-3 dark:border-brand-800">
           <p role="alert" className="text-sm font-semibold text-slate-700 dark:text-slate-200">영어를 불러오지 못했어요. 한국어로 계속 이용할 수 있어요.</p>
           <button type="button" onClick={() => void handleSelectLanguage("en")} className="min-h-10 rounded-lg px-3 text-sm font-bold text-brand-700 dark:text-brand-300">다시 시도</button>
