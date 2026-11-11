@@ -4,11 +4,12 @@
  * 메뉴 문구 선택, 장소 정보 번역, 알림 언어처럼 여러 기능이 같은 언어를 참조한다.
  *
  * 동작 방식:
- * WebView localStorage에서 초기 언어를 읽고 변경값을 다시 저장한다.
- * 네이티브 앱에서도 같은 언어를 유지하도록 브리지 메시지를 함께 전송한다.
+ * 한국어로 시작하고, 영어를 선택하면 팩이 준비된 뒤 화면과 저장값을 변경한다.
+ * 적용한 언어는 네이티브 앱에도 전달한다.
  */
 import { create } from "zustand";
 import { updateNativeAppLanguage } from "@/native-bridge/language";
+import { prepareEnglishUiText } from "@/lib/ui-text/englishPack";
 
 export type AppLanguage = "ko" | "en";
 
@@ -17,13 +18,16 @@ export const APP_DISPLAY_NAMES = { ko: "마실", en: "Masil" } as const;
 type AppLanguageState = {
   /** UI 문구와 장소 번역 요청에 적용할 현재 언어. 저장값이 없거나 유효하지 않으면 ko */
   language: AppLanguage;
-  /** 문서 언어와 제목, localStorage, 네이티브 언어와 Store 값을 전달한 언어로 맞춘다. */
-  setLanguage: (language: AppLanguage) => void;
+  /** 영어팩 준비 중의 진행률. 전체 길이를 모르면 null이다. */
+  languageDownload: { progress: number | null } | null;
+  languageDownloadFailed: boolean;
+  /** 팩 준비까지 마친 뒤 언어를 적용하고 실제로 변경했는지 반환한다. */
+  setLanguage: (language: AppLanguage) => Promise<boolean>;
 };
 
 const APP_LANGUAGE_STORAGE_KEY = "routeone-app-language";
 
-function readInitialLanguage(): AppLanguage {
+export function readPreferredAppLanguage(): AppLanguage {
   if (typeof window === "undefined") {
     return "ko";
   }
@@ -37,16 +41,29 @@ function readInitialLanguage(): AppLanguage {
   }
 }
 
-const initialLanguage = readInitialLanguage();
-
 if (typeof document !== "undefined") {
-  document.documentElement.lang = initialLanguage;
-  document.title = APP_DISPLAY_NAMES[initialLanguage];
+  document.documentElement.lang = "ko";
+  document.title = APP_DISPLAY_NAMES.ko;
 }
 
-export const useAppLanguageStore = create<AppLanguageState>((set) => ({
-  language: initialLanguage,
-  setLanguage: (language) => {
+export const useAppLanguageStore = create<AppLanguageState>((set, get) => ({
+  language: "ko",
+  languageDownload: null,
+  languageDownloadFailed: false,
+  setLanguage: async (language) => {
+    if (get().languageDownload) return false;
+    if (get().language === language && readPreferredAppLanguage() === language) return false;
+
+    if (language === "en") {
+      set({ languageDownload: { progress: null }, languageDownloadFailed: false });
+      try {
+        await prepareEnglishUiText((progress) => set({ languageDownload: { progress } }));
+      } catch {
+        set({ languageDownload: null, languageDownloadFailed: true });
+        return false;
+      }
+    }
+
     if (typeof document !== "undefined") {
       document.documentElement.lang = language;
       document.title = APP_DISPLAY_NAMES[language];
@@ -59,6 +76,7 @@ export const useAppLanguageStore = create<AppLanguageState>((set) => ({
     }
 
     updateNativeAppLanguage(language);
-    set({ language });
+    set({ language, languageDownload: null, languageDownloadFailed: false });
+    return true;
   },
 }));

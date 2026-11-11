@@ -1,0 +1,10 @@
+#!/bin/sh
+# Fork에서 실행할 때도 Mac의 기본 Homebrew 설치 경로에서 Node.js를 찾는다.
+export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"
+
+if ! command -v node >/dev/null 2>&1; then
+  printf '%s\n' '[pre-commit] 커밋 중단. Fork에서 Node.js를 찾을 수 없습니다.' >&2
+  exit 1
+fi
+
+exec node scripts/pre-commit.mjs

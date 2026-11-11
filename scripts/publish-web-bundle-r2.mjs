@@ -180,10 +180,15 @@ function assertDistDir() {
   if (!existsSync(distDir) || !statSync(distDir).isDirectory()) {
     fail(`Web dist directory does not exist: ${distDir}`);
   }
+  const index = readFileSync(join(distDir, "index.html"), "utf8");
+  const languagePack = index.match(/\/language-packs\/(en-[a-f0-9]{64}\.mjs)/)?.[1];
+  if (languagePack && !existsSync(join(distDir, "language-packs", languagePack))) {
+    fail("English language pack referenced by index.html is missing.");
+  }
 }
 
 function zipDist() {
-  run("zip", ["-qr", bundlePath, "."], { cwd: distDir });
+  run("zip", ["-qr", bundlePath, ".", "-x", "language-packs/*"], { cwd: distDir });
 }
 
 function uploadFile(sourcePath, key, contentType, cacheControl) {
@@ -202,6 +207,13 @@ function uploadFile(sourcePath, key, contentType, cacheControl) {
 function uploadDistFiles() {
   for (const filePath of listDistFiles(distDir)) {
     const relativePath = toPosixPath(relative(distDir, filePath));
+    const languagePackHash = /^language-packs\/en-([a-f0-9]{64})\.mjs$/.exec(relativePath)?.[1];
+    if (languagePackHash) {
+      if (sha256(filePath) !== languagePackHash) fail("English language pack hash mismatch.");
+      // 구버전 앱도 같은 해시의 팩을 받을 수 있도록 릴리스 정리 범위 밖에 둔다.
+      uploadFile(filePath, relativePath, "text/javascript; charset=utf-8", "public, max-age=31536000, immutable");
+      continue;
+    }
     const key = joinKey(releaseWebPrefix, relativePath);
 
     uploadFile(

@@ -14,6 +14,7 @@ import App from "./App.tsx";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import NativeWebBundleReadySignal from "./components/NativeWebBundleReadySignal";
 import { isGraphQLRequestError } from "./lib/graphqlClient";
+import { readPreferredAppLanguage, useAppLanguageStore } from "./stores/appLanguageStore";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -77,3 +78,7 @@ function renderApp() {
 warmAppFonts();
 preventMediaAndLinkDrag();
 renderApp();
+
+if (readPreferredAppLanguage() === "en") {
+  void useAppLanguageStore.getState().setLanguage("en");
+}

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { loadEnglishUiText } from "./helpers/englishUiText.mjs";
 
 let server;
 let infoStore;
@@ -14,8 +15,8 @@ let stopSync;
 let resolvePlaceDirectionOrigin;
 let PlaceDirectionsSection;
 let mapSheetStore;
-let getUiText;
 let text;
+let englishText;
 let appInfo;
 let readAppInfo;
 let readPosition;
@@ -75,8 +76,9 @@ before(async () => {
   ({ resolvePlaceDirectionOrigin } = await server.ssrLoadModule("/src/features/place-sheet/utils/placeDirectionOrigin.ts"));
   ({ default: PlaceDirectionsSection } = await server.ssrLoadModule("/src/features/place-sheet/components/PlaceDirectionsSection.tsx"));
   ({ useMapSheetStore: mapSheetStore } = await server.ssrLoadModule("/src/stores/mapSheetStore.ts"));
-  ({ getUiText } = await server.ssrLoadModule("/src/lib/uiText.ts"));
+  const { getUiText } = await server.ssrLoadModule("/src/lib/uiText.ts");
   text = getUiText("ko");
+  englishText = await loadEnglishUiText(server);
 });
 beforeEach(() => {
   appInfo = grantedInfo();
@@ -286,7 +288,7 @@ function renderDirections(language = "ko", explicitOrigin = null) {
       routeError: null,
       routePathPoints: [],
       selectedPlace: { id: "test-place", contentId: "test-place", contentTypeId: "12", title: "테스트 장소", address: "테스트 주소", lat: 37, lng: 127 },
-      text: getUiText(language),
+      text: language === "en" ? englishText : text,
     }));
   } finally {
     infoSnapshot.appInfoState = previousInfo;

@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useSearchParams } from "react-router-dom";
-import { MdArrowForward, MdErrorOutline, MdLanguage, MdMap, MdRefresh, MdRoute } from "react-icons/md";
+import { MdArrowForward, MdArrowUpward, MdErrorOutline, MdLanguage, MdMap, MdRefresh } from "react-icons/md";
 import HomeRecommendationForm from "@/features/home/recommendations/HomeRecommendationForm";
 import HomeRecommendedCourseCard from "@/features/home/recommendations/HomeRecommendedCourseCard";
 import HomeMapEntry from "@/features/home/recommendations/HomeMapEntry";
@@ -15,6 +15,7 @@ import type { MapSheetCourseStopDescription } from "@/stores/mapSheetStore";
 import type { MapSheetPlace } from "@/types/place";
 
 const courseGridClassName = "grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2";
+const courseSpinnerClassName = "size-3.5 shrink-0 rounded-full border-2 border-brand-200 border-t-brand-600 motion-safe:animate-spin dark:border-brand-800 dark:border-t-brand-300";
 
 type CourseListProps = {
   courses: HomeTourCourse[];
@@ -28,7 +29,7 @@ type CourseListProps = {
   onStartCourse: (places: MapSheetPlace[]) => void;
 };
 
-/** 받은 코스는 유지하고, 더 보기 또는 재시도 버튼으로 다음 페이지를 요청한다. */
+/** 기존 카드를 유지한 채 다음 페이지를 붙이고, 이동하는 버튼 영역은 스크롤 기준에서 제외한다. */
 function HomeRecommendationCourseList({
   courses, language, text, hasMore, isLoadingMore, loadMoreFailed, onLoadMore, onPlaceSelect, onStartCourse,
 }: CourseListProps) {
@@ -46,17 +47,18 @@ function HomeRecommendationCourseList({
         />
       ))}
     </div>
-    {hasMore ? <div className="mt-4 space-y-2">
-      {loadMoreFailed && !isLoadingMore ? <p role="status" className="text-center text-sm text-slate-500 dark:text-slate-400">{text.moreError}</p> : null}
+    {hasMore ? <div className="mt-4 space-y-2 [overflow-anchor:none]">
       <button
         type="button"
         aria-controls="home-recommended-courses"
         disabled={isLoadingMore}
         onClick={onLoadMore}
-        className="flex min-h-11 w-full items-center justify-center rounded-2xl border border-brand-200 bg-white px-4 text-sm font-bold text-brand-800 hover:bg-brand-50 disabled:opacity-60 dark:border-brand-400/25 dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/60"
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-white px-4 text-sm font-bold text-brand-800 enabled:hover:bg-brand-50 disabled:cursor-wait dark:border-brand-400/25 dark:bg-brand-900/40 dark:text-brand-100 dark:enabled:hover:bg-brand-900/60"
       >
-        {isLoadingMore ? text.moreLoading : loadMoreFailed ? text.retry : text.moreCourses}
+        {isLoadingMore ? <span aria-hidden="true" className={courseSpinnerClassName} /> : null}
+        {isLoadingMore ? text.moreLoading : loadMoreFailed ? text.moreRetry : text.moreCourses}
       </button>
+      {loadMoreFailed && !isLoadingMore ? <p role="status" className="text-center text-sm text-slate-500 dark:text-slate-400">{text.moreError}</p> : null}
     </div> : null}
   </>;
 }
@@ -75,6 +77,8 @@ function HomeRecommendationContent() {
     : regionNames.join(", ") || areaLabel;
   const isLoading = query.isPending || (query.isFetching && !query.data);
   const isError = query.isError && !query.data;
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const homeRef = useRef<HTMLElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const recommendationsRef = useRef<HTMLElement>(null);
   const { hash, search } = useLocation();
@@ -87,8 +91,31 @@ function HomeRecommendationContent() {
     recommendations?.scrollIntoView({ block: "start" });
   }, [hash]);
 
+  // 처음부터 선택 영역이 화면 아래에 있는 경우는 제외하고, 위로 벗어났을 때만 버튼을 표시한다.
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry) {
+        setShowBackToTop(!entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0));
+      }
+    });
+    observer.observe(form);
+    return () => observer.disconnect();
+  }, []);
+
+  const handleBackToTop = () => {
+    const home = homeRef.current;
+    if (!home) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    home.focus({ preventScroll: true });
+    home.scrollIntoView({ block: "start", behavior: reduceMotion ? "instant" : "smooth" });
+  };
+
   return (
-    <section className="min-h-full bg-[#f7faf9] text-slate-900 dark:bg-[#071718] dark:text-slate-100">
+    <section ref={homeRef} tabIndex={-1} aria-label={ui.nav.home} className="min-h-full bg-[#f7faf9] text-slate-900 focus:outline-none dark:bg-[#071718] dark:text-slate-100">
       <div className="mx-auto max-w-5xl px-5 pb-8 pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-8 sm:pt-[calc(env(safe-area-inset-top)+1.5rem)]">
         <header className="flex min-h-11 items-center justify-between gap-3">
           <span className="flex items-center gap-2 text-brand-800 dark:text-brand-200"><img src={`${import.meta.env.BASE_URL}masil-icon.png`} alt="" className="size-6 rounded-md" /><span className="font-trip text-2xl">{text.brand}</span></span>
@@ -118,7 +145,7 @@ function HomeRecommendationContent() {
         </div>
         <HomeMapEntry href={mapHref} onOpen={actions.prepareMap} text={text} />
         <div className="grid items-start gap-7 lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-9">
-          <div ref={formRef} className="scroll-mt-5"><HomeRecommendationForm selection={selection} area={area} text={text} onAreaChange={actions.selectArea} onRegionsChange={actions.selectRegions} /></div>
+          <div ref={formRef}><HomeRecommendationForm selection={selection} area={area} text={text} onAreaChange={actions.selectArea} onRegionsChange={actions.selectRegions} /></div>
           <section
             id={HOME_RECOMMENDATIONS_ANCHOR}
             ref={recommendationsRef}
@@ -131,10 +158,7 @@ function HomeRecommendationContent() {
               <p className="text-xs font-semibold text-brand-700 dark:text-brand-300">
                 {regionLabel}{query.data ? ` · ${text.courseCount(courses.length, query.hasNextPage)}` : ""}
               </p>
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="mt-1 text-xl font-bold">{text.results}</h2>
-                <button type="button" onClick={() => formRef.current?.scrollIntoView({ block: "start", behavior: "smooth" })} className="min-h-11 shrink-0 rounded-full border border-brand-200 px-3 text-xs font-bold text-brand-800 dark:border-brand-400/25 dark:text-brand-100">{text.editConditions}</button>
-              </div>
+              <h2 className="mt-1 text-xl font-bold">{text.results}</h2>
               <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{text.resultDescription}</p>
             </div>
             <div className="mb-4 flex min-h-4 items-center justify-between gap-2">
@@ -142,7 +166,7 @@ function HomeRecommendationContent() {
               <span role="status" className="inline-flex shrink-0">
                 {isLoading ? <>
                   <span className="sr-only">{text.loading}</span>
-                  <span aria-hidden="true" className="size-3.5 rounded-full border-2 border-brand-200 border-t-brand-600 motion-safe:animate-spin dark:border-brand-800 dark:border-t-brand-300" />
+                  <span aria-hidden="true" className={courseSpinnerClassName} />
                 </> : null}
               </span>
             </div>
@@ -176,11 +200,13 @@ function HomeRecommendationContent() {
                   onPlaceSelect={actions.openPlace}
                   onStartCourse={actions.startCourse}
                 />
-                <Link to={mapHref} onClick={actions.prepareMap} className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-brand-700 dark:text-brand-200">{text.mapRegion}<MdArrowForward aria-hidden="true" /></Link>
+                <Link to={mapHref} onClick={actions.prepareMap} className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-brand-700 [overflow-anchor:none] dark:text-brand-200">{text.mapRegion}<MdArrowForward aria-hidden="true" /></Link>
               </> : <div className="flex min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed border-brand-200 px-5 py-8 text-center sm:min-h-72 dark:border-brand-400/25">
-                <span className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-brand-100/70 text-3xl text-brand-700 dark:bg-brand-900/50 dark:text-brand-200">
-                  {isError ? <MdErrorOutline aria-hidden="true" /> : <MdRoute aria-hidden="true" />}
-                </span>
+                {isError ? (
+                  <span className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-brand-100/70 text-3xl text-brand-700 dark:bg-brand-900/50 dark:text-brand-200">
+                    <MdErrorOutline aria-hidden="true" />
+                  </span>
+                ) : null}
                 <h2 className="text-base font-bold">{isError ? text.error : text.empty}</h2>
                 <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500 dark:text-slate-400">{isError ? text.errorDescription : text.emptyDescription}</p>
                 {isError ? <button type="button" onClick={() => void query.refetch()} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-200 px-4 text-sm font-semibold text-brand-800 dark:text-brand-100"><MdRefresh aria-hidden="true" />{text.retry}</button> : null}
@@ -190,6 +216,17 @@ function HomeRecommendationContent() {
           </section>
         </div>
       </div>
+      {showBackToTop ? (
+        <button
+          type="button"
+          aria-label={text.backToTop}
+          title={text.backToTop}
+          onClick={handleBackToTop}
+          className="fixed right-4 bottom-[calc(var(--bottom-tab-offset)+1rem)] z-30 inline-flex size-12 items-center justify-center rounded-full border border-brand-200 bg-white text-xl text-brand-800 shadow-md transition hover:bg-brand-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:right-6 dark:border-brand-400/30 dark:bg-[#0f3431] dark:text-brand-100 dark:hover:bg-brand-900"
+        >
+          <MdArrowUpward aria-hidden="true" />
+        </button>
+      ) : null}
     </section>
   );
 }

@@ -32,12 +32,9 @@ function BottomTabLayout() {
     pathname === "/shared-route" ||
     pathname === "/me";
   const shouldSlideInPage = pathname === "/home/language" || pathname.startsWith("/me/");
-  const bottomTabOffsetClass =
-    "bottom-[calc(4.5rem+max(0.7rem,env(safe-area-inset-bottom)))]";
-
   return (
-    <div className="relative h-dvh overflow-hidden bg-brand-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <main className={`absolute inset-x-0 top-0 ${bottomTabOffsetClass}`}>
+    <div className="relative h-dvh overflow-hidden bg-brand-50 text-slate-900 [--bottom-tab-offset:calc(4.5rem+max(0.7rem,env(safe-area-inset-bottom)))] dark:bg-slate-950 dark:text-slate-100">
+      <main className="absolute inset-x-0 top-0 bottom-[var(--bottom-tab-offset)]">
         <div
           className={
             isMap

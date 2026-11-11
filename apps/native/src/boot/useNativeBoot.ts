@@ -6,7 +6,7 @@
  * 온보딩을 마치면 인증 여부와 관계없이 지도로 진입하고, 이후 로그인·로그아웃은
  * WebView를 유지한 채 세션 정보만 교체한다.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
@@ -24,6 +24,11 @@ import {
   reconcileNativeSessionCleanup
 } from "@/auth/nativeSessionCleanup";
 import { prepareNativeCurrentPosition } from "@/location/nativeCurrentPosition";
+import {
+  loadNativeEnglishLanguagePack,
+  readNativeEnglishLanguagePack,
+  type NativeEnglishLanguagePack,
+} from "@/language/nativeEnglishLanguagePack";
 
 export type NativeBootStep =
   | "checking"
@@ -47,6 +52,10 @@ export function useNativeBoot() {
   const [bootProgressStage, setBootProgressStage] =
     useState<NativeBootProgressStage>("storage");
   const [appLanguage, setAppLanguage] = useState<AppLanguage>("ko");
+  const [englishLanguagePack, setEnglishLanguagePack] = useState<NativeEnglishLanguagePack | null>(null);
+  const [languageDownload, setLanguageDownload] = useState<{ progress: number | null } | null>(null);
+  const [languageDownloadFailed, setLanguageDownloadFailed] = useState(false);
+  const selectingLanguage = useRef(false);
   const [nativeAuthToken, setNativeAuthToken] = useState<string | null>(null);
   const [nativeAuthRole, setNativeAuthRole] =
     useState<NativeAuthRole | null>(null);
@@ -140,6 +149,7 @@ export function useNativeBoot() {
       const storedLanguage = normalizeAppLanguage(
         await AsyncStorage.getItem(APP_LANGUAGE_STORAGE_KEY)
       );
+      const cachedEnglishPack = await readNativeEnglishLanguagePack().catch(() => null);
       const { didClearStoredSession, storedAuthSession } =
         await enqueueNativeAuthSessionOperation(async () => {
           const nextStoredAuthSession =
@@ -161,6 +171,7 @@ export function useNativeBoot() {
       if (storedLanguage) {
         setAppLanguage(storedLanguage);
       }
+      setEnglishLanguagePack(cachedEnglishPack);
 
       if (storedAuthSession.token && !didClearStoredSession) {
         setNativeAuthToken(storedAuthSession.token);
@@ -236,11 +247,35 @@ export function useNativeBoot() {
     };
   }, [enterWebView, prepareLocationBeforeWebView]);
 
+  /** 영어팩이 준비된 선택만 저장하며 실패하면 온보딩에서 재시도할 수 있다. */
   const selectAppLanguage = useCallback(
     async (language: AppLanguage) => {
-      setAppLanguage(language);
-      await AsyncStorage.setItem(APP_LANGUAGE_STORAGE_KEY, language);
-      await goToLocationOrNotificationOrWebView();
+      if (selectingLanguage.current) return;
+      selectingLanguage.current = true;
+      setLanguageDownloadFailed(false);
+      try {
+        if (language === "en") {
+          setLanguageDownload({ progress: null });
+          try {
+            const pack = await loadNativeEnglishLanguagePack((progress) => {
+              setLanguageDownload({ progress });
+            });
+            await AsyncStorage.setItem(APP_LANGUAGE_STORAGE_KEY, language);
+            setEnglishLanguagePack(pack);
+          } catch {
+            setLanguageDownloadFailed(true);
+            return;
+          } finally {
+            setLanguageDownload(null);
+          }
+        } else {
+          await AsyncStorage.setItem(APP_LANGUAGE_STORAGE_KEY, language);
+        }
+        setAppLanguage(language);
+        await goToLocationOrNotificationOrWebView();
+      } finally {
+        selectingLanguage.current = false;
+      }
     },
     [goToLocationOrNotificationOrWebView]
   );
@@ -333,6 +368,9 @@ export function useNativeBoot() {
     completeNativeLogin,
     handleNativeAuthSessionChange,
     appLanguage,
+    englishLanguagePack,
+    languageDownload,
+    languageDownloadFailed,
     isAuthSessionExpired,
     isRequestingLocationPermission,
     isRequestingNotificationPermission,

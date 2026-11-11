@@ -1,4 +1,4 @@
-/** 로컬 시뮬레이터의 WebView 번들, Xcode, Metro에 `apps/native/.env`를 적용한다. */
+/** 로컬 시뮬레이터에 `apps/native/.env`와 로컬 영어팩을 적용한 뒤 실행한다. */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -31,7 +31,7 @@ const portArgs = expoArgs.some((arg) => /^(--no-bundler|--port|-p)(=|$)/.test(ar
 const steps = [
   { command: "pnpm", args: ["run", "prebuild:ios:local"] },
   { command: process.execPath, args: ["scripts/sync-xcode-env.mjs", envFileName, "none"] },
-  { command: "pnpm", args: ["run", "build:webview"] },
+  { command: "pnpm", args: ["run", "build:webview", "--embed-local-language-pack"] },
   { command: "pnpm", args: ["exec", "expo", "run:ios", ...portArgs, ...expoArgs] },
 ];
 

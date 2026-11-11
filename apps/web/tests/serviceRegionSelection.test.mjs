@@ -3,8 +3,9 @@ import { before, after, test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { loadEnglishUiText } from "./helpers/englishUiText.mjs";
 
-let server, areas, regions, boundaries, findRegion, buildBoundaryMap, getUiText;
+let server, areas, regions, boundaries, findRegion, buildBoundaryMap, englishText;
 before(async () => {
   server = await createServer({
     configFile: false,
@@ -17,7 +18,7 @@ before(async () => {
   ({ SERVICE_AREAS: areas, SERVICE_REGION_LIST: regions } = await server.ssrLoadModule("/src/data/serviceAreas.ts"));
   ({ findServiceRegionAtLocation: findRegion } = await server.ssrLoadModule("/src/features/home/map/serviceRegionSelection.ts"));
   ({ buildBoundaryMapByRegions: buildBoundaryMap } = await server.ssrLoadModule("/src/lib/gangwonBoundaryUtils.ts"));
-  ({ getUiText } = await server.ssrLoadModule("/src/lib/uiText.ts"));
+  englishText = await loadEnglishUiText(server);
   const collection = JSON.parse(await readFile(new URL("../public/service-region-boundary.json", import.meta.url), "utf8"));
   boundaries = buildBoundaryMap(collection, regions.map(({ region }) => ({ ...region, sigunguCode: region.adminCode })));
 });
@@ -82,7 +83,7 @@ test("전국 데이터에서 이름이 같은 중구는 행정 코드로 구분�
 
 
 test("영문 시 선택에서 하위 구 이름 대신 시 이름을 표시한다", () => {
-  const labels = getUiText("en").labels.regions;
+  const labels = englishText.labels.regions;
   for (const [name, expected] of [["청주시", "Cheongju-si"], ["천안시", "Cheonan-si"], ["전주시", "Jeonju-si"], ["포항시", "Pohang-si"], ["창원시", "Changwon-si"]]) {
     assert.equal(labels[name], expected);
   }

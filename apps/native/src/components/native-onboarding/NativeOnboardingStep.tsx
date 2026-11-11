@@ -20,6 +20,8 @@ type NativeOnboardingAction = {
 type NativeOnboardingStepProps = {
   title: string;
   description: string;
+  /** undefined는 숨김, null은 전체 길이를 모르는 다운로드다. */
+  progress?: number | null;
   primaryAction: NativeOnboardingAction;
   secondaryAction?: NativeOnboardingAction;
 };
@@ -46,6 +48,7 @@ export function NativeOnboardingLoading() {
 export default function NativeOnboardingStep({
   title,
   description,
+  progress,
   primaryAction,
   secondaryAction,
 }: NativeOnboardingStepProps) {
@@ -71,6 +74,18 @@ export default function NativeOnboardingStep({
         <Text style={[styles.description, { color: colors.description }]}>
           {description}
         </Text>
+        {progress === null ? (
+          <ActivityIndicator accessibilityLabel="영어 언어팩 다운로드" color={colors.brandText} />
+        ) : progress !== undefined ? (
+          <View
+            accessibilityRole="progressbar"
+            accessibilityLabel="영어 언어팩 다운로드"
+            accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
+            style={[styles.progressTrack, { backgroundColor: colors.cardBorder }]}
+          >
+            <View style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: colors.primaryBackground }]} />
+          </View>
+        ) : null}
         <View style={secondaryAction ? styles.actions : undefined}>
           {actions.map((action) => (
             <Pressable
@@ -152,6 +167,15 @@ const styles = StyleSheet.create({
   },
   headerText: {
     width: "100%"
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+    marginTop: 12,
+  },
+  progressFill: {
+    height: "100%",
   },
   title: {
     fontSize: 20,

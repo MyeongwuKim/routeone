@@ -37,6 +37,9 @@ export default function App() {
   const onboardingTheme = useNativeOnboardingTheme();
   const {
     appLanguage,
+    englishLanguagePack,
+    languageDownload,
+    languageDownloadFailed,
     bootProgressStage,
     bootStep,
     completeNativeLogin,
@@ -163,9 +166,15 @@ export default function App() {
           backgroundColor={onboardingTheme.background}
         />
         <NativeOnboardingStep
-          description={"마실에서 사용할 언어를 선택해 주세요.\nChoose the language to use in Masil."}
+          description={languageDownload
+            ? "다운로드가 끝나면 영어로 시작할 수 있어요.\nMasil will continue when the download is complete."
+            : languageDownloadFailed
+              ? "영어를 불러오지 못했어요. 다시 시도하거나 한국어로 시작할 수 있어요.\nTry again or continue in Korean."
+              : "마실에서 사용할 언어를 선택해 주세요.\nChoose the language to use in Masil."}
+          progress={languageDownload?.progress}
           primaryAction={{
-            label: "English",
+            label: languageDownloadFailed ? "다시 시도 / Retry" : "English",
+            disabled: Boolean(languageDownload),
             onPress: () => {
               void selectAppLanguage("en");
             },
@@ -173,12 +182,13 @@ export default function App() {
           }}
           secondaryAction={{
             label: "한국어",
+            disabled: Boolean(languageDownload),
             onPress: () => {
               void selectAppLanguage("ko");
             },
             variant: "secondary"
           }}
-          title="사용 언어 / Language"
+          title={languageDownload ? "영어 언어팩 다운로드" : "사용 언어 / Language"}
         />
       </SafeAreaView>
     );
@@ -246,6 +256,7 @@ export default function App() {
     <View style={styles.container}>
       <NativeWebViewScreen
         appLanguage={appLanguage}
+        englishLanguagePack={englishLanguagePack}
         nativeAuthExpiresAt={nativeAuthExpiresAt}
         nativeAuthRole={nativeAuthRole}
         nativeAuthSessionId={nativeAuthSessionId}

@@ -17,6 +17,9 @@ declare global {
       nativeAppVariant?: string;
       webBundleChannel?: string;
       webBundleManifestUrl?: string | null;
+      languagePackBaseUrl?: string;
+      languagePackLocalOnly?: boolean;
+      englishLanguagePack?: { hash: string; source: string } | null;
     };
     RouteOneNative?: NativeBridgeApi;
     ReactNativeWebView?: ReactNativeWebViewApi;

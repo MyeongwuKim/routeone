@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { loadEnglishUiText } from "./helpers/englishUiText.mjs";
 
 let server;
 let getUiText;
+let englishText;
 
 before(async () => {
   server = await createServer({
@@ -16,6 +18,7 @@ before(async () => {
     optimizeDeps: { noDiscovery: true, include: [] },
   });
   ({ getUiText } = await server.ssrLoadModule("/src/lib/uiText.ts"));
+  englishText = await loadEnglishUiText(server);
 });
 
 after(async () => {
@@ -23,7 +26,7 @@ after(async () => {
 });
 
 test("버전 및 권한 화면의 영문 문구와 권한 상태를 제공한다", () => {
-  const text = getUiText("en");
+  const text = englishText;
 
   assert.deepEqual(
     {
@@ -73,4 +76,8 @@ test("버전 및 권한 화면의 한글 문구도 기존 표시를 유지한다
   });
   assert.equal(text.appInfo.locationPermission, "위치 권한");
   assert.equal(text.appInfo.notificationPermission, "푸시 알림 권한");
+});
+
+test("영어팩을 준비하기 전에는 기본 한국어 문구를 반환한다", () => {
+  assert.equal(getUiText("en"), getUiText("ko"));
 });

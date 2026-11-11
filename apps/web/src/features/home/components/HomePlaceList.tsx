@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { IoArrowForward, IoChevronDown, IoChevronUp } from "react-icons/io5";
+import { IoArrowForward, IoChevronUp } from "react-icons/io5";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useUiText } from "@/lib/uiText";
@@ -23,10 +23,12 @@ type Props = {
   onOpenCheckout: () => void;
 };
 
+const EXPANDED_PANEL_HEIGHT_RATIO = 0.42;
+
 /**
  * 지도 아래에서 장소를 연속으로 담고 기존 코스 생성 화면으로 이어간다.
  * 지역·필터별 조회 결과는 부모에서 받고, 담기·취소와 개수 표시는 기존 카트 Store를 사용한다.
- * 목록을 접으면 지도 영역을 넓히며, 다시 펼칠 때 목록 위치와 담은 선택은 유지한다.
+ * 목록 본문의 높이를 전환해 지도 영역도 함께 조절한다. 본문을 유지해 목록 위치와 담은 선택을 보존한다.
  */
 export default function HomePlaceList({ regionLabel, areaCode, signguCode, scopeKey, results, totalCount, isLoading, error, onLoadMore, onOpenPlace, onOpenCheckout }: Props) {
   const language = useAppLanguageStore(state => state.language);
@@ -36,48 +38,66 @@ export default function HomePlaceList({ regionLabel, areaCode, signguCode, scope
   const ui = useUiText();
   // 지도 진입 시에는 목록을 접어 두고, 담은 장소 개수와 코스 만들기는 항상 표시한다.
   const [isExpanded, setIsExpanded] = useState(false);
+  const [expandedListHeight, setExpandedListHeight] = useState(0);
   const listContentId = useId();
+  const panelRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const footerRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const preservedScrollTopRef = useRef(0);
   const items = useMemo(() => buildHomePlaceListItems({
     results, areaCode, signguCode, savedPlaces: savedPlaces.map(item => item.place),
   }), [results, areaCode, signguCode, savedPlaces]);
 
   useLayoutEffect(() => {
-    preservedScrollTopRef.current = 0;
     scrollRef.current?.scrollTo({ top: 0 });
   }, [scopeKey]);
 
+  // 펼친 패널의 비율은 유지하고, 항상 보이는 헤더·푸터를 뺀 본문 높이만 전환한다.
   useLayoutEffect(() => {
-    if (isExpanded) {
-      scrollRef.current?.scrollTo({ top: preservedScrollTopRef.current });
-    }
-  }, [isExpanded]);
+    const panel = panelRef.current;
+    const parent = panel?.parentElement;
+    const header = headerRef.current;
+    const footer = footerRef.current;
+    if (!panel || !parent || !header || !footer) return;
 
-  const handleToggleExpanded = () => {
-    if (isExpanded) {
-      preservedScrollTopRef.current = scrollRef.current?.scrollTop ?? 0;
-    }
-    setIsExpanded(expanded => !expanded);
-  };
+    const updateListHeight = () => {
+      const panelHeight = parent.clientHeight * EXPANDED_PANEL_HEIGHT_RATIO;
+      const fixedHeight = header.offsetHeight + footer.offsetHeight + panel.clientTop;
+      setExpandedListHeight(Math.max(0, panelHeight - fixedHeight));
+    };
+    const observer = new ResizeObserver(updateListHeight);
+    observer.observe(parent);
+    observer.observe(header);
+    observer.observe(footer);
+    updateListHeight();
+    return () => observer.disconnect();
+  }, []);
 
   const handleTogglePlace = (item: HomePlaceListItemModel) => {
     toggleSavedPlace(item.place, item.result.thumbnailUrl, language);
   };
 
   return (
-    <section aria-label={text.list} className={`relative z-10 flex min-h-0 shrink-0 flex-col border-t border-brand-100 bg-white dark:border-brand-400/20 dark:bg-[#0b211f] ${isExpanded ? "basis-[42%]" : "basis-auto"}`}>
-      <header className="mx-auto flex w-full max-w-3xl shrink-0 items-center justify-between gap-3 px-4 py-1.5 sm:px-6">
+    <section ref={panelRef} aria-label={text.list} className="relative z-10 flex min-h-0 shrink-0 flex-col border-t border-brand-100 bg-white dark:border-brand-400/20 dark:bg-[#0b211f]">
+      <header ref={headerRef} className="mx-auto flex w-full max-w-3xl shrink-0 items-center justify-between gap-3 px-4 py-1.5 sm:px-6">
         <div className="flex min-w-0 items-center gap-2">
           <h2 className="truncate text-sm font-bold text-slate-900 dark:text-slate-50">{text.title(regionLabel)}</h2>
           <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">{text.count(totalCount)}</span>
         </div>
-        <button type="button" aria-expanded={isExpanded} aria-controls={listContentId} onClick={handleToggleExpanded} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-bold text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:text-brand-200">
+        <button type="button" aria-expanded={isExpanded} aria-controls={listContentId} onClick={() => setIsExpanded(expanded => !expanded)} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-bold text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:text-brand-200">
           {isExpanded ? text.collapse : text.expand}
-          {isExpanded ? <IoChevronDown aria-hidden="true" /> : <IoChevronUp aria-hidden="true" />}
+          <IoChevronUp aria-hidden="true" className={`motion-safe:transition-transform motion-safe:duration-300 ${isExpanded ? "rotate-180" : ""}`} />
         </button>
       </header>
-      <div id={listContentId} ref={scrollRef} hidden={!isExpanded} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6" aria-busy={isLoading}>
+      <div
+        id={listContentId}
+        ref={scrollRef}
+        inert={!isExpanded}
+        aria-hidden={!isExpanded}
+        aria-busy={isLoading}
+        style={{ height: isExpanded ? expandedListHeight : 0 }}
+        className={`min-h-0 shrink-0 overflow-y-auto overscroll-contain px-4 motion-safe:transition-[height,opacity] motion-safe:duration-300 motion-safe:ease-out sm:px-6 ${isExpanded ? "opacity-100" : "opacity-0"}`}
+      >
         <div className="mx-auto max-w-3xl">
           {items.length > 0 ? <>
             <ul>{items.map(item => <HomePlaceListItem key={item.place.id} item={item} text={text} onOpen={onOpenPlace} onToggle={handleTogglePlace} />)}</ul>
@@ -91,7 +111,7 @@ export default function HomePlaceList({ regionLabel, areaCode, signguCode, scope
           </div>}
         </div>
       </div>
-      <footer className="shrink-0 border-t border-brand-100 px-4 py-3 dark:border-brand-400/20 sm:px-6">
+      <footer ref={footerRef} className="shrink-0 border-t border-brand-100 px-4 py-3 dark:border-brand-400/20 sm:px-6">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <p aria-live="polite" aria-atomic="true" className="text-sm font-bold text-slate-700 dark:text-slate-200">{text.selected(savedPlaces.length)}</p>
           <button type="button" onClick={onOpenCheckout} disabled={savedPlaces.length === 0} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 text-sm font-bold text-white disabled:opacity-40">

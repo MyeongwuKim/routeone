@@ -10,6 +10,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -165,6 +166,51 @@ test("keeps an upload failure fatal", () => {
   }
 });
 
+test("publishes the English pack outside the release before switching latest", () => {
+  const source = "export default {};\n";
+  const hash = createHash("sha256").update(source).digest("hex");
+  const pack = `language-packs/en-${hash}.mjs`;
+  const fixture = createFixture({ languagePack: { pack, source } });
+
+  try {
+    const result = fixture.run();
+    const calls = fixture.readCalls();
+    const packUpload = calls.findIndex(({ args }) => args.includes(`s3://test-bucket/${pack}`));
+    const latestUpload = calls.findIndex(({ args }) => args.includes("s3://test-bucket/latest/manifest.json"));
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(packUpload >= 0 && packUpload < latestUpload);
+    assert.ok(!calls.some(({ args }) => args.includes(`s3://test-bucket/releases/1.0.6/web/${pack}`)));
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("does not switch latest when the English pack has a mismatched hash", () => {
+  const fixture = createFixture({ languagePack: { pack: `language-packs/en-${"0".repeat(64)}.mjs`, source: "export default {};\n" } });
+
+  try {
+    const result = fixture.run();
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /English language pack hash mismatch/);
+    assert.doesNotMatch(result.stdout, /Updated latest\/manifest\.json/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("rejects a missing English pack referenced by the web build", () => {
+  const fixture = createFixture({ languagePack: { pack: `language-packs/en-${"0".repeat(64)}.mjs` } });
+
+  try {
+    const result = fixture.run();
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /English language pack referenced by index.html is missing/);
+    assert.deepEqual(fixture.readCalls(), []);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("skips cleanup with a warning when releases cannot be listed", () => {
   const fixture = createFixture({ failList: true });
 
@@ -184,7 +230,7 @@ test("skips cleanup with a warning when releases cannot be listed", () => {
   }
 });
 
-function createFixture({ failCopy = false, failList = false, rmFailures = 0 }) {
+function createFixture({ failCopy = false, failList = false, rmFailures = 0, languagePack }) {
   const fixtureRoot = mkdtempSync(join(tmpdir(), "routeone-r2-publish-test-"));
   const binDirectory = join(fixtureRoot, "bin");
   const distDirectory = join(fixtureRoot, "dist");
@@ -193,7 +239,13 @@ function createFixture({ failCopy = false, failList = false, rmFailures = 0 }) {
 
   mkdirSync(binDirectory, { recursive: true });
   mkdirSync(distDirectory, { recursive: true });
-  writeFileSync(join(distDirectory, "index.html"), "<main>RouteOne</main>\n");
+  const meta = languagePack ? `<meta name="masil-english-pack" content="https://bundle.example.com/${languagePack.pack}">` : "";
+  writeFileSync(join(distDirectory, "index.html"), `${meta}<main>RouteOne</main>\n`);
+  if (languagePack?.source) {
+    const file = join(distDirectory, languagePack.pack);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, languagePack.source);
+  }
   writeExecutable(join(binDirectory, "zip"), fakeZipSource);
   writeExecutable(join(binDirectory, "aws"), fakeAwsSource);
 

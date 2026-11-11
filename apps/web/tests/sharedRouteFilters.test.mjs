@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { loadEnglishUiText } from "./helpers/englishUiText.mjs";
 
 let server;
 let filters;
 let getUiText;
+let englishText;
 let serviceArea;
 
 before(async () => {
@@ -19,6 +21,7 @@ before(async () => {
   });
   filters = await server.ssrLoadModule("/src/features/shared-route/sharedRouteFilters.ts");
   ({ getUiText } = await server.ssrLoadModule("/src/lib/uiText.ts"));
+  englishText = await loadEnglishUiText(server);
   const { SERVICE_AREAS } = await server.ssrLoadModule("/src/data/serviceAreas.ts");
   serviceArea = SERVICE_AREAS.gangwon;
 });
@@ -121,9 +124,9 @@ test("지역 중복 추가와 토글이 다른 조건을 바꾸지 않는다", (
 
 test("영문 화면에서도 지역 이름의 표시 언어와 무관하게 필터가 적용된다", () => {
   const selected = { tags: [], regions: ["철원"], places: [] };
-  assert.equal(filters.routeMatchesFilters(createRoute(["철원"]), selected, getUiText("en")), true);
-  assert.equal(filters.routeMatchesFilters(createRoute(["정선"]), selected, getUiText("en")), false);
-  assert.equal(filters.getFilterLabel({ type: "region", value: "철원" }, getUiText("en")), "Region: Cheorwon");
+  assert.equal(filters.routeMatchesFilters(createRoute(["철원"]), selected, englishText), true);
+  assert.equal(filters.routeMatchesFilters(createRoute(["정선"]), selected, englishText), false);
+  assert.equal(filters.getFilterLabel({ type: "region", value: "철원" }, englishText), "Region: Cheorwon");
 });
 
 test("공개 공유 루트는 재시작 시 시도만 복원하고 좋아요 목록은 별도 선택을 사용한다", async () => {

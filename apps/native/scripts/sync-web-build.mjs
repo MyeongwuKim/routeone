@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -378,6 +379,21 @@ ${entryImports}
 }
 
 let html = await readFile(path.join(webDist, "index.html"), "utf8");
+const englishPackHash = html.match(/\/language-packs\/en-([a-f0-9]{64})\.mjs/)?.[1];
+
+if (!englishPackHash) {
+  throw new Error("English language pack metadata is missing from web dist.");
+}
+
+// 로컬 시뮬레이터 명령에서만 같은 빌드의 영어팩을 앱에 포함한다.
+const localEnglishPackSource = process.argv.includes("--embed-local-language-pack")
+  ? await readFile(path.join(webDist, "language-packs", `en-${englishPackHash}.mjs`), "utf8")
+  : null;
+
+if (localEnglishPackSource !== null && createHash("sha256").update(localEnglishPackSource).digest("hex") !== englishPackHash) {
+  throw new Error("Local English language pack does not match the web bundle.");
+}
+
 const entryScriptPaths = getEntryModuleScripts(html);
 
 if (entryScriptPaths.length === 0) {
@@ -397,7 +413,7 @@ await writeFile(
     nativeWebviewBaseUrl
   )};\nexport const WEB_BUNDLE_PUBLIC_ORIGIN = ${JSON.stringify(
     readHttpOrigin(nativeWebviewBaseUrl)
-  )};\nexport const WEB_BUNDLE_HTML = ${JSON.stringify(
+  )};\nexport const WEB_BUNDLE_ENGLISH_PACK_HASH = ${JSON.stringify(englishPackHash)};\nexport const WEB_BUNDLE_LOCAL_ENGLISH_PACK_SOURCE: string | null = ${JSON.stringify(localEnglishPackSource)};\nexport const WEB_BUNDLE_HTML = ${JSON.stringify(
     html
   )};\n`
 );

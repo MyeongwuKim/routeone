@@ -40,6 +40,11 @@ import {
 import type { NativeAuthRole } from "@/auth/nativeAuthStorage";
 import { isNativeTestFeatureEnabled } from "@/auth/testFeatureAccess";
 import { WEB_BUNDLE_UPDATE_CONFIG } from "@/config/webBundleUpdateConfig";
+import {
+  getNativeLanguagePackBaseUrl,
+  usesLocalEnglishLanguagePack,
+  type NativeEnglishLanguagePack,
+} from "@/language/nativeEnglishLanguagePack";
 import { reportHandledNativeError } from "@/monitoring/sentry";
 import {
   openNativeExternalUrl,
@@ -55,6 +60,8 @@ import RouteOneLaunchScreen from "./RouteOneLaunchScreen";
 
 type NativeWebViewScreenProps = {
   appLanguage: AppLanguage;
+  /** 온보딩에서 검증한 팩을 WebView가 같은 버전일 때 재사용한다. */
+  englishLanguagePack: NativeEnglishLanguagePack | null;
   isAuthSessionPreparing: boolean;
   nativeAuthExpiresAt: number | null;
   nativeAuthRole: NativeAuthRole | null;
@@ -303,6 +310,7 @@ function readWebBundleAllowedOrigins(bundle: ResolvedWebBundle | null) {
 
 export default function NativeWebViewScreen({
   appLanguage,
+  englishLanguagePack,
   isAuthSessionPreparing,
   nativeAuthExpiresAt,
   nativeAuthRole,
@@ -445,6 +453,9 @@ export default function NativeWebViewScreen({
         {},
         window.RouteOneRuntimeConfig || {},
         {
+          languagePackBaseUrl: ${JSON.stringify(getNativeLanguagePackBaseUrl())},
+          languagePackLocalOnly: ${JSON.stringify(usesLocalEnglishLanguagePack)},
+          englishLanguagePack: ${JSON.stringify(englishLanguagePack)},
           testAccountMode: ${JSON.stringify(testAccountMode)},
           reviewerVerificationBypass: ${JSON.stringify(
             reviewerVerificationBypass
@@ -460,6 +471,7 @@ export default function NativeWebViewScreen({
     return `${authScript}\n${authPreparingScript}\n${languageScript}\n${runtimeConfigScript}\n${ROUTEONE_WEBVIEW_BRIDGE_SCRIPT}`;
   }, [
     appLanguage,
+    englishLanguagePack,
     isAuthSessionPreparing,
     nativeAuthExpiresAt,
     nativeAuthSessionId,
