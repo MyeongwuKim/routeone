@@ -139,7 +139,6 @@ function HomeRecommendationContent() {
           </div>
         </header>
         <div className="mb-6 mt-7 sm:mb-8 sm:mt-10">
-          <p className="mb-2 text-xs font-bold tracking-wide text-brand-700 dark:text-brand-300">{text.eyebrow}</p>
           <h1 className="text-[29px] font-bold leading-tight tracking-tight sm:text-4xl">{text.title}</h1>
           <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{text.description}</p>
         </div>

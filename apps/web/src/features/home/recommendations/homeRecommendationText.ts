@@ -2,7 +2,7 @@ import type { AppLanguage } from "@/stores/appLanguageStore";
 
 const copy = {
   ko: {
-    brand: "마실", eyebrow: "가볍게 고르고, 마실 가요",
+    brand: "마실",
     title: "어디로 떠나볼까요?", description: "한국관광공사의 지역별 여행 코스를 둘러보세요.",
     regionTitle: "어디로 갈까요?", area: "시·도", region: "시·군·구 (선택)", allRegions: "전체 시·군·구",
     selectedDistrictCount: (count: number) => `${count}곳 선택`,
@@ -26,7 +26,7 @@ const copy = {
     courseDistance: "총거리", courseDuration: "소요시간", courseTheme: "테마",
   },
   en: {
-    brand: "Masil", eyebrow: "A little planning. A new discovery.",
+    brand: "Masil",
     title: "Where shall we go?", description: "Choose a region and explore courses from the Korea Tourism Organization.",
     regionTitle: "Choose a destination", area: "Province / city", region: "Districts (optional)", allRegions: "All districts",
     selectedDistrictCount: (count: number) => `${count} districts selected`,
