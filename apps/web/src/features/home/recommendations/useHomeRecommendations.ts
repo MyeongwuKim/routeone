@@ -24,6 +24,7 @@ import {
   createHomeSelectionParams,
   findTourCourseRegion,
   formatTourCourseMeasurement,
+  getHomeCourseRetryInterval,
   loadAvailableHomeCoursePage,
   readHomeSelection,
   type HomeTourCourse,
@@ -104,6 +105,7 @@ export function useHomeRecommendations() {
     }),
     getNextPageParam: (lastPage) => lastPage.nextPage,
     staleTime: Infinity,
+    refetchInterval: (currentQuery) => getHomeCourseRetryInterval(currentQuery.state.data?.pages),
     // 같은 지역을 다시 골라도 이전에 펼친 페이지까지 자동으로 불러오지 않는다.
     gcTime: 0,
     retry: false,

@@ -812,22 +812,34 @@ function getPageNumbers(startPage: number, endPage: number) {
 
 const TOUR_COURSE_CONTENT_TYPE = "25";
 const TOUR_COURSE_PAGE_SIZE = 200;
+const TOUR_COURSE_REQUEST_TIMEOUT_MS = 12_000;
 
-function requestTourCoursePage<TItem = TourApiItem>(
+/** 코스 상세 요청마다 제한 시간을 적용하고 호출자의 취소 신호를 전달한다. */
+async function requestTourCoursePage<TItem = TourApiItem>(
   serviceKey: string,
   operation: string,
   options: Record<string, string>,
   signal?: AbortSignal
 ) {
-  return requestTourApiListPage<TItem>(getTourApiUrl("ko", operation), new URLSearchParams({
-    serviceKey: normalizeServiceKey(serviceKey),
-    MobileOS: "ETC",
-    MobileApp: "RouteOne",
-    _type: "json",
-    pageNo: "1",
-    numOfRows: `${TOUR_COURSE_PAGE_SIZE}`,
-    ...options,
-  }), "Tour course", signal);
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abortFromCaller();
+  else signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeout = globalThis.setTimeout(() => controller.abort(), TOUR_COURSE_REQUEST_TIMEOUT_MS);
+  try {
+    return await requestTourApiListPage<TItem>(getTourApiUrl("ko", operation), new URLSearchParams({
+      serviceKey: normalizeServiceKey(serviceKey),
+      MobileOS: "ETC",
+      MobileApp: "RouteOne",
+      _type: "json",
+      pageNo: "1",
+      numOfRows: `${TOUR_COURSE_PAGE_SIZE}`,
+      ...options,
+    }), "Tour course", controller.signal);
+  } finally {
+    globalThis.clearTimeout(timeout);
+    signal?.removeEventListener("abort", abortFromCaller);
+  }
 }
 
 function getTourCourseLocation(item: TourApiItem) {

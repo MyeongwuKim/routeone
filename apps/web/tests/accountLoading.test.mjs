@@ -177,7 +177,7 @@ test("내 정보의 첫 조회 중에도 메뉴와 설정 버튼을 사용할 �
     text.myInfo.visitedRoutes,
     text.myInfo.likedRoutes,
     text.myInfo.darkMode,
-    text.myInfo.language,
+    text.myInfo.serviceArea,
     text.myInfo.notificationSettings,
     text.myInfo.appInfo,
   ]) {

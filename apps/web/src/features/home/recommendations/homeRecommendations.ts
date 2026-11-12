@@ -39,6 +39,7 @@ export function formatTourCourseMeasurement(value: string, language: AppLanguage
 
 const COURSE_LIST_PAGE_SIZE = 12;
 const COURSE_CHECK_BATCH_SIZE = 4;
+const PARTIAL_FAILURE_RETRY_INTERVAL_MS = 30_000;
 
 type CoursePage = HomeTourCoursesQuery["homeTourCourses"];
 
@@ -49,7 +50,15 @@ type CoursePageLoaders = {
   signal: AbortSignal;
 };
 
-/** 방문지 전부를 지도에 연결할 수 있는 코스만 남기고, 표시할 코스가 없는 페이지는 건너뛴다. */
+/** 부분 실패가 있는 조회만 다시 시도하고, 정상 조회는 주기적으로 다시 받지 않는다. */
+export function getHomeCourseRetryInterval(pages?: Array<{ hadLookupError?: boolean }>) {
+  return pages?.some((page) => page.hadLookupError) ? PARTIAL_FAILURE_RETRY_INTERVAL_MS : false;
+}
+
+/**
+ * 방문지 전부를 지도에 연결할 수 있는 코스만 원래 순서로 남기고, 표시할 코스가 없는 페이지는 건너뛴다.
+ * 일부 상세 조회가 실패하면 정상 코스를 유지하고 재조회 표시를 남긴다. 모든 상세 조회가 실패하면 오류를 전달한다.
+ */
 export async function loadAvailableHomeCoursePage(firstPage: number, loaders: CoursePageLoaders) {
   const { loadPage, loadStops, loadPlace, signal } = loaders;
   const hasAllPlaces = async ({ id }: HomeTourCourse) => {
@@ -64,19 +73,34 @@ export async function loadAvailableHomeCoursePage(firstPage: number, loaders: Co
 
   let page: number | undefined = firstPage;
   const courses: HomeTourCourse[] = [];
+  let hasLookupError = false;
+  let hasCompletedLookup = false;
+  let firstLookupError: unknown;
   while (page !== undefined && !courses.length) {
     signal.throwIfAborted();
     const source = await loadPage(page);
     for (let start = 0; start < source.courses.length; start += COURSE_CHECK_BATCH_SIZE) {
       signal.throwIfAborted();
       const batch = source.courses.slice(start, start + COURSE_CHECK_BATCH_SIZE);
-      const available = await Promise.all(batch.map(hasAllPlaces));
-      courses.push(...batch.filter((_, index) => available[index]));
+      const results = await Promise.allSettled(batch.map(hasAllPlaces));
+      signal.throwIfAborted();
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          hasCompletedLookup = true;
+          if (result.value) courses.push(batch[index]);
+        } else if (!hasLookupError) {
+          hasLookupError = true;
+          firstLookupError = result.reason;
+        }
+      });
     }
     page = page * COURSE_LIST_PAGE_SIZE < source.totalCount ? page + 1 : undefined;
   }
   signal.throwIfAborted();
-  return { courses, nextPage: page };
+  if (!hasCompletedLookup && hasLookupError) throw firstLookupError;
+  return hasLookupError
+    ? { courses, nextPage: page, hadLookupError: true }
+    : { courses, nextPage: page };
 }
 
 /** 기존 단일 region과 여러 region 값에서 조회 범위를 복원하고, 같은 조합은 지역 순서로 정규화한다. */

@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { setTimeout as sleep } from "node:timers/promises";
 import { createServer } from "vite";
 
 let server;
 let readHomeSelection;
 let createHomeSelectionParams;
 let loadAvailableHomeCoursePage;
+let getHomeCourseRetryInterval;
 let formatTourCourseMeasurement;
 let fetchTourCourseFacts;
 let fetchTourCourseOverview;
@@ -21,7 +23,7 @@ before(async () => {
     server: { middlewareMode: true, hmr: false, ws: false },
     optimizeDeps: { noDiscovery: true, include: [] },
   });
-  ({ readHomeSelection, createHomeSelectionParams, loadAvailableHomeCoursePage, formatTourCourseMeasurement } = await server.ssrLoadModule(
+  ({ readHomeSelection, createHomeSelectionParams, loadAvailableHomeCoursePage, getHomeCourseRetryInterval, formatTourCourseMeasurement } = await server.ssrLoadModule(
     "/src/features/home/recommendations/homeRecommendations.ts"
   ));
   ({ fetchTourCourseFacts, fetchTourCourseOverview, fetchTourCourseStops, fetchTourCourseStopPlace } =
@@ -78,6 +80,24 @@ test("코스의 공식 방문 순서와 설명을 복원하고 상세 ID가 없�
     { order: 2, contentId: "", title: "산책 구간", description: "산책 설명" },
     { order: 10, contentId: "201", title: "마지막 장소", description: "" },
   ]);
+});
+
+test("코스 상세 요청이 끝나지 않으면 제한 시간에 중단한다", async (t) => {
+  t.mock.method(globalThis, "fetch", async (_url, options) => new Promise((_resolve, reject) => {
+    options?.signal?.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+  }));
+  t.mock.method(globalThis, "setTimeout", (callback, delay) => {
+    assert.equal(delay, 12_000);
+    queueMicrotask(callback);
+    return 1;
+  });
+  t.mock.method(globalThis, "clearTimeout", () => {});
+
+  const outcome = await Promise.race([
+    fetchTourCourseStops("test-key", "101").then(() => "resolved", (error) => error.name),
+    sleep(25).then(() => "pending"),
+  ]);
+  assert.equal(outcome, "AbortError");
 });
 
 test("코스 전체 소개는 공통 상세에서 읽고 빈 설명은 표시하지 않는다", async (t) => {
@@ -194,6 +214,90 @@ test("방문지 하나라도 지도에 연결할 수 없으면 코스 전체를 
   });
   assert.deepEqual(await loadAvailableHomeCoursePage(3, loaders), { courses: [], nextPage: undefined });
   assert.deepEqual(requestedPages, [1, 2, 3]);
+});
+
+test("모든 코스의 상세 조회가 정상이라면 추천 순서와 다음 페이지를 유지한다", async () => {
+  const result = await loadAvailableHomeCoursePage(1, {
+    signal: new AbortController().signal,
+    loadPage: async () => ({ courses: [{ id: "first" }, { id: "second" }], totalCount: 13 }),
+    loadStops: async (id) => [{ contentId: id === "first" ? "201" : "202" }],
+    loadPlace: async (id) => ({ id }),
+  });
+
+  assert.deepEqual(result, {
+    courses: [{ id: "first" }, { id: "second" }],
+    nextPage: 2,
+  });
+});
+
+test("코스 조회 일부가 실패해도 정상 코스를 원래 순서로 표시하고 다음 페이지를 유지한다", async () => {
+  const pages = [
+    [{ id: "first" }, { id: "failed" }, { id: "second" }],
+    [{ id: "third" }],
+  ];
+  const loaders = {
+    signal: new AbortController().signal,
+    loadPage: async (page) => ({ courses: pages[page - 1], totalCount: 13 }),
+    loadStops: async (id) => {
+      if (id === "failed") throw new Error("TourAPI unavailable");
+      return [{ contentId: id === "first" ? "201" : id === "second" ? "202" : "203" }];
+    },
+    loadPlace: async (id) => ({ id }),
+  };
+
+  assert.deepEqual(await loadAvailableHomeCoursePage(1, loaders), {
+    courses: [{ id: "first" }, { id: "second" }],
+    nextPage: 2,
+    hadLookupError: true,
+  });
+  assert.deepEqual(await loadAvailableHomeCoursePage(2, loaders), {
+    courses: [{ id: "third" }],
+    nextPage: undefined,
+  });
+});
+
+test("모든 코스의 상세 조회가 실패하면 빈 목록 대신 오류를 유지한다", async () => {
+  const error = new Error("TourAPI unavailable");
+  await assert.rejects(loadAvailableHomeCoursePage(1, {
+    signal: new AbortController().signal,
+    loadPage: async () => ({ courses: [{ id: "first" }, { id: "second" }], totalCount: 2 }),
+    loadStops: async () => { throw error; },
+    loadPlace: async () => ({ id: "201" }),
+  }), error);
+});
+
+test("장소 정보 없음과 조회 실패가 섞여 있으면 전체 조회 오류로 처리하지 않는다", async () => {
+  const result = await loadAvailableHomeCoursePage(1, {
+    signal: new AbortController().signal,
+    loadPage: async () => ({ courses: [{ id: "missing" }, { id: "failed" }], totalCount: 2 }),
+    loadStops: async (id) => {
+      if (id === "failed") throw new Error("TourAPI unavailable");
+      return [{ contentId: "201" }];
+    },
+    loadPlace: async () => null,
+  });
+
+  assert.deepEqual(result, { courses: [], nextPage: undefined, hadLookupError: true });
+});
+
+test("부분 실패 결과만 재조회하고 일시적 실패가 회복되면 재조회를 멈춘다", async () => {
+  let shouldFail = true;
+  const loaders = {
+    signal: new AbortController().signal,
+    loadPage: async () => ({ courses: [{ id: "first" }, { id: "second" }], totalCount: 2 }),
+    loadStops: async (id) => {
+      if (id === "second" && shouldFail) throw new Error("TourAPI unavailable");
+      return [{ contentId: id === "first" ? "201" : "202" }];
+    },
+    loadPlace: async (id) => ({ id }),
+  };
+
+  const partial = await loadAvailableHomeCoursePage(1, loaders);
+  assert.equal(getHomeCourseRetryInterval([partial]), 30_000);
+  shouldFail = false;
+  const recovered = await loadAvailableHomeCoursePage(1, loaders);
+  assert.deepEqual(recovered.courses, [{ id: "first" }, { id: "second" }]);
+  assert.equal(getHomeCourseRetryInterval([recovered]), false);
 });
 
 test("장소 조회 실패는 장소 정보 누락으로 처리하지 않는다", async () => {
