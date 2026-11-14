@@ -14,6 +14,7 @@ import {
   getRouteTitle,
   getSortedRouteDays,
   isVisitedStop,
+  isResolvedStop,
 } from "./routeDisplay";
 import type { MyRoute, MyRouteStop } from "./types";
 
@@ -272,12 +273,13 @@ function getCompletedPosterStops(route: MyRoute) {
   return getPosterStops(route).filter(isVisitedStop);
 }
 
-function getCompletedPosterDayGroups(route: MyRoute) {
+/** 모두 방문·건너뜀으로 정리된 DAY에서 실제 방문만 모은다. DAY가 없는 이전 루트도 같은 기준으로 읽는다. */
+export function getCompletedPosterDayGroups(route: MyRoute) {
   const days = getSortedRouteDays(route);
 
   if (days.length > 0) {
     return days
-      .filter((day) => day.stops.length > 0 && day.stops.every(isVisitedStop))
+      .filter((day) => day.stops.length > 0 && day.stops.every(isResolvedStop))
       .map((day) => {
         const stops = [...day.stops]
           .sort((left, right) => left.order - right.order)
@@ -298,7 +300,7 @@ function getCompletedPosterDayGroups(route: MyRoute) {
       .filter((day) => day.stops.length > 0);
   }
 
-  if (!route.stops.length || !route.stops.every(isVisitedStop)) return [];
+  if (!route.stops.length || !route.stops.every(isResolvedStop)) return [];
   const groupedStops = new Map<number, PosterStop[]>();
 
   getCompletedPosterStops(route).forEach((stop) => {
@@ -1034,7 +1036,8 @@ async function fetchImageAsDataUrlWithRetry(normalizedUrl: string) {
   return null;
 }
 
-async function fetchImageAsDataUrl(url: string) {
+/** 카드용 사진 URL을 기존 캐시·이미지 프록시·재시도로 읽는다. 로딩 실패는 null이며 업로드는 하지 않는다. */
+export async function fetchImageAsDataUrl(url: string) {
   if (url.startsWith("data:image/")) {
     return url;
   }
@@ -1317,16 +1320,19 @@ export async function downloadRouteCompletionPoster(
   };
 }
 
+/** PNG 파일을 웹 공유로 전달한다. 파일 준비 뒤 세션 유효성을 다시 확인하며 미지원·취소된 세션은 false를 반환한다. */
 export async function shareRouteCompletionPoster(
   dataUrl: string,
   fileName: string,
-  title: string
+  title: string,
+  isCurrent: () => boolean = () => true
 ) {
   if (!navigator.share || !navigator.canShare) {
     return false;
   }
 
   const blob = await fetch(dataUrl).then((response) => response.blob());
+  if (!isCurrent()) return false;
   const file = new File([blob], fileName, {
     type: "image/png",
   });

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>여행 대표 카드 렌더링 검증</title>
+  <pre id="result">검증 중...</pre>
+  <div id="cards"></div>
+  <script type="module">
+    import "/src/index.css";
+    const result = document.getElementById("result");
+    try {
+      const { renderTravelCard, prepareTravelCardAlbumPhoto, prepareTravelCardDraft } = await import("/src/features/my-route/services/travelCardRenderer.ts");
+      const checks = [];
+      const check = (name, passed) => { checks.push({ name, passed: Boolean(passed) }); };
+      const colors = [[34,107,211],[38,140,82],[219,112,43],[180,68,130]];
+      function photo(index, width = 900, height = 600) {
+        const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height;
+        const context = canvas.getContext("2d"); context.fillStyle = `rgb(${colors[index].join()})`; context.fillRect(0, 0, width, height);
+        return { id: `photo-${index}`, source: "album", label: "테스트 사진", url: canvas.toDataURL(), focal: { x: 0.5, y: 0.5 } };
+      }
+      async function pixels(card) {
+        const image = new Image(); image.src = card.dataUrl; await image.decode();
+        const canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+        const context = canvas.getContext("2d"); context.drawImage(image, 0, 0);
+        return { image, at: (x,y) => [...context.getImageData(x,y,1,1).data].slice(0,3).join() };
+      }
+      const draft = { routeId: "render-test", title: "강릉에서 남긴 순간", caption: "바다를 걷던 하루", locationLabel: "강릉", dateLabel: "2026. 9. 7.", candidates: [], photos: [photo(0)] };
+      const centers = [[[540,490]], [[350,500],[850,500]], [[540,300],[280,800],[800,800]], [[540,300],[210,800],[540,800],[865,800]]];
+      for (let count = 1; count <= 4; count++) {
+        const input = { ...draft, photos: Array.from({length:count},(_,index) => photo(index)) };
+        const original = JSON.stringify(input);
+        const card = await renderTravelCard(input);
+        if (!card.dataUrl) throw new Error(JSON.stringify(card.errors));
+        const rendered = await pixels(card);
+        check(`사진 ${count}장 PNG 크기·형식`, rendered.image.naturalWidth === 1080 && rendered.image.naturalHeight === 1350 && card.mimeType === "image/png");
+        check(`사진 ${count}장 자동 배치·색상`, centers[count-1].every(([x,y],index) => rendered.at(x,y) === colors[index].join()));
+        check(`사진 ${count}장 원본·선택 순서 보존`, original === JSON.stringify(input) && card.photoIds.join() === input.photos.map(photo=>photo.id).join());
+        rendered.image.style.width = "260px"; rendered.image.style.display = "inline-block";
+        document.getElementById("cards").append(rendered.image);
+      }
+      const crop = document.createElement("canvas"); crop.width = 900; crop.height = 300;
+      const cropContext = crop.getContext("2d");
+      ["#226bd3","#ffff00","#ff0000"].forEach((color,index) => { cropContext.fillStyle=color;cropContext.fillRect(index*300,0,300,300); });
+      for (const [x,expected] of [[0,"34,107,211"],[1,"255,0,0"]]) {
+        const card = await renderTravelCard({...draft,photos:[{...photo(0),url:crop.toDataURL(),focal:{x,y:0.5}}]});
+        check(`가로 초점 ${x} 반영`, (await pixels(card)).at(540,490) === expected);
+      }
+      for (const [field,value,error] of [["title","   ","empty"],["title","여행".repeat(100),"long"],["caption","기억".repeat(100),"long"]]) {
+        const card = await renderTravelCard({...draft,[field]:value});
+        check(`${field} 입력 오류 ${error}`, !card.dataUrl && card.errors[field] === error);
+      }
+      const empty = await renderTravelCard({...draft,photos:[]});
+      check("사진 0장 내보내기 차단", !empty.dataUrl && empty.errors.photos === "empty");
+      const invalid = {...photo(1),url:"data:image/png;base64,invalid"};
+      const partial = await renderTravelCard({...draft,photos:[photo(0),invalid]});
+      check("일부 사진 실패 시 빈 칸 없이 재배치", partial.photoIds.join() === "photo-0" && partial.missingPhotoIds.join() === "photo-1" && (await pixels(partial)).at(540,490) === "34,107,211");
+      const failed = await renderTravelCard({...draft,photos:[invalid]});
+      check("모든 사진 실패 시 완료로 처리하지 않음", !failed.dataUrl && failed.errors.photos === "failed");
+      const prepared = await prepareTravelCardAlbumPhoto(photo(0,4000,2000).url);
+      const local = new Image(); local.src=prepared; await local.decode();
+      check("앨범 원본 비율 유지·1920px 리사이즈", local.naturalWidth === 1920 && local.naturalHeight === 960);
+      const safe = await renderTravelCard({...draft,title:"<script>&",caption:'<img>&"'});
+      check("문구는 마크업 아닌 이미지 텍스트", Boolean(safe.dataUrl) && !document.querySelector("script[onload],img[onerror]"));
+      const candidates = [...Array.from({length:4},(_,index)=>({...invalid,id:`failed-${index}`})),photo(0)];
+      const preparedDraft = await prepareTravelCardDraft({...draft,candidates,photos:candidates.slice(0,4)});
+      check("앞 네 장 실패 시 뒤의 가용 인증 사진을 자동 선택", preparedDraft.draft.photos.map(photo=>photo.id).join() === "photo-0" && preparedDraft.missingPhotoIds.length === 4);
+      result.textContent = JSON.stringify({ passed: checks.every(item=>item.passed), checked:checks.length, failures:checks.filter(item=>!item.passed), checks },null,2);
+    } catch (error) { result.textContent = JSON.stringify({ passed: false, error: String(error) }); }
+  </script>
+</html>

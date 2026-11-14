@@ -4,7 +4,8 @@
  * 종료된 여행을 페이지 단위로 조회해 현재 언어로 표시하고, 선택한 DAY의 방문 기록과 인증 사진을 상세 팝업에서 보여준다.
  * URL의 routeId·dayId·stopId로 알림 대상 일정을 열며, 팝업을 닫을 때 알림함 복귀 여부까지 처리한다.
  *
- * DAY 포토카드 생성·저장·공유는 전용 Hook에 맡기고, ‘다녀오지 않음’ 처리는 경로 삭제 후
+ * 목록에서 여행 대표 카드를 편집하고 DAY 상세에서는 기존 기록 카드를 만든다. 각 편집·생성 Hook이 저장·공유를 맡는다.
+ * ‘다녀오지 않음’ 처리는 경로 삭제 후
  * 내 경로·방문 사진·체류 통계·알림 캐시를 갱신한다.
  */
 import {
@@ -23,6 +24,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   MdArrowBack,
   MdHistory,
+  MdPhotoLibrary,
 } from "react-icons/md";
 import { NOTIFICATION_INBOX_QUERY_KEY } from "@/api/notificationApi";
 import { routeApi } from "@/api/routeApi";
@@ -38,6 +40,8 @@ import {
 import { getRouteCompletionPosterStats } from "@/features/my-route/routeCompletionPoster";
 import { useRoutePosterPreview } from "../hooks/useRoutePosterPreview";
 import RoutePosterPreview from "../components/RoutePosterPreview";
+import TravelCardEditor from "../components/TravelCardEditor";
+import { useTravelCardEditor } from "../hooks/useTravelCardEditor";
 import {
   getDateKeyDiffInDays,
   getRouteEndDateKey,
@@ -100,6 +104,7 @@ function MyRouteHistoryPage() {
     returnToNotificationInbox?: boolean;
   } | null>(null);
   const posterController = useRoutePosterPreview();
+  const travelCardController = useTravelCardEditor();
   const { generatingRouteId: posterGeneratingRouteId, createPoster: handleCreatePoster } = posterController;
   const todayKey = useMemo(() => getTodayDateKey(), []);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
@@ -433,6 +438,12 @@ function MyRouteHistoryPage() {
               hideTimelineBadge
               onSelectDay={handleSelectHistoryDay}
               onRequestDeleteRoute={handleRequestNotVisited}
+              historyAction={route.isMine && getRouteCompletionPosterStats(route).canCreate ? (
+                <button type="button" onClick={() => void travelCardController.open(route)}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-50 px-4 text-sm font-bold text-brand-800 transition hover:bg-brand-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:bg-brand-400/15 dark:text-brand-100 dark:hover:bg-brand-400/25">
+                  <MdPhotoLibrary aria-hidden="true" className="text-lg" />{travelCardController.text.create}
+                </button>
+              ) : undefined}
             />
           ))}
 
@@ -497,6 +508,7 @@ function MyRouteHistoryPage() {
       ) : null}
 
       <RoutePosterPreview controller={posterController} />
+      <TravelCardEditor controller={travelCardController} onOpenDayCards={route => void handleCreatePoster(route)} />
     </section>
   );
 }

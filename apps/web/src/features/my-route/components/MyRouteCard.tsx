@@ -1,5 +1,5 @@
 /** 내 경로를 예정·진행·완료 화면에 맞는 카드 형태로 표시하고 DAY 선택, 여행 시작, DAY 추가와 삭제 요청을 부모에 전달한다. */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   MdAdd,
   MdDeleteOutline,
@@ -49,6 +49,9 @@ type MyRouteCardProps = {
   onRequestAppendDay?: (route: MyRoute) => void;
 
   onRequestDeleteRoute?: (route: MyRoute) => void;
+
+  /** 다녀온 루트 카드 하단에만 표시할 화면 전용 액션. 카드가 생성 조건이나 편집 상태를 소유하지 않는다. */
+  historyAction?: ReactNode;
 };
 
 function isRouteShared(route: MyRoute) {
@@ -128,11 +131,13 @@ function MyRouteHistoryCard({
   todayKey,
   onSelectDay,
   onRequestDeleteRoute,
+  historyAction,
 }: {
   route: MyRoute;
   todayKey: string;
   onSelectDay: (route: MyRoute, day: MyRouteDay) => void;
   onRequestDeleteRoute?: (route: MyRoute) => void;
+  historyAction?: ReactNode;
 }) {
   const text = useUiText();
   const [isStopExpanded, setIsStopExpanded] = useState(false);
@@ -337,6 +342,8 @@ function MyRouteHistoryCard({
           </div>
         </div>
       ) : null}
+
+      {historyAction ? <div className="border-t border-brand-100 px-4 py-3 dark:border-brand-400/25">{historyAction}</div> : null}
 
       {visibleDays.length > 0 ? (
         <div className="relative flex flex-wrap gap-1.5 bg-brand-50/60 px-4 py-3 before:pointer-events-none before:absolute before:left-4 before:right-4 before:top-0 before:h-px before:bg-brand-100 before:content-[''] dark:bg-[#082b28] dark:before:bg-brand-400/30">
@@ -555,6 +562,7 @@ function MyRouteCard({
   onRequestStartRoute,
   onRequestAppendDay,
   onRequestDeleteRoute,
+  historyAction,
 }: MyRouteCardProps) {
   const text = useUiText();
   const todayKey = getTodayDateKey();
@@ -591,6 +599,7 @@ function MyRouteCard({
         todayKey={todayKey}
         onSelectDay={onSelectDay}
         onRequestDeleteRoute={onRequestDeleteRoute}
+        historyAction={historyAction}
       />
     );
   }

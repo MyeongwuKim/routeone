@@ -267,8 +267,24 @@ export function getDayDateLabel(
   return date ?? text.dayRoute.dateUnknown;
 }
 
-export function isVisitedStop(stop: MyRouteDay["stops"][number]) {
-  return stop.visitStatus === "VISITED" || Boolean(stop.visitedAt);
+type RouteStopProgress = {
+  visitStatus?: MyRouteDay["stops"][number]["visitStatus"];
+  visitedAt?: string | null;
+};
+
+/** SKIPPED 상태를 우선해 이전 방문 시각이 남아 있어도 방문 집계와 기록에서 제외한다. */
+export function isSkippedStop(stop: RouteStopProgress) {
+  return stop.visitStatus === "SKIPPED";
+}
+
+/** 방문 상태 또는 예전 응답의 방문 시각을 확인하되 명시적으로 건너뛴 장소는 방문으로 세지 않는다. */
+export function isVisitedStop(stop: RouteStopProgress) {
+  return !isSkippedStop(stop) && (stop.visitStatus === "VISITED" || Boolean(stop.visitedAt));
+}
+
+/** 방문과 건너뜀을 모두 일정에서 처리한 장소로 판단한다. 실제 방문 기록 여부와는 구분한다. */
+export function isResolvedStop(stop: RouteStopProgress) {
+  return isVisitedStop(stop) || isSkippedStop(stop);
 }
 
 export function getDayCompletedStopCount(day: MyRouteDay) {
