@@ -290,10 +290,13 @@ async function parseCloudflareUploadResponse(response: Response) {
   }
 }
 
+/** 네이티브 업로드와 웹 재전송 사이에도 요청 세션을 확인하며, 이미 전송한 업로드 자체는 취소하지 않는다. */
 export async function uploadVerifiedVisitPhoto(
   uploadTarget: NativePhotoUploadTarget,
-  photo: NativeVisitPhoto
+  photo: NativeVisitPhoto,
+  assertCurrent?: () => void
 ) {
+  assertCurrent?.();
   if (photo.uploadedImageUrl) {
     return photo.uploadedImageUrl;
   }
@@ -312,6 +315,7 @@ export async function uploadVerifiedVisitPhoto(
       uploadTarget
     );
 
+    assertCurrent?.();
     if (nativeUploadResult) {
       return nativeUploadResult.uploadedImageUrl ?? uploadTarget.imageUrl;
     }
@@ -331,11 +335,14 @@ export async function uploadVerifiedVisitPhoto(
     uploadTarget.fileName
   );
 
+  assertCurrent?.();
   const response = await fetch(uploadTarget.uploadUrl, {
     method: "POST",
     body: formData,
   });
+  assertCurrent?.();
   const payload = await parseCloudflareUploadResponse(response);
+  assertCurrent?.();
 
   if (!response.ok || !payload.success) {
     throw new Error(getCloudflareUploadError(payload));

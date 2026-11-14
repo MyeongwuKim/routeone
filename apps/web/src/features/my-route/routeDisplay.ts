@@ -291,14 +291,46 @@ export function getDayCompletedStopCount(day: MyRouteDay) {
   return day.stops.filter(isVisitedStop).length;
 }
 
+/** 해당 DAY에서 방문 없이 건너뛴 장소 수를 반환한다. */
+export function getDaySkippedStopCount(day: MyRouteDay) {
+  return day.stops.filter(isSkippedStop).length;
+}
+
+/** 해당 DAY의 진행률·완료 판정에 사용할 방문 또는 건너뜀 장소 수를 반환한다. */
+export function getDayResolvedStopCount(day: MyRouteDay) {
+  return day.stops.filter(isResolvedStop).length;
+}
+
+/** 상세·공유 목록의 전체 장소에서 건너뛴 수를 계산한다. 예전 요약 응답에 장소가 없으면 0이다. */
+export function getRouteSkippedStopCount(route: { stops?: readonly RouteStopProgress[] }) {
+  return route.stops?.filter(isSkippedStop).length ?? 0;
+}
+
+/** 서버의 실제 방문 수에 건너뜀 수를 합쳐 처리한 장소 수를 계산하고 전체 수를 넘지 않게 한다. */
+export function getRouteResolvedStopCount(route: {
+  stops?: readonly RouteStopProgress[];
+  totalStopCount: number;
+  completedStopCount: number;
+}) {
+  return Math.min(route.totalStopCount, route.completedStopCount + getRouteSkippedStopCount(route));
+}
+
+/** 실제 방문율과 구분해 방문·건너뜀을 모두 처리한 일정 진행률(0~100)을 반환한다. */
+export function getRouteProgressPercent(route: Parameters<typeof getRouteResolvedStopCount>[0]) {
+  return route.totalStopCount > 0
+    ? Math.max(0, Math.round(getRouteResolvedStopCount(route) / route.totalStopCount * 100))
+    : 0;
+}
+
+/** DAY의 방문과 건너뜀을 합친 처리 진행률을 반환하며, 빈 DAY는 0이다. */
 export function getDayProgressPercent(day: MyRouteDay) {
   if (day.stops.length === 0) {
     return 0;
   }
 
-  return Math.round((getDayCompletedStopCount(day) / day.stops.length) * 100);
+  return Math.round((getDayResolvedStopCount(day) / day.stops.length) * 100);
 }
 
 export function getCurrentRouteStop(day: MyRouteDay) {
-  return day.stops.find((stop) => !isVisitedStop(stop)) ?? null;
+  return day.stops.find((stop) => !isResolvedStop(stop)) ?? null;
 }

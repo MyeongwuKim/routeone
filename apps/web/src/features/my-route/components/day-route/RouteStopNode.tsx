@@ -2,7 +2,8 @@
  * 사용 위치: 내 루트 → DAY 상세 → 장소별 일정 카드
  *
  * 용도:
- * 장소의 방문·인증 상태와 체류 시간을 보여주고 방문 처리와 일정 편집을 연결한다.
+ * 장소의 방문·건너뜀·인증 상태를 보여주고 방문 처리와 일정 편집을 연결한다.
+ * 건너뛴 장소는 계획 순번을 유지하되 시각·체류·인증을 표시하지 않고 허용된 소유자에게 취소를 제공한다.
  * 방문 처리 중에는 버튼을 잠그고, 자세한 진행 상태는 화면 하단에서 안내한다.
  * 상단에는 상태만 표시하고, 사진·지도·GPS 테스트는 카드 하단의 액션 영역에서 제공한다.
  */
@@ -25,6 +26,7 @@ import {
   MdImage,
   MdMyLocation,
   MdOutlinePlace,
+  MdSkipNext,
   MdUndo,
 } from "react-icons/md";
 import {
@@ -32,7 +34,7 @@ import {
   useUiText,
   type UiText,
 } from "@/lib/uiText";
-import { isVisitedStop } from "../../routeDisplay";
+import { isSkippedStop, isVisitedStop } from "../../routeDisplay";
 import type { MyRouteStop } from "../../types";
 import {
   formatStayMinutes,
@@ -101,6 +103,8 @@ type RouteStopNodeProps = {
   isDragging: boolean;
 
   isVisitSaving: boolean;
+  /** 다른 장소를 포함한 방문·건너뛰기 저장 중에는 추가 상태 변경을 막는다. */
+  isVisitActionBusy?: boolean;
 
   isStaySaving: boolean;
 
@@ -109,6 +113,8 @@ type RouteStopNodeProps = {
   isActiveDestination: boolean;
 
   canToggleVisited: boolean;
+  /** 해당 날짜·시작 상태에서 소유자가 건너뛰기 또는 취소를 할 수 있으면 true다. */
+  canToggleSkipped?: boolean;
 
   enableVerificationPhotoPreview: boolean;
 
@@ -143,6 +149,7 @@ type RouteStopNodeProps = {
   onRequestVisitTimesEdit: (stop: MyRouteStop) => void;
 
   onToggleVisited: (stop: MyRouteStop) => void;
+  onToggleSkipped?: (stop: MyRouteStop) => void;
 
   onOpenPlace: (stop: MyRouteStop) => void;
 
@@ -162,10 +169,12 @@ function RouteStopNode({
   isOrderEditing,
   isDragging,
   isVisitSaving,
+  isVisitActionBusy = false,
   isStaySaving,
   isReadOnly,
   isActiveDestination,
   canToggleVisited,
+  canToggleSkipped = false,
   enableVerificationPhotoPreview,
   isGpsTestEnabled,
   isGpsTestLocationActive,
@@ -183,6 +192,7 @@ function RouteStopNode({
   onRequestStayMinutesEdit,
   onRequestVisitTimesEdit,
   onToggleVisited,
+  onToggleSkipped,
   onOpenPlace,
   onOpenDirections,
   onEditVerificationPhoto,
@@ -192,7 +202,8 @@ function RouteStopNode({
   const text = useUiText();
   const cardRef = useRef<HTMLDivElement>(null);
   const isVisited = isVisitedStop(stop);
-  const isCheckedIn = !isVisited && Boolean(stop.checkedInAt);
+  const isSkipped = isSkippedStop(stop);
+  const isCheckedIn = !isVisited && !isSkipped && Boolean(stop.checkedInAt);
   const stayMinutes = stop.stayMinutes ?? 60;
   const hasActualStayMinutes =
     isVisited && Boolean(stop.actualStayMinutes && stop.actualStayMinutes > 0);
@@ -206,8 +217,10 @@ function RouteStopNode({
     : text.dayRoute.plannedStay(
         formatStayMinutes(displayedStayMinutes, text)
       );
-  const statusLabel = isVisited
-    ? text.dayRoute.visited
+  const statusLabel = isSkipped
+    ? text.dayRoute.skippedBadge
+    : isVisited
+      ? text.dayRoute.visited
     : isCheckedIn
       ? text.dayRoute.visiting
       : text.dayRoute.notVisited;
@@ -215,7 +228,7 @@ function RouteStopNode({
     ? getRouteStopVerificationBadge(stop, text)
     : null;
   const canOpenVerificationPhoto =
-    enableVerificationPhotoPreview && Boolean(stop.verificationPhotoUrl);
+    !isSkipped && enableVerificationPhotoPreview && Boolean(stop.verificationPhotoUrl);
   const canAddVerificationPhoto =
     canEditVerificationPhoto && isVisited && !stop.verificationPhotoUrl;
   const photoAction: RouteStopPhotoAction | null =
@@ -331,6 +344,8 @@ function RouteStopNode({
               ? "border-brand-200 bg-white shadow-sm dark:border-brand-400/30 dark:bg-slate-950"
               : isVisited
                 ? "cursor-pointer border-brand-500 bg-brand-50 shadow-sm active:scale-[0.99] dark:border-brand-400/40 dark:bg-brand-400/10"
+                : isSkipped
+                  ? "cursor-pointer border-slate-200 bg-slate-50 active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900/70"
                 : isCheckedIn
                   ? "cursor-pointer border-brand-400 bg-brand-50/60 shadow-sm active:scale-[0.99] dark:border-brand-400/40 dark:bg-brand-400/10"
                   : isActiveDestination
@@ -384,7 +399,7 @@ function RouteStopNode({
                       {text.dayRoute.currentDestination}
                     </span>
                   ) : null}
-                  <p className="truncate text-sm font-black text-slate-900 dark:text-white">
+                  <p className={`truncate text-sm font-black ${isSkipped ? "text-slate-500 dark:text-slate-400" : "text-slate-900 dark:text-white"}`}>
                     {stop.place.title}
                   </p>
                 </div>
@@ -414,7 +429,7 @@ function RouteStopNode({
                       <MdDragIndicator />
                     </button>
                   </div>
-                ) : canToggleVisited ? (
+                ) : canToggleVisited && !isSkipped ? (
                   <button
                     type="button"
                     aria-label={
@@ -428,7 +443,7 @@ function RouteStopNode({
                       event.stopPropagation();
                       onToggleVisited(stop);
                     }}
-                    disabled={isVisitSaving}
+                    disabled={isVisitSaving || isVisitActionBusy}
                     title={
                       isVisited
                         ? text.dayRoute.cancelVisitTitle
@@ -468,6 +483,8 @@ function RouteStopNode({
                 >
                   {isVisited ? (
                     <MdCheckCircle className="text-sm" />
+                  ) : isSkipped ? (
+                    <MdSkipNext className="text-sm" />
                   ) : isCheckedIn ? (
                     <MdMyLocation className="text-sm" />
                   ) : (
@@ -496,7 +513,7 @@ function RouteStopNode({
                   text
                 )}
               </p>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {!isSkipped ? <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {scheduleLabel ? (
                   canEditVisitTimes && (stop.checkedInAt || isVisited) ? (
                     <>
@@ -570,7 +587,7 @@ function RouteStopNode({
                     </span>
                   </button>
                 )}
-              </div>
+              </div> : null}
               <p
                 className={`mt-1 min-h-8 line-clamp-2 text-[11px] leading-4 ${
                   isVisited
@@ -619,12 +636,27 @@ function RouteStopNode({
               isGpsTestLocationActive={isGpsTestLocationActive}
               onOpenDirections={() => onOpenDirections(stop)}
               onOpenGpsTest={
-                isGpsTestEnabled ? () => onOpenGpsTest(stop) : undefined
+                isGpsTestEnabled && !isSkipped ? () => onOpenGpsTest(stop) : undefined
               }
             />
           ) : null}
+          {!isOrderEditing && !isVisited && canToggleSkipped && onToggleSkipped ? (
+            <button
+              type="button"
+              aria-label={`${stop.place.title} ${isSkipped ? text.dayRoute.undoSkipStop : text.dayRoute.skipStop}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleSkipped(stop);
+              }}
+              disabled={isVisitSaving || isVisitActionBusy}
+              className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+            >
+              {isVisitSaving ? <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : isSkipped ? <MdUndo className="shrink-0 text-base" /> : <MdSkipNext className="shrink-0 text-base" />}
+              {isSkipped ? text.dayRoute.undoSkipStop : text.dayRoute.skipStop}
+            </button>
+          ) : null}
         </div>
-        {!isLast ? (
+        {!isLast && !isSkipped && travelSegmentToNext ? (
           <div className="ml-1 mt-2 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700 dark:bg-brand-400/10 dark:text-brand-100">
             <MdDirectionsCar className="text-sm" />
             {text.dayRoute.nextPlaceTravel(

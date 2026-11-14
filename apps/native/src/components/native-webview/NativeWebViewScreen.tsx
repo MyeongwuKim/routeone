@@ -544,12 +544,13 @@ export default function NativeWebViewScreen({
       }
 
       fatalExitAlertShownRef.current = true;
+      const currentText = textRef.current;
       Alert.alert(
-        text.fatalAlertTitle,
-        `${message}\n\n${text.fatalAlertDescription}`,
+        currentText.fatalAlertTitle,
+        `${message}\n\n${currentText.fatalAlertDescription}`,
         [
           {
-            text: text.fatalAlertConfirm,
+            text: currentText.fatalAlertConfirm,
             onPress: () => {
               BackHandler.exitApp();
             }
@@ -558,7 +559,7 @@ export default function NativeWebViewScreen({
         { cancelable: false }
       );
     },
-    [text]
+    []
   );
 
   const flushPendingNavigationPath = useCallback(() => {
@@ -845,6 +846,7 @@ export default function NativeWebViewScreen({
     [allowedWebBundleOrigins]
   );
 
+  // 번들 선택은 화면 진입 시 시작하며, 언어 전환은 진행 중인 준비를 다시 실행하지 않는다.
   useEffect(() => {
     let cancelled = false;
 
@@ -863,7 +865,7 @@ export default function NativeWebViewScreen({
           setBundleProgress({
             stage: "loading",
             progress: 0.93,
-            message: text.loadingRouteOne
+            message: textRef.current.loadingRouteOne
           });
           setResolvedBundle(bundle);
         }
@@ -873,7 +875,7 @@ export default function NativeWebViewScreen({
           reportHandledNativeError(error, {
             source: "web-bundle-resolve"
           });
-          const errorMessage = getLoadErrorMessage(error, text);
+          const errorMessage = getLoadErrorMessage(error, textRef.current);
 
           setLoadError(errorMessage);
           setIsLoading(false);
@@ -887,7 +889,7 @@ export default function NativeWebViewScreen({
     return () => {
       cancelled = true;
     };
-  }, [requestFatalAppExit, text]);
+  }, [requestFatalAppExit]);
 
   const handleLoadError = useCallback(
     (description: string) => {

@@ -717,33 +717,15 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           >
             <MdArrowBack />
           </button>
-          <div className="min-w-0">
-            <p className="text-xs font-black text-brand-700">
-              {text.routeShell.myInfoTitle}
-            </p>
-            <h1 className="truncate text-lg font-bold text-slate-900">
+          <div className="min-w-0 flex-1">
+            <h1 className="break-keep text-lg font-bold leading-snug text-slate-900">
               {text.sharedRoute.likedTitle}
             </h1>
+            <p className="mt-1 break-keep text-xs font-medium leading-5 text-slate-500 dark:text-slate-300">
+              {pageCopy.description}
+            </p>
           </div>
         </header>
-      ) : null}
-
-      {mode === "liked" ? (
-        <div className="rounded-2xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
-              <FaHeart />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-slate-900 dark:text-white">
-                {pageCopy.title}
-              </p>
-              <p className="mt-0.5 text-xs font-semibold text-slate-500 dark:text-slate-300">
-                {pageCopy.description}
-              </p>
-            </div>
-          </div>
-        </div>
       ) : null}
 
       <div className="space-y-2">
@@ -759,7 +741,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
           {mode === "feed" && filteredRoutes.length > 0 ? (
             <Link
               {...recommendedCoursesLink}
-              className="inline-flex min-h-10 max-w-full items-center justify-center gap-1.5 rounded-full border border-brand-200 bg-white px-3 py-2 text-xs font-bold text-brand-700 shadow-sm transition hover:bg-brand-50 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-brand-100"
+              className="inline-flex min-h-10 max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-brand-200 bg-white px-3 py-2 text-xs font-bold text-brand-700 shadow-sm transition hover:bg-brand-50 dark:border-brand-400/30 dark:bg-[#0b211f] dark:text-brand-100"
             />
           ) : null}
         </div>
@@ -1137,6 +1119,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         text={text.sharedRouteReport}
       />
       <RouteCheckoutModal
+        draftContext={{ mode: "shared-copy", sourceRouteId: selectedRouteId ?? "shared-route" }}
         isOpen={Boolean(checkoutRoutePlan)}
         savedPlaces={checkoutSavedPlaces}
         insertCandidatePlaces={checkoutCandidatePlaces}

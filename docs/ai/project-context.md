@@ -17,13 +17,17 @@
 
 웹 기능은 대체로 `pages` → `features`·`stores` → `api`·`graphql`로 이어진다. 서버 요청의 공통 처리는 `apps/web/src/lib/graphqlClient.ts`, Fastify 진입은 `apps/api/src/app.ts`, GraphQL 계약과 로그인 사용자 연결은 `apps/api/src/schema.ts`와 `apps/api/src/context.ts`에서 확인한다. 영속 모델은 `apps/api/prisma/schema.prisma`의 MongoDB 모델이 기준이다. 도메인 규칙은 `apps/api/src/modules/`에서 해당 resolver가 위임하는 서비스를 찾는다.
 
+공통 탭 높이와 본문 여백은 `BottomTabLayout.tsx`, 탭 제목은 `components/layout/RoutePageHeader.tsx`, 색상과 포커스 표시는 `index.css`에서 맞춘다. 한국어 안내는 해요체와 “해 주세요”를 사용하고, 자동 일정은 “루트”, 관광공사 원본은 “코스”로 구분한다. 짧은 버튼은 한 줄을 유지하고, 목록의 긴 제목은 생략하되 원문을 접근 가능한 이름이나 상세 화면에 남긴다. 반응형 변경은 390×844와 1440×900에서 확인한다.
+
 ## 추천 코스와 지도
 
 - `useHomeRecommendations.ts`는 선택 지역의 코스 목록을 API의 `homeTourCourses` GraphQL 쿼리로 받는다. API의 `tourCourseSource.ts`는 관광공사 코스 원본을 조회할 때 `VISITKOREA_SERVICE_KEY` 또는 `TOUR_API_SERVICE_KEY`를 사용한다.
 - 웹의 `visitKoreaTourApi.ts`는 TourAPI의 `detailInfo2`에서 방문 순서와 방문지별 설명, `detailCommon2`에서 전체 소개와 개별 장소 상세, `detailIntro2`에서 거리·시간·테마를 조회한다. `homeRecommendations.ts`는 방문지 전체를 지도에 연결할 수 있는 코스만 표시한다. 코스가 안 보이면 목록 응답, 방문지 ID와 상세 응답, 조회 오류를 따로 확인한다.
 - 언어 선택은 홈에서 로그인 없이 가능하다. 코스 제목·소개와 방문지별 설명은 `apps/web/src/hooks/useTourCourseLocalization.ts`를, 방문지 이름·주소는 `apps/web/src/lib/placeLocalization.ts`와 API의 `apps/api/src/modules/places/placeLocalization.service.ts`를 먼저 확인한다.
 - 지원 지역 판정은 `apps/web/src/features/home/map/serviceRegionSelection.ts`를 확인한다. 경계 JSON은 웹 `apps/web/public/service-region-boundary.json`과 API `apps/api/src/assets/service-region-boundary.json`에 각각 있다. API의 빌드 단계는 API 소스 내부 파일을 `dist/assets`로 복사한다. `apps/api`만 빌드 소스로 사용할 때도 이 파일을 읽을 수 있어야 한다.
+- 홈 지도 데이터의 조회·번역 Effect·캐시 갱신은 `features/home/useHomeAttractionData.ts`, 관광지·축제의 중복 제거·혼잡도 순위와 번역 결과 병합은 React에 의존하지 않는 `homeAttractionModel.ts`에서 확인한다. `apps/web/tests/homeAttractionModel.test.mjs`는 원문·이미지 보존과 순위 규칙을 검증한다.
 - 장소 상세 길찾기는 `apps/web/src/features/place-sheet/hooks/usePlaceSheetData.ts`에서 자동차와 도보로 분기한다. 도보 범위와 경로 계산은 `apps/web/src/features/walking/`에서 확인한다. GPS 좌표를 얻는 동작, 서비스 지역 판정, 도보 데이터 지원 범위는 서로 다른 조건이다.
+- 도보 Worker는 인라인 번들로 실행하고, 강릉 보행로 JSON은 웹에서 필요할 때 조회한다. 네이티브의 `apps/native/scripts/sync-web-build.mjs`는 같은 JSON을 data: URL로 포함한다. Worker와 데이터 로딩을 바꾸면 `apps/web/tests/walkingRouting.test.mjs`와 `walkingNativeBundle.test.mjs`로 실제 경로 계산과 data: 모듈 패키징을 함께 확인한다.
 
 ## 실행 환경
 
@@ -36,6 +40,8 @@
 | `pnpm native:ios:dev` | `apps/native/.env.development`를 사용해 개발용 iOS 네이티브 프로젝트와 번들을 준비한다. |
 
 API 환경 선택은 `apps/api/src/lib/serverEnv.ts`에서 확인한다. iOS 환경과 번들 생성은 `apps/native/scripts/run-ios-local.mjs`, `apps/native/scripts/prebuild-ios.mjs`, `apps/native/scripts/sync-web-build.mjs`에서 확인한다. 시뮬레이터 화면이 웹 개발 서버와 다르면 앱이 실행 중인 WebView 번들과 브릿지가 가리키는 API를 각각 확인한다. 네이티브 앱의 `EXPO_PUBLIC_API_URL`은 `fetchBridge.ts`에서 사용한다.
+
+다른 프로젝트와 로컬 API 포트가 겹치면 `apps/api/.env`의 `PORT`, `apps/native/.env`의 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`(우선) 또는 `EXPO_PUBLIC_API_URL`, `apps/web/.env`의 `VITE_GRAPHQL_PROXY_TARGET`을 같은 마실 API 포트로 맞춘다. 서버가 HTTP 200을 반환해도 다른 프로젝트일 수 있으므로 `homeTourCourses`와 `loginWithNativeOAuth`가 해당 GraphQL 스키마에 있는지 확인한다. Native 환경값을 바꿨으면 Metro를 재시작하고 앱을 다시 불러온다. Xcode 빌드 환경은 `node apps/native/scripts/sync-xcode-env.mjs .env none`으로 함께 맞춘다.
 
 ## 커밋 전 검사
 

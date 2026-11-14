@@ -1,4 +1,4 @@
-/** DAY 팝업의 읽기 전용 좋아요·포토카드 액션 또는 편집 저장·취소·여행 시작·지도 버튼을 현재 상태에 맞춰 표시한다. */
+/** DAY 팝업의 공유·편집·시작·지도 액션과, 권한이 있는 선택 DAY의 남은 장소를 건너뛰는 마치기를 표시한다. */
 import {
   MdCheck,
   MdCheckCircle,
@@ -35,14 +35,22 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
     isRouteActionDayCompleted,
     isStartingRouteDay,
     canStartRouteActionDay,
+    canFinishDay = false,
+    isFinishingDay = false,
     handleRequestShareRoute,
     handleCancelOrderEditing,
     handleSaveOrder,
     handleRequestRouteActionDayStart,
+    handleRequestFinishDay,
     handleOpenMapForDay,
   } = controller;
   const readOnlyActionIcon = readOnlyFooterAction?.icon ?? (
-    <MdShare className="text-lg" />
+    <MdShare className="shrink-0 text-lg" />
+  );
+  const shouldExpandShareAction = Boolean(
+    readOnlyPosterAction &&
+      !readOnlyFooterAction &&
+      readOnlyActionLabel === text.dayRoute.shareAfterComplete
   );
   const readOnlyActionDisabledClass = readOnlyFooterAction?.isActive
     ? "disabled:opacity-100"
@@ -53,7 +61,7 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
       {isReadOnly ? (
         <div
           className={`grid gap-2 ${
-            readOnlyPosterAction ? "grid-cols-3" : "grid-cols-2"
+            readOnlyPosterAction && !shouldExpandShareAction ? "grid-cols-3" : "grid-cols-2"
           }`}
         >
           <button
@@ -68,7 +76,7 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
               readOnlyFooterAction?.onClick ?? handleRequestShareRoute
             }
             disabled={readOnlyActionDisabled}
-            className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-bold disabled:cursor-default ${readOnlyActionDisabledClass} ${
+            className={`flex min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-2xl border px-1.5 py-3 text-xs font-bold sm:text-sm disabled:cursor-default ${shouldExpandShareAction ? "col-span-2" : ""} ${readOnlyActionDisabledClass} ${
               readOnlyFooterAction?.isActive
                 ? "border-brand-500 bg-brand-600 text-white"
                 : "border-brand-200 bg-brand-50 text-brand-700"
@@ -83,9 +91,9 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
               aria-label={readOnlyPosterAction.ariaLabel}
               onClick={readOnlyPosterAction.onClick}
               disabled={readOnlyPosterAction.disabled}
-              className="flex items-center justify-center gap-1.5 rounded-2xl border border-amber-200 bg-amber-50 px-2 py-3 text-xs font-bold text-amber-700 disabled:cursor-wait disabled:opacity-60"
+              className="flex min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-2xl border border-amber-200 bg-amber-50 px-1.5 py-3 text-xs font-bold text-amber-700 disabled:cursor-wait disabled:opacity-60"
             >
-              <MdImage className="text-lg" />
+              <MdImage className="shrink-0 text-lg" />
               {readOnlyPosterAction.label}
             </button>
           ) : null}
@@ -93,9 +101,9 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
             type="button"
             onClick={() => handleOpenMapForDay(activeDay)}
             disabled={routeStopCount === 0}
-            className="flex items-center justify-center gap-1.5 rounded-2xl bg-brand-600 px-3 py-3 text-sm font-bold text-white disabled:opacity-40"
+            className="flex min-w-0 items-center justify-center gap-1 whitespace-nowrap rounded-2xl bg-brand-600 px-1.5 py-3 text-xs font-bold text-white sm:text-sm disabled:opacity-40"
           >
-            <MdMap className="text-lg" />
+            <MdMap className="shrink-0 text-lg" />
             {text.dayRoute.routeMap}
           </button>
         </div>
@@ -108,7 +116,7 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
             className="flex items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-2 py-3 text-xs font-bold text-slate-600 disabled:opacity-40"
           >
             <MdClose />
-            취소
+            {text.common.cancel}
           </button>
           <button
             type="button"
@@ -117,7 +125,7 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
             className="flex items-center justify-center gap-1.5 rounded-2xl bg-brand-600 px-2 py-3 text-xs font-bold text-white disabled:opacity-40"
           >
             <MdCheck />
-            {isSavingOrder ? "저장 중" : "저장"}
+            {isSavingOrder ? text.dayRoute.savingRoute : text.inputs.save}
           </button>
         </div>
       ) : (
@@ -126,16 +134,16 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
             type="button"
             onClick={handleRequestRouteActionDayStart}
             disabled={!canStartRouteActionDay}
-            className={`flex items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 text-sm font-bold disabled:cursor-default ${
+            className={`flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-2xl border px-2 py-3 text-xs font-bold sm:text-sm disabled:cursor-default ${
               routeActionDay.startedAt || routeStatus === "COMPLETED"
                 ? "border-brand-200 bg-brand-50 text-brand-700 disabled:opacity-100"
                 : "border-brand-500 bg-brand-600 text-white disabled:opacity-40"
             }`}
           >
             {routeStatus === "COMPLETED" ? (
-              <MdCheckCircle />
+              <MdCheckCircle className="shrink-0" />
             ) : (
-              <MdPlayArrow />
+              <MdPlayArrow className="shrink-0" />
             )}
             {isStartingRouteDay
               ? text.dayRoute.startingDayAction(routeActionDay.dayIndex)
@@ -153,13 +161,24 @@ function DayRoutePopupFooter({ controller }: DayRoutePopupFooterProps) {
             type="button"
             onClick={() => handleOpenMapForDay(activeDay)}
             disabled={routeStopCount === 0}
-            className="flex items-center justify-center gap-1.5 rounded-2xl bg-brand-600 px-2 py-3 text-xs font-bold text-white disabled:opacity-40"
+            className="flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-2xl bg-brand-600 px-2 py-3 text-xs font-bold text-white disabled:opacity-40"
           >
-            <MdMap className="text-lg" />
+            <MdMap className="shrink-0 text-lg" />
             {text.dayRoute.routeMap}
           </button>
         </div>
       )}
+      {canFinishDay || isFinishingDay ? (
+        <button
+          type="button"
+          onClick={handleRequestFinishDay}
+          disabled={!canFinishDay || isFinishingDay || isOrderEditing || isSavingOrder}
+          className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+        >
+          {isFinishingDay ? <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <MdCheck className="shrink-0 text-base" />}
+          {isFinishingDay ? text.dayRoute.finishingDay : text.dayRoute.finishDay}
+        </button>
+      ) : null}
     </footer>
   );
 }

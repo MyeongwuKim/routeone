@@ -1,7 +1,7 @@
 
 import { Kind, print, type DocumentNode } from "graphql";
 import type { TypedDocumentNode } from "@graphql-typed-document-node/core";
-import { getAuthToken } from "./authToken";
+import { clearAuthToken, getAuthToken, isStoredAuthTokenCurrent } from "./authToken";
 import { reportHandledWebError } from "@/monitoring/sentry";
 
 const GRAPHQL_REQUEST_TIMEOUT_MS = getPositiveNumberEnv(
@@ -191,7 +191,7 @@ function reportFinalGraphQLRequestError(
 ) {
   if (
     error instanceof GraphQLRequestError &&
-    error.code === "USER_FACING_ERROR"
+    (error.code === "USER_FACING_ERROR" || error.code === "UNAUTHENTICATED")
   ) {
     return;
   }
@@ -332,6 +332,15 @@ export async function requestGraphQL<TResult, TVariables>(
       });
     } catch (error) {
       const requestError = normalizeGraphQLRequestError(error);
+      // 이전 토큰으로 시작한 요청의 늦은 거절이 새 로그인까지 해제하지 않도록 비교한다.
+      if (
+        isGraphQLRequestError(requestError) &&
+        requestError.code === "UNAUTHENTICATED" &&
+        token &&
+        isStoredAuthTokenCurrent(token)
+      ) {
+        clearAuthToken("expired");
+      }
       const canRetry =
         retryCount < maxRetryCount &&
         isRetryableGraphQLError(requestError);

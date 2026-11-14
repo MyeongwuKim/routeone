@@ -171,7 +171,7 @@ function PlaceCartRouteDayCard({
                 </span>
               ) : null}
             </p>
-            <p className="mt-1 text-[11px] leading-5 text-slate-500">
+            {isTravelTimeLoading || firstTravelMinutes >= 60 || isOrderEditing ? <p className="mt-1 text-[11px] leading-5 break-keep text-slate-500">
               {isTravelTimeLoading
                 ? text.dayRoute.travelLoading
                 : firstTravelMinutes >= 60
@@ -179,7 +179,7 @@ function PlaceCartRouteDayCard({
                       getRouteDurationText(firstTravelMinutes, text)
                     )
                   : text.cart.dayStartLocationRecalculateDescription}
-            </p>
+            </p> : null}
           </div>
           {isOrderEditing ? (
             <button
@@ -248,8 +248,7 @@ function PlaceCartRouteDayCard({
               {text.cart.dropToEnd}
             </div>
           ) : (
-            <div className="mt-3 flex items-center justify-between rounded-2xl border border-brand-100 bg-brand-50/60 px-3 py-2 text-[10px] text-slate-500 dark:border-brand-400/30 dark:bg-slate-900/80 dark:text-slate-200">
-              <span>{text.cart.sOrder}</span>
+            <div className="mt-3 flex items-center justify-end px-1 py-2 text-[11px] text-slate-500 dark:text-slate-300">
               <span>
                 {isTravelTimeEstimated
                   ? text.cart.carTravelEstimate

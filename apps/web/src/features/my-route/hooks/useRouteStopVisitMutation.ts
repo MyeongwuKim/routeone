@@ -3,14 +3,17 @@
  * 장소의 도착 인증, 방문 완료, 사진·머문 시간 수정 상태를 저장한다.
  *
  * 동작 방식:
- * 방문 완료 전에 현재·다음 도착 알림을 함께 사전 등록하고,
- * API 성공을 화면에 먼저 반영한 뒤 다음 대상의 현재 위치를 다시 확인한다.
+ * 방문 저장의 알림 준비·실패 복구·잠금은 routeVisitArrivalTransition에 맡긴다.
+ * 이 Hook은 낙관적 상태와 API 확정 결과를 목록·캐시·입력창에 반영한 뒤 최종 알림을 요청한다.
  * 저장 여부와 네이티브가 알려준 진행 단계를 입력창과 장소 카드에 전달한다.
- * 확정 실패만 기존 타깃으로 되돌리고, 결과가 불명확하면 재조회로 확정될 때까지 두 대상을 유지한다.
+ * 요청을 시작한 인증 세션이 바뀌면 후속 요청과 캐시·화면·알림 반영을 중단한다.
+ * 일반 확정 실패는 이전 대상으로, 방문 충돌은 최신 서버 대상으로 알림을 맞춘다.
+ * 결과가 불명확하면 재조회로 확정될 때까지 두 대상을 유지한다.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SetStateAction } from "react";
 import { routeApi } from "@/api/routeApi";
+import { createAuthSessionRequest, type AuthSessionRequest } from "@/lib/authToken";
 import { NOTIFICATION_SETTINGS_QUERY_KEY } from "@/api/notificationApi";
 import type {
   MyRoutesQuery,
@@ -35,24 +38,12 @@ import {
 } from "../services/visitPhotoService";
 import { getVisitPhotoVerificationStatus } from "../services/visitPhotoVerification";
 import {
-  prepareRouteArrivalNotificationsForVisitTransition,
-  RouteArrivalVisitTransitionPreparationError,
-  syncRouteArrivalNotificationsAfterVisitChange,
-  syncTodayRouteArrivalNotifications,
-  type RouteArrivalVisitTransitionPreparation,
-} from "../services/routeArrivalNotificationService";
-import { createRouteArrivalVisitPreview } from "../services/routeArrivalNotificationTarget";
-import {
-  acquireRouteArrivalTransitionLock,
-  isRouteArrivalTransitionLocked,
-  markRouteArrivalTransitionRequestDispatched,
-  markRouteArrivalTransitionUnresolved,
-  resolveRouteArrivalTransition,
-} from "../services/routeArrivalTransitionLock";
-import {
-  getConfirmedRouteVisitState,
-  isDefinitiveRouteMutationFailure,
-} from "../services/routeArrivalMutationRecovery";
+  createRouteVisitArrivalTransition,
+  syncRouteVisitArrivalTarget,
+  type RouteVisitArrivalTransition,
+} from "../services/routeVisitArrivalTransition";
+import { isRouteArrivalTransitionLocked } from "../services/routeArrivalTransitionLock";
+import { isRouteStopVisitConflict } from "../services/routeArrivalMutationRecovery";
 import type {
   ActualStayMinutesTarget,
   PhotoPublicationTarget,
@@ -61,12 +52,10 @@ import type {
   VisitTimesEditTarget,
 } from "../models/dayRouteDialogTypes";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
-import { isVisitedStop } from "../routeDisplay";
-import { nativeBridge } from "@/native-bridge";
+import { isVisitedStop, isResolvedStop } from "../routeDisplay";
 import {
   useRouteVisitProgress,
   type RouteVisitProgressOperation,
-  type RouteVisitProgressReporter,
 } from "./useRouteVisitProgress";
 
 type UseRouteStopVisitMutationOptions = {
@@ -102,17 +91,9 @@ type UseRouteStopVisitMutationOptions = {
   setVisitTimesEditTarget: (value: VisitTimesEditTarget | null) => void;
 };
 
-type VisitArrivalTransition = {
-  currentRoutes: MyRoute[];
-  nextRoutes: MyRoute[];
-  isApiOutcomeUnresolved: boolean;
-  journalGeneration: number | null;
-  releaseLock: () => void;
-  progress: RouteVisitProgressReporter;
-};
-
 type PersistVisitVariables = {
-  arrivalTransition: VisitArrivalTransition | null;
+  session: AuthSessionRequest;
+  arrivalTransition: RouteVisitArrivalTransition | null;
   routeDay: MyRouteDay;
   stop: MyRouteStop;
   nextVisited: boolean;
@@ -131,29 +112,35 @@ type PersistVisitVariables = {
 };
 
 type PrepareVisitPhotoVariables = {
+  session: AuthSessionRequest;
   target: VisitCompletionTarget;
   source: VisitPhotoSource;
 };
 
 type CheckInVariables = {
+  session: AuthSessionRequest;
   target: VisitCompletionTarget;
   verification: RouteStopVisitVerificationInput;
 };
 
 type CompleteVisitVariables = {
-  arrivalTransition: VisitArrivalTransition;
+  session: AuthSessionRequest;
+  arrivalTransition: RouteVisitArrivalTransition;
   target: ActualStayMinutesTarget;
   actualStayMinutes: number | null;
 };
 
 type PhotoPublicationVariables = {
+  session: AuthSessionRequest;
   target: PhotoPublicationTarget;
   published: boolean;
 };
 
-type ReplaceVisitPhotoVariables = VerificationPhotoPreviewTarget;
+type VisitTargetVariables = { session: AuthSessionRequest; target: VisitCompletionTarget };
+type ReplaceVisitPhotoVariables = { session: AuthSessionRequest; target: VerificationPhotoPreviewTarget };
 
 type UpdateVisitTimesVariables = {
+  session: AuthSessionRequest;
   target: VisitTimesEditTarget;
   checkedInAt: string;
   checkedOutAt: string | null;
@@ -182,261 +169,31 @@ export function useRouteStopVisitMutation({
     queryClient.getQueryData<NotificationSettingsQuery>(
       NOTIFICATION_SETTINGS_QUERY_KEY
     )?.notificationSettings.routeArrivalEnabled;
+  const arrivalContext = {
+    routeId,
+    language: appLanguage,
+    getRoutes: () => queryClient.getQueryData<MyRoutesQuery>(
+      MY_ROUTES_QUERY_KEY
+    )?.myRoutes,
+    getRouteArrivalEnabled,
+  };
   const createVisitArrivalTransition = (
     stopId: string,
     visitedAt: string,
     nextVisited: boolean,
-    operation: RouteVisitProgressOperation
-  ): VisitArrivalTransition => {
-    const cachedRoutes = queryClient.getQueryData<MyRoutesQuery>(
-      MY_ROUTES_QUERY_KEY
-    )?.myRoutes;
-    const currentRoutes = cachedRoutes?.length ? cachedRoutes : [route];
-    const currentRoute =
-      currentRoutes.find((candidateRoute) => candidateRoute.id === routeId) ??
-      route;
-    const nextRoute = createRouteArrivalVisitPreview(
-      currentRoute,
-      stopId,
-      visitedAt,
-      nextVisited
-    );
-
-    return {
-      currentRoutes,
-      nextRoutes: currentRoutes.map((candidateRoute) =>
-        candidateRoute.id === routeId ? nextRoute : candidateRoute
-      ),
-      isApiOutcomeUnresolved: false,
-      journalGeneration: null,
-      releaseLock: acquireRouteArrivalTransitionLock(routeId),
-      progress: beginVisitProgress(stopId, operation),
-    };
-  };
-  const rollbackVisitArrivalTransition = async (
-    transition: VisitArrivalTransition,
-    requestPermissions: boolean
-  ) => {
-    try {
-      const result = await syncTodayRouteArrivalNotifications(
-        transition.currentRoutes,
-        appLanguage,
-        routeId,
-        {
-          routeArrivalEnabled: getRouteArrivalEnabled(),
-          checkCurrentPosition: false,
-          requestPermissions,
-          requireConfirmedRegistration: requestPermissions,
-        }
-      );
-
-      return result !== null;
-    } catch (error) {
-      console.warn(
-        "[route-arrival-notifications] visit transition rollback failed",
-        error instanceof Error ? error.message : error
-      );
-      return false;
-    }
-  };
-  const prepareVisitArrivalTransition = async (
-    transition: VisitArrivalTransition,
-    stopId: string,
-    nextVisited: boolean
-  ) => {
-    const routeArrivalEnabled = getRouteArrivalEnabled();
-
-    if (
-      nativeBridge.runtime.isAvailable() &&
-      routeArrivalEnabled !== false &&
-      transition.journalGeneration === null
-    ) {
-      const unresolvedTransition = markRouteArrivalTransitionUnresolved(
-        routeId,
-        {
-          expectation: {
-            kind: "stop-visit",
-            stopId,
-            visited: nextVisited,
-          },
-        }
-      );
-
-      transition.journalGeneration =
-        unresolvedTransition?.generation ?? null;
-
-      if (transition.journalGeneration === null) {
-        throw new Error(
-          appLanguage === "en"
-            ? "The app could not safely save the arrival alert transition."
-            : "도착 알림 전환 상태를 안전하게 저장하지 못했어요."
-        );
-      }
-    }
-    try {
-      const preparation =
-        await prepareRouteArrivalNotificationsForVisitTransition(
-        transition.currentRoutes,
-        transition.nextRoutes,
-        appLanguage,
-        routeId,
-        { routeArrivalEnabled, onProgress: transition.progress.onNativeProgress }
-      );
-
-      if (!preparation.rollbackRequired) {
-        resolveVisitArrivalTransitionJournal(transition);
-      }
-
-      return preparation;
-    } catch (error) {
-      if (!(error instanceof RouteArrivalVisitTransitionPreparationError)) {
-        resolveVisitArrivalTransitionJournal(transition);
-        throw error;
-      }
-
-      const didRollback = await rollbackVisitArrivalTransition(
-        transition,
-        error.requestPermissions
-      );
-
-      if (didRollback) {
-        resolveVisitArrivalTransitionJournal(transition);
-      }
-
-      throw error;
-    }
-  };
-  const rollbackPreparedVisitArrivalTransition = async (
-    transition: VisitArrivalTransition,
-    preparation: RouteArrivalVisitTransitionPreparation | null
-  ) => {
-    if (!preparation?.rollbackRequired) {
-      return true;
-    }
-
-    return rollbackVisitArrivalTransition(
-      transition,
-      preparation.requestPermissions
-    );
-  };
-  const resolveVisitArrivalTransitionJournal = (
-    transition: VisitArrivalTransition
-  ) => {
-    if (transition.journalGeneration === null) {
-      return;
-    }
-
-    resolveRouteArrivalTransition(
-      routeId,
-      transition.journalGeneration
-    );
-    transition.journalGeneration = null;
-  };
-  const markVisitArrivalTransitionRequestDispatched = (
-    transition: VisitArrivalTransition
-  ) => {
-    transition.progress.setStage("saving");
-    if (transition.journalGeneration === null) {
-      return;
-    }
-
-    const dispatchedTransition =
-      markRouteArrivalTransitionRequestDispatched(
-        routeId,
-        transition.journalGeneration
-      );
-
-    if (!dispatchedTransition) {
-      throw new Error(
-        appLanguage === "en"
-          ? "The app could not safely update the arrival alert transition."
-          : "도착 알림 전환 상태를 안전하게 갱신하지 못했어요."
-      );
-    }
-  };
-  const recoverVisitMutationFailure = async (
-    transition: VisitArrivalTransition,
-    preparation: RouteArrivalVisitTransitionPreparation | null,
-    stopId: string,
-    nextVisited: boolean,
-    error: unknown
-  ) => {
-    transition.progress.setStage("recovering");
-    if (isDefinitiveRouteMutationFailure(error)) {
-      const didRollback = await rollbackPreparedVisitArrivalTransition(
-        transition,
-        preparation
-      );
-
-      if (didRollback) {
-        resolveVisitArrivalTransitionJournal(transition);
-      }
-
-      return null;
-    }
-
-    try {
-      const result = await routeApi.routeById(routeId);
-      const recoveredRoute = getConfirmedRouteVisitState(
-        result.route,
-        stopId,
-        nextVisited
-      );
-
-      if (recoveredRoute) {
-        return recoveredRoute;
-      }
-    } catch (recoveryError) {
-      console.warn(
-        "[route-arrival-notifications] visit result recovery failed",
-        recoveryError instanceof Error
-          ? recoveryError.message
-          : recoveryError
-      );
-    }
-
-    if (preparation?.rollbackRequired) {
-      transition.isApiOutcomeUnresolved = true;
-    }
-
-    return null;
-  };
-  const syncUpdatedRouteArrivalTarget = async (
-    nextRoute: MyRoute,
-    preparation?: RouteArrivalVisitTransitionPreparation | null,
-    progress?: RouteVisitProgressReporter
-  ) => {
-    const nextRoutes =
-      queryClient.getQueryData<MyRoutesQuery>(MY_ROUTES_QUERY_KEY)?.myRoutes ??
-      [nextRoute];
-
-    try {
-      const result = await syncRouteArrivalNotificationsAfterVisitChange(
-        nextRoutes,
-        appLanguage,
-        nextRoute.id,
-        {
-          routeArrivalEnabled: getRouteArrivalEnabled(),
-          requestPermissions: preparation?.requestPermissions,
-          onProgress: progress?.onNativeProgress,
-          requireConfirmedRegistration:
-            preparation?.requestPermissions === true,
-        }
-      );
-
-      if (preparation?.rollbackRequired && result === null) {
-        throw new Error("Native route arrival target sync did not respond");
-      }
-
-      return null;
-    } catch (error) {
-      console.warn(
-        "[route-arrival-notifications] updated route target sync failed",
-        error instanceof Error ? error.message : error
-      );
-      return error;
-    }
-  };
+    operation: RouteVisitProgressOperation,
+    session: AuthSessionRequest
+  ) => createRouteVisitArrivalTransition({
+    ...arrivalContext,
+    route,
+    routeId,
+    stopId,
+    visitedAt,
+    nextVisited,
+    operation,
+    beginProgress: beginVisitProgress,
+    session,
+  });
   const invalidatePlaceVisitQueries = (stop: MyRouteStop) => {
     const contentId =
       stop.place.contentId?.trim() ||
@@ -451,6 +208,14 @@ export function useRouteStopVisitMutation({
     void queryClient.invalidateQueries({
       queryKey: ["place-stay-summary", placeDetailKey],
     });
+  };
+  /** 충돌로 거절된 요청은 다시 보내지 않고 목록·상세·기록에서 서버의 최신 상태를 읽는다. */
+  const refreshOnVisitConflict = (error: unknown) => {
+    if (!isRouteStopVisitConflict(error)) return;
+    for (const key of [MY_ROUTES_QUERY_KEY, MY_ROUTE_HISTORY_QUERY_KEY, ["route-detail", routeId],
+      ["shared-routes"], ["liked-shared-routes"], ["place-photos"], ["place-stay-summary"]]) {
+      void queryClient.invalidateQueries({ queryKey: key });
+    }
   };
   const applyRouteResult = (
     nextRoute: MyRoute,
@@ -474,9 +239,12 @@ export function useRouteStopVisitMutation({
     return nextStops;
   };
   const checkInMutation = useMutation({
-    mutationFn: ({ target, verification }: CheckInVariables) =>
-      routeApi.checkInRouteStop(target.stop.id, verification),
+    mutationFn: ({ target, verification, session }: CheckInVariables) => {
+      session.assertCurrent();
+      return routeApi.checkInRouteStop(target.stop.id, verification);
+    },
     onSuccess: (result, variables) => {
+      if (!variables.session.isCurrent()) return;
       const nextStops = applyRouteResult(
         result.checkInRouteStop,
         variables.target
@@ -494,7 +262,9 @@ export function useRouteStopVisitMutation({
         showToast("도착 인증이 완료됐어요. 머무는 시간을 기록할게요.");
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (!variables.session.isCurrent()) return;
+      refreshOnVisitConflict(error);
       showToast(
         error instanceof Error
           ? error.message
@@ -504,61 +274,36 @@ export function useRouteStopVisitMutation({
     },
   });
   const completeVisitMutation = useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       arrivalTransition,
       target,
       actualStayMinutes,
+      session,
     }: CompleteVisitVariables) => {
-      const preparation = await prepareVisitArrivalTransition(
-        arrivalTransition,
-        target.stop.id,
-        true
+      session.assertCurrent();
+      return arrivalTransition.execute(
+        () => routeApi.completeRouteStopVisit(target.stop.id, actualStayMinutes),
+        (recoveredRoute) => ({ completeRouteStopVisit: recoveredRoute }),
+        arrivalContext
       );
-
-      markVisitArrivalTransitionRequestDispatched(arrivalTransition);
-
-      try {
-        const data = await routeApi.completeRouteStopVisit(
-          target.stop.id,
-          actualStayMinutes
-        );
-
-        return { data, preparation };
-      } catch (error) {
-        const recoveredRoute = await recoverVisitMutationFailure(
-          arrivalTransition,
-          preparation,
-          target.stop.id,
-          true,
-          error
-        );
-
-        if (recoveredRoute) {
-          return {
-            data: { completeRouteStopVisit: recoveredRoute },
-            preparation,
-          };
-        }
-
-        throw error;
-      }
     },
-    onSuccess: async ({ data, preparation }, variables) => {
-      variables.arrivalTransition.progress.markSaved();
+    onSuccess: async (data, variables) => {
+      if (!variables.session.isCurrent()) return;
+      variables.arrivalTransition.markSaved();
       const previousStops =
         variables.target.routeDay.id === activeDayId
           ? orderedStops
           : variables.target.routeDay.stops;
       const wasDayCompleted =
         previousStops.length > 0 &&
-        previousStops.filter(isVisitedStop).length === previousStops.length;
+        previousStops.every(isResolvedStop);
       const nextStops = applyRouteResult(
         data.completeRouteStopVisit,
         variables.target
       );
       const nextIsDayCompleted =
         nextStops.length > 0 &&
-        nextStops.filter(isVisitedStop).length === nextStops.length;
+        nextStops.every(isResolvedStop);
       const isRouteCompleted = Boolean(
         data.completeRouteStopVisit.completedAt
       );
@@ -572,18 +317,12 @@ export function useRouteStopVisitMutation({
       setActualStayMinutesTarget(null);
       showToast(successMessage, isRouteCompleted ? 3200 : undefined);
 
-      const arrivalSyncError = await syncUpdatedRouteArrivalTarget(
+      const arrivalSyncError = await variables.arrivalTransition.syncSavedRoute(
         data.completeRouteStopVisit,
-        preparation,
-        variables.arrivalTransition.progress
+        arrivalContext
       );
 
-      if (!arrivalSyncError) {
-        resolveVisitArrivalTransitionJournal(
-          variables.arrivalTransition
-        );
-      }
-
+      if (!variables.session.isCurrent()) return;
       if (arrivalSyncError) {
         showToast(
           "방문은 완료했지만 도착 알림 상태를 정리하지 못했어요. 앱을 다시 열면 자동으로 맞춰져요.",
@@ -596,6 +335,8 @@ export function useRouteStopVisitMutation({
       invalidatePlaceVisitQueries(variables.target.stop);
     },
     onError: (error, variables) => {
+      if (!variables.session.isCurrent()) return;
+      refreshOnVisitConflict(error);
       showToast(
         variables.arrivalTransition.isApiOutcomeUnresolved
           ? "방문 완료 여부를 확인 중이에요. 현재·다음 장소 알림은 그대로 유지돼요."
@@ -606,8 +347,7 @@ export function useRouteStopVisitMutation({
       );
     },
     onSettled: (_data, _error, variables) => {
-      variables.arrivalTransition.progress.finish();
-      variables.arrivalTransition.releaseLock();
+      variables.arrivalTransition.finish();
     },
   });
   const visitMutation = useMutation({
@@ -617,51 +357,25 @@ export function useRouteStopVisitMutation({
       nextVisited,
       verification,
       actualStayMinutes,
+      session,
     }: PersistVisitVariables) => {
-      const preparation =
-        arrivalTransition
-          ? await prepareVisitArrivalTransition(
-              arrivalTransition,
-              stop.id,
-              nextVisited
-            )
-          : null;
-
-      if (arrivalTransition) {
-        markVisitArrivalTransitionRequestDispatched(arrivalTransition);
-      }
-
-      try {
-        const data = await routeApi.markRouteStopVisited(
-          stop.id,
-          nextVisited,
-          nextVisited ? verification : null,
-          nextVisited ? actualStayMinutes : null
-        );
-
-        return { data, preparation };
-      } catch (error) {
-        if (arrivalTransition) {
-          const recoveredRoute = await recoverVisitMutationFailure(
-            arrivalTransition,
-            preparation,
-            stop.id,
-            nextVisited,
-            error
-          );
-
-          if (recoveredRoute) {
-            return {
-              data: { markRouteStopVisited: recoveredRoute },
-              preparation,
-            };
-          }
-        }
-
-        throw error;
-      }
+      session.assertCurrent();
+      const save = () => routeApi.markRouteStopVisited(
+        stop.id,
+        nextVisited,
+        nextVisited ? verification : null,
+        nextVisited ? actualStayMinutes : null
+      );
+      return arrivalTransition
+        ? arrivalTransition.execute(
+            save,
+            (recoveredRoute) => ({ markRouteStopVisited: recoveredRoute }),
+            arrivalContext
+          )
+        : save();
     },
     onMutate: async (variables) => {
+      variables.session.assertCurrent();
       if (variables.isActiveRouteDay) {
         setOrderedStops(variables.optimisticStops);
       }
@@ -669,6 +383,7 @@ export function useRouteStopVisitMutation({
       await queryClient.cancelQueries({
         queryKey: MY_ROUTES_QUERY_KEY,
       });
+      variables.session.assertCurrent();
       const previousRoutes =
         queryClient.getQueryData<MyRoutesQuery>(MY_ROUTES_QUERY_KEY);
 
@@ -695,15 +410,15 @@ export function useRouteStopVisitMutation({
 
       return { previousRoutes };
     },
-    onSuccess: async ({ data, preparation }, variables) => {
-      variables.arrivalTransition?.progress.markSaved();
+    onSuccess: async (data, variables) => {
+      if (!variables.session.isCurrent()) return;
+      variables.arrivalTransition?.markSaved();
       const nextDay = data.markRouteStopVisited.days.find(
         (candidateDay) => candidateDay.id === variables.routeDay.id
       );
       const nextStops = nextDay?.stops ?? variables.sourceStops;
-      const nextCompletedStopCount = nextStops.filter(isVisitedStop).length;
       const nextIsDayCompleted =
-        nextStops.length > 0 && nextCompletedStopCount === nextStops.length;
+        nextStops.length > 0 && nextStops.every(isResolvedStop);
       const isRouteCompleted =
         variables.nextVisited && Boolean(data.markRouteStopVisited.completedAt);
 
@@ -738,22 +453,17 @@ export function useRouteStopVisitMutation({
       );
       showToast(successMessage, isRouteCompleted ? 3200 : undefined);
 
-      const arrivalSyncError = await syncUpdatedRouteArrivalTarget(
-        data.markRouteStopVisited,
-        preparation,
-        variables.arrivalTransition?.progress
-      );
-
-      if (!arrivalSyncError && variables.arrivalTransition) {
-        resolveVisitArrivalTransitionJournal(
-          variables.arrivalTransition
-        );
-      }
+      const arrivalSyncError = variables.arrivalTransition
+        ? await variables.arrivalTransition.syncSavedRoute(
+            data.markRouteStopVisited,
+            arrivalContext
+          )
+        : await syncRouteVisitArrivalTarget(data.markRouteStopVisited, arrivalContext, variables.session);
+      if (!variables.session.isCurrent()) return;
       void queryClient.invalidateQueries({
         queryKey: MY_ROUTE_HISTORY_QUERY_KEY,
       });
       invalidatePlaceVisitQueries(variables.stop);
-
       if (arrivalSyncError) {
         showToast(
           "장소 상태는 저장했지만 도착 알림 상태를 갱신하지 못했어요. 앱을 다시 열면 자동으로 맞춰져요.",
@@ -775,6 +485,7 @@ export function useRouteStopVisitMutation({
       }
     },
     onError: (error, variables, context) => {
+      if (!variables.session.isCurrent()) return;
       if (context?.previousRoutes) {
         queryClient.setQueryData<MyRoutesQuery>(
           MY_ROUTES_QUERY_KEY,
@@ -784,6 +495,7 @@ export function useRouteStopVisitMutation({
       if (variables.isActiveRouteDay) {
         setOrderedStops(variables.previousStops);
       }
+      refreshOnVisitConflict(error);
       showToast(
         variables.arrivalTransition?.isApiOutcomeUnresolved
           ? variables.nextVisited
@@ -798,12 +510,12 @@ export function useRouteStopVisitMutation({
       );
     },
     onSettled: (_data, _error, variables) => {
-      variables.arrivalTransition?.progress.finish();
-      variables.arrivalTransition?.releaseLock();
+      variables.arrivalTransition?.finish();
     },
   });
   const photoMutation = useMutation({
-    mutationFn: async ({ target, source }: PrepareVisitPhotoVariables) => {
+    mutationFn: async ({ target, source, session }: PrepareVisitPhotoVariables) => {
+      session.assertCurrent();
       const verificationStatus = getVisitPhotoVerificationStatus(
         source,
         isRetrospectiveCompletion
@@ -813,15 +525,20 @@ export function useRouteStopVisitMutation({
           ? await requestVisitVerificationPosition(target.stop.place)
           : null;
 
+      session.assertCurrent();
       const photo = await requestVisitPhoto(source);
+      session.assertCurrent();
       const uploadPayload = await routeApi.createRouteStopVisitPhotoUpload(
         target.stop.id
       );
+      session.assertCurrent();
       const photoUrl = await uploadVerifiedVisitPhoto(
         uploadPayload.createRouteStopVisitPhotoUpload,
-        photo
+        photo,
+        session.assertCurrent
       );
 
+      session.assertCurrent();
       cacheRouteStopVerificationPhotoDataUrl({
         stopId: target.stop.id,
         photoUrl,
@@ -856,7 +573,8 @@ export function useRouteStopVisitMutation({
 
       return { ...target, verification } satisfies ActualStayMinutesTarget;
     },
-    onSuccess: (target) => {
+    onSuccess: (target, variables) => {
+      if (!variables.session.isCurrent()) return;
       if (target.verification.status === "MANUAL") {
         setActualStayMinutesTarget(target);
         setVisitCompletionTarget(null);
@@ -866,9 +584,12 @@ export function useRouteStopVisitMutation({
       checkInMutation.mutate({
         target,
         verification: target.verification,
+        session: variables.session,
       });
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (!variables.session.isCurrent()) return;
+      refreshOnVisitConflict(error);
       showToast(
         error instanceof Error
           ? error.message
@@ -878,8 +599,10 @@ export function useRouteStopVisitMutation({
     },
   });
   const gpsMutation = useMutation({
-    mutationFn: async (target: VisitCompletionTarget) => {
+    mutationFn: async ({ target, session }: VisitTargetVariables) => {
+      session.assertCurrent();
       const position = await requestVisitVerificationPosition(target.stop.place);
+      session.assertCurrent();
 
       return {
         ...target,
@@ -893,13 +616,17 @@ export function useRouteStopVisitMutation({
         },
       } satisfies ActualStayMinutesTarget;
     },
-    onSuccess: (target) => {
+    onSuccess: (target, variables) => {
+      if (!variables.session.isCurrent()) return;
       checkInMutation.mutate({
         target,
         verification: target.verification,
+        session: variables.session,
       });
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (!variables.session.isCurrent()) return;
+      refreshOnVisitConflict(error);
       showToast(
         error instanceof Error
           ? error.message
@@ -909,9 +636,12 @@ export function useRouteStopVisitMutation({
     },
   });
   const photoPublicationMutation = useMutation({
-    mutationFn: ({ target, published }: PhotoPublicationVariables) =>
-      routeApi.setRouteStopPhotoPublication(target.stop.id, published),
+    mutationFn: ({ target, published, session }: PhotoPublicationVariables) => {
+      session.assertCurrent();
+      return routeApi.setRouteStopPhotoPublication(target.stop.id, published);
+    },
     onSuccess: (result, variables) => {
+      if (!variables.session.isCurrent()) return;
       applyRouteResult(
         result.setRouteStopPhotoPublication,
         variables.target
@@ -925,7 +655,9 @@ export function useRouteStopVisitMutation({
           : "사진 공개를 취소했어요."
       );
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (!variables.session.isCurrent()) return;
+      refreshOnVisitConflict(error);
       showToast(
         error instanceof Error
           ? error.message
@@ -935,16 +667,21 @@ export function useRouteStopVisitMutation({
     },
   });
   const replacePhotoMutation = useMutation({
-    mutationFn: async (target: ReplaceVisitPhotoVariables) => {
+    mutationFn: async ({ target, session }: ReplaceVisitPhotoVariables) => {
+      session.assertCurrent();
       const photo = await requestVisitPhoto("library");
+      session.assertCurrent();
       const uploadPayload = await routeApi.createRouteStopVisitPhotoUpload(
         target.stop.id
       );
+      session.assertCurrent();
       const photoUrl = await uploadVerifiedVisitPhoto(
         uploadPayload.createRouteStopVisitPhotoUpload,
-        photo
+        photo,
+        session.assertCurrent
       );
 
+      session.assertCurrent();
       cacheRouteStopVerificationPhotoDataUrl({
         stopId: target.stop.id,
         photoUrl,
@@ -959,7 +696,8 @@ export function useRouteStopVisitMutation({
 
       return result.setRouteStopVisitPhoto;
     },
-    onSuccess: (nextRoute, target) => {
+    onSuccess: (nextRoute, { target, session }) => {
+      if (!session.isCurrent()) return;
       const nextStops = applyRouteResult(nextRoute, target);
       const nextStop = nextStops.find(
         (candidateStop) => candidateStop.id === target.stop.id
@@ -980,7 +718,9 @@ export function useRouteStopVisitMutation({
         showToast("사진 기록을 저장했어요.");
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (!variables.session.isCurrent()) return;
+      refreshOnVisitConflict(error);
       showToast(
         error instanceof Error
           ? error.message
@@ -990,16 +730,21 @@ export function useRouteStopVisitMutation({
     },
   });
   const deletePhotoMutation = useMutation({
-    mutationFn: (target: VerificationPhotoPreviewTarget) =>
-      routeApi.deleteRouteStopVisitPhoto(target.stop.id),
-    onSuccess: (result, target) => {
+    mutationFn: ({ target, session }: ReplaceVisitPhotoVariables) => {
+      session.assertCurrent();
+      return routeApi.deleteRouteStopVisitPhoto(target.stop.id);
+    },
+    onSuccess: (result, { target, session }) => {
+      if (!session.isCurrent()) return;
       applyRouteResult(result.deleteRouteStopVisitPhoto, target);
       setPhotoPublicationTarget(null);
       setVerificationPhotoPreviewTarget(null);
       invalidatePlaceVisitQueries(target.stop);
       showToast("인증 사진을 삭제했어요. 방문 기록은 유지돼요.");
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (!variables.session.isCurrent()) return;
+      refreshOnVisitConflict(error);
       showToast(
         error instanceof Error
           ? error.message
@@ -1009,13 +754,16 @@ export function useRouteStopVisitMutation({
     },
   });
   const updateVisitTimesMutation = useMutation({
-    mutationFn: ({ target, checkedInAt, checkedOutAt }: UpdateVisitTimesVariables) =>
-      routeApi.updateRouteStopVisitTimes({
+    mutationFn: ({ target, checkedInAt, checkedOutAt, session }: UpdateVisitTimesVariables) => {
+      session.assertCurrent();
+      return routeApi.updateRouteStopVisitTimes({
         stopId: target.stop.id,
         checkedInAt,
         checkedOutAt,
-      }),
+      });
+    },
     onSuccess: (result, variables) => {
+      if (!variables.session.isCurrent()) return;
       applyRouteResult(result.updateRouteStopVisitTimes, variables.target);
       setVisitTimesEditTarget(null);
       void queryClient.invalidateQueries({
@@ -1024,7 +772,9 @@ export function useRouteStopVisitMutation({
       invalidatePlaceVisitQueries(variables.target.stop);
       showToast("방문시간을 수정했어요.");
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      if (!variables.session.isCurrent()) return;
+      refreshOnVisitConflict(error);
       showToast(
         error instanceof Error
           ? error.message
@@ -1034,11 +784,11 @@ export function useRouteStopVisitMutation({
     },
   });
   const visitSavingStopId = replacePhotoMutation.isPending
-    ? (replacePhotoMutation.variables?.stop.id ?? null)
+    ? (replacePhotoMutation.variables?.target.stop.id ?? null)
     : photoMutation.isPending
     ? (photoMutation.variables?.target.stop.id ?? null)
     : gpsMutation.isPending
-      ? (gpsMutation.variables?.stop.id ?? null)
+      ? (gpsMutation.variables?.target.stop.id ?? null)
       : checkInMutation.isPending
         ? (checkInMutation.variables?.target.stop.id ?? null)
         : completeVisitMutation.isPending
@@ -1048,7 +798,7 @@ export function useRouteStopVisitMutation({
             : photoPublicationMutation.isPending
               ? (photoPublicationMutation.variables?.target.stop.id ?? null)
               : deletePhotoMutation.isPending
-                ? (deletePhotoMutation.variables?.stop.id ?? null)
+                ? (deletePhotoMutation.variables?.target.stop.id ?? null)
                 : updateVisitTimesMutation.isPending
                   ? (updateVisitTimesMutation.variables?.target.stop.id ?? null)
                   : null;
@@ -1060,6 +810,7 @@ export function useRouteStopVisitMutation({
     verification: RouteStopVisitVerificationInput | null = null,
     actualStayMinutes: number | null = null
   ) => {
+    const session = createAuthSessionRequest();
     if (visitSavingStopId) {
       return false;
     }
@@ -1117,8 +868,10 @@ export function useRouteStopVisitMutation({
             ? "complete"
             : isVisitedStop(stop)
               ? "cancel-completion"
-              : "cancel-arrival"
+              : "cancel-arrival",
+          session
         ),
+        session,
         routeDay,
         stop,
         nextVisited,
@@ -1129,7 +882,7 @@ export function useRouteStopVisitMutation({
         previousStops: orderedStops,
         wasDayCompleted:
           sourceStops.length > 0 &&
-          sourceStops.filter(isVisitedStop).length === sourceStops.length,
+          sourceStops.every(isResolvedStop),
         visitedAt,
         nextVerificationStatus,
         isGpsVerified,
@@ -1137,7 +890,7 @@ export function useRouteStopVisitMutation({
         hasPhotoRecord,
         optimisticStops,
       });
-      return true;
+      return session.isCurrent();
     } catch {
       return false;
     }
@@ -1156,7 +909,7 @@ export function useRouteStopVisitMutation({
       return;
     }
 
-    photoMutation.mutate({ target, source });
+    photoMutation.mutate({ target, source, session: createAuthSessionRequest() });
   };
 
   const completeStopVisitWithGps = (target: VisitCompletionTarget) => {
@@ -1169,7 +922,7 @@ export function useRouteStopVisitMutation({
       return;
     }
 
-    gpsMutation.mutate(target);
+    gpsMutation.mutate({ target, session: createAuthSessionRequest() });
   };
 
   const saveActualStayMinutes = async (
@@ -1181,6 +934,7 @@ export function useRouteStopVisitMutation({
       return false;
     }
 
+    const session = createAuthSessionRequest();
     if (target.stop.checkedInAt) {
       const visitedAt = new Date().toISOString();
 
@@ -1190,12 +944,14 @@ export function useRouteStopVisitMutation({
             target.stop.id,
             visitedAt,
             true,
-            "complete"
+            "complete",
+            session
           ),
+          session,
           target,
           actualStayMinutes,
         });
-        return true;
+        return session.isCurrent();
       } catch {
         return false;
       }
@@ -1209,7 +965,7 @@ export function useRouteStopVisitMutation({
       actualStayMinutes
     );
 
-    if (isSaved) {
+    if (isSaved && session.isCurrent()) {
       setActualStayMinutesTarget(null);
     }
 
@@ -1217,13 +973,14 @@ export function useRouteStopVisitMutation({
   };
 
   const cancelStopCheckIn = async (target: ActualStayMinutesTarget) => {
+    const session = createAuthSessionRequest();
     const isSaved = await persistStopVisit(
       target.routeDay,
       target.stop,
       false
     );
 
-    if (isSaved) {
+    if (isSaved && session.isCurrent()) {
       setActualStayMinutesTarget(null);
     }
 
@@ -1238,7 +995,7 @@ export function useRouteStopVisitMutation({
       return;
     }
 
-    photoPublicationMutation.mutate({ target, published });
+    photoPublicationMutation.mutate({ target, published, session: createAuthSessionRequest() });
   };
 
   const deleteVerificationPhoto = (
@@ -1248,7 +1005,7 @@ export function useRouteStopVisitMutation({
       return;
     }
 
-    deletePhotoMutation.mutate(target);
+    deletePhotoMutation.mutate({ target, session: createAuthSessionRequest() });
   };
 
   const replaceVerificationPhoto = (
@@ -1258,7 +1015,7 @@ export function useRouteStopVisitMutation({
       return;
     }
 
-    replacePhotoMutation.mutate(target);
+    replacePhotoMutation.mutate({ target, session: createAuthSessionRequest() });
   };
 
   const updateVisitTimes = async (
@@ -1266,17 +1023,19 @@ export function useRouteStopVisitMutation({
     checkedInAt: string,
     checkedOutAt: string | null
   ) => {
+    const session = createAuthSessionRequest();
     if (visitSavingStopId) {
       return false;
     }
 
     try {
       await updateVisitTimesMutation.mutateAsync({
+        session,
         target,
         checkedInAt,
         checkedOutAt,
       });
-      return true;
+      return session.isCurrent();
     } catch {
       return false;
     }

@@ -17,17 +17,17 @@ type RoutePageHeaderProps = {
 
 function RoutePageHeader({ icon, title, description, action }: RoutePageHeaderProps) {
   return (
-    <div className="rounded-2xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40">
+    <div className="shrink-0 rounded-2xl border border-brand-200 bg-white p-4 shadow-sm dark:border-brand-400/25 dark:bg-slate-950/40">
       <div className="flex min-h-11 items-center gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-sm font-bold text-slate-900 dark:text-white">
+          <h1 className="truncate text-base font-bold leading-6 text-slate-900 dark:text-white">
             {title}
           </h1>
           {description ? (
-            <p title={description} className="mt-0.5 truncate text-xs font-semibold text-slate-500 dark:text-slate-300">
+            <p title={description} className="mt-0.5 truncate text-xs font-semibold leading-4 text-slate-500 dark:text-slate-300">
               {description}
             </p>
           ) : null}

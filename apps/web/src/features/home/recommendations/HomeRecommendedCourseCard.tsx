@@ -37,7 +37,7 @@ function CourseStop({ title, place, description, number, detailsLabel, unavailab
     <>
       <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-800 dark:bg-brand-900 dark:text-brand-100">{number}</span>
       <span className="min-w-0 flex-1">
-        <span className="block break-words text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</span>
+        <span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100" title={title}>{title}</span>
         {place?.address ? <span className="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{place.address}</span> : null}
       </span>
     </>
@@ -108,19 +108,18 @@ export default function HomeRecommendedCourseCard({
 
   return (
     <article
-      className="home-course-card-enter min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-[#0b211f]"
+      className="home-course-card-enter min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#0b211f]"
       style={{ animationDelay: `${Math.min(index, 4) * 45}ms` }}
     >
       <div ref={coverRef} className="relative h-40 overflow-hidden bg-gradient-to-br from-brand-100 to-sky-100 sm:h-44 dark:from-brand-900 dark:to-slate-800">
         {image
           ? <img key={image} src={image} alt="" loading="lazy" onError={() => markImageFailed(image)} className="h-full w-full object-cover" />
           : <div className="flex h-full items-center justify-center text-brand-700/35 dark:text-brand-200/40"><MdLandscape aria-hidden="true" className="text-8xl" /></div>}
-        <span className="absolute left-4 top-4 rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-brand-800 shadow-sm">COURSE {String(index + 1).padStart(2, "0")}</span>
       </div>
       <div className="p-4 sm:p-5">
-        <h3 lang={title.lang} className="break-words text-lg font-bold tracking-tight text-slate-900 dark:text-white">{title.text}</h3>
+        <h3 lang={title.lang} title={title.text} className="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white">{title.text}</h3>
         {description.text ? (
-          <p lang={description.lang} className={`mt-2 break-words text-sm leading-6 text-slate-600 dark:text-slate-300 ${isOpen ? "" : "line-clamp-2"}`}>
+          <p lang={description.lang} className={`mt-2 break-words text-sm leading-6 text-slate-600 dark:text-slate-300 ${isOpen ? "" : "truncate"}`}>
             {description.text}
           </p>
         ) : null}

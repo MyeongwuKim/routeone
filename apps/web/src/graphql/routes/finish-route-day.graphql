@@ -1,0 +1,5 @@
+mutation FinishRouteDay($dayId: ID!) {
+  finishRouteDay(dayId: $dayId) {
+    ...RouteDetailFields
+  }
+}

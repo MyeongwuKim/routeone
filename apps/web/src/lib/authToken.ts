@@ -11,6 +11,31 @@ export const AUTH_SESSION_CHANGE_EVENT = "routeone:auth-session-change";
 
 type AuthSessionEndReason = "logout" | "expired";
 
+let authSessionRevision = 0;
+
+/** 비동기 요청을 시작한 세션을 기억하며 토큰을 같게 재발급한 재로그인도 구분한다. */
+export function createAuthSessionRequest() {
+  const token = getAuthToken();
+  const revision = authSessionRevision;
+  const isCurrent = () => getAuthToken() === token && authSessionRevision === revision;
+  return {
+    isCurrent,
+    assertCurrent() {
+      if (!isCurrent()) throw new Error("Auth session changed during request");
+    },
+  };
+}
+
+export type AuthSessionRequest = ReturnType<typeof createAuthSessionRequest>;
+
+// 네이티브 토큰 주입과 다른 탭의 로그아웃도 이미 시작한 요청을 무효화한다.
+if (typeof window !== "undefined" && "addEventListener" in window) {
+  window.addEventListener(AUTH_SESSION_CHANGE_EVENT, () => { authSessionRevision += 1; });
+  window.addEventListener("storage", (event) => {
+    if (event.key === AUTH_TOKEN_STORAGE_KEY || event.key === null) authSessionRevision += 1;
+  });
+}
+
 function postNativeAuthToken(
   token: string | null,
   expiresAt: number | null,
@@ -28,6 +53,7 @@ function createAuthSessionExpiresAt() {
 }
 
 function notifyAuthSessionChange() {
+  authSessionRevision += 1;
   if (typeof window !== "undefined" && "dispatchEvent" in window) {
     window.dispatchEvent(new Event(AUTH_SESSION_CHANGE_EVENT));
   }

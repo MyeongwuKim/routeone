@@ -8,6 +8,7 @@ import {
   MdSell,
 } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
+import { getRouteProgressPercent, getRouteSkippedStopCount } from "@/features/my-route/routeDisplay";
 import {
   getDisplayPlaceOptions,
   getDisplayShareTags,
@@ -65,10 +66,8 @@ const SharedRouteCard = memo(function SharedRouteCard({
     isTagExpanded && shareTags.length > VISIBLE_SHARE_TAG_COUNT;
   const canCollapsePlaces =
     isPlaceExpanded && placeOptions.length > VISIBLE_PLACE_CHIP_COUNT;
-  const progressPercent =
-    route.totalStopCount > 0
-      ? Math.round((route.completedStopCount / route.totalStopCount) * 100)
-      : 0;
+  const progressPercent = getRouteProgressPercent(route);
+  const skippedStopCount = getRouteSkippedStopCount(route);
 
   return (
     <article
@@ -90,13 +89,13 @@ const SharedRouteCard = memo(function SharedRouteCard({
       } ${onOpen ? "cursor-pointer transition active:scale-[0.99]" : ""}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <SharedRouteAuthor owner={route.owner} isMine={isMine} />
           <p className="mt-2 truncate text-base font-black text-slate-900 dark:text-white">
             {getSharedRouteTitle(route, text)}
           </p>
           <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-200/80">
-            <MdOutlineCalendarToday className="text-sm dark:text-brand-200" />
+            <MdOutlineCalendarToday className="shrink-0 text-sm dark:text-brand-200" />
             {getSharedRouteSubtitle(route, text)}
           </p>
         </div>
@@ -267,6 +266,11 @@ const SharedRouteCard = memo(function SharedRouteCard({
         </div>
       ) : null}
 
+      {skippedStopCount > 0 ? (
+        <p className="mt-3 text-xs font-bold text-slate-500 dark:text-slate-200/80">
+          {text.myRouteCard.visitedSkippedCount(route.completedStopCount, skippedStopCount)}
+        </p>
+      ) : null}
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
         <div
           className="h-full rounded-full bg-brand-500"

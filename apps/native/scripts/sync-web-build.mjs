@@ -332,7 +332,8 @@ async function buildNativeModuleScripts(entryScriptPaths) {
   const publicAssetPaths = [
     "/gangwon-sigungu-boundary.json",
     "./service-region-boundary.json",
-    "./masil-icon.png"
+    "./masil-icon.png",
+    "./walking-data/gangneung.json"
   ];
   const publicAssetDataUrls = await Promise.all(
     publicAssetPaths.map(async (assetUrl) => [assetUrl, await toDataUrl(assetUrl)])

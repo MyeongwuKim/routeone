@@ -9,6 +9,7 @@
 import { createHash } from "node:crypto";
 import type { Prisma, PrismaClient, User } from "@prisma/client";
 import { runTransactionWithRetry } from "../../lib/transaction.js";
+import { updateRouteStopVisitVersions } from "./routeStopVisitVersion.js";
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import {
   addDays,
@@ -888,26 +889,22 @@ export async function updateRouteLayout(
   });
 }
 
+/** 전체 완료도 조회한 장소의 변경 번호를 비교하고 기록·집계를 같은 트랜잭션에 반영한다. */
 export async function clearRoute(
   prisma: PrismaClient,
   user: User,
   routeId: string
 ) {
   await assertRouteOwner(prisma, routeId, user.id);
-
-  await prisma.routeStop.updateMany({
-    where: {
-      routeId,
-    },
-    data: {
+  const stops = await prisma.routeStop.findMany({ where: { routeId } });
+  return runTransactionWithRetry(prisma, async (transaction) => {
+    await updateRouteStopVisitVersions(transaction, stops, {
       visitStatus: "VISITED",
       visitedAt: new Date(),
-    },
+    });
+    await deletePendingRouteStartNotifications(transaction, routeId);
+    return refreshRouteProgress(transaction, routeId);
   });
-
-  await deletePendingRouteStartNotifications(prisma, routeId);
-
-  return refreshRouteProgress(prisma, routeId);
 }
 
 export async function deleteRoute(

@@ -529,6 +529,7 @@ export type UiText = {
     createFromMap: string;
   };
   myRouteCard: {
+    visitedSkippedCount: (visited: number, skipped: number) => string;
     shared: string;
     pastRoute: string;
     startsToday: string;
@@ -718,6 +719,32 @@ export type UiText = {
     moreTags: (count: number) => string;
   };
   dayRoute: {
+    skipStop: string;
+    undoSkipStop: string;
+    skippingStop: string;
+    restoringSkippedStop: string;
+    finishingDayProgress: string;
+    skipProgressDescription: string;
+    skippedBadge: string;
+    visitSkippedSummary: (visited: number, skipped: number) => string;
+    finishDay: string;
+    finishingDay: string;
+    skipConfirmTitle: (title: string) => string;
+    skipConfirmDescription: string;
+    undoSkipConfirmTitle: (title: string) => string;
+    undoSkipConfirmDescription: string;
+    finishDayConfirmTitle: (day: number) => string;
+    finishDayConfirmDescription: (count: number) => string;
+    stopSkippedToast: string;
+    stopSkipUndoneToast: string;
+    dayFinishedToast: string;
+    skipSaveFailed: string;
+    skipSaveUnconfirmed: string;
+    skipArrivalSyncFailed: string;
+    skipBusy: string;
+    editRoute: string;
+    editingRoute: string;
+    savingRoute: string;
     dateUnknown: string;
     undatedRouteTitle: string;
     routeTitle: (start: string, end: string | null) => string;
@@ -1022,6 +1049,11 @@ export type UiText = {
     detailValueTranslations: Record<string, string>;
   };
   cart: {
+    resumeDraft: string;
+    resumeDraftDescription: (count: number) => string;
+    discardDraft: string;
+    discardDraftTitle: string;
+    discardDraftDescription: string;
     emptyTitle: string;
     emptyDescription: string;
     emptyFooter: string;

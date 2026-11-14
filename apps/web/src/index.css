@@ -65,7 +65,7 @@
   --color-brand-300: #5eead4;
   --color-brand-400: #2dd4bf;
   --color-brand-500: #14b8a6;
-  --color-brand-600: #0d9488;
+  --color-brand-600: #0b8278;
   --color-brand-700: #0f766e;
   --color-brand-800: #115e59;
   --color-brand-900: #134e4a;
@@ -145,6 +145,30 @@ body {
   background: #f8fafc;
   overflow-x: hidden;
   overscroll-behavior: none;
+}
+
+:where(button, a, input, textarea, select, [role="button"]):focus-visible {
+  outline: 2px solid var(--color-brand-700);
+  outline-offset: 3px;
+}
+
+.dark :where(button, a, input, textarea, select, [role="button"]):focus-visible {
+  outline-color: var(--color-brand-300);
+}
+
+::selection {
+  color: var(--color-brand-900);
+  background: var(--color-brand-200);
+}
+
+input,
+textarea {
+  caret-color: var(--color-brand-700);
+}
+
+.dark input,
+.dark textarea {
+  caret-color: var(--color-brand-300);
 }
 
 .app-safe-area-header {
@@ -563,7 +587,32 @@ body {
   cursor: grabbing;
 }
 
+.route-skip-journey[data-direction="backward"] {
+  transform: scaleX(-1);
+}
+
+.route-skip-motion {
+  animation: routeSkipJourney 1.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.route-skip-progress[data-motion-paused="true"] .route-skip-motion {
+  animation-play-state: paused;
+}
+
+@keyframes routeSkipJourney {
+  0% { transform: translate(0, 0); opacity: 0; }
+  12% { transform: translate(0, 0); opacity: 1; }
+  48% { transform: translate(48px, -26px); opacity: 1; }
+  78%, 88% { transform: translate(96px, 0); opacity: 1; }
+  100% { transform: translate(96px, 0); opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .route-skip-motion {
+    animation: none;
+    transform: translate(48px, -26px);
+    opacity: 1;
+  }
   .skeleton-shimmer::after {
     animation: none;
   }

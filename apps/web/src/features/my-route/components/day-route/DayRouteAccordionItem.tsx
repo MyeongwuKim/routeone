@@ -11,7 +11,7 @@ import {
 } from "react-icons/md";
 import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import { useUiText, type UiText } from "@/lib/uiText";
-import { isVisitedStop } from "../../routeDisplay";
+import { isResolvedStop, isSkippedStop, isVisitedStop } from "../../routeDisplay";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../../types";
 import type { VerificationPhotoPreviewTarget } from "../../models/dayRouteDialogTypes";
 import {
@@ -85,11 +85,16 @@ function buildRouteStopSchedules(
   stops: MyRouteStop[],
   startLocation: MyRoute["startLocation"],
   dailyStartMinutes: number,
-  firstTravelMinutes: number | null
+  firstTravelMinutes: number | null,
+  getTravelMinutes: (stop: MyRouteStop, index: number) => number | null
 ) {
   let currentMinutes = dailyStartMinutes;
+  let activeStopIndex = 0;
 
-  return stops.map((stop, index): RouteStopSchedule => {
+  return stops.map((stop, index): RouteStopSchedule | null => {
+    // 건너뛴 장소에는 가상의 도착·체류 시각을 만들지 않고 다음 방문 시간에도 더하지 않는다.
+    if (isSkippedStop(stop)) return null;
+    const currentActiveStopIndex = activeStopIndex++;
     const actualEndMinutes = getDateTimeClockMinutes(
       stop.checkedOutAt ?? stop.visitedAt,
       currentMinutes
@@ -128,9 +133,9 @@ function buildRouteStopSchedules(
       };
     }
 
-    currentMinutes += getStopTravelMinutes(
+    currentMinutes += getTravelMinutes(stop, index) ?? getStopTravelMinutes(
       stop,
-      index,
+      currentActiveStopIndex,
       startLocation,
       firstTravelMinutes
     );
@@ -197,6 +202,8 @@ type DayRouteAccordionItemProps = {
   canEditVerificationPhoto: boolean;
 
   canToggleVisited: boolean;
+  /** 소유자에게 허용된 건너뛰기 동작이며 실제 날짜·시작 허용은 아래에서 함께 확인한다. */
+  canToggleSkipStatus: boolean;
 
   isVisitDateAllowed: boolean;
 
@@ -245,6 +252,7 @@ type DayRouteAccordionItemProps = {
   onRequestVisitTimesEdit: (stop: MyRouteStop) => void;
 
   onToggleVisited: (stop: MyRouteStop) => void;
+  onToggleSkipped: (stop: MyRouteStop) => void;
 
   onOpenPlace: (stop: MyRouteStop) => void;
 
@@ -275,6 +283,7 @@ function DayRouteAccordionItem({
   canRecordDayStart,
   canEditVerificationPhoto,
   canToggleVisited,
+  canToggleSkipStatus,
   isVisitDateAllowed,
   showActiveDestination,
   enableVerificationPhotoPreview,
@@ -297,6 +306,7 @@ function DayRouteAccordionItem({
   onRequestStayMinutesEdit,
   onRequestVisitTimesEdit,
   onToggleVisited,
+  onToggleSkipped,
   onOpenPlace,
   onOpenDirections,
   onEditVerificationPhoto,
@@ -305,8 +315,9 @@ function DayRouteAccordionItem({
 }: DayRouteAccordionItemProps) {
   const text = useUiText();
   const dayStops = orderedStops;
+  const activeStops = dayStops.filter((stop) => !isSkippedStop(stop));
   const hasDayStops = dayStops.length > 0;
-  const firstStop = dayStops[0] ?? null;
+  const firstStop = activeStops[0] ?? null;
   const getFallbackTravelSegment = (
     from: RouteLatLng | null | undefined,
     to: RouteLatLng | null | undefined
@@ -339,10 +350,20 @@ function DayRouteAccordionItem({
     dayStops,
     startLocation,
     routeDayStartMinutes,
-    firstTravelMinutes
+    firstTravelMinutes,
+    (stop, index) => {
+      const previousStop = dayStops.slice(0, index).findLast((item) => !isSkippedStop(item));
+      const crossesSkippedStop = index > 0 && isSkippedStop(dayStops[index - 1]);
+      if (!crossesSkippedStop) return null;
+      const segment = getFallbackTravelSegment(previousStop?.place ?? startLocation, stop.place);
+      if (segment?.status === "success" || segment?.status === "fallback") return segment.minutes;
+      // 이전 계획 구간은 건너뛴 장소를 경유한 값이므로 직접 구간 조회가 끝나기 전에는 합산하지 않는다.
+      return 0;
+    }
   );
-  const firstStopSchedule = stopSchedules[0] ?? null;
-  const lastStopSchedule = stopSchedules.at(-1) ?? null;
+  const activeSchedules = stopSchedules.filter((schedule) => schedule !== null);
+  const firstStopSchedule = activeSchedules[0] ?? null;
+  const lastStopSchedule = activeSchedules.at(-1) ?? null;
   const scheduleStartMinutes =
     firstStopSchedule?.kind === "actual" ||
     firstStopSchedule?.kind === "ongoing"
@@ -362,13 +383,15 @@ function DayRouteAccordionItem({
       ? text.dayRoute.firstPlaceTravel(firstTravelLabel)
       : firstTravelLabel;
   const completedStopCount = dayStops.filter(isVisitedStop).length;
+  const skippedStopCount = dayStops.filter(isSkippedStop).length;
+  const resolvedStopCount = dayStops.filter(isResolvedStop).length;
   const startTitlePrefix = startLocation ? "START" : text.dayRoute.firstPlace;
   const progressPercent = hasDayStops
-    ? Math.round((completedStopCount / dayStops.length) * 100)
+    ? Math.round((resolvedStopCount / dayStops.length) * 100)
     : 0;
-  const isDayCleared = hasDayStops && completedStopCount === dayStops.length;
+  const isDayCleared = hasDayStops && resolvedStopCount === dayStops.length;
   const activeDestinationStopId = showActiveDestination
-    ? (dayStops.find((stop) => !isVisitedStop(stop))?.id ?? null)
+    ? (dayStops.find((stop) => !isResolvedStop(stop))?.id ?? null)
     : null;
   const hasActualStart = actualDayStartMinutes != null;
   const hasActualEnd =
@@ -467,13 +490,14 @@ function DayRouteAccordionItem({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <span
+              aria-label={skippedStopCount > 0 ? text.dayRoute.visitSkippedSummary(completedStopCount, skippedStopCount) : undefined}
               className={`rounded-full px-2.5 py-1 text-[11px] font-black ${
                 isDayCleared
                   ? "bg-brand-600 text-white"
                   : "bg-white text-brand-700 ring-1 ring-brand-100"
               }`}
             >
-              {completedStopCount}/{dayStops.length}
+              {resolvedStopCount}/{dayStops.length}
             </span>
             <MdExpandMore
               className={`text-xl text-brand-700 transition-transform ${
@@ -515,18 +539,25 @@ function DayRouteAccordionItem({
                         isDayCleared ? "text-white/85" : "text-brand-700"
                       }`}
                     >
-                      {isDayCleared
+                      {skippedStopCount > 0
+                        ? text.dayRoute.visitSkippedSummary(completedStopCount, skippedStopCount)
+                        : isDayCleared
                         ? text.dayRoute.allPlacesCompleted
                         : text.dayRoute.remainingPlaces(
-                            dayStops.length - completedStopCount
+                            dayStops.length - resolvedStopCount
                           )}
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-black text-brand-700">
-                    {completedStopCount}/{dayStops.length}
+                    {resolvedStopCount}/{dayStops.length}
                   </span>
                 </div>
                 <div
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={dayStops.length}
+                  aria-valuenow={resolvedStopCount}
+                  aria-valuetext={skippedStopCount > 0 ? text.dayRoute.visitSkippedSummary(completedStopCount, skippedStopCount) : text.dayRoute.fullRouteProgress(completedStopCount, dayStops.length)}
                   className={`mt-3 h-2 overflow-hidden rounded-full ${
                     isDayCleared ? "bg-white/25" : "bg-white"
                   }`}
@@ -602,36 +633,39 @@ function DayRouteAccordionItem({
               ) : null}
               {firstStopSchedule && lastStopSchedule ? (
                 <div className="mb-4 grid grid-cols-3 gap-2">
-                  <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
+                  <div className="rounded-2xl border border-brand-100 bg-white px-1.5 py-2 shadow-sm min-[375px]:px-3">
                     <p className="text-[10px] font-black text-slate-400">
                       {text.dayRoute.expectedStart}
                     </p>
-                    <p className="mt-0.5 text-sm font-black text-slate-900">
+                    <p className="mt-0.5 whitespace-nowrap text-[11px] font-black tracking-tight text-slate-900 min-[375px]:text-xs min-[430px]:text-sm">
                       {formatClock(routeDayStartMinutes, text)}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
+                  <div className="rounded-2xl border border-brand-100 bg-white px-1.5 py-2 shadow-sm min-[375px]:px-3">
                     <p className="text-[10px] font-black text-slate-400">
                       {text.dayRoute.expectedEnd}
                     </p>
-                    <p className="mt-0.5 text-sm font-black text-slate-900">
+                    <p className="mt-0.5 whitespace-nowrap text-[11px] font-black tracking-tight text-slate-900 min-[375px]:text-xs min-[430px]:text-sm">
                       {formatClock(lastStopSchedule.endMinutes, text)}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-brand-100 bg-white px-3 py-2 shadow-sm">
+                  <div className="rounded-2xl border border-brand-100 bg-white px-1.5 py-2 shadow-sm min-[375px]:px-3">
                     <p className="text-[10px] font-black text-slate-400">
                       {hasActualEnd
                         ? text.dayRoute.actualTotalDuration
                         : text.dayRoute.totalDuration}
                     </p>
-                    <p className="mt-0.5 text-sm font-black text-slate-900">
+                    <p className="mt-0.5 whitespace-nowrap text-[11px] font-black tracking-tight text-slate-900 min-[375px]:text-xs min-[430px]:text-sm">
                       {formatTravelMinutes(totalScheduleMinutes, text)}
                     </p>
                   </div>
                 </div>
               ) : null}
-              {startRouteCard}
-              {dayStops.map((stop, index) => (
+              {activeStops.length > 0 ? startRouteCard : null}
+              {dayStops.map((stop, index) => {
+                const nextStop = dayStops.slice(index + 1).find((item) => !isSkippedStop(item));
+                const directlyFollows = nextStop === dayStops[index + 1];
+                return (
                 <div
                   key={stop.id}
                   ref={(node) => onRegisterDropZone(index, node)}
@@ -649,6 +683,7 @@ function DayRouteAccordionItem({
                     isOrderEditing={isOrderEditing}
                     isDragging={draggedStopId === stop.id}
                     isVisitSaving={visitSavingStopId === stop.id}
+                    isVisitActionBusy={Boolean(visitSavingStopId)}
                     isStaySaving={staySavingStopId === stop.id}
                     isReadOnly={isReadOnly}
                     isActiveDestination={activeDestinationStopId === stop.id}
@@ -658,6 +693,7 @@ function DayRouteAccordionItem({
                         (isGpsTestEnabled &&
                           gpsTestLocationStopId === stop.id))
                     }
+                    canToggleSkipped={canToggleSkipStatus && canToggleVisited && isVisitDateAllowed}
                     enableVerificationPhotoPreview={
                       enableVerificationPhotoPreview
                     }
@@ -667,11 +703,11 @@ function DayRouteAccordionItem({
                     }
                     isNotificationFocused={focusedStopId === stop.id}
                     travelSegmentToNext={
-                      getStoredTravelSegment(dayStops[index + 1]) ??
-                      (dayStops[index + 1]
+                      (directlyFollows ? getStoredTravelSegment(nextStop) : null) ??
+                      (nextStop
                         ? getFallbackTravelSegment(
                             stop.place,
-                            dayStops[index + 1].place
+                            nextStop.place
                           )
                         : null)
                     }
@@ -699,6 +735,7 @@ function DayRouteAccordionItem({
                     onRequestStayMinutesEdit={onRequestStayMinutesEdit}
                     onRequestVisitTimesEdit={onRequestVisitTimesEdit}
                     onToggleVisited={onToggleVisited}
+                    onToggleSkipped={onToggleSkipped}
                     onOpenPlace={onOpenPlace}
                     onOpenDirections={onOpenDirections}
                     onEditVerificationPhoto={onEditVerificationPhoto}
@@ -711,7 +748,7 @@ function DayRouteAccordionItem({
                     }
                   />
                 </div>
-              ))}
+              ); })}
               {isOrderEditing ? (
                 <div
                   ref={(node) => onRegisterDropZone(dayStops.length, node)}

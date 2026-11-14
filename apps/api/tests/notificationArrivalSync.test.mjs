@@ -7,7 +7,7 @@ const routeId = "route-1";
 const dayId = "day-1";
 const stopId = "stop-1";
 
-function createPrisma() {
+function createPrisma(visitStatus = "PENDING") {
   const upserts = [];
 
   return {
@@ -21,6 +21,7 @@ function createPrisma() {
             id: stopId,
             routeId,
             dayId,
+            visitStatus,
             place: { title: "테스트 장소" },
           },
         ],
@@ -77,4 +78,14 @@ test("일반 도착 알림은 기존 장소·날짜 식별자만 허용한다", 
     ]),
     /도착 알림 식별자/
   );
+});
+
+test("건너뛴 장소의 늦게 도착한 네이티브 알림은 다시 저장하지 않는다", async () => {
+  const { prisma, upserts } = createPrisma("SKIPPED");
+  const input = createInput(`arrival-test:${routeId}:${stopId}:${Date.now()}`);
+  input.deliveredAt = new Date();
+  const result = await syncRouteArrivalNotificationInbox(prisma, user, [input]);
+  assert.equal(result.syncedCount, 0);
+  assert.deepEqual(result.notificationKeys, []);
+  assert.equal(upserts.length, 0);
 });

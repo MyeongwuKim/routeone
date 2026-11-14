@@ -7,7 +7,7 @@
  * 현재 위치·선택 지역·검색 조건은 전역 Store에서 읽고, 장소 조회와 검색 결과 계산은 전용 Hook에 맡긴다.
  * 이 화면은 위치 권한 안내, 검색 팝업, 지도 오버레이와 장소 상세 시트의 열림·선택 흐름을 연결한다.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import MapLoadingSkeleton from "@/components/map/MapLoadingSkeleton";
 import LocationPermissionNotice from "@/components/map/LocationPermissionNotice";
 import { useLocationPermissionDenied } from "@/native-bridge/useLocationPermissionDenied";
@@ -22,6 +22,9 @@ import {
   NOTIFICATION_INBOX_PAGE_SIZE,
 } from "@/api/notificationApi";
 import RouteCheckoutModal from "@/features/route-checkout/components/RouteCheckoutModal";
+import RouteCheckoutResumeCard from "@/features/route-checkout/components/RouteCheckoutResumeCard";
+import { useRouteCheckoutDraftStore } from "@/stores/routeCheckoutDraftStore";
+import { useAuthUserStore } from "@/stores/authUserStore";
 import HomeMapControls, {
   HomeMapControlsSkeleton,
 } from "@/components/home/HomeMapControls";
@@ -62,6 +65,8 @@ function HomePage() {
   const text = useUiText();
   const navigate = useNavigate();
   const location = useLocation();
+  const resumeDraft = new URLSearchParams(location.search).get("resumeDraft") === "1";
+  const resumeDraftId = useRouteCheckoutDraftStore((state) => state.draft?.id ?? null);
   const language = useAppLanguageStore((state) => state.language);
   const requestLogin = useLoginRequest();
   const { isAuthenticated } = useAuthSession();
@@ -78,6 +83,20 @@ function HomePage() {
     removeSavedPlace,
     clearSavedPlaces,
   } = usePlaceCartStore();
+  // 홈의 재개 링크는 공유 복사·DAY 추가의 원래 저장 문맥까지 복원한다.
+  useEffect(() => {
+    const draft = useRouteCheckoutDraftStore.getState().draft;
+    const userId = useAuthUserStore.getState().user?.id ?? null;
+    if (resumeDraft && draft && (!draft.ownerUserId || draft.ownerUserId === userId)) openSavedList();
+  }, [resumeDraft, resumeDraftId, openSavedList]);
+  const handleCloseCheckout = () => {
+    closeSavedList();
+    if (resumeDraft) {
+      const params = new URLSearchParams(location.search);
+      params.delete("resumeDraft");
+      navigate({ pathname: location.pathname, search: params.toString(), hash: location.hash }, { replace: true });
+    }
+  };
   const appendTarget = useRouteEditFlowStore((state) => state.appendTarget);
   const clearAppendTarget = useRouteEditFlowStore(
     (state) => state.clearAppendTarget
@@ -395,6 +414,7 @@ function HomePage() {
         ) : null}
       </div>
 
+      {!isSavedListOpen && resumeDraftId ? <div className="shrink-0 px-3 pt-2"><RouteCheckoutResumeCard /></div> : null}
       <HomePlaceList
         regionLabel={selectedRegionLabel}
         areaCode={serviceArea.tatsAreaCode}
@@ -410,6 +430,8 @@ function HomePage() {
       />
 
       <RouteCheckoutModal
+        draftContext={appendTarget ? { mode: "append", target: appendTarget } : { mode: "new" }}
+        resumeDraft={resumeDraft}
         isOpen={isSavedListOpen}
         savedPlaces={savedPlaces}
         insertCandidatePlaces={routeInsertCandidatePlaces}
@@ -417,7 +439,7 @@ function HomePage() {
         appendRouteTitle={appendTarget?.routeTitle}
         initialTravelStartDate={appendTarget?.suggestedStartDate}
         initialTripDays={appendTarget ? 1 : undefined}
-        onClose={closeSavedList}
+        onClose={handleCloseCheckout}
         onSelectPlace={(place) => {
           openSheet(place, {
             fallbackDirectionOrigin: selectedRegionDirectionOrigin,

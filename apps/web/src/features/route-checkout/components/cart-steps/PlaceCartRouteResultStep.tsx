@@ -8,7 +8,6 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { IoReorderThreeOutline } from "react-icons/io5";
 import { routeApi } from "@/api/routeApi";
-import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { createPlaceDuplicateKeySet } from "@/lib/placeDuplicate";
 import {
   getMapSheetPlaceStaySummaryKey,
@@ -72,8 +71,10 @@ function PlaceCartRouteResultStep({
   onRequestSearchPlace,
 }: PlaceCartRouteResultStepProps) {
   const text = useUiText();
-  const appendTarget = useRouteEditFlowStore((state) => state.appendTarget);
   const {
+    appendTarget,
+    editorState,
+    setEditorState,
     isSavingRoute,
     isRouteSaveInFlight,
     travelStartDate,
@@ -100,6 +101,8 @@ function PlaceCartRouteResultStep({
     handleApplyRouteEdits,
     handleCancelRouteEdits,
   } = useRouteResultEditor({
+    initialEditorState: editorState,
+    onEditorStateChange: setEditorState,
     savedPlaces,
     initialRoutePlan,
     travelStartDate,
@@ -308,17 +311,16 @@ function PlaceCartRouteResultStep({
         <div className="route-checkout-step-enter space-y-4">
           <div>
             <div className="min-w-0">
-              <p className="font-trip text-sm text-brand-700">ROUTE RESULT</p>
               {isRouteEditDirty ? (
                 <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
                   {text.cart.editingBadge}
                 </span>
               ) : null}
             </div>
-            <p className="mt-1 text-xl font-semibold text-slate-900">
+            <h3 className="text-xl font-semibold text-slate-900">
               {appendTarget ? text.cart.appendResultTitle : text.cart.resultTitle}
-            </p>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
+            </h3>
+            <p className="mt-2 text-xs leading-5 break-keep text-slate-500">
               {appendTarget
                 ? text.cart.appendResultDescription(appendTarget.routeTitle)
                 : text.cart.resultDescription(

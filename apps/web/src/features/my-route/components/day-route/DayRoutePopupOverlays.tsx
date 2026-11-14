@@ -1,5 +1,6 @@
-/** DAY 팝업 controller가 선택한 지도·출발지·방문·시간·사진·GPS 테스트 대상을 해당 전용 팝업과 진행 토스트로 연결한다. */
+/** DAY 팝업 controller의 지도·출발지·방문·사진·GPS 대상과 저장 진행 상태를 전용 팝업·대화상자·토스트로 연결한다. */
 import RouteVisitProgressToast from "./RouteVisitProgressToast";
+import RouteSkippingProgressDialog from "./RouteSkippingProgressDialog";
 import { MdDragIndicator } from "react-icons/md";
 import { useUiText } from "@/lib/uiText";
 import PlaceCartRouteMapPopup from "@/features/route-checkout/components/cart-steps/PlaceCartRouteMapPopup";
@@ -25,6 +26,7 @@ type DayRoutePopupOverlaysProps = {
 function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
   const text = useUiText();
   const {
+    skippingOperation,
     mapTargetRouteDay,
     mapTargetDayOption,
     routeMapDayOptions,
@@ -88,6 +90,7 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
 
   return (
     <>
+      {skippingOperation ? <RouteSkippingProgressDialog operation={skippingOperation} /> : null}
       {visitProgress && visitSavingStopId === visitProgress.stopId ? (
         <RouteVisitProgressToast key={visitProgress.stopId} progress={visitProgress} />
       ) : null}

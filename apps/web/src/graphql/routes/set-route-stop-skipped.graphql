@@ -1,0 +1,5 @@
+mutation SetRouteStopSkipped($stopId: ID!, $skipped: Boolean!) {
+  setRouteStopSkipped(stopId: $stopId, skipped: $skipped) {
+    ...RouteDetailFields
+  }
+}

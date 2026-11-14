@@ -19,11 +19,13 @@ function createPrisma() {
     { id: "blocked", displayName: "차단 대상" },
   ];
   const blocks = [];
+  const reports = [];
   const routeQueries = [];
   const photoQueries = [];
 
   return {
     blocks,
+    reports,
     routeQueries,
     photoQueries,
     prisma: {
@@ -75,6 +77,12 @@ function createPrisma() {
         async findMany(args) {
           routeQueries.push(args);
           return [];
+        },
+      },
+      sharedRouteReport: {
+        async findMany({ where }) {
+          return reports.filter(report => report.reporterId === where.reporterId && report.status === where.status)
+            .map(report => ({ routeId: report.routeId }));
         },
       },
       placePhoto: {
@@ -130,6 +138,22 @@ test("차단 사용자는 공유 루트 목록과 페이지 조회에서 제외�
 
   assert.deepEqual(db.routeQueries[0].where.ownerId, { notIn: ["blocked"] });
   assert.deepEqual(db.routeQueries[1].where.ownerId, { notIn: ["blocked"] });
+});
+
+test("차단 사용자와 내가 처리 대기 중으로 신고한 루트를 함께 제외한다", async () => {
+  const db = createPrisma();
+  db.blocks.push({ id: "block-1", blockerId: "me", blockedId: "blocked" });
+  db.reports.push(
+    { reporterId: "me", routeId: "reported-route", status: "PENDING" },
+    { reporterId: "me", routeId: "canceled-route", status: "CANCELED" },
+    { reporterId: "other", routeId: "other-report", status: "PENDING" },
+  );
+  await getPublicRoutes(db.prisma, { viewerId: "me" });
+  await getPublicRouteConnection(db.prisma, { viewerId: "me" });
+  for (const query of db.routeQueries) {
+    assert.deepEqual(query.where.ownerId, { notIn: ["blocked"] });
+    assert.deepEqual(query.where.NOT, { id: { in: ["reported-route"] } });
+  }
 });
 
 test("차단 사용자의 방문 사진을 장소 사진 조회에서 제외한다", async () => {

@@ -1,11 +1,11 @@
 /**
  * 용도: DB에 남아 있는 모든 이미지 참조를 확인해 사용 중인 사진의 삭제를 막는다.
- * 동작 방식: 사진 ID뿐 아니라 URL, 썸네일, 장소 스냅샷과 프로필도 확인한다.
- * 공개 여부나 부모 게시물의 존재로 필터링하지 않아 비공개·복제된 사진도 보존한다.
+ * 동작 방식: 사진 ID뿐 아니라 URL, 썸네일, 장소·신고 스냅샷과 프로필도 확인한다.
+ * 공개·신고 처리 상태나 원본 사진 기록의 존재로 필터링하지 않아 남아 있는 참조를 보존한다.
  */
 import type { PrismaClient } from "@prisma/client";
 
-type ImageReferencePrisma = Pick<PrismaClient, "routeStop" | "placePhoto" | "placeStayStat" | "user">;
+type ImageReferencePrisma = Pick<PrismaClient, "routeStop" | "placePhoto" | "placePhotoReport" | "placeStayStat" | "user">;
 
 export async function isImageReferenced(prisma: ImageReferencePrisma, imageId: string) {
   if (!imageId.trim()) throw new Error("An image ID is required for reference lookup.");
@@ -29,6 +29,15 @@ export async function isImageReferenced(prisma: ImageReferencePrisma, imageId: s
         { imageId },
         ...urlFilters.flatMap((filter) => [
           { imageUrl: filter }, { thumbnailUrl: filter }, { placeImageUrl: filter },
+        ]),
+      ] },
+      select: { id: true },
+    }),
+    prisma.placePhotoReport.findFirst({
+      where: { OR: [
+        { photoImageId: imageId },
+        ...urlFilters.flatMap(filter => [
+          { photoImageUrl: filter }, { photoThumbnailUrl: filter },
         ]),
       ] },
       select: { id: true },

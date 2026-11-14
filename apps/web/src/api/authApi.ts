@@ -22,9 +22,7 @@ export const authApi = {
     return requestGraphQL(MeDocument);
   },
   loginWithPassword(input: PasswordLoginInput) {
-    return requestGraphQL(LoginWithPasswordDocument, {
-      input,
-    });
+    return requestGraphQL(LoginWithPasswordDocument, { input }, { authToken: null });
   },
   refreshAuthSession() {
     return requestGraphQL(RefreshAuthSessionDocument);

@@ -950,6 +950,7 @@ export async function syncRouteArrivalNotificationInbox(
           id: true,
           routeId: true,
           dayId: true,
+          visitStatus: true,
           place: true,
         },
       }),
@@ -962,7 +963,8 @@ export async function syncRouteArrivalNotificationInbox(
       return (
         ownedRouteIds.has(notification.routeId) &&
         stop?.routeId === notification.routeId &&
-        stop.dayId === notification.dayId
+        stop.dayId === notification.dayId &&
+        stop.visitStatus !== VisitStatus.SKIPPED
       );
     });
 

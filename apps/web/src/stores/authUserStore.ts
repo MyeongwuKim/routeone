@@ -10,13 +10,14 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { MeQuery } from "@/generated/graphql";
+import { useRouteCheckoutDraftStore } from "./routeCheckoutDraftStore";
 
 export type AuthUser = NonNullable<MeQuery["me"]>;
 
 type AuthUserState = {
   /** 마지막 세션 조회나 로그인에서 확인한 사용자. 로그아웃 상태는 null */
   user: AuthUser | null;
-  /** 로그인 또는 세션 갱신 결과로 user를 교체하며 null도 그대로 저장한다. */
+  /** 사용자 정보를 교체하고 비로그인 초안을 해당 사용자에게 넘기거나 다른 계정의 초안을 제거한다. */
   setUser: (user: AuthUser | null) => void;
   /** 로그아웃·탈퇴 후 user를 null로 비우고 영속 저장값에도 반영한다. */
   clearUser: () => void;
@@ -26,7 +27,10 @@ export const useAuthUserStore = create<AuthUserState>()(
   persist(
     (set) => ({
       user: null,
-      setUser: (user) => set({ user }),
+      setUser: (user) => {
+        useRouteCheckoutDraftStore.getState().reconcileOwner(user?.id ?? null);
+        set({ user });
+      },
       clearUser: () => set({ user: null }),
     }),
     {

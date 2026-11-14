@@ -33,7 +33,7 @@ function BottomTabLayout() {
     pathname === "/me";
   const shouldSlideInPage = pathname === "/home/language" || pathname.startsWith("/me/");
   return (
-    <div className="relative h-dvh overflow-hidden bg-brand-50 text-slate-900 [--bottom-tab-offset:calc(4.5rem+max(0.7rem,env(safe-area-inset-bottom)))] dark:bg-slate-950 dark:text-slate-100">
+    <div className="relative h-dvh overflow-hidden bg-brand-50 text-slate-900 [--bottom-tab-offset:calc(4.5rem+1px+max(0.7rem,env(safe-area-inset-bottom)))] dark:bg-slate-950 dark:text-slate-100">
       <main className="absolute inset-x-0 top-0 bottom-[var(--bottom-tab-offset)]">
         <div
           className={
@@ -63,11 +63,11 @@ function BottomTabLayout() {
         <div className="mx-auto w-full max-w-md">
           <ul className="grid grid-cols-4 gap-1">
             {tabs.map((tab) => (
-              <li key={tab.to}>
+              <li key={tab.to} className="min-w-0">
                 <NavLink
                   to={tab.to}
                   className={({ isActive }) =>
-                    `flex h-16 flex-col items-center justify-center rounded-xl text-xs font-semibold transition ${
+                    `flex h-16 min-w-0 flex-col items-center justify-center rounded-xl text-xs font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:focus-visible:outline-brand-300 ${
                       isActive
                         ? "bg-brand-50 text-brand-700 dark:bg-brand-900/50 dark:text-brand-200"
                         : "text-slate-500 hover:bg-brand-50 hover:text-brand-700 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-brand-200"
@@ -77,7 +77,7 @@ function BottomTabLayout() {
                   <span className="text-[26px] leading-none">
                     <tab.icon />
                   </span>
-                  <span className="mt-1.5 text-[13px]">
+                  <span className="mt-1.5 whitespace-nowrap text-[13px] leading-4">
                     {text.nav[tab.labelKey]}
                   </span>
                 </NavLink>

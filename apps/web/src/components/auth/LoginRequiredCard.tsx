@@ -17,20 +17,20 @@ function LoginRequiredCard() {
 
   return (
     <section className="flex min-h-full items-center justify-center py-4">
-      <div className="w-full max-w-sm rounded-3xl border border-brand-100 bg-white p-6 text-center shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
+      <div className="w-full max-w-sm rounded-2xl border border-brand-100 bg-white p-6 text-center shadow-sm dark:border-brand-400/25 dark:bg-[#071f1d]">
         <span className="mx-auto flex size-16 items-center justify-center rounded-full bg-brand-50 text-4xl text-brand-700 dark:bg-brand-400/15 dark:text-brand-100">
           <MdOutlineAccountCircle />
         </span>
-        <h1 className="mt-4 text-lg font-black text-slate-900 dark:text-white">
+        <h1 className="mt-5 text-balance text-lg font-black text-slate-900 dark:text-white">
           {text.auth.requiredTitle}
         </h1>
-        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-300">
+        <p className="mt-2 break-keep text-pretty text-sm leading-6 text-slate-600 dark:text-slate-300">
           {text.auth.requiredDescription}
         </p>
         <button
           type="button"
           onClick={() => requestLogin("protected-screen")}
-          className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white transition active:scale-[0.99]"
+          className="mt-6 inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-600 active:scale-[0.99] dark:focus-visible:outline-brand-300"
         >
           <MdLogin className="text-lg" />
           {text.auth.login}

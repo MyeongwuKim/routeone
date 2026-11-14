@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Prisma } from "@prisma/client";
 
 export const owner = { id: "owner" };
 export const origin = { lat: 37, lng: 127 };
@@ -45,34 +46,37 @@ export function dayRow(dayIndex, startLocation = origin, overrides = {}) {
 
 export function memoryDatabase(initial = {}) {
   const state = structuredClone({ routes: [], days: [], stops: [], requests: [], ...initial });
+  const getRows = (name) => state[name] ?? [];
   const writes = [];
   let nextId = 1;
   let transactionDepth = 0;
   const matches = (row, where = {}) =>
-    Object.entries(where).every(([key, value]) =>
-      value && typeof value === "object" && "in" in value
-        ? value.in.includes(row[key])
-        : row[key] === value
-    );
+    Object.entries(where).every(([key, value]) => {
+      if (key === "OR") return value.some(condition => matches(row, condition));
+      if (key === "AND") return value.every(condition => matches(row, condition));
+      if (value && typeof value === "object" && "in" in value) return value.in.includes(row[key]);
+      if (value && typeof value === "object" && "isSet" in value) return (row[key] !== undefined) === value.isSet;
+      return row[key] === value;
+    });
   const recordWrite = (model, operation, data) => {
     writes.push({ model, operation, data: structuredClone(data), inTransaction: transactionDepth > 0 });
   };
   const table = (name, defaults = {}) => ({
     async findUnique({ where }) {
-      return structuredClone(state[name].find((row) => matches(row, where)) ?? null);
+      return structuredClone(getRows(name).find((row) => matches(row, where)) ?? null);
     },
     async findMany({ where, orderBy } = {}) {
-      const rows = state[name].filter((row) => matches(row, where));
+      const rows = getRows(name).filter((row) => matches(row, where));
       const orderKey = Object.keys(orderBy ?? {})[0];
       if (orderKey) rows.sort((left, right) => left[orderKey] - right[orderKey]);
       return structuredClone(rows);
     },
     async count({ where }) {
-      return state[name].filter((row) => matches(row, where)).length;
+      return getRows(name).filter((row) => matches(row, where)).length;
     },
     async create({ data }) {
       const row = structuredClone({ ...defaults, id: `created-${name}-${nextId++}`, ...data });
-      state[name].push(row);
+      (state[name] ??= []).push(row);
       recordWrite(name, "create", row);
       return structuredClone(row);
     },
@@ -80,21 +84,27 @@ export function memoryDatabase(initial = {}) {
       const rows = data.map((item) =>
         structuredClone({ ...defaults, id: `created-${name}-${nextId++}`, ...item })
       );
-      state[name].push(...rows);
+      (state[name] ??= []).push(...rows);
       recordWrite(name, "createMany", rows);
       return { count: rows.length };
     },
     async update({ where, data }) {
-      const row = state[name].find((item) => matches(item, where));
-      assert.ok(row, `${name} row must exist for update`);
+      const row = getRows(name).find((item) => matches(item, where));
+      if (!row) throw new Prisma.PrismaClientKnownRequestError(`${name} row must exist for update`, { code: "P2025", clientVersion: "test" });
       Object.assign(row, structuredClone(data));
       recordWrite(name, "update", { id: row.id, ...data });
       return structuredClone(row);
     },
+    async updateMany({ where, data }) {
+      const rows = getRows(name).filter((row) => matches(row, where));
+      for (const row of rows) Object.assign(row, structuredClone(data));
+      recordWrite(name, "updateMany", { where, data });
+      return { count: rows.length };
+    },
     async deleteMany({ where }) {
-      const rows = state[name].filter((row) => !matches(row, where));
-      const count = state[name].length - rows.length;
-      state[name].splice(0, state[name].length, ...rows);
+      const rows = getRows(name).filter((row) => !matches(row, where));
+      const count = getRows(name).length - rows.length;
+      state[name]?.splice(0, state[name].length, ...rows);
       recordWrite(name, "deleteMany", where);
       return { count };
     },
@@ -129,10 +139,11 @@ export function memoryDatabase(initial = {}) {
   const prisma = {
     route,
     routeDay: table("days", { date: null, startLocation: null }),
-    routeStop: table("stops", { visitStatus: "PENDING" }),
+    routeStop: table("stops", { visitStatus: "PENDING", visitRevision: 0 }),
     routeCreateRequest: requests,
-    userNotification: { deleteMany: async () => ({ count: 0 }) },
-    placePhoto: { deleteMany: async () => ({ count: 0 }) },
+    userNotification: table("notifications"),
+    placePhoto: table("photos"),
+    placeStayStat: table("stats"),
     async $runCommandRaw(command) {
       assert.ok(transactionDepth > 0, "batch writes must be inside the transaction");
       recordWrite("raw", "command", command);
@@ -155,9 +166,14 @@ export function memoryDatabase(initial = {}) {
       const before = structuredClone(state);
       transactionDepth += 1;
       try {
-        return await operation(prisma);
+        // 실제 Prisma TransactionClient처럼 중첩 트랜잭션 진입점을 노출하지 않는다.
+        const { $transaction, ...transaction } = prisma;
+        return await operation(transaction);
       } catch (error) {
-        for (const name of Object.keys(state)) state[name].splice(0, state[name].length, ...before[name]);
+        for (const name of Object.keys(state)) {
+          if (!(name in before)) delete state[name];
+          else state[name].splice(0, state[name].length, ...before[name]);
+        }
         throw error;
       } finally {
         transactionDepth -= 1;

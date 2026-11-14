@@ -30,6 +30,10 @@ import {
   getSortedRouteDays,
   getTodayDateKey,
   getTodayRouteDay,
+  getRouteSkippedStopCount,
+  getRouteProgressPercent,
+  getDaySkippedStopCount,
+  isVisitedStop,
 } from "../routeDisplay";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
 import { useUiText, type UiText } from "@/lib/uiText";
@@ -60,10 +64,6 @@ function isRouteShared(route: MyRoute) {
 
 function canRequestRouteStart(route: MyRoute) {
   return route.status !== "COMPLETED" && !route.startedAt;
-}
-
-function isVisitedRouteStop(stop: MyRouteStop) {
-  return stop.visitStatus === "VISITED" || Boolean(stop.visitedAt);
 }
 
 function getVerifiedRouteStopCount(stops: MyRouteStop[]) {
@@ -143,7 +143,8 @@ function MyRouteHistoryCard({
   const [isStopExpanded, setIsStopExpanded] = useState(false);
   const sortedDays = getSortedRouteDays(route);
   const selectableDay = getSelectableRouteDay(route, todayKey);
-  const visitedStops = route.stops.filter(isVisitedRouteStop);
+  const visitedStops = route.stops.filter(isVisitedStop);
+  const skippedStopCount = getRouteSkippedStopCount(route);
   const previewStopLimit = visitedStops.length > 3 ? 2 : 3;
   const visibleStops = isStopExpanded
     ? visitedStops
@@ -162,10 +163,9 @@ function MyRouteHistoryCard({
   );
   const visibleDays = sortedDays.slice(0, 3);
   const hiddenDayCount = Math.max(0, sortedDays.length - visibleDays.length);
-  const completionText = text.myRouteCard.visitedCount(
-    visitedStops.length,
-    route.totalStopCount
-  );
+  const completionText = skippedStopCount > 0
+    ? text.myRouteCard.visitedSkippedCount(visitedStops.length, skippedStopCount)
+    : text.myRouteCard.visitedCount(visitedStops.length, route.totalStopCount);
   const endDateKey = getRouteEndDateKey(route);
   const daysSinceEnd = endDateKey
     ? getDateKeyDiffInDays(todayKey, endDateKey)
@@ -234,7 +234,7 @@ function MyRouteHistoryCard({
               {getRouteTitle(route, text)}
             </p>
             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-200/80">
-              <MdOutlineCalendarToday className="text-sm dark:text-brand-200" />
+              <MdOutlineCalendarToday className="shrink-0 text-sm dark:text-brand-200" />
               {getRouteSubtitle(route, text)}
             </p>
           </div>
@@ -248,7 +248,7 @@ function MyRouteHistoryCard({
             <p className="text-[10px] font-black text-brand-700 dark:text-brand-100">
               {text.myRouteCard.completed}
             </p>
-            <p className="mt-0.5 truncate text-xs font-black text-slate-900 dark:text-white">
+            <p className="mt-0.5 text-xs font-black leading-5 text-slate-900 dark:text-white">
               {completionText}
             </p>
           </div>
@@ -348,7 +348,8 @@ function MyRouteHistoryCard({
       {visibleDays.length > 0 ? (
         <div className="relative flex flex-wrap gap-1.5 bg-brand-50/60 px-4 py-3 before:pointer-events-none before:absolute before:left-4 before:right-4 before:top-0 before:h-px before:bg-brand-100 before:content-[''] dark:bg-[#082b28] dark:before:bg-brand-400/30">
           {visibleDays.map((day) => {
-            const completedStopCount = day.stops.filter(isVisitedRouteStop).length;
+            const completedStopCount = day.stops.filter(isVisitedStop).length;
+            const skippedCount = getDaySkippedStopCount(day);
 
             return (
               <button
@@ -362,8 +363,9 @@ function MyRouteHistoryCard({
                 </span>
                 <span className="h-1 w-1 shrink-0 rounded-full bg-slate-300 dark:bg-slate-500" />
                 <span className="truncate">
-                  {text.myRouteCard.placeCount(completedStopCount)}/
-                  {text.myRouteCard.placeCount(day.stops.length)}
+                  {skippedCount > 0
+                    ? text.myRouteCard.visitedSkippedCount(completedStopCount, skippedCount)
+                    : `${text.myRouteCard.placeCount(completedStopCount)}/${text.myRouteCard.placeCount(day.stops.length)}`}
                 </span>
               </button>
             );
@@ -423,7 +425,7 @@ function MyRouteUpcomingCard({
               {getRouteTitle(route, text)}
             </p>
             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
-              <MdEventAvailable className="text-sm text-brand-600" />
+              <MdEventAvailable className="shrink-0 text-sm text-brand-600" />
               {getRouteTimelineLabel(route, todayKey, text)}
             </p>
           </div>
@@ -450,7 +452,7 @@ function MyRouteUpcomingCard({
           <button
             type="button"
             onClick={() => onRequestStartRoute?.(route)}
-            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-brand-600 px-3 text-[11px] font-black text-white shadow-sm transition active:scale-95"
+            className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-brand-600 px-3 text-[11px] font-black text-white shadow-sm transition active:scale-95"
           >
             <MdPlayArrow className="text-sm" />
             {text.myRouteCard.startTravel}
@@ -480,10 +482,8 @@ function MyRouteCompactCard({
   const selectableDay = getSelectableRouteDay(route, todayKey);
   const shouldShowStartAction =
     onRequestStartRoute && canRequestRouteStart(route);
-  const progressPercent =
-    route.totalStopCount > 0
-      ? Math.round((route.completedStopCount / route.totalStopCount) * 100)
-      : 0;
+  const progressPercent = getRouteProgressPercent(route);
+  const skippedStopCount = getRouteSkippedStopCount(route);
 
   return (
     <article className="w-full rounded-2xl border border-slate-100 bg-white px-4 py-3 text-left shadow-sm transition hover:border-brand-200 hover:bg-brand-50/40">
@@ -517,7 +517,7 @@ function MyRouteCompactCard({
               {getRouteTitle(route, text)}
             </p>
             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
-              <MdOutlineCalendarToday className="text-sm" />
+              <MdOutlineCalendarToday className="shrink-0 text-sm" />
               {getRouteSubtitle(route, text)}
             </p>
           </div>
@@ -544,6 +544,11 @@ function MyRouteCompactCard({
         ) : null}
       </div>
 
+      {skippedStopCount > 0 ? (
+        <p className="mt-2 text-xs font-bold text-slate-500">
+          {text.myRouteCard.visitedSkippedCount(route.completedStopCount, skippedStopCount)}
+        </p>
+      ) : null}
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
         <div
           className="h-full rounded-full bg-brand-500"
@@ -624,8 +629,8 @@ function MyRouteCard({
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             {hideTimelineBadge ? null : (
               <span
                 className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
@@ -646,7 +651,7 @@ function MyRouteCard({
             {getRouteTitle(route, text)}
           </h2>
           <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
-            <MdOutlineCalendarToday className="text-sm" />
+            <MdOutlineCalendarToday className="shrink-0 text-sm" />
             {getRouteSubtitle(route, text)}
           </p>
         </div>
@@ -655,7 +660,7 @@ function MyRouteCard({
             <button
               type="button"
               onClick={() => onRequestStartRoute?.(route)}
-              className="inline-flex h-9 items-center gap-1 rounded-full bg-brand-600 px-3 text-xs font-black text-white shadow-sm transition active:scale-95"
+              className="inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-full bg-brand-600 px-3 text-xs font-black text-white shadow-sm transition active:scale-95"
             >
               <MdPlayArrow className="text-base" />
               {text.myRouteCard.startTravel}

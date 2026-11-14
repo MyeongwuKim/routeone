@@ -8,6 +8,7 @@ import type {
 } from "@/generated/graphql";
 import { SERVICE_AREA_LIST, resolveServiceRegion } from "@/data/serviceAreas";
 import { getUiText, type UiText } from "@/lib/uiText";
+import { isSkippedStop } from "@/features/my-route/routeDisplay";
 
 const REGION_SHARE_TAGS = new Set(
   SERVICE_AREA_LIST.flatMap((serviceArea) => [
@@ -156,6 +157,7 @@ export function getDisplayRegionNames(route: SharedRoute) {
   };
 
   (route.stops ?? []).forEach((stop) => {
+    if (isSkippedStop(stop)) return;
     appendRegionName(
       getRegionName(stop.place.regionLabelKey, stop.place.regionCode)
     );
@@ -180,6 +182,7 @@ export function getDisplayPlaceOptions(
     text.sharedRouteCard.unknownRegion;
 
   (route.stops ?? []).forEach((stop) => {
+    if (isSkippedStop(stop)) return;
     const name = stop.place.title?.trim();
     const region =
       getRegionName(stop.place.regionLabelKey, stop.place.regionCode) ??

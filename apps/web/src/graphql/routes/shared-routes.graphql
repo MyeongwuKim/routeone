@@ -6,6 +6,8 @@ query SharedRoutes($regionCode: String, $regionTag: String, $limit: Int) {
     }
     stops {
       id
+      visitStatus
+      visitedAt
       place {
         contentId
         contentTypeId

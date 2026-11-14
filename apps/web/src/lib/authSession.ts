@@ -1,5 +1,6 @@
 
 import { authApi } from "@/api/authApi";
+import { isGraphQLRequestError } from "@/lib/graphqlClient";
 import {
   clearAuthToken,
   getAuthToken,
@@ -24,8 +25,8 @@ let refreshRequest: Promise<AuthSessionRefreshResult> | null = null;
 
 function isExpiredSessionError(error: unknown) {
   return (
-    error instanceof Error &&
-    error.message.includes(AUTH_SESSION_EXPIRED_ERROR_TEXT)
+    (isGraphQLRequestError(error) && error.code === "UNAUTHENTICATED") ||
+    (error instanceof Error && error.message.includes(AUTH_SESSION_EXPIRED_ERROR_TEXT))
   );
 }
 

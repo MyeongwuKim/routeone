@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import {
   buildCreateRouteInput,
   getEffectiveRoutePlanTripDays,
+  restoreRouteCreateRequestInput,
   routeCheckoutApi,
   type SaveRoutePlanInput,
 } from "@/api/routeCheckoutApi";
@@ -23,6 +24,7 @@ import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiToastStore } from "@/stores/uiToastStore";
 import { findRouteDateConflict } from "../utils/routeDateConflict";
+import type { RouteCreateAttempt } from "../models/routeCheckoutDraft";
 import { useRouteCheckout } from "./useRouteCheckout";
 
 type UseRouteCheckoutSaveOptions = {
@@ -38,11 +40,6 @@ type UseRouteCheckoutSaveOptions = {
   onChooseDate: () => void;
 };
 
-type RouteCreateAttempt = {
-  inputKey: string;
-  requestId: string;
-};
-
 function createRouteRequestId() {
   if (typeof globalThis.crypto?.randomUUID === "function") {
     return globalThis.crypto.randomUUID();
@@ -53,8 +50,9 @@ function createRouteRequestId() {
 
 /**
  * 비로그인 사용자는 일정 결과를 유지한 채 로그인으로 안내한다. 다시 저장을 누르면 날짜 충돌과 입력 가능 상태를 확인한다.
- * 새 경로 생성은 같은 입력에 같은 requestId를 재사용해
- * 결과 불명 재시도를 중복 생성으로부터 보호한다. 성공 시 캐시를 갱신하고 담은 장소를 비우며,
+ * 새 경로 생성은 최초 전송 본문과 requestId를 초안에 기록한다. 이동 시간만 자동 갱신된
+ * 재시도·재실행에는 둘을 함께 재사용해 저장 결과를 확인하고, 직접 바꾼 입력은 별도 저장으로 구분한다.
+ * 성공 시 캐시를 갱신한 뒤 초안과 담은 장소를 비우며, 실패와 로그인 안내에서는 초안을 유지한다.
  * 새로 만든 루트는 저장 완료 안내에서 해당 DAY 상세를 열 수 있게 한다.
  */
 export function useRouteCheckoutSave({
@@ -70,13 +68,19 @@ export function useRouteCheckoutSave({
   const queryClient = useQueryClient();
   const showToast = useUiToastStore((state) => state.showToast);
   const openModal = useUiModalStore((state) => state.openModal);
-  const appendTarget = useRouteEditFlowStore((state) => state.appendTarget);
   const clearAppendTarget = useRouteEditFlowStore(
     (state) => state.clearAppendTarget
   );
-  const { isRouteSaveInFlight, startSavingRoute, finishSavingRoute } =
-    useRouteCheckout();
-  const createAttemptRef = useRef<RouteCreateAttempt | null>(null);
+  const {
+    appendTarget,
+    createAttempt,
+    setCreateAttempt,
+    clearDraft,
+    isRouteSaveInFlight,
+    startSavingRoute,
+    finishSavingRoute,
+  } = useRouteCheckout();
+  const createAttemptRef = useRef<RouteCreateAttempt | null>(createAttempt);
 
   const saveAuthenticatedRoute = useCallback(async () => {
     if (!canSave || isRouteSaveInFlight()) {
@@ -95,9 +99,13 @@ export function useRouteCheckoutSave({
     let hasSentSaveRequest = false;
 
     try {
-      const inputKey = JSON.stringify(buildCreateRouteInput(input));
-      const isCreateRetry =
-        !appendTarget && createAttemptRef.current?.inputKey === inputKey;
+      const currentInput = buildCreateRouteInput(input);
+      const retryInput = !appendTarget && createAttemptRef.current
+        ? restoreRouteCreateRequestInput(currentInput, createAttemptRef.current.inputKey)
+        : null;
+      const isCreateRetry = retryInput !== null;
+      const requestInput = retryInput ?? currentInput;
+      const inputKey = JSON.stringify(requestInput);
 
       // 응답만 유실된 재요청은 이미 저장된 본인 일정과 충돌할 수 있습니다.
       // 같은 요청 ID의 결과 확인은 서버의 중복 방지 처리에 맡깁니다.
@@ -165,6 +173,7 @@ export function useRouteCheckoutSave({
             inputKey,
             requestId: createRouteRequestId(),
           };
+          setCreateAttempt(createAttemptRef.current);
         }
 
         const attempt = createAttemptRef.current;
@@ -176,7 +185,8 @@ export function useRouteCheckoutSave({
         hasSentSaveRequest = true;
         const result = await routeCheckoutApi.saveRoutePlan(
           input,
-          attempt.requestId
+          attempt.requestId,
+          requestInput
         );
         const savedRoute = result.createRoute;
         // 저장 전에 시작된 목록 조회가 새 루트를 덮어쓰지 않도록 정리한다.
@@ -209,6 +219,7 @@ export function useRouteCheckoutSave({
         });
       }
 
+      clearDraft();
       clearAppendTarget();
       onClearPlaces();
       onClose();
@@ -231,6 +242,7 @@ export function useRouteCheckoutSave({
     appendTarget,
     canSave,
     clearAppendTarget,
+    clearDraft,
     finishSavingRoute,
     input,
     isRouteSaveInFlight,
@@ -240,11 +252,13 @@ export function useRouteCheckoutSave({
     onClose,
     openModal,
     queryClient,
+    setCreateAttempt,
     showToast,
     startSavingRoute,
     text,
   ]);
 
+  /** 저장 가능 상태를 확인하고, 인증 전에는 초안을 유지한 채 로그인 안내만 연다. */
   const handleSaveRoute = () => {
     if (!canSave || isRouteSaveInFlight()) {
       return;

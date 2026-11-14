@@ -276,8 +276,7 @@ function StartLocationPickerPopup({
       <div className="flex h-full flex-col">
         <header className="app-safe-area-header flex shrink-0 items-center justify-between border-b border-brand-100 px-4 py-3">
           <div className="min-w-0">
-            <p className="font-trip text-sm text-brand-700">START POINT</p>
-            <h2 className="mt-0.5 text-lg font-bold text-slate-900">
+            <h2 className="truncate text-lg font-bold text-slate-900">
               {title ?? text.cart.startLocationPickerTitle}
             </h2>
           </div>

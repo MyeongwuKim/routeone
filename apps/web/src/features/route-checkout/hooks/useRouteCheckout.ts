@@ -6,8 +6,19 @@ import type {
 } from "../models/routePlanTypes";
 import type { CartFlowStep } from "../models/routeCheckoutFlow";
 import type { RouteStartLocationSource } from "../models/routeCheckoutState";
+import type { RouteAppendTarget } from "@/stores/routeEditFlowStore";
+import type { RouteCreateAttempt } from "../models/routeCheckoutDraft";
+import type { RouteEditorState } from "../models/routeResultEditorState";
 
 export type RouteCheckoutContextValue = {
+  /** 현재 작성 중인 초안과 API 저장 대상을 구분하는 값 */
+  draftId: string;
+  appendTarget: RouteAppendTarget | null;
+  editorState: RouteEditorState | null;
+  setEditorState: (state: RouteEditorState) => void;
+  createAttempt: RouteCreateAttempt | null;
+  setCreateAttempt: (attempt: RouteCreateAttempt) => void;
+  clearDraft: () => void;
   isSavingRoute: boolean;
   isRouteSaveInFlight: () => boolean;
   startSavingRoute: () => boolean;

@@ -300,14 +300,14 @@ test("설정에서 권한을 끄면 길찾기 지도 자리에 설정 안내가 
   stopSync = startSync();
   await until(() => positionStore.getState().status === "success");
   assert.match(renderDirections(), /h-48/);
-  assert.doesNotMatch(renderDirections(), /위치 권한이 꺼져 있습니다\./);
+  assert.doesNotMatch(renderDirections(), /위치 권한이 꺼져 있어요/);
 
   appInfo.locationPermissionStatus = "denied";
   appActive();
   await until(() => infoStore.getState().appInfoState.info?.locationPermissionStatus === "denied");
   const deniedMarkup = renderDirections();
-  assert.match(deniedMarkup, /위치 권한이 꺼져 있습니다\./);
-  assert.match(deniedMarkup, /설정에서 위치 권한 켜기/);
+  assert.match(deniedMarkup, /위치 권한이 꺼져 있어요/);
+  assert.match(deniedMarkup, /위치 설정 열기/);
   assert.match(deniedMarkup, /role="status"/);
   assert.doesNotMatch(deniedMarkup, /h-48|15분|3km/);
   assert.match(renderDirections("en"), /Location access is turned off\./);
@@ -316,19 +316,19 @@ test("설정에서 권한을 끄면 길찾기 지도 자리에 설정 안내가 
   appInfo.locationPermissionStatus = "granted";
   appActive();
   await until(() => positionStore.getState().status === "success");
-  assert.doesNotMatch(renderDirections(), /위치 권한이 꺼져 있습니다\./);
+  assert.doesNotMatch(renderDirections(), /위치 권한이 꺼져 있어요/);
   assert.match(renderDirections(), /h-48/);
 });
 
 test("GPS 일시 오류나 직접 정한 출발지는 위치 권한을 켜라는 안내로 막지 않는다", async () => {
   await infoStore.getState().refresh();
   positionStore.getState().invalidatePosition();
-  assert.doesNotMatch(renderDirections(), /위치 권한이 꺼져 있습니다\./);
+  assert.doesNotMatch(renderDirections(), /위치 권한이 꺼져 있어요/);
   appInfo.locationPermissionStatus = "denied";
   await infoStore.getState().refresh();
   const markup = renderDirections("ko", {
     coordinates: { lat: 36, lng: 128 }, label: "선택한 출발지", isCurrentLocation: false,
   });
-  assert.doesNotMatch(markup, /위치 권한이 꺼져 있습니다\./);
+  assert.doesNotMatch(markup, /위치 권한이 꺼져 있어요/);
   assert.match(markup, /h-48/);
 });

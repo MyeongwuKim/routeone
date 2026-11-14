@@ -8,6 +8,7 @@ import {
   addDaysToDateKey,
   getRouteDateKey,
   isVisitedStop,
+  isResolvedStop,
 } from "./routeDisplay";
 import type { MyRoute, MyRouteStop } from "./types";
 
@@ -21,13 +22,14 @@ function getRouteStopCounts(route: MyRoute) {
   return {
     totalStopCount: stops.length,
     completedStopCount: stops.filter(isVisitedStop).length,
+    resolvedStopCount: stops.filter(isResolvedStop).length,
   };
 }
 
 function refreshRouteCounts(route: MyRoute): MyRoute {
-  const { totalStopCount, completedStopCount } = getRouteStopCounts(route);
+  const { totalStopCount, completedStopCount, resolvedStopCount } = getRouteStopCounts(route);
   const isCompleted =
-    totalStopCount > 0 && totalStopCount === completedStopCount;
+    totalStopCount > 0 && totalStopCount === resolvedStopCount;
   const nextStatus = isCompleted
     ? "COMPLETED"
     : route.status === "COMPLETED"

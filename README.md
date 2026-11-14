@@ -170,6 +170,80 @@ flowchart TD
 
 자체 도보 계산 범위는 현재 **강릉 시내·경포·안목**입니다. 보행로 데이터가 없는 지역은 미지원 안내를 표시하며, 지도에서 탐색할 수 있는 지역과 자체 도보 계산 범위는 구분합니다.
 
+## 문제 해결 기록
+
+<details>
+<summary>저장 응답 유실 후 재시도에서 중복 일정과 장바구니 혼선 방지</summary>
+
+- **문제:** 서버가 일정을 저장한 뒤 응답만 유실되면, 내 루트에는 일정이 있지만 작성 중인 초안과 담은 장소는 남을 수 있었습니다. 이후 재시도가 새 저장으로 처리되면 중복 일정이나 날짜 충돌이 발생할 수 있었습니다.
+- **원인:** 재시도를 구분할 요청 ID와 최초 전송 본문을 유지해야 했습니다. ID를 보관하더라도 화면 재진입 후 이동 시간이 자동 갱신되면 본문 비교에서 다른 일정으로 판단하는 문제가 남았습니다.
+- **해결:** 최초 요청 ID와 본문을 초안에 함께 보관하고, 이동 시간만 자동 갱신된 경우 최초 본문으로 재전송하도록 했습니다. 서버는 계정·요청 ID·입력 해시로 기존 저장 결과를 반환하며, 클라이언트는 성공을 확인한 뒤 초안과 담은 장소를 정리합니다. 사용자가 날짜·장소·순서·체류시간을 직접 바꾸면 새 요청으로 구분합니다.
+- **검증:** [저장 흐름 테스트](apps/web/tests/routeCheckoutDraftLifecycle.test.mjs)에서 저장 전 통신 실패, 저장 후 응답 유실, 이동 시간 갱신 후 재시도, 직접 편집 후 새 저장을 구분했습니다. [요청 변환 테스트](apps/web/tests/routeCheckoutApi.test.mjs)에서는 동일 본문 재전송과 손상된 이전 본문의 처리도 확인했습니다.
+
+관련 코드: [클라이언트 저장 흐름](apps/web/src/features/route-checkout/hooks/useRouteCheckoutSave.ts), [서버 중복 생성 방지](apps/api/src/modules/routes/routeCommand.service.ts)
+
+</details>
+
+<details>
+<summary>저장 중 날짜를 바꾸면 다른 날짜의 장소가 표시되는 문제</summary>
+
+- **문제:** DAY 1의 건너뛰기 요청을 보낸 뒤 DAY 2를 선택하면, 늦게 도착한 DAY 1 응답이 현재 화면의 장소 목록을 덮어쓸 수 있었습니다. 서버 재조회 뒤에도 이전 미방문 목록이 다시 표시될 수 있었습니다.
+- **원인:** 저장 요청이 시작된 날짜와 응답을 반영할 때 선택된 날짜가 다를 수 있는데, 응답 처리에서 이전 선택과 장소 배열을 사용했습니다.
+- **해결:** 최신 선택 DAY의 ID를 기준으로 응답 루트에서 해당 날짜를 다시 찾아 반영하도록 했습니다. 서버에서 확인한 장소 상태와 편집 중인 초안을 구분하고, 편집 취소 시에도 최신 서버 상태로 돌아가도록 정리했습니다. 현재 UI에서는 건너뛰기 처리 중 화면 조작도 막습니다.
+- **검증:** [DAY 화면 동기화 테스트](apps/web/tests/dayRouteControllerSync.test.mjs)에서 날짜 전환 후 지연 응답, 재조회로 바뀐 방문 상태, 편집 초안 유지, 저장 실패와 재시도를 확인했습니다.
+
+관련 코드: [DAY 화면 제어](apps/web/src/features/my-route/hooks/useDayRoutePopupController.ts), [DAY 화면 상태](apps/web/src/features/my-route/hooks/useDayRoutePopupState.ts)
+
+</details>
+
+<details>
+<summary>계정 전환 뒤 이전 방문·사진 요청이 새 화면을 변경하는 문제</summary>
+
+- **문제:** 방문 인증이나 사진 업로드를 기다리는 동안 계정을 바꾸면, 이전 계정의 늦은 성공·실패 응답이 새 계정의 캐시·입력창·알림을 변경할 수 있었습니다.
+- **원인:** 토큰 변경만 확인하면 같은 토큰으로 다시 로그인한 경우를 구분하기 어려웠고, 위치·사진·업로드처럼 여러 비동기 단계 사이에도 세션이 바뀔 수 있었습니다.
+- **해결:** 요청 시작 시 토큰과 세션 변경 세대를 함께 기억하고, 후속 요청 전과 응답 반영 전에 현재 세션인지 확인하도록 했습니다. 이전 요청의 정리 작업도 새 세션의 잠금이나 진행 표시를 해제하지 않도록 구분했습니다. 적용 범위는 방문·사진·체류시간 요청이며, 서버에 이미 접수된 작업의 취소는 별도 문제입니다.
+- **검증:** [방문 요청 테스트](apps/web/tests/routeStopVisitMutation.test.mjs)에서 계정 전환 후 지연 성공·실패, 같은 토큰의 재로그인, 위치·사진·업로드·기기 정보 조회 대기 중 전환을 재현했습니다. 이전 요청이 새 계정의 상태를 변경하지 않는지 확인했습니다.
+
+관련 코드: [요청별 세션 검사](apps/web/src/lib/authToken.ts), [방문·사진 요청 처리](apps/web/src/features/my-route/hooks/useRouteStopVisitMutation.ts)
+
+</details>
+
+<details>
+<summary>루트 비공개 전환과 사진 공개 범위가 따로 저장되는 문제</summary>
+
+- **문제:** 완료한 공유 루트에서 방문을 취소해 진행 중·비공개로 되돌릴 때, 사진 공개 범위나 회고 알림 정리가 실패하면 루트 상태와 관련 데이터가 서로 달라질 수 있었습니다.
+- **원인:** 방문 기록과 루트 진행 상태, 사진이 상속하는 루트 공개 범위, 완료 후 알림을 하나의 저장 단위로 처리해야 했습니다. 이미 일부만 비공개로 바뀐 데이터도 재시도로 정리할 필요가 있었습니다.
+- **해결:** 진행 상태 갱신과 관련 데이터 정리를 같은 트랜잭션에서 처리하도록 했습니다. 정리가 실패하면 함께 되돌리고, 재시도 시 이미 비공개인 루트의 남은 불일치도 정리합니다. 사진별로 사용자가 명시한 공개 동의는 유지합니다.
+- **검증:** [공개 범위 회귀 테스트](apps/api/tests/routeProgressPrivacy.test.mjs)에서 사진·알림 정리 실패 시 원복, 재시도, 기존 불일치 복구, 트랜잭션 충돌을 확인했습니다. 다른 사용자의 장소 사진 조회 경로에서도 공개 범위가 반영되는지 검사했습니다.
+
+관련 코드: [루트 진행 상태와 공개 범위 갱신](apps/api/src/modules/routes/route.shared.ts), [방문 취소 처리](apps/api/src/modules/routes/routeVisit.service.ts)
+
+</details>
+
+<details>
+<summary>WebView 내장 번들에서 도보 Worker와 보행로 데이터 로딩 복구</summary>
+
+- **문제:** 일반 웹의 파일 URL을 전제로 만든 도보 기능은 JavaScript를 data: 모듈로 포함하는 Native 내장 번들에서 Worker나 보행로 JSON을 불러오는 경로가 맞지 않았습니다.
+- **원인:** Worker를 별도 상대 URL로 만들고 보행로 JSON을 웹 공개 경로에서 조회했지만, Native 패키징에는 해당 파일을 포함하는 처리가 빠져 있었습니다.
+- **해결:** Worker 코드를 인라인 번들로 바꾸고, Native 패키징 단계에서 강릉 보행로 JSON도 data: URL로 포함하도록 했습니다. 웹에서는 기존 공개 파일 조회를 유지합니다. 지원 범위는 강릉 시내·경포·안목이며 범위 밖 좌표는 계산 전에 구분합니다.
+- **검증:** [Native 번들 테스트](apps/web/tests/walkingNativeBundle.test.mjs)에서 실제 패키징 스크립트로 만든 data: 모듈을 불러와 외부 요청 없이 강릉 경로를 계산했습니다. 범위 밖 좌표와 계산 취소 시 Worker 종료도 확인했습니다. Worker 실행은 테스트 대역을 사용하므로 iOS WebView 실행 확인은 별도로 필요합니다.
+
+관련 코드: [도보 경로 요청](apps/web/src/features/walking/walkingDirections.ts), [Native 웹 번들 패키징](apps/native/scripts/sync-web-build.mjs)
+
+</details>
+
+<details>
+<summary>건너뛰기 처리 중 화면 이탈과 꺼둔 도착 알림의 재등록 방지</summary>
+
+- **문제:** 건너뛰기 저장과 기기 알림 갱신이 진행 중이어도 화면을 닫거나 뒤로갈 수 있었습니다. 요청 대기 중 알림 설정이 OFF로 바뀌면, 이전 ON 설정을 기억한 후속 처리가 등록 대상을 다시 보낼 수도 있었습니다.
+- **원인:** 비동기 작업 시작 시 읽은 설정을 이후에도 사용했습니다. 또한 진행 화면에서 popstate 리스너를 뒤늦게 등록하는 방식은 라우터가 먼저 이동을 처리해 화면을 닫는 경우를 막지 못했습니다.
+- **해결:** 실제 Mutation 진행 상태로 경로 점이 다음 지점으로 뛰는 대화상자를 표시하고 배경 조작·닫기·Escape를 막았습니다. 앱 시작 시 라우터보다 먼저 뒤로가기 보호를 설치하고 처리 중에만 잠급니다. 알림은 대기 후 최신 설정을 다시 읽고, 이미 보낸 등록이 OFF 이후 완료되면 마지막에 빈 대상을 전송해 해제합니다. 성공과 실패 모두 진행 표시와 이동 잠금을 정리합니다.
+- **검증:** [건너뛰기 요청 테스트](apps/web/tests/routeSkippingMutation.test.mjs)에서 저장 성공·실패·취소·DAY 마무리 중 설정 변경과 늦은 기기 응답을 확인했습니다. [이동 보호 테스트](apps/web/tests/historyNavigationGuard.test.mjs)와 별도 브라우저 검증으로 닫기·Escape·BrowserRouter/HashRouter 뒤로가기, 완료 후 해제, 좁은 화면·다크 모드·동작 줄이기를 확인했습니다. 기기 알림 호출은 테스트 대역으로 검증했으며 iOS 실기기 알림 수신은 미확인입니다.
+
+관련 코드: [건너뛰기 진행 화면](apps/web/src/features/my-route/components/day-route/RouteSkippingProgressDialog.tsx), [도착 알림 동기화](apps/web/src/features/my-route/services/routeArrivalNotificationService.ts), [앱 내부 이동 보호](apps/web/src/lib/historyNavigationGuard.ts)
+
+</details>
+
 ## 빠른 시작
 
 ```bash

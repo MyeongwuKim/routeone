@@ -4,6 +4,7 @@ import { MdArrowForward, MdArrowUpward, MdErrorOutline, MdLanguage, MdMap, MdRef
 import HomeRecommendationForm from "@/features/home/recommendations/HomeRecommendationForm";
 import HomeRecommendedCourseCard from "@/features/home/recommendations/HomeRecommendedCourseCard";
 import HomeMapEntry from "@/features/home/recommendations/HomeMapEntry";
+import RouteCheckoutResumeCard from "@/features/route-checkout/components/RouteCheckoutResumeCard";
 import { getHomeRecommendationText, type HomeRecommendationText } from "@/features/home/recommendations/homeRecommendationText";
 import { useHomeRecommendations } from "@/features/home/recommendations/useHomeRecommendations";
 import { HOME_RECOMMENDATIONS_ANCHOR, type HomeTourCourse } from "@/features/home/recommendations/homeRecommendations";
@@ -142,6 +143,7 @@ function HomeRecommendationContent() {
           <h1 className="text-[29px] font-bold leading-tight tracking-tight sm:text-4xl">{text.title}</h1>
           <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{text.description}</p>
         </div>
+        <RouteCheckoutResumeCard />
         <HomeMapEntry href={mapHref} onOpen={actions.prepareMap} text={text} />
         <div className="grid items-start gap-7 lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-9">
           <div ref={formRef}><HomeRecommendationForm selection={selection} area={area} text={text} onAreaChange={actions.selectArea} onRegionsChange={actions.selectRegions} /></div>
@@ -154,10 +156,12 @@ function HomeRecommendationContent() {
             className="min-w-0 scroll-mt-[calc(env(safe-area-inset-top)+1rem)] focus:outline-none"
           >
             <div className="mb-4">
-              <p className="text-xs font-semibold text-brand-700 dark:text-brand-300">
-                {regionLabel}{query.data ? ` · ${text.courseCount(courses.length, query.hasNextPage)}` : ""}
-              </p>
-              <h2 className="mt-1 text-xl font-bold">{text.results}</h2>
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <h2 className="shrink-0 text-xl font-bold">{text.results}</h2>
+                <p className="min-w-0 truncate text-xs font-semibold text-brand-700 dark:text-brand-300" title={regionLabel}>
+                  {regionLabel}{query.data ? ` · ${text.courseCount(courses.length, query.hasNextPage)}` : ""}
+                </p>
+              </div>
               <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{text.resultDescription}</p>
             </div>
             <div className="mb-4 flex min-h-4 items-center justify-between gap-2">
@@ -173,7 +177,7 @@ function HomeRecommendationContent() {
               {isLoading ? (
                 <div className={courseGridClassName} aria-hidden="true">
                   {[0, 1].map((index) => (
-                    <div key={index} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-[#0b211f]">
+                    <div key={index} className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#0b211f]">
                       <div className="relative h-40 bg-gradient-to-br from-brand-50 to-sky-50 sm:h-44 dark:from-brand-900/60 dark:to-slate-800">
                         <div className="absolute left-4 top-4 h-6 w-20 rounded-full bg-white/70 dark:bg-white/10" />
                       </div>
@@ -200,7 +204,7 @@ function HomeRecommendationContent() {
                   onStartCourse={actions.startCourse}
                 />
                 <Link to={mapHref} onClick={actions.prepareMap} className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-brand-700 [overflow-anchor:none] dark:text-brand-200">{text.mapRegion}<MdArrowForward aria-hidden="true" /></Link>
-              </> : <div className="flex min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed border-brand-200 px-5 py-8 text-center sm:min-h-72 dark:border-brand-400/25">
+              </> : <div className="flex min-h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-brand-200 px-5 py-8 text-center sm:min-h-72 dark:border-brand-400/25">
                 {isError ? (
                   <span className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-brand-100/70 text-3xl text-brand-700 dark:bg-brand-900/50 dark:text-brand-200">
                     <MdErrorOutline aria-hidden="true" />

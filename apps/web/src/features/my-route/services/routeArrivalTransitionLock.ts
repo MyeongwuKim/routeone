@@ -1,6 +1,6 @@
 /**
  * 용도:
- * 여행 시작·방문 완료의 네이티브 알림 전환과 API 처리가 끝날 때까지
+ * 여행 시작·방문 완료·건너뜀·DAY 마무리의 네이티브 알림 전환과 API 처리가 끝날 때까지
  * 전역 도착 알림 동기화가 중간 상태를 덮어쓰지 못하게 한다.
  *
  * 동작 방식:
@@ -11,6 +11,8 @@
 export type RouteArrivalTransitionExpectation =
   | { kind: "route-start" }
   | { kind: "stop-visit"; stopId: string; visited: boolean }
+  | { kind: "stop-skip"; stopId: string; skipped: boolean }
+  | { kind: "day-finish"; dayId: string }
   | { kind: "unknown" };
 
 export type UnresolvedRouteArrivalTransition = {
@@ -26,6 +28,12 @@ const activeTransitionCountByRouteId = new Map<string, number>();
 const unresolvedTransitionByRouteId =
   new Map<string, UnresolvedRouteArrivalTransition>();
 const transitionListeners = new Set<() => void>();
+let transitionResetVersion = 0;
+
+/** 계정 정리로 잠금이 초기화된 뒤 이전 방문 요청이 새 잠금을 해제하지 않도록 구분한다. */
+export function getRouteArrivalTransitionResetVersion() {
+  return transitionResetVersion;
+}
 let nextTransitionGeneration = 0;
 
 export const ROUTE_ARRIVAL_TRANSITION_RECONCILIATION_DELAY_MS = 5_000;
@@ -52,7 +60,14 @@ function isRouteArrivalTransitionExpectation(
     (expectation.kind === "stop-visit" &&
       typeof expectation.stopId === "string" &&
       Boolean(expectation.stopId.trim()) &&
-      typeof expectation.visited === "boolean")
+      typeof expectation.visited === "boolean") ||
+    (expectation.kind === "stop-skip" &&
+      typeof expectation.stopId === "string" &&
+      Boolean(expectation.stopId.trim()) &&
+      typeof expectation.skipped === "boolean") ||
+    (expectation.kind === "day-finish" &&
+      typeof expectation.dayId === "string" &&
+      Boolean(expectation.dayId.trim()))
   );
 }
 
@@ -154,12 +169,14 @@ function hydrateUnresolvedTransitions() {
         ...transition,
         routeId: normalizedRouteId,
         expectation:
-          transition.expectation.kind === "stop-visit"
+          transition.expectation.kind === "stop-visit" || transition.expectation.kind === "stop-skip"
             ? {
                 ...transition.expectation,
                 stopId: transition.expectation.stopId.trim(),
               }
-            : transition.expectation,
+            : transition.expectation.kind === "day-finish"
+              ? { ...transition.expectation, dayId: transition.expectation.dayId.trim() }
+              : transition.expectation,
       } satisfies UnresolvedRouteArrivalTransition;
 
       unresolvedTransitionByRouteId.set(
@@ -429,6 +446,7 @@ export function clearRouteArrivalTransitions() {
     return false;
   }
 
+  transitionResetVersion += 1;
   notifyTransitionListeners();
   return true;
 }

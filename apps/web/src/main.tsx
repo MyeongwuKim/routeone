@@ -3,7 +3,7 @@
  * 웹 앱 실행에 필요한 전역 설정을 적용하고 React 애플리케이션을 시작한다.
  *
  * 동작 방식:
- * 모니터링과 공통 스타일을 준비하고, 저장된 언어팩을 적용한 뒤 App을 렌더링한다.
+ * 모니터링·공통 스타일·저장 중 이동 보호를 준비하고, 저장된 언어팩을 적용한 뒤 App을 렌더링한다.
  */
 import "./instrument";
 import { StrictMode } from "react";
@@ -15,6 +15,7 @@ import AppErrorBoundary from "./components/AppErrorBoundary";
 import NativeWebBundleReadySignal from "./components/NativeWebBundleReadySignal";
 import { isGraphQLRequestError } from "./lib/graphqlClient";
 import { startLocalizedApp } from "./lib/startLocalizedApp";
+import { installHistoryNavigationGuard } from "./lib/historyNavigationGuard";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -77,4 +78,5 @@ function renderApp() {
 
 warmAppFonts();
 preventMediaAndLinkDrag();
+installHistoryNavigationGuard();
 void startLocalizedApp(renderApp);

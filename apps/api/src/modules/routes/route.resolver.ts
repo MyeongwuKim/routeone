@@ -24,6 +24,7 @@ import {
   deleteRouteDay,
   deleteRouteStopVisitPhoto,
   fetchPosterImageDataUrl,
+  finishRouteDay,
   getPublicRoutes,
   getPublicRouteConnection,
   getLikedRouteConnection,
@@ -36,6 +37,7 @@ import {
   markRouteStopVisited,
   reorderRouteStops,
   setRouteStopPhotoPublication,
+  setRouteStopSkipped,
   setRouteStopVisitPhoto,
   setRouteLike,
   setRouteSave,
@@ -439,6 +441,8 @@ export const routeTypeDefs = gql`
       verification: RouteStopVisitVerificationInput!
     ): Route!
     completeRouteStopVisit(stopId: ID!, actualStayMinutes: Int): Route!
+    setRouteStopSkipped(stopId: ID!, skipped: Boolean!): Route!
+    finishRouteDay(dayId: ID!): Route!
     setRouteStopPhotoPublication(stopId: ID!, published: Boolean!): Route!
     setRouteStopVisitPhoto(
       stopId: ID!
@@ -853,6 +857,16 @@ export const routeResolvers = {
         args.verification,
         args.actualStayMinutes
       );
+    },
+    setRouteStopSkipped(
+      _parent: unknown,
+      args: { stopId: string; skipped: boolean },
+      context: GraphQLContext
+    ) {
+      return setRouteStopSkipped(context.prisma, requireUser(context), args.stopId, args.skipped);
+    },
+    finishRouteDay(_parent: unknown, args: DayIdArgs, context: GraphQLContext) {
+      return finishRouteDay(context.prisma, requireUser(context), args.dayId);
     },
     checkInRouteStop(
       _parent: unknown,

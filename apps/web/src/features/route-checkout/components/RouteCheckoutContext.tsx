@@ -2,12 +2,17 @@
 import {
   useCallback,
   useMemo,
+  useLayoutEffect,
   useReducer,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { useUiText } from "@/lib/uiText";
+import { useRouteCheckoutDraftStore } from "@/stores/routeCheckoutDraftStore";
+import type { SavedPlaceItem } from "@/stores/placeCartStore";
+import { getCheckoutPlacesKey, type RouteCheckoutDraft, type RouteCreateAttempt } from "../models/routeCheckoutDraft";
+import type { RouteEditorState } from "../models/routeResultEditorState";
 import type {
   RouteStartLocation,
   TravelTempo,
@@ -19,7 +24,6 @@ import {
   type CartFlowStep,
 } from "../models/routeCheckoutFlow";
 import {
-  createRouteCheckoutState,
   routeCheckoutReducer,
   type RouteCheckoutAction,
   type RouteStartLocationSource,
@@ -27,42 +31,67 @@ import {
 import { RouteCheckoutContext } from "../hooks/useRouteCheckout";
 
 type RouteCheckoutProviderProps = {
-
   children: ReactNode;
-  /** Provider를 처음 만들 때 표시할 일정 만들기 단계 */
-  initialStep?: CartFlowStep;
-  /** 일정 상태를 처음 만들 때 적용할 여행 시작일. null과 빈 문자열은 미선택 상태로 정규화된다. */
-  initialTravelStartDate?: string | null;
-
-  initialTripDays?: number;
-  /** 추천 일정 계산에 사용할 최초 출발지. 없으면 출발지 선택 단계에서 정한다. */
-  initialStartLocation?: RouteStartLocation | null;
-  /** 공유 코스를 가져올 때는 기존 코스의 출발지로 표시한다. */
-  initialStartLocationSource?: RouteStartLocationSource;
+  /** 모달을 열 때 확정한 저장 문맥과 복원 상태. 같은 모달 안에서는 ID를 유지한다. */
+  draft: RouteCheckoutDraft;
+  savedPlaces: SavedPlaceItem[];
 };
 
+/** 입력·결과 편집을 한 초안 ID로 보관하며, 저장·명시 삭제 후에는 늦은 변경으로 초안을 되살리지 않는다. */
 export function RouteCheckoutProvider({
   children,
-  initialStep = "cart",
-  initialTravelStartDate = "",
-  initialTripDays = 1,
-  initialStartLocation = null,
-  initialStartLocationSource,
+  draft,
+  savedPlaces,
 }: RouteCheckoutProviderProps) {
   const text = useUiText();
   const [isSavingRoute, setIsSavingRoute] = useState(false);
   const isSaveRequestInFlightRef = useRef(false);
-  const [state, dispatch] = useReducer(
-    routeCheckoutReducer,
-    {
-      initialStep,
-      initialTravelStartDate,
-      initialTripDays,
-      initialStartLocation,
-      initialStartLocationSource,
-    },
-    createRouteCheckoutState
-  );
+  const [state, dispatch] = useReducer(routeCheckoutReducer, draft.form);
+  const [editorState, setEditor] = useState(draft.editor);
+  const [createAttempt, setAttempt] = useState(draft.createAttempt);
+  const didInitializeDraft = useRef(false);
+  const placesKey = getCheckoutPlacesKey(savedPlaces);
+  const previousPlacesKey = useRef(placesKey);
+  const [editorPlacesKey, setEditorPlacesKey] = useState(placesKey);
+  const appendTarget = draft.context.mode === "append" ? draft.context.target : null;
+
+  // 결과 자식이 새 장소로 마운트되기 전에 예전 장소의 편집 상태를 초기화한다.
+  if (editorPlacesKey !== placesKey) {
+    setEditorPlacesKey(placesKey);
+    setEditor(null);
+    setAttempt(null);
+  }
+
+  // 입력 직후 저장해 앱 종료 시 지연 저장을 기다리다 변경분을 잃지 않게 한다.
+  useLayoutEffect(() => {
+    const store = useRouteCheckoutDraftStore.getState();
+    const didPlacesChange = previousPlacesKey.current !== placesKey;
+    previousPlacesKey.current = placesKey;
+    if (!didInitializeDraft.current) {
+      store.saveDraft({ ...draft, form: state, savedPlaces });
+      didInitializeDraft.current = true;
+    } else {
+      store.updateDraft(draft.id, {
+        form: state, savedPlaces,
+        ...(didPlacesChange ? { editor: null, createAttempt: null } : {}),
+      });
+    }
+  }, [draft, placesKey, savedPlaces, state]);
+
+  /** 적용 전 편집과 취소 기준을 함께 보관해 결과 단계를 나갔다 돌아와도 유지한다. */
+  const setEditorState = useCallback((editor: RouteEditorState) => {
+    setEditor(editor);
+    useRouteCheckoutDraftStore.getState().updateDraft(draft.id, { editor });
+  }, [draft.id]);
+  /** 생성 요청을 보내기 전에 재시도 식별자를 동기 저장한다. */
+  const setCreateAttempt = useCallback((attempt: RouteCreateAttempt) => {
+    setAttempt(attempt);
+    useRouteCheckoutDraftStore.getState().updateDraft(draft.id, { createAttempt: attempt });
+  }, [draft.id]);
+  /** 저장 성공 또는 명시 폐기 시 이 모달의 초안만 삭제한다. */
+  const clearDraft = useCallback(() => {
+    useRouteCheckoutDraftStore.getState().clearDraft(draft.id);
+  }, [draft.id]);
   const isRouteSaveInFlight = useCallback(
     () => isSaveRequestInFlightRef.current,
     []
@@ -159,6 +188,13 @@ export function RouteCheckoutProvider({
 
   const value = useMemo(
     () => ({
+      draftId: draft.id,
+      appendTarget,
+      editorState,
+      setEditorState,
+      createAttempt,
+      setCreateAttempt,
+      clearDraft,
       isSavingRoute,
       isRouteSaveInFlight,
       startSavingRoute,
@@ -184,6 +220,13 @@ export function RouteCheckoutProvider({
       scheduleValidationMessage,
     }),
     [
+      draft.id,
+      appendTarget,
+      editorState,
+      setEditorState,
+      createAttempt,
+      setCreateAttempt,
+      clearDraft,
       dailyStartMinutes,
       dailyStartTime,
       finishSavingRoute,

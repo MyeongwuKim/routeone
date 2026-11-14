@@ -8,15 +8,9 @@ function PlaceCartTempoStep() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <p className="font-trip text-sm text-brand-700">TRAVEL TEMPO</p>
-        <p className="mt-1 text-xl font-semibold text-slate-900">
-          {text.cart.tempoTitle}
-        </p>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          {text.cart.tempoDescription}
-        </p>
-      </div>
+      <p className="text-sm leading-6 break-keep text-slate-500">
+        {text.cart.tempoDescription}
+      </p>
 
       <button
         type="button"

@@ -4,6 +4,7 @@ import { UserFacingError } from "../graphql/userFacingError.js";
 
 export type AuthTokenPayload = {
   userId: string;
+  sessionId: string;
   exp: number;
 };
 
@@ -74,9 +75,11 @@ export function verifyPassword(password: string, passwordHash: string) {
   return safeEqual(candidateHash, hash);
 }
 
-export function createAuthToken(userId: string) {
+/** 전달받은 로그인 세션 식별자로 7일짜리 토큰을 발급한다. 서버 세션 교체는 로그인 처리에서 수행한다. */
+export function createAuthToken(userId: string, sessionId: string) {
   const payload: AuthTokenPayload = {
     userId,
+    sessionId,
     exp: Date.now() + TOKEN_TTL_MS,
   };
   const encodedPayload = toBase64Url(JSON.stringify(payload));
@@ -104,7 +107,10 @@ export function verifyAuthSession(token: string | null | undefined) {
     const payload = JSON.parse(fromBase64Url(encodedPayload)) as AuthTokenPayload;
 
     if (
+      typeof payload.userId !== "string" ||
       !payload.userId ||
+      typeof payload.sessionId !== "string" ||
+      !payload.sessionId ||
       typeof payload.exp !== "number" ||
       !Number.isFinite(payload.exp) ||
       payload.exp <= Date.now()

@@ -2,7 +2,7 @@
  * 진입 경로: 내 정보 → 계정 관리
  *
  * 현재 로그인 사용자의 프로필과 로그인 이메일을 표시하고 로그아웃·회원 탈퇴를 실행한다.
- * 푸시 기기와 네이티브 알림을 먼저 해제한 뒤 인증·사용자 Store·Query 캐시를 비우며,
+ * 푸시 기기와 네이티브 알림을 먼저 해제한 뒤 작성 중 일정·인증·사용자 Store·Query 캐시를 비우며,
  * 회원 탈퇴는 확인 단계와 요청 중 잠금을 거친 뒤 같은 정리 흐름을 사용한다.
  */
 import { useState, type ReactNode } from "react";
@@ -28,6 +28,7 @@ import { useAuthUserStore } from "@/stores/authUserStore";
 import { useHomeExploreStore } from "@/stores/homeExploreStore";
 import { useMapSheetStore } from "@/stores/mapSheetStore";
 import { useRouteEditFlowStore } from "@/stores/routeEditFlowStore";
+import { useRouteCheckoutDraftStore } from "@/stores/routeCheckoutDraftStore";
 import { useDefaultServiceArea } from "@/stores/serviceAreaStore";
 import { useUiModalStore } from "@/stores/uiModalStore";
 import { useUiLoadingStore } from "@/stores/uiLoadingStore";
@@ -123,6 +124,7 @@ function MyAccountPage() {
   const clearAppendTarget = useRouteEditFlowStore(
     (state) => state.clearAppendTarget
   );
+  const clearCheckoutDraft = useRouteCheckoutDraftStore((state) => state.clearDraft);
   const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -156,6 +158,7 @@ function MyAccountPage() {
     resetHomeForArea(serviceArea.defaultRegion.sigunguCode);
     resetMapSheet();
     clearAppendTarget();
+    clearCheckoutDraft();
     clearRouteArrivalTransitions();
     clearRouteStartAttempts();
     clearAuthToken();

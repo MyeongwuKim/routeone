@@ -2,12 +2,15 @@
  * 진입 경로: 지도에서 담은 장소 또는 공유 루트 담기 → 일정 만들기
  * 장소·날짜·템포·출발지·추천 일정 단계를 연결하고, 단계별 안내와 저장 상태를 관리한다.
  */
-import { useRef, useState, type SyntheticEvent } from "react";
+import { useLayoutEffect, useRef, useState, type SyntheticEvent } from "react";
 import { IoArrowBack, IoTrashOutline } from "react-icons/io5";
 import {
   RouteCheckoutProvider,
 } from "./RouteCheckoutContext";
 import { useRouteCheckout } from "../hooks/useRouteCheckout";
+import { useRouteCheckoutDraftSession } from "../hooks/useRouteCheckoutDraftSession";
+import { getCheckoutPlacesKey, type RouteCheckoutDraftContext } from "../models/routeCheckoutDraft";
+import { useAuthUserStore } from "@/stores/authUserStore";
 import TodayStartScheduleConfirmDialog from "./TodayStartScheduleConfirmDialog";
 import RouteCheckoutSavingOverlay from "./RouteCheckoutSavingOverlay";
 import RouteCheckoutHelpButton from "./RouteCheckoutHelpButton";
@@ -37,6 +40,9 @@ import {
 } from "../models/routeCheckoutFlow";
 
 type RouteCheckoutModalProps = {
+  /** 새 일정·공유 복사·기존 DAY 추가의 저장 문맥. 홈 재개 링크는 저장된 문맥을 복원한다. */
+  draftContext?: RouteCheckoutDraftContext;
+  resumeDraft?: boolean;
 
   isOpen: boolean;
 
@@ -223,7 +229,7 @@ function RouteCheckoutModalContent({
         onClickCapture={blockInteractionWhileSaving}
         onPointerDownCapture={blockInteractionWhileSaving}
         onKeyDownCapture={blockInteractionWhileSaving}
-        className="flex h-full min-h-0 flex-col"
+        className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col"
       >
         <header className="app-safe-area-header flex shrink-0 items-center justify-between gap-2 border-b border-brand-100 px-4 py-3">
           <div className="flex min-w-0 items-center">
@@ -285,6 +291,7 @@ function RouteCheckoutModalContent({
 
         {step === "result" && tempo ? (
           <PlaceCartRouteResultStep
+            key={getCheckoutPlacesKey(savedPlaces)}
             savedPlaces={savedPlaces}
             candidatePlaces={insertCandidatePlaces}
             initialRoutePlan={initialRoutePlan}
@@ -328,7 +335,7 @@ function RouteCheckoutModalContent({
                 type="button"
                 onClick={handleNext}
                 disabled={nextDisabled}
-                className="w-full rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+                className="min-h-11 w-full whitespace-nowrap rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
               >
                 {text.cart.nextStepLabels[step]}
               </button>
@@ -354,30 +361,55 @@ function RouteCheckoutModalContent({
   );
 }
 
-function RouteCheckoutModal({
-  isOpen,
+function RouteCheckoutSession({
   initialStep = "cart",
   initialTravelStartDate,
   initialTripDays,
+  draftContext = { mode: "new" },
+  resumeDraft = false,
   ...contentProps
 }: RouteCheckoutModalProps) {
-  if (!isOpen) {
-    return null;
-  }
+  const session = useRouteCheckoutDraftSession({
+    context: draftContext,
+    resumeDraft,
+    initialStep,
+    initialTravelStartDate,
+    initialTripDays,
+    ...contentProps,
+  });
+  const userId = useAuthUserStore((state) => state.user?.id ?? null);
+  const sessionOwnerId = useRef(session.draft.ownerUserId);
+  const { onClose } = contentProps;
+  // 로그인 중인 작성 화면은 유지하되 다른 계정으로 바뀐 경우 이전 작성 화면을 닫는다.
+  useLayoutEffect(() => {
+    if (userId && sessionOwnerId.current && userId !== sessionOwnerId.current) onClose();
+    else if (userId) sessionOwnerId.current = userId;
+  }, [userId, onClose]);
+  const appendRouteTitle = session.draft.context.mode === "append"
+    ? session.draft.context.target.routeTitle : null;
 
   return (
     <RouteCheckoutProvider
-      initialStep={initialStep}
-      initialTravelStartDate={initialTravelStartDate}
-      initialTripDays={initialTripDays}
-      initialStartLocation={contentProps.currentLocation}
-      initialStartLocationSource={
-        contentProps.initialRoutePlan ? "shared-route" : "current-location"
-      }
+      key={session.draft.id}
+      draft={session.draft}
+      savedPlaces={session.savedPlaces}
     >
-      <RouteCheckoutModalContent {...contentProps} initialStep={initialStep} />
+      <RouteCheckoutModalContent
+        {...contentProps}
+        savedPlaces={session.savedPlaces}
+        initialStep={session.draft.initialStep}
+        initialRoutePlan={session.draft.initialRoutePlan}
+        appendRouteTitle={appendRouteTitle}
+        onRemovePlace={session.removePlace}
+        onClearPlaces={session.clearPlaces}
+      />
     </RouteCheckoutProvider>
   );
+}
+
+/** 모달을 닫으면 UI만 해제하고 입력·결과는 초안에 남겨 다음 진입에서 복원한다. */
+function RouteCheckoutModal(props: RouteCheckoutModalProps) {
+  return props.isOpen ? <RouteCheckoutSession {...props} /> : null;
 }
 
 export default RouteCheckoutModal;

@@ -50,8 +50,7 @@ export function StayMinutesPopup({
       <section className="center-modal-panel-enter relative w-full max-w-[340px] rounded-[1.4rem] border border-brand-100 bg-white p-4 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-trip text-sm text-brand-700">STAY TIME</p>
-            <h3 className="mt-1 truncate text-lg font-bold text-slate-900">
+            <h3 className="truncate text-lg font-bold text-slate-900">
               {item.place.title}
             </h3>
             <p className="mt-1 text-xs font-semibold text-slate-500">
@@ -209,7 +208,7 @@ export function PlaceCartRouteItemSheet({
         </div>
 
         <div className="mt-4 rounded-2xl border border-brand-100 bg-brand-50/70 px-3 py-3 dark:border-brand-400/25 dark:bg-slate-900/80">
-          <p className="line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-300">
+          <p className="truncate text-xs leading-5 text-slate-500 dark:text-slate-300" title={item.place.address}>
             {item.place.address || text.cart.noAddress}
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">

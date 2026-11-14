@@ -11,6 +11,7 @@ import type {
   RouteStopVerificationStatus,
 } from "@prisma/client";
 import { UserFacingError } from "../../graphql/userFacingError.js";
+import { runTransactionWithRetry } from "../../lib/transaction.js";
 import type { PlaceSnapshotInput } from "./route.types.js";
 import { resolvePlaceVerificationPolicy } from "./routePlaceVerificationPolicy.js";
 import { findRouteRegionTag } from "./routeRegions.js";
@@ -442,12 +443,13 @@ export async function assertRouteOwner(
   return route;
 }
 
+/** 방문 수는 실제 방문만 세고, 모두 방문·건너뜀이면 완료한다. 완료를 되돌리면 공개 공유도 해제한다. */
 export function buildRouteProgressData(
   route: Pick<Route, "status" | "completedAt" | "startedAt">,
-  counts: { totalStopCount: number; completedStopCount: number }
+  counts: { totalStopCount: number; completedStopCount: number; skippedStopCount?: number }
 ) {
-  const { totalStopCount, completedStopCount } = counts;
-  const isCompleted = totalStopCount > 0 && totalStopCount === completedStopCount;
+  const { totalStopCount, completedStopCount, skippedStopCount = 0 } = counts;
+  const isCompleted = totalStopCount > 0 && totalStopCount === completedStopCount + skippedStopCount;
   const status = isCompleted ? "COMPLETED" : route.status === "COMPLETED" ? "ACTIVE" : route.status;
   return {
     totalStopCount,
@@ -455,21 +457,34 @@ export function buildRouteProgressData(
     status,
     completedAt: isCompleted ? (route.completedAt ?? new Date()) : null,
     startedAt: route.startedAt ?? (completedStopCount > 0 ? new Date() : null),
+    ...(!isCompleted && route.status === "COMPLETED"
+      ? { visibility: "PRIVATE" as const, sharedAt: null, shareTags: [] }
+      : {}),
   } satisfies Prisma.RouteUpdateInput;
 }
 
+/** 저장 장소의 전체 수와 실제 방문 수, 건너뜀 수를 따로 집계한다. */
 export function countRouteStops(stops: Pick<RouteStop, "visitStatus">[]) {
   return {
     totalStopCount: stops.length,
     completedStopCount: stops.filter((stop) => stop.visitStatus === "VISITED").length,
+    skippedStopCount: stops.filter((stop) => stop.visitStatus === "SKIPPED").length,
   };
 }
 
+/**
+ * 방문 집계와 비공개 전환 시 사진·리뷰 알림 정리를 함께 저장한다.
+ * 루트 클라이언트는 재시도 가능한 트랜잭션을 열고, 기존 트랜잭션에서는 그 안에서 실행한다.
+ * 이미 일부만 비공개로 바뀐 기록도 현재 상태를 기준으로 다시 정리한다.
+ */
 export async function refreshRouteProgress(
   prisma: RouteSharedPrisma,
   routeId: string
-) {
-  const [totalStopCount, completedStopCount] = await Promise.all([
+): Promise<Route> {
+  if ("$transaction" in prisma) {
+    return runTransactionWithRetry(prisma, (transaction) => refreshRouteProgress(transaction, routeId));
+  }
+  const [totalStopCount, completedStopCount, skippedStopCount] = await Promise.all([
     prisma.routeStop.count({
       where: {
         routeId,
@@ -481,6 +496,7 @@ export async function refreshRouteProgress(
         visitStatus: "VISITED",
       },
     }),
+    prisma.routeStop.count({ where: { routeId, visitStatus: "SKIPPED" } }),
   ]);
   const route = await prisma.route.findUnique({
     where: {
@@ -492,10 +508,18 @@ export async function refreshRouteProgress(
     throw new UserFacingError("루트를 찾을 수 없습니다.");
   }
 
-  return prisma.route.update({
+  const refreshedRoute = await prisma.route.update({
     where: {
       id: routeId,
     },
-    data: buildRouteProgressData(route, { totalStopCount, completedStopCount }),
+    data: buildRouteProgressData(route, { totalStopCount, completedStopCount, skippedStopCount }),
   });
+  if (refreshedRoute.visibility === "PRIVATE") {
+    // 사진별 명시 공개 동의는 유지하고, 레거시 사진이 상속하는 루트 공개 범위만 맞춘다.
+    await prisma.placePhoto.updateMany({ where: { routeId }, data: { routeVisibility: "PRIVATE" } });
+  }
+  if (refreshedRoute.status !== "COMPLETED") {
+    await prisma.userNotification.deleteMany({ where: { routeId, type: "ROUTE_REVIEW" } });
+  }
+  return refreshedRoute;
 }

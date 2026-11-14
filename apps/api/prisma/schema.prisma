@@ -22,6 +22,8 @@ model User {
   avatarUrl    String?
   locale       String?
   role         UserRole @default(USER)
+  /// 마지막으로 로그인한 세션만 인증한다. 자동 토큰 갱신에서는 이 값을 바꾸지 않는다.
+  activeSessionId String?
 
   accounts            AuthAccount[]
   routes              Route[]
@@ -151,6 +153,8 @@ model RouteStop {
 
   visitStatus VisitStatus @default(PENDING)
   visitedAt   DateTime?
+  /// 방문·도착·건너뜀 등 방문 기록 저장의 잠금 번호. 기존 문서의 누락·null은 0으로 취급한다.
+  visitRevision Int? @default(0)
 
   verificationStatus                  RouteStopVerificationStatus @default(NONE)
   verifiedAt                          DateTime?

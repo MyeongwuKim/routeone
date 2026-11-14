@@ -13,6 +13,7 @@ import {
   type LazyExoticComponent,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   BrowserRouter,
   HashRouter,
@@ -58,6 +59,10 @@ import { getLoginNavigation } from "@/hooks/useLoginRequest";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText } from "@/lib/uiText";
 import { nativeBridge } from "@/native-bridge";
+import { AUTH_SESSION_CHANGE_EVENT, getAuthToken } from "@/lib/authToken";
+import { useAuthUserStore } from "@/stores/authUserStore";
+import { clearRouteArrivalTransitions } from "@/features/my-route/services/routeArrivalTransitionLock";
+import { clearRouteStartAttempts } from "@/features/my-route/services/routeStartAttemptJournal";
 import MyInfoPage from "@/pages/MyInfoPage";
 
 type PreloadableLazyComponent<T extends ComponentType<Record<string, never>>> =
@@ -637,6 +642,29 @@ function withRouteSuspense(children: ReactNode, fallback: ReactNode = null) {
 function AuthSessionTracker() {
   const location = useLocation();
   const { isAuthenticated } = useAuthSession();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    let wasAuthenticated = Boolean(getAuthToken());
+    const handleSessionChange = () => {
+      const hasToken = Boolean(getAuthToken());
+      // 로그인 화면 전환 전에 사용자·조회 캐시·진행 journal을 비우고 일정 초안은 유지한다.
+      if (wasAuthenticated && !hasToken) {
+        clearRouteArrivalTransitions();
+        clearRouteStartAttempts();
+        useAuthUserStore.getState().clearUser();
+        void queryClient.cancelQueries();
+        queryClient.clear();
+      }
+      wasAuthenticated = hasToken;
+    };
+    window.addEventListener(AUTH_SESSION_CHANGE_EVENT, handleSessionChange);
+    window.addEventListener("storage", handleSessionChange);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_CHANGE_EVENT, handleSessionChange);
+      window.removeEventListener("storage", handleSessionChange);
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     if (!isAuthenticated) {

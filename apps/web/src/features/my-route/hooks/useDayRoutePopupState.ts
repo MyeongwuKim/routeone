@@ -1,4 +1,4 @@
-/** DAY 상세 팝업의 선택 일차, 펼침 상태, 순서 편집 draft와 각 확인 팝업 대상을 하나의 reducer로 관리한다. */
+/** DAY 상세 팝업의 선택 일차, 펼침 상태, 확인된 장소 목록과 각 확인 팝업 대상을 하나의 reducer로 관리한다. */
 import { useMemo, useReducer, type SetStateAction } from "react";
 import type {
   ActualStayMinutesTarget,
@@ -15,7 +15,6 @@ type DayRoutePopupState = {
   activeDayId: string;
   expandedDayIds: Set<string>;
   mapTargetDayId: string | null;
-  isOrderEditing: boolean;
   stayMinutesEditTarget: StayMinutesEditTarget | null;
   visitCompletionTarget: VisitCompletionTarget | null;
   visitTimesEditTarget: VisitTimesEditTarget | null;
@@ -31,7 +30,6 @@ type DayRoutePopupAction =
   | { type: "set-active-day-id"; value: string }
   | { type: "set-expanded-day-ids"; value: SetStateAction<Set<string>> }
   | { type: "set-map-target-day"; value: string | null }
-  | { type: "set-order-editing"; value: boolean }
   | { type: "set-stay-minutes-edit-target"; value: StayMinutesEditTarget | null }
   | { type: "set-visit-completion-target"; value: VisitCompletionTarget | null }
   | { type: "set-visit-times-edit-target"; value: VisitTimesEditTarget | null }
@@ -63,7 +61,6 @@ function createDayRoutePopupState(day: MyRouteDay): DayRoutePopupState {
     activeDayId: day.id,
     expandedDayIds: new Set([day.id]),
     mapTargetDayId: null,
-    isOrderEditing: false,
     stayMinutesEditTarget: null,
     visitCompletionTarget: null,
     visitTimesEditTarget: null,
@@ -93,8 +90,6 @@ function dayRoutePopupReducer(
       };
     case "set-map-target-day":
       return { ...state, mapTargetDayId: action.value };
-    case "set-order-editing":
-      return { ...state, isOrderEditing: action.value };
     case "set-stay-minutes-edit-target":
       return { ...state, stayMinutesEditTarget: action.value };
     case "set-visit-completion-target":
@@ -127,7 +122,6 @@ function dayRoutePopupReducer(
         ...state,
         activeDayId: action.day.id,
         mapTargetDayId: null,
-        isOrderEditing: false,
         stayMinutesEditTarget: null,
         visitTimesEditTarget: null,
         verificationPhotoPreviewTarget: null,
@@ -142,8 +136,8 @@ function dayRoutePopupReducer(
 }
 
 /**
- * 최초 day의 장소 순서를 편집 기준으로 저장한다. set 계열 함수는 React SetStateAction을 reducer action으로
- * 변환하며 resetDayEditor는 새 일차의 장소와 ID를 기준으로 편집 상태를 함께 초기화한다.
+ * 최초 day의 확인된 장소 목록을 표시 상태로 저장한다. set 계열 함수는 React SetStateAction을 reducer action으로
+ * 변환하며 resetDayEditor는 새 일차의 장소와 ID를 반영하고 지도·장소 관련 팝업 대상을 초기화한다.
  */
 export function useDayRoutePopupState(day: MyRouteDay) {
   const [state, dispatch] = useReducer(
@@ -159,8 +153,6 @@ export function useDayRoutePopupState(day: MyRouteDay) {
         dispatch({ type: "set-expanded-day-ids", value }),
       setMapTargetDayId: (value: string | null) =>
         dispatch({ type: "set-map-target-day", value }),
-      setIsOrderEditing: (value: boolean) =>
-        dispatch({ type: "set-order-editing", value }),
       setStayMinutesEditTarget: (value: StayMinutesEditTarget | null) =>
         dispatch({ type: "set-stay-minutes-edit-target", value }),
       setVisitCompletionTarget: (value: VisitCompletionTarget | null) =>

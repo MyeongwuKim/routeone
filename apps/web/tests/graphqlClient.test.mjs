@@ -18,10 +18,12 @@ const saveOptions = { timeoutMs: 30_000, maxRetryCount: 1, retryDelayMs: 1_000 }
 
 let server;
 let client;
+let authApi;
 let previousGlobals;
 let fetchSteps;
 let fetchCalls;
 let timers;
+let storage;
 
 before(async () => {
   server = await createServer({
@@ -37,6 +39,7 @@ before(async () => {
     optimizeDeps: { noDiscovery: true, include: [] },
   });
   client = await server.ssrLoadModule("/src/lib/graphqlClient.ts");
+  ({ authApi } = await server.ssrLoadModule("/src/api/authApi.ts"));
 });
 
 after(async () => {
@@ -53,10 +56,15 @@ beforeEach(() => {
   fetchSteps = [];
   fetchCalls = [];
   timers = [];
+  storage = new Map();
   const mockedGlobals = {
     window: {
       RouteOneRuntimeConfig: { graphqlEndpoint: "/graphql-test" },
-      localStorage: { getItem: () => null },
+      localStorage: {
+        getItem: key => storage.get(key) ?? null,
+        setItem: (key, value) => storage.set(key, String(value)),
+        removeItem: key => storage.delete(key),
+      },
       setTimeout(callback, delay) {
         const timer = { callback, delay, canceled: false, fired: false };
         timers.push(timer);
@@ -100,6 +108,19 @@ function jsonResponse(payload, status = 200) {
     headers: { "Content-Type": "application/json" },
   });
 }
+
+test("방문 기록 충돌 HTTP 409는 오류를 유지하고 자동 재전송하지 않는다", async () => {
+  fetchSteps.push(() => jsonResponse({ errors: [{
+    message: "방문 기록이 변경됐어요.", extensions: { code: "USER_FACING_ERROR" },
+  }] }, 409));
+  await assert.rejects(requestMutation(), error => {
+    assert.equal(error.status, 409);
+    assert.equal(error.code, "USER_FACING_ERROR");
+    assert.equal(error.retryable, false);
+    return true;
+  });
+  assert.equal(fetchCalls.length, 1);
+});
 
 function successResponse() {
   return jsonResponse({ data: savedRoute });
@@ -169,6 +190,54 @@ function assertSameRetriedRequest() {
   assert.deepEqual(fetchCalls[0].headers, fetchCalls[1].headers);
   assert.notEqual(fetchCalls[0].signal, fetchCalls[1].signal);
 }
+
+function storeSession(token) {
+  storage.set("routeone.authToken", token);
+  storage.set("routeone.authSessionExpiresAt", String(Date.now() + 60_000));
+}
+
+function sessionRejectedResponse() {
+  return jsonResponse({ errors: [{
+    message: "다른 기기에서 로그인되어 로그아웃됐어요. 다시 로그인해 주세요.",
+    extensions: { code: "UNAUTHENTICATED" },
+  }] }, 401);
+}
+
+test("서버가 현재 로그인 세션을 거절하면 재시도 없이 로컬 세션도 종료한다", async () => {
+  storeSession("fixture-session-a");
+  fetchSteps.push(sessionRejectedResponse);
+  await assert.rejects(requestMutation(), error => error.code === "UNAUTHENTICATED" && !error.retryable);
+  assert.equal(storage.has("routeone.authToken"), false);
+  assert.equal(storage.get("routeone.authSessionExpired"), "true");
+  assert.equal(fetchCalls.length, 1);
+});
+
+test("이전 세션의 늦은 인증 거절은 새로 로그인한 세션을 종료하지 않는다", async () => {
+  storeSession("fixture-session-a");
+  let resolveResponse;
+  fetchSteps.push(() => new Promise(resolve => { resolveResponse = resolve; }));
+  const request = requestMutation();
+  await flushPromises();
+  storeSession("fixture-session-b");
+  resolveResponse(sessionRejectedResponse());
+  await assert.rejects(request, error => error.code === "UNAUTHENTICATED");
+  assert.equal(storage.get("routeone.authToken"), "fixture-session-b");
+  assert.equal(storage.has("routeone.authSessionExpired"), false);
+});
+
+test("명시적으로 다른 토큰을 쓴 정리 요청의 거절은 현재 세션을 종료하지 않는다", async () => {
+  storeSession("fixture-session-b");
+  fetchSteps.push(sessionRejectedResponse);
+  await assert.rejects(requestMutation({ authToken: "fixture-session-a" }), error => error.code === "UNAUTHENTICATED");
+  assert.equal(storage.get("routeone.authToken"), "fixture-session-b");
+});
+
+test("재로그인 요청은 이전 인증값 없이 보내 종료된 세션에 막히지 않는다", async () => {
+  storeSession("fixture-session-a");
+  fetchSteps.push(() => jsonResponse({ data: { loginWithPassword: { token: "new-session", user: { id: "fixture-user" } } } }));
+  await authApi.loginWithPassword({ accountId: "fixture-user", password: "fixture-password" });
+  assert.equal(fetchCalls[0].headers.Authorization, undefined);
+});
 
 for (const phase of ["headers", "body"]) {
   test(`${phase} 수신 중 timeout이면 같은 요청을 1초 뒤 한 번 재시도한다`, async () => {

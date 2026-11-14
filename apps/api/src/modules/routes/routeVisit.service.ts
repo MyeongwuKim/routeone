@@ -1,6 +1,8 @@
 /**
  * 용도:
  * 장소 방문 인증·시간 수정과 사진, 체류 통계 반영을 처리한다.
+ * 건너뜀과 DAY 마무리는 실제 방문과 구분하고, 인증 정보 정리와 루트 집계를 함께 저장한다.
+ * 읽은 방문 기록의 변경 번호를 저장 조건에 포함해 지연된 요청이 최신 기록을 덮지 못하게 한다.
  * 단일 방문과 일정 공유는 같은 사진 공개 규칙을 사용하고, 공유 사진은 묶어서 저장한다.
  */
 import type {
@@ -21,6 +23,8 @@ import {
 } from "../../lib/mongoBatch.js";
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import { isDevVerificationBypassEnabled } from "../../lib/devVerification.js";
+import { runTransactionWithRetry } from "../../lib/transaction.js";
+import { updateRouteStopVisitVersion, updateRouteStopVisitVersions } from "./routeStopVisitVersion.js";
 import { deleteRouteVisitPhotoImages } from "./routeVisitPhoto.service.js";
 import {
   VERIFIED_ROUTE_STOP_STATUSES,
@@ -148,7 +152,7 @@ function assertRoutePhotoCorrectionWindow(route: Route) {
 async function assertRouteStopVisitDate(
   prisma: RouteServicePrisma,
   route: Route,
-  stop: RouteStop,
+  stop: Pick<RouteStop, "dayId">,
   options: { allowPast: boolean; bypassVerification?: boolean }
 ) {
   if (isDevVerificationBypassEnabled() || options.bypassVerification) {
@@ -773,12 +777,12 @@ async function markPlacePhotoDeletedForRouteStop(
 }
 
 async function refreshRouteAfterVisitChange(
-  prisma: PrismaClient,
+  prisma: RouteServicePrisma,
   route: Route
 ) {
   const refreshedRoute = await refreshRouteProgress(prisma, route.id);
 
-  if (route.visibility !== "PUBLIC") {
+  if (refreshedRoute.visibility !== "PUBLIC") {
     return refreshedRoute;
   }
 
@@ -971,6 +975,9 @@ export async function checkInRouteStop(
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
   assertRouteCorrectionWindow(route);
   const bypassVerification = canBypassVisitVerification(user);
+  if (stop.visitStatus === "SKIPPED") {
+    throw new UserFacingError("건너뜀을 되돌린 뒤 방문을 인증해 주세요.");
+  }
   await assertRouteStopVisitDate(prisma, route, stop, {
     allowPast: false,
     bypassVerification,
@@ -990,14 +997,9 @@ export async function checkInRouteStop(
     bypassVerification
   );
 
-  await prisma.routeStop.update({
-    where: {
-      id: stopId,
-    },
-    data: {
-      ...checkInData,
-      stayStatSyncedAt: null,
-    },
+  await updateRouteStopVisitVersion(prisma, stop, {
+    ...checkInData,
+    stayStatSyncedAt: null,
   });
 
   return refreshRouteProgress(prisma, route.id);
@@ -1031,14 +1033,9 @@ export async function setRouteStopPhotoPublication(
   const publishedAt = published ? new Date() : null;
 
   await prisma.$transaction(async (transaction) => {
-    const nextStop = await transaction.routeStop.update({
-      where: {
-        id: stop.id,
-      },
-      data: {
-        verificationPhotoPublicationConsent: published,
-        verificationPhotoPublishedAt: publishedAt,
-      },
+    const nextStop = await updateRouteStopVisitVersion(transaction, stop, {
+      verificationPhotoPublicationConsent: published,
+      verificationPhotoPublishedAt: publishedAt,
     });
 
     await syncPlacePhotoForRouteStopVisit(
@@ -1095,17 +1092,12 @@ export async function setRouteStopVisitPhoto(
         : stop.verificationStatus;
 
   await prisma.$transaction(async (transaction) => {
-    const nextStop = await transaction.routeStop.update({
-      where: {
-        id: stop.id,
-      },
-      data: {
-        verificationStatus: nextVerificationStatus,
-        verificationPhotoImageId: normalizedImageId,
-        verificationPhotoUrl: normalizedImageUrl,
-        verificationPhotoPublicationConsent: false,
-        verificationPhotoPublishedAt: null,
-      },
+    const nextStop = await updateRouteStopVisitVersion(transaction, stop, {
+      verificationStatus: nextVerificationStatus,
+      verificationPhotoImageId: normalizedImageId,
+      verificationPhotoUrl: normalizedImageUrl,
+      verificationPhotoPublicationConsent: false,
+      verificationPhotoPublishedAt: null,
     });
 
     await syncPlacePhotoForRouteStopVisit(
@@ -1155,28 +1147,28 @@ export async function deleteRouteStopVisitPhoto(
     return refreshRouteProgress(prisma, route.id);
   }
 
-  if (stop.verificationPhotoImageId) {
-    await deleteRouteVisitPhotoImages([stop.verificationPhotoImageId]);
-  }
-
   await prisma.$transaction(async (transaction) => {
-    await transaction.routeStop.update({
-      where: {
-        id: stop.id,
-      },
-      data: {
-        verificationStatus:
-          stop.verificationStatus === "GPS_PHOTO"
-            ? "GPS"
-            : stop.verificationStatus,
-        verificationPhotoImageId: null,
-        verificationPhotoUrl: null,
-        verificationPhotoPublicationConsent: false,
-        verificationPhotoPublishedAt: null,
-      },
+    await updateRouteStopVisitVersion(transaction, stop, {
+      verificationStatus:
+        stop.verificationStatus === "GPS_PHOTO"
+          ? "GPS"
+          : stop.verificationStatus,
+      verificationPhotoImageId: null,
+      verificationPhotoUrl: null,
+      verificationPhotoPublicationConsent: false,
+      verificationPhotoPublishedAt: null,
     });
     await markPlacePhotoDeletedForRouteStop(transaction, stop.id);
   });
+
+  // 조건부 저장에서 거절된 요청은 현재 기록이 참조하는 원본을 지우면 안 된다.
+  if (stop.verificationPhotoImageId) {
+    try {
+      await deleteRouteVisitPhotoImages([stop.verificationPhotoImageId]);
+    } catch (error) {
+      console.error("[visit-photo] deleted image cleanup failed", error instanceof Error ? error.message : error);
+    }
+  }
 
   return refreshRouteProgress(prisma, route.id);
 }
@@ -1199,6 +1191,9 @@ export async function completeRouteStopVisit(
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
   assertRouteCorrectionWindow(route);
+  if (stop.visitStatus === "SKIPPED") {
+    throw new UserFacingError("건너뜀을 되돌린 뒤 방문을 인증해 주세요.");
+  }
   await assertRouteStopVisitDate(prisma, route, stop, {
     allowPast: false,
     bypassVerification: canBypassVisitVerification(user),
@@ -1221,14 +1216,9 @@ export async function completeRouteStopVisit(
   const nextStayStatSyncedAt = shouldSyncNextStayStat ? new Date() : null;
 
   await prisma.$transaction(async (transaction) => {
-    await transaction.routeStop.update({
-      where: {
-        id: stopId,
-      },
-      data: {
-        ...visitData,
-        stayStatSyncedAt: nextStayStatSyncedAt,
-      },
+    await updateRouteStopVisitVersion(transaction, stop, {
+      ...visitData,
+      stayStatSyncedAt: nextStayStatSyncedAt,
     });
 
     await syncPlaceStayStatForRouteStopChange(transaction, stop, nextStop);
@@ -1327,18 +1317,13 @@ export async function updateRouteStopVisitTimes(
   const nextStayStatSyncedAt = shouldSyncNextStayStat ? new Date() : null;
 
   await prisma.$transaction(async (transaction) => {
-    await transaction.routeStop.update({
-      where: {
-        id: stop.id,
-      },
-      data: {
-        checkedInAt,
-        checkedOutAt,
-        visitedAt: checkedOutAt ?? stop.visitedAt,
-        actualStayMinutes,
-        visitTimeEditedAt: new Date(),
-        stayStatSyncedAt: nextStayStatSyncedAt,
-      },
+    await updateRouteStopVisitVersion(transaction, stop, {
+      checkedInAt,
+      checkedOutAt,
+      visitedAt: checkedOutAt ?? stop.visitedAt,
+      actualStayMinutes,
+      visitTimeEditedAt: new Date(),
+      stayStatSyncedAt: nextStayStatSyncedAt,
     });
 
     await syncPlaceStayStatForRouteStopChange(transaction, stop, nextStop);
@@ -1494,6 +1479,9 @@ export async function markRouteStopVisited(
 
   const route = await assertRouteOwner(prisma, stop.routeId, user.id);
   assertRouteCorrectionWindow(route);
+  if (stop.visitStatus === "SKIPPED") {
+    throw new UserFacingError("건너뜀을 되돌린 뒤 방문 기록을 수정해 주세요.");
+  }
 
   if (visited) {
     const verificationStatus = getVisitVerificationStatus(verification);
@@ -1522,15 +1510,10 @@ export async function markRouteStopVisited(
     Boolean(getPrimaryPlaceStayStatKey(stop.place));
   const nextStayStatSyncedAt = shouldSyncNextStayStat ? new Date() : null;
 
-  await prisma.$transaction(async (transaction) => {
-    await transaction.routeStop.update({
-      where: {
-        id: stopId,
-      },
-      data: {
-        ...visitData,
-        stayStatSyncedAt: nextStayStatSyncedAt,
-      },
+  return runTransactionWithRetry(prisma, async (transaction) => {
+    await updateRouteStopVisitVersion(transaction, stop, {
+      ...visitData,
+      stayStatSyncedAt: nextStayStatSyncedAt,
     });
 
     await syncPlaceStayStatForRouteStopChange(transaction, stop, nextStop);
@@ -1541,9 +1524,79 @@ export async function markRouteStopVisited(
       stop,
       visitData
     );
+    return refreshRouteAfterVisitChange(transaction, route);
   });
+}
 
-  return refreshRouteAfterVisitChange(prisma, route);
+/**
+ * 소유한 일정의 미방문 장소를 건너뜀으로 남기거나 다시 미방문으로 되돌린다.
+ * 방문 기록은 먼저 방문 취소해야 하며, 건너뜀에는 방문 시각·인증·체류 통계를 만들지 않는다.
+ */
+export async function setRouteStopSkipped(
+  prisma: PrismaClient,
+  user: User,
+  stopId: string,
+  skipped: boolean
+) {
+  const stop = await prisma.routeStop.findUnique({ where: { id: stopId } });
+  if (!stop) throw new UserFacingError("장소를 찾을 수 없습니다.");
+  return runTransactionWithRetry(prisma, async (transaction) => {
+    const route = await assertRouteOwner(transaction, stop.routeId, user.id);
+    assertRouteCorrectionWindow(route);
+    await assertRouteStopVisitDate(transaction, route, stop, {
+      allowPast: true,
+      bypassVerification: canBypassVisitVerification(user),
+    });
+    if (stop.visitStatus === "VISITED") {
+      throw new UserFacingError("방문한 장소는 방문 취소한 뒤 건너뛰어 주세요.");
+    }
+    const visitStatus = skipped ? "SKIPPED" : "PENDING";
+    if (stop.visitStatus === visitStatus) return route;
+    await updateRouteStopVisitVersion(transaction, stop, {
+      ...buildRouteStopVisitData(stop, false), visitStatus, stayStatSyncedAt: null,
+    });
+    await markPlacePhotoDeletedForRouteStop(transaction, stopId);
+    await transaction.userNotification.deleteMany({
+      where: { userId: user.id, routeId: route.id, stopId, type: "ROUTE_ARRIVAL" },
+    });
+    return refreshRouteProgress(transaction, route.id);
+  });
+}
+
+/** 선택한 DAY의 미방문 장소만 건너뛰고 인증·공개 사진·도착 알림 정리와 진행 집계를 함께 저장한다. */
+export async function finishRouteDay(
+  prisma: PrismaClient,
+  user: User,
+  dayId: string
+) {
+  const day = await prisma.routeDay.findUnique({ where: { id: dayId } });
+  if (!day) throw new UserFacingError("DAY를 찾을 수 없습니다.");
+  const pendingStops = await prisma.routeStop.findMany({
+    where: { routeId: day.routeId, dayId, visitStatus: "PENDING" },
+  });
+  return runTransactionWithRetry(prisma, async (transaction) => {
+    const route = await assertRouteOwner(transaction, day.routeId, user.id);
+    assertRouteCorrectionWindow(route);
+    await assertRouteStopVisitDate(transaction, route, { dayId }, {
+      allowPast: true,
+      bypassVerification: canBypassVisitVerification(user),
+    });
+    if (!pendingStops.length) return route;
+    const stopIds = pendingStops.map((stop) => stop.id);
+    await updateRouteStopVisitVersions(transaction, pendingStops, {
+      ...buildRouteStopVisitData(pendingStops[0]!, false),
+      visitStatus: "SKIPPED",
+      stayStatSyncedAt: null,
+    });
+    await transaction.placePhoto.updateMany({
+      where: { routeStopId: { in: stopIds } },
+      data: { status: "DELETED", publicationConsent: false, publishedAt: null },
+    });
+    await transaction.userNotification.deleteMany({
+      where: { userId: user.id, routeId: route.id, stopId: { in: stopIds }, type: "ROUTE_ARRIVAL" },
+    });
+    return refreshRouteProgress(transaction, route.id);
+  });
 }
 
 export async function getPlaceStaySummary(

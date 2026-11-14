@@ -328,6 +328,41 @@ test("자동 재시도 실패 후 같은 입력을 수동 재시도해도 본문
   assert.deepEqual(transport.timerDelays, [30_000, 1_000, 30_000, 30_000]);
 });
 
+test("최초 본문 복원은 이동 시간 0·null을 유지하고 현재 화면 입력은 변경하지 않는다", () => {
+  const original = checkout.buildCreateRouteInput(createPlanInput());
+  original.stops[0].travelMinutesFromPrevious = 0;
+  original.stops[1].travelMinutesFromPrevious = null;
+  const stored = JSON.stringify(original);
+  const current = structuredClone(original);
+  current.stops.forEach(stop => { stop.travelMinutesFromPrevious = 15; });
+  const before = structuredClone(current);
+  assert.deepEqual(checkout.restoreRouteCreateRequestInput(current, stored), original);
+  assert.deepEqual(current, before);
+});
+
+test("손상되거나 이동 시간 형식이 잘못된 이전 본문은 재전송하지 않는다", () => {
+  const current = checkout.buildCreateRouteInput(createPlanInput());
+  for (const invalid of ["not JSON", "null", "[]", JSON.stringify({ stops: [] }), ...["wrong", -1].map(minutes => {
+    const input = structuredClone(current);
+    input.stops[0].travelMinutesFromPrevious = minutes;
+    return JSON.stringify(input);
+  })]) {
+    assert.equal(checkout.restoreRouteCreateRequestInput(current, invalid), null);
+  }
+});
+
+test("재시도 전송은 지정한 최초 본문을 사용하고 저장한 스냅샷을 변경하지 않는다", async () => {
+  const screen = createPlanInput();
+  const original = checkout.buildCreateRouteInput(screen);
+  const before = structuredClone(original);
+  Object.freeze(original);
+  screen.routePlan[0].items.forEach(item => { item.travelMinutesFromPrevious += 5; });
+  transport.respondWith(() => jsonResponse({ data: { createRoute: { id: "saved-route" } } }));
+  await checkout.routeCheckoutApi.saveRoutePlan(screen, "original-request", original);
+  assert.deepEqual(JSON.parse(transport.requests[0].body).variables.input, { ...before, clientRequestId: "original-request" });
+  assert.deepEqual(original, before);
+});
+
 for (const clientRequestId of [undefined, null, "", "   "]) {
   test(`유효한 식별자가 없는 생성(${JSON.stringify(clientRequestId)})은 30초 뒤 재시도하지 않는다`, async () => {
     transport.respondWith(waitForAbort);

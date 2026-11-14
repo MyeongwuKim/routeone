@@ -15,6 +15,9 @@ import {
   getDaySummary,
   getCurrentRouteStop,
   getRouteDayState,
+  getDayResolvedStopCount,
+  getDaySkippedStopCount,
+  isSkippedStop,
 } from "../routeDisplay";
 import {
   localizePlaceCategoryLabel,
@@ -30,9 +33,9 @@ function getDayStateLabel(
   dayState: RouteDayState,
   text: UiText
 ) {
-  const completedStopCount = getDayCompletedStopCount(day);
+  const resolvedStopCount = getDayResolvedStopCount(day);
   const isCompleted =
-    day.stops.length > 0 && completedStopCount === day.stops.length;
+    day.stops.length > 0 && resolvedStopCount === day.stops.length;
 
   if (dayState === "past") {
     return isCompleted
@@ -62,8 +65,9 @@ export function MyRouteDayItem({
 }) {
   const text = useUiText();
   const completedStopCount = getDayCompletedStopCount(day);
+  const skippedStopCount = getDaySkippedStopCount(day);
   const isCompleted =
-    day.stops.length > 0 && completedStopCount === day.stops.length;
+    day.stops.length > 0 && getDayResolvedStopCount(day) === day.stops.length;
   const stateLabel = getDayStateLabel(day, dayState, text);
 
   return (
@@ -99,10 +103,9 @@ export function MyRouteDayItem({
             <>
               <span className="h-1 w-1 rounded-full bg-slate-300" />
               <span>
-                {text.myRouteCard.completedPlaceCount(
-                  completedStopCount,
-                  day.stops.length
-                )}
+                {skippedStopCount > 0
+                  ? text.myRouteCard.visitedSkippedCount(completedStopCount, skippedStopCount)
+                  : text.myRouteCard.completedPlaceCount(completedStopCount, day.stops.length)}
               </span>
             </>
           ) : null}
@@ -126,8 +129,9 @@ export function MyRouteDayMiniItem({
 }) {
   const text = useUiText();
   const completedStopCount = getDayCompletedStopCount(day);
+  const skippedStopCount = getDaySkippedStopCount(day);
   const isCompleted =
-    day.stops.length > 0 && completedStopCount === day.stops.length;
+    day.stops.length > 0 && getDayResolvedStopCount(day) === day.stops.length;
   const stateLabel = getDayStateLabel(day, dayState, text);
 
   return (
@@ -160,9 +164,14 @@ export function MyRouteDayMiniItem({
         {getDaySummary(day, text)}
       </p>
       <p className="mt-1 truncate text-[11px] font-bold text-slate-400">
-        {getDayDateLabel(day, text)} · {stateLabel} · {completedStopCount}/
-        {day.stops.length}
+        {getDayDateLabel(day, text)} · {stateLabel}
+        {skippedStopCount === 0 ? ` · ${completedStopCount}/${day.stops.length}` : ""}
       </p>
+      {skippedStopCount > 0 ? (
+        <p className="mt-1 text-[11px] font-bold leading-4 text-slate-500">
+          {text.myRouteCard.visitedSkippedCount(completedStopCount, skippedStopCount)}
+        </p>
+      ) : null}
     </button>
   );
 }
@@ -186,7 +195,10 @@ function TodayRoutePreview({ day }: { day: MyRouteDay }) {
         {previewStops.map((stop, index) => (
           <Fragment key={stop.id}>
             <span className="max-w-[8rem] truncate rounded-full bg-slate-950/45 px-2.5 py-1 text-[11px] font-bold text-brand-100 shadow-sm ring-1 ring-white/10">
-              {index + 1}. {stop.place.title}
+              <span className={isSkippedStop(stop) ? "line-through opacity-70" : undefined}>
+                {index + 1}. {stop.place.title}
+              </span>
+              {isSkippedStop(stop) ? ` · ${text.dayRoute.skippedBadge}` : ""}
             </span>
             {index < previewStops.length - 1 ? (
               <MdChevronRight className="shrink-0 text-lg text-white/70" />
@@ -279,6 +291,7 @@ export function TodayRouteDayCard({
 }) {
   const text = useUiText();
   const completedStopCount = getDayCompletedStopCount(day);
+  const skippedStopCount = getDaySkippedStopCount(day);
   const progressPercent = getDayProgressPercent(day);
 
   return (
@@ -318,10 +331,9 @@ export function TodayRouteDayCard({
         <div className="flex items-center justify-between text-xs font-bold text-white/85">
           <span>{text.myRouteCard.todayProgress}</span>
           <span>
-            {text.myRouteCard.completedPlaceCount(
-              completedStopCount,
-              day.stops.length
-            )}
+            {skippedStopCount > 0
+              ? text.myRouteCard.visitedSkippedCount(completedStopCount, skippedStopCount)
+              : text.myRouteCard.completedPlaceCount(completedStopCount, day.stops.length)}
           </span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/25">

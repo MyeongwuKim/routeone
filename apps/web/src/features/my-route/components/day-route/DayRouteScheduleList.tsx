@@ -40,6 +40,7 @@ function DayRouteScheduleList({
     isVerificationBypassEnabled,
     canEditVerificationPhoto,
     canToggleVisitStatus,
+    canToggleSkipStatus,
     visitEnabledDayIds,
     enableVerificationPhotoPreview,
     isGpsTestEnabled,
@@ -57,6 +58,7 @@ function DayRouteScheduleList({
     setStayMinutesEditTarget,
     setVisitTimesEditTarget,
     handleToggleStopVisited,
+    handleToggleStopSkipped,
     handleOpenPlaceDetail,
     handleOpenStopDirections,
     handleReplaceVerificationPhoto,
@@ -163,6 +165,7 @@ function DayRouteScheduleList({
                   isVerificationBypassEnabled ||
                   Boolean(routeDay.startedAt))
               }
+              canToggleSkipStatus={canToggleSkipStatus}
               isVisitDateAllowed={visitEnabledDayIds.has(routeDay.id)}
               showActiveDestination={
                 !isReadOnly &&
@@ -223,6 +226,7 @@ function DayRouteScheduleList({
               onToggleVisited={(stop) =>
                 handleToggleStopVisited(routeDay, stop)
               }
+              onToggleSkipped={(stop) => handleToggleStopSkipped(routeDay, stop)}
               onOpenPlace={handleOpenPlaceDetail}
               onOpenDirections={(stop) =>
                 handleOpenStopDirections(routeDay, stop)

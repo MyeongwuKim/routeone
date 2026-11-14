@@ -6,6 +6,7 @@ import {
   ClearRouteDocument,
   CloneRouteDocument,
   CompleteRouteStopVisitDocument,
+  FinishRouteDayDocument,
   CreateRouteStopVisitPhotoUploadDocument,
   CreateRouteDocument,
   DeleteRouteDayDocument,
@@ -27,6 +28,7 @@ import {
   SaveRouteDocument,
   SetRouteStopPhotoPublicationDocument,
   SetRouteStopVisitPhotoDocument,
+  SetRouteStopSkippedDocument,
   ShareRouteDocument,
   SharedRoutesDocument,
   SharedRouteConnectionDocument,
@@ -212,6 +214,14 @@ export const routeApi = {
       verification,
       actualStayMinutes,
     });
+  },
+  /** 방문 수를 늘리지 않고 장소를 건너뛰거나 다시 미방문 상태로 되돌린다. */
+  setRouteStopSkipped(stopId: RouteId, skipped: boolean) {
+    return requestGraphQL(SetRouteStopSkippedDocument, { stopId, skipped });
+  },
+  /** 선택 DAY에 남은 미방문 장소를 건너뛰고 해당 날짜의 일정을 마친다. */
+  finishRouteDay(dayId: RouteId) {
+    return requestGraphQL(FinishRouteDayDocument, { dayId });
   },
   checkInRouteStop(
     stopId: RouteId,

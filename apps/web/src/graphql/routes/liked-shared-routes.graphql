@@ -6,6 +6,8 @@ query LikedSharedRoutes {
     }
     stops {
       id
+      visitStatus
+      visitedAt
       place {
         contentId
         contentTypeId

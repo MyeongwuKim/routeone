@@ -151,13 +151,6 @@ function PlaceCartScheduleStep({
     <>
       <div className="space-y-4">
         <div>
-          <p className="font-trip text-sm text-brand-700">TRAVEL SCHEDULE</p>
-          <p className="mt-1 text-xl font-semibold text-slate-900">
-            {text.cart.scheduleTitle}
-          </p>
-        </div>
-
-        <div>
           <p className="mb-2 text-sm font-semibold text-slate-700">
             {text.cart.startDateLabel}
           </p>

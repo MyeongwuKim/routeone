@@ -1,4 +1,4 @@
-/** 담은 장소를 여행 일수·운영 시간·이동시간·여행 속도에 맞춰 DAY별 일정으로 배치하고 편집 후 시각을 다시 계산한다. */
+/** 담은 장소를 선택 일수·일일 시간 범위·예상 이동시간·여행 속도에 맞춰 DAY별로 배치하고 편집 후 시각을 다시 계산한다. */
 import {
   getRoutePlaceCategory,
   type RoutePlaceCategory,
@@ -288,7 +288,7 @@ function appendPlaceToRouteState(options: {
   state: RoutePlannerState;
   candidate: RoutePlannerPlace;
   dayIndex: number;
-  dayBreakPenalty: number;
+  dayAllocationPenalty: number;
   dailyStartMinutes: number;
   dailyEndMinutes: number;
   tempo: TravelTempo;
@@ -298,7 +298,7 @@ function appendPlaceToRouteState(options: {
     state,
     candidate,
     dayIndex,
-    dayBreakPenalty,
+    dayAllocationPenalty,
     dailyStartMinutes,
     dailyEndMinutes,
     tempo,
@@ -338,7 +338,7 @@ function appendPlaceToRouteState(options: {
   };
   const score =
     state.score +
-    dayBreakPenalty +
+    dayAllocationPenalty +
     travelScoreMinutes * getTempoTravelWeight(tempo) +
     getCategoryTimeScore({
       category: candidate.category,
@@ -389,6 +389,11 @@ function getDayBreakPenalty(options: {
   );
 }
 
+/**
+ * 장소가 충분하면 선택한 모든 DAY에 배치하고, 부족하면 앞 날짜부터 한 곳씩 배치한다.
+ * 일일 시간 초과를 우선 피하면서 방문 수·이동거리·식사와 카페 시간대를 점수로 비교한다.
+ * 수용할 시간이 부족해도 장소를 제외하지 않고 isOverSchedule로 알린다. 원본 입력은 변경하지 않는다.
+ */
 export function buildRoutePlan(options: {
   savedPlaces: SavedPlaceItem[];
   travelStartDate: string;
@@ -421,6 +426,7 @@ export function buildRoutePlan(options: {
   if (routePlaces.length === 0) {
     return emptyDays;
   }
+  const activeDayCount = Math.min(emptyDays.length, routePlaces.length);
 
   let beam: RoutePlannerState[] = [
     {
@@ -443,27 +449,29 @@ export function buildRoutePlan(options: {
       }
 
       state.remainingPlaces.forEach((candidate) => {
+        const currentDayPlaceCount = state.days[state.dayIndex].items.length;
+        const remainingDayCount = activeDayCount - state.dayIndex - 1;
+        const balancedPlaceCount = Math.ceil(
+          (currentDayPlaceCount + state.remainingPlaces.length) /
+            (remainingDayCount + 1)
+        );
+        const canMoveToNextDay =
+          remainingDayCount > 0 && currentDayPlaceCount > 0;
+        // 아직 비어 있는 DAY마다 최소 한 장소를 남겨 선택한 일수가 줄어들지 않게 한다.
+        const mustMoveToNextDay =
+          canMoveToNextDay && state.remainingPlaces.length <= remainingDayCount;
         const currentDayState = appendPlaceToRouteState({
           state,
           candidate,
           dayIndex: state.dayIndex,
-          dayBreakPenalty: 0,
+          dayAllocationPenalty:
+            Math.max(0, currentDayPlaceCount + 1 - balancedPlaceCount) *
+            DAY_PLACE_COUNT_DEVIATION_PENALTY,
           dailyStartMinutes: options.dailyStartMinutes,
           dailyEndMinutes: options.dailyEndMinutes,
           tempo: options.tempo,
           currentLocation: options.currentLocation,
         });
-        const canMoveToNextDay =
-          state.dayIndex < emptyDays.length - 1 &&
-          state.days[state.dayIndex].items.length > 0;
-        const currentDayPlaceCount =
-          state.days[state.dayIndex].items.length;
-        const remainingDayCount =
-          emptyDays.length - state.dayIndex - 1;
-        const balancedPlaceCount = Math.ceil(
-          (currentDayPlaceCount + state.remainingPlaces.length) /
-            (remainingDayCount + 1)
-        );
         const hasFoodRemaining = state.remainingPlaces.some(
           (item) => item.category === "food"
         );
@@ -472,13 +480,16 @@ export function buildRoutePlan(options: {
         );
         const cafeWindow = getCafeWindow(options.tempo);
         const shouldTryNextDay =
+          mustMoveToNextDay ||
           currentDayState.currentMinutes > options.dailyEndMinutes ||
           state.currentMinutes >= options.dailyEndMinutes - 120 ||
           (hasFoodRemaining && state.currentMinutes > LUNCH_END_MINUTES) ||
           (hasCafeRemaining && state.currentMinutes > cafeWindow.end) ||
           currentDayPlaceCount >= balancedPlaceCount;
 
-        nextBeam.push(currentDayState);
+        if (!mustMoveToNextDay) {
+          nextBeam.push(currentDayState);
+        }
 
         if (canMoveToNextDay && shouldTryNextDay) {
           nextBeam.push(
@@ -486,7 +497,7 @@ export function buildRoutePlan(options: {
               state,
               candidate,
               dayIndex: state.dayIndex + 1,
-              dayBreakPenalty: getDayBreakPenalty({
+              dayAllocationPenalty: getDayBreakPenalty({
                 currentMinutes: state.currentMinutes,
                 dailyStartMinutes: options.dailyStartMinutes,
                 dailyEndMinutes: options.dailyEndMinutes,

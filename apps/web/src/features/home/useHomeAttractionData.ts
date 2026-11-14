@@ -1,6 +1,6 @@
 /**
  * 홈 지도에 필요한 지역 경계, 관광지·축제, 혼잡도 순위와 다국어 장소명을 조회하고
- * 지도 마커와 검색에서 함께 사용할 데이터로 조합한다.
+ * 모델에 지도·검색 데이터 조합을 맡기고 조회 상태와 번역 결과의 캐시 반영을 관리한다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,11 +8,7 @@ import { festivalApi } from "@/api/festivalApi";
 import { createFestivalAttraction } from "@/lib/festivalAttraction";
 import type { ServiceArea } from "@/data/serviceAreas";
 import { useServiceRegionBoundaries } from "@/hooks/useServiceRegionBoundaries";
-import {
-  getTouristNameMatchScore,
-  shouldHideAttraction,
-} from "@/lib/gangwonAttractionMap";
-import { CAFE_LCLS_CODE, isTouristPlace } from "@/lib/placeCategory";
+import { CAFE_LCLS_CODE } from "@/lib/placeCategory";
 import {
   cacheTourCategoryLocalizationMap,
   localizeTourPlaces,
@@ -20,7 +16,6 @@ import {
 } from "@/lib/placeLocalization";
 import { useUiText } from "@/lib/uiText";
 import {
-  buildLatestConcentrationMap,
   fetchTourAttractions,
   fetchLclsSystemNameMap,
   fetchTouristConcentrationPoints,
@@ -28,25 +23,15 @@ import {
 } from "@/lib/visitKoreaTourApi";
 import { TOUR_API_SERVICE_KEY } from "@/pages/HomePage.constants";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import {
+  applyHomeAttractionLocalization,
+  buildHomeAttractionData,
+  hasHomeAttractionLocalizedText,
+  type HomeAttractionQueryData,
+} from "./homeAttractionModel";
 import type { HomeAttractionLoadingPhase } from "./homeLoadingPhase";
 
-export type HomeAttractionQueryData = {
-  /** 숨김 대상이 제거되고 현재 언어의 표시값이 반영된 지도·검색용 관광지 목록 */
-  allAttractions: GangwonAttraction[];
-  /** 언어가 바뀔 때 다시 번역할 기준으로 보관하는 원본 관광지 목록 */
-  sourceAttractions: GangwonAttraction[];
-  /** 이 데이터가 속하는 시·군·구 코드 */
-  sigunguCode: string;
-  /** 혼잡도 순위에 포함된 관광지와 트렌드 표시명 목록 */
-  topAttractions: Array<{
-    attraction: GangwonAttraction;
-    touristTrendName: string;
-  }>;
-  /** 관광 분류 코드를 키로 갖는 현재 언어의 분류명 조회표 */
-  lclsNameByCode: Record<string, string>;
-  /** allAttractions와 분류명이 현재 앱 언어로 변환됐는지 여부 */
-  isLocalized: boolean;
-};
+export type { HomeAttractionQueryData } from "./homeAttractionModel";
 
 type UseHomeAttractionDataOptions = {
   /** false이면 관광지 Query를 실행하지 않는다. 기본값은 true다. */
@@ -220,77 +205,19 @@ export function useHomeAttractionData(
         setAttractionLoadingPhase("ranking");
       }
 
-      const attractionsWithFestivals = [...attractions, ...festivals];
-      const dedupedAttractions = attractionsWithFestivals.filter(
-        (attraction, index, array) => {
-          const key = `${attraction.title.trim().toLowerCase()}|${attraction.address
-            .trim()
-            .toLowerCase()}`;
-          return (
-            array.findIndex((candidate) => {
-              const candidateKey = `${candidate.title
-                .trim()
-                .toLowerCase()}|${candidate.address.trim().toLowerCase()}`;
-              return candidateKey === key;
-            }) === index
-          );
-        }
-      );
-      const filteredAttractions = dedupedAttractions.filter(
-        (attraction) =>
-          !shouldHideAttraction(attraction, resolvedLclsNameByCode)
-      );
-      const rankableTouristAttractions = filteredAttractions.filter(
-        (attraction) => isTouristPlace(attraction)
-      );
-      const latestConcentrationByName =
-        buildLatestConcentrationMap(concentrationPoints);
-      const latestConcentrationPoints = [
-        ...latestConcentrationByName.values(),
-      ].sort((a, b) => b.concentrationRate - a.concentrationRate);
-
-      const usedAttractionIds = new Set<string>();
-      const topAttractions: HomeAttractionQueryData["topAttractions"] = [];
-
-      latestConcentrationPoints.forEach((point) => {
-        if (topAttractions.length >= 10) {
-          return;
-        }
-
-        const bestMatch = rankableTouristAttractions
-          .filter((attraction) => !usedAttractionIds.has(attraction.id))
-          .map((attraction) => ({
-            attraction,
-            score: getTouristNameMatchScore(
-              attraction.title,
-              point.touristName
-            ),
-          }))
-          .filter((candidate) => candidate.score > 0)
-          .sort((a, b) => b.score - a.score)[0];
-
-        if (!bestMatch) {
-          return;
-        }
-
-        usedAttractionIds.add(bestMatch.attraction.id);
-        topAttractions.push({
-          attraction: bestMatch.attraction,
-          touristTrendName: point.touristName,
-        });
+      const attractionData = buildHomeAttractionData({
+        attractions,
+        festivals,
+        concentrationPoints,
+        lclsNameByCode: resolvedLclsNameByCode,
+        sigunguCode: selectedSigunguCode,
+        isLocalized: appLanguage !== "en",
       });
 
       if (attractionLoadingRequestIdRef.current === loadingRequestId) {
         setAttractionLoadingPhase("idle");
       }
-      return {
-        allAttractions: filteredAttractions,
-        sourceAttractions: filteredAttractions,
-        sigunguCode: selectedSigunguCode,
-        topAttractions,
-        lclsNameByCode: resolvedLclsNameByCode,
-        isLocalized: appLanguage !== "en",
-      };
+      return attractionData;
     },
     staleTime: 1000 * 60 * 60 * 12,
     gcTime: 1000 * 60 * 60 * 24,
@@ -321,34 +248,11 @@ export function useHomeAttractionData(
           return;
         }
 
-        const sourceAttractionByKey = new Map(
-          sourceAttractions.map((attraction) => [
-            `${attraction.id}-${attraction.contentTypeId}`,
-            attraction,
-          ])
-        );
-        const hasLocalizedText = localizedAttractions.some((attraction) => {
-          const sourceAttraction = sourceAttractionByKey.get(
-            `${attraction.id}-${attraction.contentTypeId}`
-          );
-
-          return (
-            sourceAttraction &&
-            (attraction.title !== sourceAttraction.title ||
-              attraction.address !== sourceAttraction.address)
-          );
-        });
-
-        if (!hasLocalizedText) {
+        if (
+          !hasHomeAttractionLocalizedText(sourceAttractions, localizedAttractions)
+        ) {
           return;
         }
-
-        const localizedAttractionByKey = new Map(
-          localizedAttractions.map((attraction) => [
-            `${attraction.id}-${attraction.contentTypeId}`,
-            attraction,
-          ])
-        );
 
         isUpdatingPlaceLabelsRef.current = true;
         queryClient.setQueryData<HomeAttractionQueryData>(
@@ -359,43 +263,11 @@ export function useHomeAttractionData(
               return currentData;
             }
 
-            const currentAttractionByKey = new Map(
-              currentData.allAttractions.map((attraction) => [
-                `${attraction.id}-${attraction.contentTypeId}`,
-                attraction,
-              ])
-            );
-            const nextAttractions = localizedAttractions.map((attraction) => {
-              const currentAttraction = currentAttractionByKey.get(
-                `${attraction.id}-${attraction.contentTypeId}`
-              );
-
-              if (!currentAttraction) {
-                return attraction;
-              }
-
-              return {
-                ...attraction,
-                firstImage:
-                  currentAttraction.firstImage || attraction.firstImage,
-                secondImage:
-                  currentAttraction.secondImage || attraction.secondImage,
-              };
-            });
-
-            return {
-              ...currentData,
-              allAttractions: nextAttractions,
+            return applyHomeAttractionLocalization(
+              currentData,
               sourceAttractions,
-              topAttractions: currentData.topAttractions.map((item) => ({
-                ...item,
-                attraction:
-                  localizedAttractionByKey.get(
-                    `${item.attraction.id}-${item.attraction.contentTypeId}`
-                  ) ?? item.attraction,
-              })),
-              isLocalized: true,
-            };
+              localizedAttractions
+            );
           }
         );
       })

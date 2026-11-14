@@ -4,6 +4,7 @@ import { fetchDrivingRouteFromCurrentLocation } from "@/lib/naverDirectionsApi";
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import type { MyRoute, MyRouteDay, MyRouteStop } from "../types";
 import { getDayRouteStartLocation } from "../utils/dayRouteStartLocation";
+import { isSkippedStop } from "../routeDisplay";
 
 export type RouteLatLng = {
   lat: number;
@@ -126,7 +127,7 @@ type UseDayRouteTravelSegmentsOptions = {
   routeStartLocation: MyRoute["startLocation"];
 };
 
-/** 각 DAY의 출발지→첫 장소와 저장 시간이 없는 장소 간 구간을 만들고 같은 좌표 쌍은 한 요청으로 합친다. */
+/** 건너뛴 장소를 제외한 DAY 구간을 조회한다. 건너뜀으로 연결이 달라진 구간은 이전 저장 시간을 재사용하지 않는다. */
 export function createDayRouteTravelSegmentRequests({
   days,
   activeDayId,
@@ -145,17 +146,20 @@ export function createDayRouteTravelSegmentRequests({
     const routeDayStops =
       stopsByDayId?.[routeDay.id] ??
       (routeDay.id === activeDayId ? orderedStops : routeDay.stops);
-    const firstStop = routeDayStops[0] ?? null;
+    const activeStops = routeDayStops.filter((stop) => !isSkippedStop(stop));
+    const firstStop = activeStops[0] ?? null;
     const startLocation = getDayRouteStartLocation(routeDay, routeStartLocation);
 
     if (firstStop && startLocation) {
       appendRequest(createTravelSegmentRequest(startLocation, firstStop.place));
     }
 
-    routeDayStops.forEach((stop, index) => {
-      const nextStop = routeDayStops[index + 1] ?? null;
+    activeStops.forEach((stop, index) => {
+      const nextStop = activeStops[index + 1] ?? null;
+      const hadSkippedStopsBetween = nextStop &&
+        routeDayStops.indexOf(nextStop) !== routeDayStops.indexOf(stop) + 1;
 
-      if (nextStop && !getStoredTravelSegment(nextStop)) {
+      if (nextStop && (hadSkippedStopsBetween || !getStoredTravelSegment(nextStop))) {
         appendRequest(createTravelSegmentRequest(stop.place, nextStop.place));
       }
     });

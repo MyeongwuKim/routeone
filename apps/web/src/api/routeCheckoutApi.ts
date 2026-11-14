@@ -160,6 +160,41 @@ export function buildCreateRouteInput(
   };
 }
 
+/**
+ * 이동 시간만 자동 갱신된 재시도라면 최초 전송 본문을 복원한다.
+ * 날짜·장소·순서·체류시간 등 나머지 값은 저장된 JSON과 같아야 하며,
+ * 읽을 수 없거나 형식이 다른 이전 본문은 복원하지 않고 현재 입력을 유지한다.
+ */
+export function restoreRouteCreateRequestInput(
+  currentInput: CreateRouteInput,
+  previousInputKey: string
+): CreateRouteInput | null {
+  try {
+    const previous: unknown = JSON.parse(previousInputKey);
+    if (!previous || typeof previous !== "object" || !("stops" in previous) ||
+      !Array.isArray(previous.stops) || !currentInput.stops ||
+      previous.stops.length !== currentInput.stops.length) return null;
+
+    const previousStops: unknown[] = previous.stops;
+    const stops = currentInput.stops.map((stop, index) => {
+      const previousStop = previousStops[index];
+      if (!previousStop || typeof previousStop !== "object" || Array.isArray(previousStop)) {
+        throw new Error("Invalid stored route stop");
+      }
+      const minutes = "travelMinutesFromPrevious" in previousStop
+        ? previousStop.travelMinutesFromPrevious : undefined;
+      if (minutes != null && (typeof minutes !== "number" || !Number.isFinite(minutes) || minutes < 0)) {
+        throw new Error("Invalid stored route travel minutes");
+      }
+      return { ...stop, travelMinutesFromPrevious: minutes };
+    });
+    const restoredInput = { ...currentInput, stops };
+    return JSON.stringify(restoredInput) === previousInputKey ? restoredInput : null;
+  } catch {
+    return null;
+  }
+}
+
 function buildAppendRouteDaysInput(
   routeId: string,
   input: SaveRoutePlanInput
@@ -179,9 +214,13 @@ function buildAppendRouteDaysInput(
 
 /** 새 경로 생성과 기존 경로 일차 추가에 공통 일정 변환 규칙을 적용한 뒤 routeApi에 요청을 위임한다. */
 export const routeCheckoutApi = {
-  async saveRoutePlan(input: SaveRoutePlanInput, clientRequestId: string) {
-    const routeInput = buildCreateRouteInput(input);
-    routeInput.clientRequestId = clientRequestId;
+  /** 재시도에는 최초 전송 본문을 지정해 요청 ID와 본문이 함께 유지되게 한다. */
+  async saveRoutePlan(
+    input: SaveRoutePlanInput,
+    clientRequestId: string,
+    requestInput: CreateRouteInput = buildCreateRouteInput(input)
+  ) {
+    const routeInput = { ...requestInput, clientRequestId };
 
     return routeApi.createRoute(routeInput);
   },

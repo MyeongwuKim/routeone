@@ -70,7 +70,7 @@ function PlaceSheetMediaSection({
           <p className="font-black text-brand-700 dark:text-brand-200">
             {text.placeSheet.userAverageStay}
           </p>
-          <p className="mt-1 line-clamp-2 leading-5 text-slate-600 dark:text-slate-300">
+          <p className="mt-1 truncate leading-5 text-slate-600 dark:text-slate-300" title={placeStaySummaryLabel}>
             {placeStaySummaryLabel}
           </p>
         </div>

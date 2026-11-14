@@ -1,6 +1,8 @@
 import { gql } from "graphql-tag";
+import { randomUUID } from "node:crypto";
+import type { User } from "@prisma/client";
 import type { GraphQLContext } from "../../context.js";
-import { UserFacingError } from "../../graphql/userFacingError.js";
+import { AuthSessionError, UserFacingError } from "../../graphql/userFacingError.js";
 import {
   createAuthToken,
   hashPassword,
@@ -14,6 +16,7 @@ import {
   type VerifiedOAuthIdentity,
 } from "../../lib/oauth.js";
 import { deleteUserAccount } from "./userAccount.service.js";
+import { runTransactionWithRetry } from "../../lib/transaction.js";
 
 export const userTypeDefs = gql`
   enum AuthProvider {
@@ -234,6 +237,23 @@ async function findOrCreateOAuthUser(
   return user;
 }
 
+/** 새 로그인으로 이전 토큰과 푸시 등록을 함께 해제한다. 갱신 요청은 이 경로를 사용하지 않는다. */
+async function createLoginPayload(context: GraphQLContext, user: User) {
+  const sessionId = randomUUID();
+  const updatedUser = await runTransactionWithRetry(context.prisma, async transaction => {
+    const updated = await transaction.user.update({
+      where: { id: user.id },
+      data: { activeSessionId: sessionId },
+    });
+    await transaction.pushDevice.updateMany({
+      where: { userId: user.id },
+      data: { enabled: false, disabledAt: new Date() },
+    });
+    return updated;
+  });
+  return { token: createAuthToken(user.id, sessionId), user: updatedUser };
+}
+
 export const userResolvers = {
   User: {
     async authProviders(
@@ -304,10 +324,7 @@ export const userResolvers = {
           throw new UserFacingError("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        return {
-          token: createAuthToken(existingUser.id),
-          user: existingUser,
-        };
+        return createLoginPayload(context, existingUser);
       }
 
       if (!isPasswordAccountCreationEnabled()) {
@@ -323,10 +340,7 @@ export const userResolvers = {
         },
       });
 
-      return {
-        token: createAuthToken(user.id),
-        user,
-      };
+      return createLoginPayload(context, user);
     },
     async loginWithNativeOAuth(
       _parent: unknown,
@@ -336,24 +350,21 @@ export const userResolvers = {
       const identity = await verifyNativeOAuthIdentity(args.input);
       const user = await findOrCreateOAuthUser(context, identity);
 
-      return {
-        token: createAuthToken(user.id),
-        user,
-      };
+      return createLoginPayload(context, user);
     },
     refreshAuthSession(
       _parent: unknown,
       _args: unknown,
       context: GraphQLContext
     ) {
-      if (!context.authenticatedUserId || !context.user) {
-        throw new UserFacingError(
+      if (!context.authenticatedUserId || !context.user?.activeSessionId) {
+        throw new AuthSessionError(
           "로그인 세션이 만료되었어요. 다시 로그인해 주세요."
         );
       }
 
       return {
-        token: createAuthToken(context.authenticatedUserId),
+        token: createAuthToken(context.authenticatedUserId, context.user.activeSessionId),
         user: context.user,
       };
     },

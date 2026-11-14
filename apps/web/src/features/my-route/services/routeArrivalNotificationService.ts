@@ -31,10 +31,14 @@ export type RouteArrivalVisitTransitionPreparation = {
 type RouteArrivalProgressHandler = (stage: NativeArrivalNotificationProgress) => void;
 
 type RouteArrivalNotificationSyncOptions = {
+  /** 비동기 준비를 마친 뒤 요청 세션이 여전히 유효한지 네이티브 호출 전에 확인한다. */
+  assertCurrent?: () => void;
 
   onProgress?: RouteArrivalProgressHandler;
 
   routeArrivalEnabled?: boolean;
+  /** 준비·서버 요청 대기 중 바뀐 알림 설정을 실제 기기 호출 직전에 다시 읽는다. */
+  getRouteArrivalEnabled?: () => boolean | undefined;
 
   checkCurrentPosition?: boolean;
 
@@ -130,12 +134,14 @@ function syncNativeRouteArrivalNotificationPlaces(
   places: NativeArrivalNotificationPlace[],
   language: AppLanguage,
   options: {
+    assertCurrent?: () => void;
     onProgress?: RouteArrivalProgressHandler;
     checkCurrentPosition?: boolean;
     waitForCurrentPosition?: boolean;
     requestPermissions?: boolean;
   } = {}
 ) {
+  options.assertCurrent?.();
   return nativeBridge.notifications.syncRouteArrivals({
     places,
     // 구버전 네이티브 앱은 장소별 반경을 읽지 못하므로 현재 대상 반경을 함께 전달한다.
@@ -192,11 +198,15 @@ export async function syncTodayRouteArrivalNotifications(
   options: RouteArrivalNotificationSyncOptions = {}
 ) {
   try {
+    options.assertCurrent?.();
     const routeArrivalEnabled =
+      options.getRouteArrivalEnabled?.() ??
       options.routeArrivalEnabled ??
       (await notificationApi.settings()).notificationSettings
         .routeArrivalEnabled;
-    const places = routeArrivalEnabled
+    options.assertCurrent?.();
+    const currentlyEnabled = options.getRouteArrivalEnabled?.() ?? routeArrivalEnabled;
+    let places = currentlyEnabled
       ? getNativeRouteArrivalNotificationPlaces(
           routes,
           getTodayDateKey(),
@@ -204,17 +214,29 @@ export async function syncTodayRouteArrivalNotifications(
         )
       : [];
 
-    const result = await syncNativeRouteArrivalNotificationPlaces(
+    let result = await syncNativeRouteArrivalNotificationPlaces(
       places,
       language,
       {
+        assertCurrent: options.assertCurrent,
         onProgress: options.onProgress,
-        checkCurrentPosition: options.checkCurrentPosition,
-        waitForCurrentPosition: options.waitForCurrentPosition,
-        requestPermissions: options.requestPermissions,
+        checkCurrentPosition: currentlyEnabled ? options.checkCurrentPosition : false,
+        waitForCurrentPosition: currentlyEnabled ? options.waitForCurrentPosition : false,
+        requestPermissions: currentlyEnabled ? options.requestPermissions : false,
       }
     );
 
+    options.assertCurrent?.();
+    // 이미 전달한 등록이 늦게 끝나도, 그사이 확인한 OFF를 마지막 기기 상태로 남긴다.
+    if (places.length > 0 && options.getRouteArrivalEnabled?.() === false) {
+      places = [];
+      result = await syncNativeRouteArrivalNotificationPlaces([], language, {
+        assertCurrent: options.assertCurrent,
+        checkCurrentPosition: false,
+        requestPermissions: false,
+      });
+      options.assertCurrent?.();
+    }
     if (
       options.requireConfirmedRegistration &&
       !hasConfirmedRouteArrivalRegistration(result, places.length)
@@ -265,14 +287,17 @@ export async function prepareRouteArrivalNotificationsForVisitTransition(
   preferredRouteId: string,
   options: {
     routeArrivalEnabled?: boolean;
+    getRouteArrivalEnabled?: () => boolean | undefined;
+    assertCurrent?: () => void;
     onProgress?: RouteArrivalProgressHandler;
   } = {}
 ): Promise<RouteArrivalVisitTransitionPreparation> {
+  options.assertCurrent?.();
   if (!nativeBridge.runtime.isAvailable()) {
     return SKIPPED_VISIT_TRANSITION_PREPARATION;
   }
 
-  let routeArrivalEnabled = options.routeArrivalEnabled;
+  let routeArrivalEnabled = options.getRouteArrivalEnabled?.() ?? options.routeArrivalEnabled;
 
   if (routeArrivalEnabled == null) {
     routeArrivalEnabled = (
@@ -280,6 +305,8 @@ export async function prepareRouteArrivalNotificationsForVisitTransition(
     ).notificationSettings.routeArrivalEnabled;
   }
 
+  options.assertCurrent?.();
+  routeArrivalEnabled = options.getRouteArrivalEnabled?.() ?? routeArrivalEnabled;
   if (!routeArrivalEnabled) {
     return SKIPPED_VISIT_TRANSITION_PREPARATION;
   }
@@ -299,6 +326,10 @@ export async function prepareRouteArrivalNotificationsForVisitTransition(
   );
   const shouldRequireRegistration =
     await canRequireRouteArrivalRegistration();
+  options.assertCurrent?.();
+  if (options.getRouteArrivalEnabled?.() === false) {
+    return SKIPPED_VISIT_TRANSITION_PREPARATION;
+  }
 
   if (!shouldRequireRegistration) {
     let result: Awaited<
@@ -310,12 +341,15 @@ export async function prepareRouteArrivalNotificationsForVisitTransition(
         places,
         language,
         {
+          assertCurrent: options.assertCurrent,
           checkCurrentPosition: false,
           requestPermissions: false,
           onProgress: options.onProgress,
         }
       );
     } catch (error) {
+      options.assertCurrent?.();
+      if (options.getRouteArrivalEnabled?.() === false) return SKIPPED_VISIT_TRANSITION_PREPARATION;
       throw new RouteArrivalVisitTransitionPreparationError(
         language === "en"
           ? "The app could not save the next arrival alert target."
@@ -325,6 +359,8 @@ export async function prepareRouteArrivalNotificationsForVisitTransition(
       );
     }
 
+    options.assertCurrent?.();
+    if (options.getRouteArrivalEnabled?.() === false) return SKIPPED_VISIT_TRANSITION_PREPARATION;
     if (result === null) {
       throw new RouteArrivalVisitTransitionPreparationError(
         language === "en"
@@ -350,10 +386,13 @@ export async function prepareRouteArrivalNotificationsForVisitTransition(
       language,
       {
         checkCurrentPosition: false,
+        assertCurrent: options.assertCurrent,
         onProgress: options.onProgress,
       }
     );
   } catch (error) {
+    options.assertCurrent?.();
+    if (options.getRouteArrivalEnabled?.() === false) return SKIPPED_VISIT_TRANSITION_PREPARATION;
     throw new RouteArrivalVisitTransitionPreparationError(
       language === "en"
         ? "The device could not prepare the next place arrival alert."
@@ -363,6 +402,8 @@ export async function prepareRouteArrivalNotificationsForVisitTransition(
     );
   }
 
+  options.assertCurrent?.();
+  if (options.getRouteArrivalEnabled?.() === false) return SKIPPED_VISIT_TRANSITION_PREPARATION;
   if (!hasConfirmedRouteArrivalRegistration(result, places.length)) {
     throw new RouteArrivalVisitTransitionPreparationError(
       language === "en"

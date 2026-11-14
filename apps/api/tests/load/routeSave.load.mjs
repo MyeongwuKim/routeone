@@ -39,6 +39,7 @@ const runId = randomBytes(12).toString("hex");
 const outputPath = join(tmpdir(), `routeone-route-save-load-${runId}.json`);
 const users = Array.from({ length: 3 }, (_, index) => ({
   id: randomBytes(12).toString("hex"), accountId: `load-test-${runId}-${index}`,
+  activeSessionId: randomBytes(16).toString("hex"),
 }));
 const userIds = users.map(user => user.id);
 const trace = new AsyncLocalStorage();
@@ -113,7 +114,7 @@ try {
   const { createAuthToken } = await import("../../src/lib/auth.ts");
   await database.$connect();
   await database.user.createMany({ data: users });
-  const tokens = users.map(user => createAuthToken(user.id));
+  const tokens = users.map(user => createAuthToken(user.id, user.activeSessionId));
   app = await buildApp();
   app.log.level = "silent";
   const pendingSamples = new Map();

@@ -49,7 +49,7 @@ function LoginPage() {
   useEffect(() => {
     isLoginScreenActiveRef.current = true;
     if (consumeAuthSessionExpired()) {
-      showToast("7일 동안 접속하지 않아 로그아웃되었어요.", 3200);
+      showToast("로그인 세션이 종료되었어요. 다시 로그인해 주세요.", 3200);
     }
     return () => { isLoginScreenActiveRef.current = false; };
   }, [showToast]);

@@ -220,10 +220,22 @@ const sources = {
   routeStop: ["verificationPhotoImageId", "verificationPhotoUrl", "place.imageUrl"],
   placeStayStat: ["imageUrl"],
   placePhoto: ["imageId", "imageUrl", "thumbnailUrl", "placeImageUrl"],
+  placePhotoReport: ["photoImageId", "photoImageUrl", "photoThumbnailUrl"],
 };
+
+function referencePrisma(records = {}) {
+  return Object.fromEntries(Object.keys(sources).map(name => [name, {
+    findFirst: async ({ where }) => {
+      const row = (records[name] ?? []).find(record => matches(record, where));
+      return row ? { id: row.id } : null;
+    },
+  }]));
+}
 
 test("스키마의 이미지 필드가 늘어나면 참조 검사 누락을 감지한다", () => {
   const fields = {};
+  // 사진 레코드 ID와 사진 제목은 이미지 원본을 가리키는 값이 아니다.
+  const nonImageReferences = new Set(["PlacePhotoReport.photoId", "PlacePhotoReport.photoTitle"]);
   function imagePaths(model, prefix = "") {
     return model.fields.flatMap((field) => {
       if (field.type === "String" && /image|photo|avatar|thumbnail/i.test(field.name)) return [prefix + field.name];
@@ -232,10 +244,52 @@ test("스키마의 이미지 필드가 늘어나면 참조 검사 누락을 감�
     });
   }
   for (const model of Prisma.dmmf.datamodel.models) {
-    const paths = imagePaths(model);
+    const paths = imagePaths(model).filter(path => !nonImageReferences.has(`${model.name}.${path}`));
     if (paths.length) fields[model.name[0].toLowerCase() + model.name.slice(1)] = paths.sort();
   }
   assert.deepEqual(fields, Object.fromEntries(Object.entries(sources).map(([key, value]) => [key, [...value].sort()])));
+});
+
+test("원본 사진 기록이 없어도 신고에 남은 이미지 ID·URL·썸네일은 정리하지 않는다", async () => {
+  for (const status of ["PENDING", "CANCELED", "DISMISSED", "ACTIONED"]) {
+    for (const field of sources.placePhotoReport) {
+      const imageId = "report-image";
+      const report = { id: "report", status, photoId: "photo-record", photoTitle: "신고 사진",
+        [field]: field.endsWith("Id") ? imageId : `https://imagedelivery.net/account/${imageId}/thumbnail?sig=fixture`,
+      };
+      const prisma = referencePrisma({ placePhotoReport: [report] });
+      const h = harness([oldImage(imageId), oldImage("unused")], id => isImageReferenced(prisma, id));
+      const result = await h.run();
+      assert.deepEqual(h.deleted, ["unused"], `${status}.${field}`);
+      assert.equal(result.referencedCount, 1);
+    }
+  }
+});
+
+test("신고 사진의 레코드 ID와 제목은 이미지 참조로 오인하지 않는다", async () => {
+  const prisma = referencePrisma({ placePhotoReport: [{ id: "report", photoId: "image-123", photoTitle: "image-123" }] });
+  assert.equal(await isImageReferenced(prisma, "image-123"), false);
+});
+
+test("삭제 직전 신고 기록에 연결된 사진도 실제 참조 재검사로 보존한다", async () => {
+  const reports = [];
+  const prisma = referencePrisma({ placePhotoReport: reports });
+  const h = harness([oldImage("late-report")], id => isImageReferenced(prisma, id));
+  h.dependencies.images.getImage = async id => {
+    reports.push({ id: "report", photoImageId: id });
+    return oldImage(id);
+  };
+  const result = await h.run();
+  assert.deepEqual(h.deleted, []);
+  assert.equal(result.preservedOnRecheckCount, 1);
+});
+
+test("신고 이미지 참조 조회가 실패하면 미사용으로 간주해 삭제하지 않는다", async () => {
+  const prisma = referencePrisma();
+  prisma.placePhotoReport.findFirst = async () => { throw new Error("report reference lookup failed"); };
+  const h = harness([oldImage("report-image")], id => isImageReferenced(prisma, id));
+  await assert.rejects(h.run(), /report reference lookup failed/);
+  assert.deepEqual(h.deleted, []);
 });
 
 test("ID·서명 URL·썸네일·스냅샷·비활성 사진·프로필 참조를 모두 보존한다", async () => {

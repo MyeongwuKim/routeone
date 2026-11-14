@@ -3,7 +3,7 @@
  * 여행 시작 전 미리보기와 오늘 등록할 장소 도착 알림 대상을 구성한다.
  *
  * 동작 방식:
- * 시작일을 기준으로 DAY 날짜를 맞추고, 오늘 DAY의 미완료 장소만
+ * 시작일을 기준으로 DAY 날짜를 맞추고, 오늘 DAY에서 방문·건너뜀을 아직 처리하지 않은 장소만
  * 일정 순서대로 반환한다. 미래 DAY는 조기 알림을 막기 위해 등록하지 않는다.
  */
 import type { MyRoute } from "../types";
@@ -13,6 +13,7 @@ import {
   getSortedRouteDays,
   getTodayDateKey,
   isVisitedStop,
+  isResolvedStop,
 } from "../routeDisplay";
 
 export function createRouteArrivalStartPreview(
@@ -69,7 +70,7 @@ export function createRouteArrivalVisitPreview(
   const totalStopCount = dayStops.length;
   const completedStopCount = dayStops.filter(isVisitedStop).length;
   const isCompleted =
-    totalStopCount > 0 && completedStopCount === totalStopCount;
+    totalStopCount > 0 && dayStops.every(isResolvedStop);
 
   return {
     ...route,
@@ -99,7 +100,7 @@ export function getRouteArrivalMonitoringTargets(
 
     return [...routeDay.stops]
       .sort((left, right) => left.order - right.order)
-      .filter((stop) => !isVisitedStop(stop))
+      .filter((stop) => !isResolvedStop(stop))
       .map((activeDestination) => ({
         activeDestination,
         dayDateKey,

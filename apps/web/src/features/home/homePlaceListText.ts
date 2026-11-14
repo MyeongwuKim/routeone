@@ -12,10 +12,10 @@ const copy = {
     toggle: (title: string) => `${title} 담기`,
     details: (title: string) => `${title} 상세 정보`,
     selected: (count: number) => `${count}곳 담음`,
-    checkout: "코스 만들기",
+    checkout: "루트 만들기",
     loading: "장소를 불러오고 있어요",
     empty: "표시할 장소가 없어요",
-    emptyDescription: "위에서 다른 지역이나 장소 종류를 골라보세요.",
+    emptyDescription: "지역이나 장소 종류를 바꿔 주세요.",
     error: "장소를 불러오지 못했어요",
   },
   en: {
@@ -32,7 +32,7 @@ const copy = {
     checkout: "Plan a route",
     loading: "Loading places",
     empty: "No places to show",
-    emptyDescription: "Choose another area or category above.",
+    emptyDescription: "Choose another area or category.",
     error: "Could not load places",
   },
 };
