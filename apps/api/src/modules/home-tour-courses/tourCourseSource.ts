@@ -38,6 +38,36 @@ const TOUR_COURSE_SOURCE_URL = "https://apis.data.go.kr/B551011/KorService2/area
 const TOUR_COURSE_SOURCE_PAGE_SIZE = 200;
 const TOUR_COURSE_SOURCE_MAX_PAGES = 100;
 const TOUR_COURSE_SOURCE_TIMEOUT_MS = 15_000;
+const NETWORK_ERROR_CODES = new Set([
+  "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "UND_ERR_SOCKET",
+  "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH",
+  "ERR_TLS_CERT_ALTNAME_INVALID", "ERR_TLS_HANDSHAKE_TIMEOUT", "CERT_HAS_EXPIRED", "CERT_NOT_YET_VALID",
+  "DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+]);
+
+/** URL이 담길 수 있는 원본 오류 대신, 중첩·복수 연결 실패에서 허용한 네트워크 코드만 남긴다. */
+function readNetworkErrorCodes(error: unknown) {
+  const pending = [error];
+  const visited = new Set<unknown>();
+  const codes = new Set<string>();
+
+  // 순환하거나 과도하게 중첩된 원인도 최대 16개까지만 확인한다.
+  for (let index = 0; index < pending.length && index < 16; index += 1) {
+    const current = pending[index];
+    if (!current || typeof current !== "object" || visited.has(current)) continue;
+    visited.add(current);
+    const { code, name, cause, errors } = current as {
+      code?: unknown; name?: unknown; cause?: unknown; errors?: unknown;
+    };
+    if (typeof code === "string" && NETWORK_ERROR_CODES.has(code)) codes.add(code);
+    if (name === "TimeoutError" || name === "AbortError") codes.add(name);
+    if (cause) pending.push(cause);
+    if (Array.isArray(errors)) pending.push(...errors.slice(0, 16));
+  }
+
+  return [...codes];
+}
 
 function normalizeServiceKey(serviceKey: string) {
   try {
@@ -68,8 +98,10 @@ async function fetchTourCourseSourcePage(serviceKey: string, pageNo: number) {
   // 관광공사 게이트웨이는 Sentry 추적 헤더가 붙은 요청을 HTTP 400으로 거절한다.
   const response = await suppressTracing(() =>
     fetch(url, { signal: AbortSignal.timeout(TOUR_COURSE_SOURCE_TIMEOUT_MS) })
-  ).catch(() => {
-    throw new Error(`Tour course source request failed (page ${pageNo})`);
+  ).catch((error: unknown) => {
+    const codes = readNetworkErrorCodes(error);
+    const details = codes.length ? `, ${codes.join(", ")}` : "";
+    throw new Error(`Tour course source request failed (page ${pageNo}${details})`);
   });
   if (!response.ok) {
     throw new Error(`Tour course source request failed (page ${pageNo}, HTTP ${response.status})`);

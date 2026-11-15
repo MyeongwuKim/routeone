@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { inspect } from "node:util";
 import { fetchOfficialTourCourses } from "../src/modules/home-tour-courses/tourCourseSource.ts";
 
 const serviceKey = "course-test-key+/=";
@@ -72,4 +73,61 @@ test("코스 원본 요청 오류에 서비스 키가 포함된 URL이나 원본
     response: { header: { resultCode: "99", resultMsg: serviceKey } },
   }));
   await assert.rejects(fetchOfficialTourCourses(), { message: "Tour course source returned an invalid response (page 1)" });
+});
+
+for (const code of ["UND_ERR_CONNECT_TIMEOUT", "ENOTFOUND", "CERT_HAS_EXPIRED"]) {
+  test(`네트워크 원인 ${code}는 남기고 원본 오류의 키와 URL은 제거한다`, async (t) => {
+    t.mock.method(globalThis, "fetch", async (url) => {
+      throw new TypeError("fetch failed", {
+        cause: Object.assign(new Error(`Failed ${url}`), { code }),
+      });
+    });
+
+    await assert.rejects(fetchOfficialTourCourses(), (error) => {
+      assert.equal(error.message, `Tour course source request failed (page 1, ${code})`);
+      assert.equal(error.cause, undefined);
+      assert.doesNotMatch(inspect(error), /course-test-key|apis\.data\.go\.kr/);
+      return true;
+    });
+  });
+}
+
+test("여러 연결 시도의 오류 코드를 중복 없이 남긴다", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url) => {
+    throw new TypeError("fetch failed", {
+      cause: new AggregateError([
+        Object.assign(new Error(`Failed ${url}`), { code: "ENETUNREACH" }),
+        Object.assign(new Error(`Failed ${url}`), { code: "ETIMEDOUT" }),
+        Object.assign(new Error(`Failed ${url}`), { code: "ETIMEDOUT" }),
+      ]),
+    });
+  });
+
+  await assert.rejects(fetchOfficialTourCourses(), {
+    message: "Tour course source request failed (page 1, ENETUNREACH, ETIMEDOUT)",
+  });
+});
+
+for (const name of ["TimeoutError", "AbortError"]) {
+  test(`요청 중단 ${name}을 네트워크 연결 오류와 구분한다`, async (t) => {
+    t.mock.method(globalThis, "fetch", async (url) => {
+      throw new DOMException(`Failed ${url}`, name);
+    });
+
+    await assert.rejects(fetchOfficialTourCourses(), {
+      message: `Tour course source request failed (page 1, ${name})`,
+    });
+  });
+}
+
+test("허용하지 않은 오류 코드와 순환 원인에는 민감한 값을 남기지 않는다", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const error = Object.assign(new Error(`Failed ${url}`), { code: serviceKey });
+    error.cause = error;
+    throw error;
+  });
+
+  await assert.rejects(fetchOfficialTourCourses(), {
+    message: "Tour course source request failed (page 1)",
+  });
 });
