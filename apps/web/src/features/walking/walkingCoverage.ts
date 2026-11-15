@@ -1,5 +1,8 @@
 import type { WalkingBounds } from "./walkingTypes";
 
+/** 보행로 데이터가 서비스 지역 전체를 지원할 때까지 도보 진입점과 이동수단 선택을 숨긴다. */
+export const WALKING_DIRECTIONS_ENABLED = false;
+
 /** 브라우저에서 자체 도보 계산을 지원하는 지역 데이터. 다른 지역은 경로를 추측하지 않고 미지원으로 알린다. */
 export const WALKING_COVERAGE = {
   id: "gangneung",

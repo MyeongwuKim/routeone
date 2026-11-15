@@ -39,6 +39,7 @@ import { formatFestivalPeriod } from "@/lib/festivalDate";
 import type { NearbyTouristPlace } from "@/lib/visitKoreaTourApi";
 import { useMapSheetStore, type MapSheetMode } from "@/stores/mapSheetStore";
 import { getWalkingRouteText } from "@/features/walking/walkingRouteText";
+import { WALKING_DIRECTIONS_ENABLED } from "@/features/walking/walkingCoverage";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
 import { usePlaceCartStore } from "@/stores/placeCartStore";
 import { useUiThemeStore } from "@/stores/uiThemeStore";
@@ -70,7 +71,9 @@ function PlaceBottomSheet() {
   const showToast = useUiToastStore((state) => state.showToast);
   const [isTopRankInfoOpen, setIsTopRankInfoOpen] = useState(false);
   // 상세 길찾기의 선택 기준만 보관한다. 여행 일정 생성·저장의 자동차 기준은 변경하지 않는다.
-  const [routeMode, setRouteMode] = useState<PlaceDirectionMode>("driving");
+  const [selectedRouteMode, setRouteMode] = useState<PlaceDirectionMode>("driving");
+  // 도보 노출 중지 중에는 이전 선택이 남아 있어도 조회·표시·외부 길찾기를 자동차 기준으로 맞춘다.
+  const routeMode = WALKING_DIRECTIONS_ENABLED ? selectedRouteMode : "driving";
   const previousInfoModeRef = useRef<Exclude<MapSheetMode, "directions-popup">>("full-popup");
   const [cartAddAnimationPlaceId, setCartAddAnimationPlaceId] = useState<
     string | null
@@ -574,13 +577,13 @@ function PlaceBottomSheet() {
                 {contextAction.label}
               </button>
             </div>
-          ) : (
+          ) : WALKING_DIRECTIONS_ENABLED ? (
             <div className="shrink-0 border-t border-brand-100 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:border-brand-400/20 dark:bg-[#071718]">
               <button type="button" onClick={handleOpenWalkingDirections} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 active:scale-[0.99]">
                 <IoFootstepsOutline aria-hidden="true" className="text-lg" />{walkingText.title}
               </button>
             </div>
-          )}
+          ) : null}
         </div>
       </section>
 

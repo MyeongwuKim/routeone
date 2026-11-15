@@ -26,7 +26,8 @@
 - 언어 선택은 홈에서 로그인 없이 가능하다. 코스 제목·소개와 방문지별 설명은 `apps/web/src/hooks/useTourCourseLocalization.ts`를, 방문지 이름·주소는 `apps/web/src/lib/placeLocalization.ts`와 API의 `apps/api/src/modules/places/placeLocalization.service.ts`를 먼저 확인한다.
 - 지원 지역 판정은 `apps/web/src/features/home/map/serviceRegionSelection.ts`를 확인한다. 경계 JSON은 웹 `apps/web/public/service-region-boundary.json`과 API `apps/api/src/assets/service-region-boundary.json`에 각각 있다. API의 빌드 단계는 API 소스 내부 파일을 `dist/assets`로 복사한다. `apps/api`만 빌드 소스로 사용할 때도 이 파일을 읽을 수 있어야 한다.
 - 홈 지도 데이터의 조회·번역 Effect·캐시 갱신은 `features/home/useHomeAttractionData.ts`, 관광지·축제의 중복 제거·혼잡도 순위와 번역 결과 병합은 React에 의존하지 않는 `homeAttractionModel.ts`에서 확인한다. `apps/web/tests/homeAttractionModel.test.mjs`는 원문·이미지 보존과 순위 규칙을 검증한다.
-- 장소 상세 길찾기는 `apps/web/src/features/place-sheet/hooks/usePlaceSheetData.ts`에서 자동차와 도보로 분기한다. 도보 범위와 경로 계산은 `apps/web/src/features/walking/`에서 확인한다. GPS 좌표를 얻는 동작, 서비스 지역 판정, 도보 데이터 지원 범위는 서로 다른 조건이다.
+- 장소 상세 길찾기는 현재 자동차만 노출한다. `apps/web/src/features/walking/walkingCoverage.ts`의 `WALKING_DIRECTIONS_ENABLED`는 `false`이며, 별도 도보 버튼·이동수단 선택을 숨기고 남아 있는 도보 선택도 `PlaceBottomSheet.tsx`에서 자동차 기준으로 바꿔 조회·표시한다. 도보 데이터가 서비스 지역 전체를 지원하지 않아 일시 중지한 상태다.
+- 길찾기 조회는 `apps/web/src/features/place-sheet/hooks/usePlaceSheetData.ts`, 보관 중인 도보 범위와 경로 계산은 `apps/web/src/features/walking/`에서 확인한다. GPS 좌표를 얻는 동작, 서비스 지역 판정, 도보 데이터 지원 범위는 서로 다른 조건이다.
 - 도보 Worker는 인라인 번들로 실행하고, 강릉 보행로 JSON은 웹에서 필요할 때 조회한다. 네이티브의 `apps/native/scripts/sync-web-build.mjs`는 같은 JSON을 data: URL로 포함한다. Worker와 데이터 로딩을 바꾸면 `apps/web/tests/walkingRouting.test.mjs`와 `walkingNativeBundle.test.mjs`로 실제 경로 계산과 data: 모듈 패키징을 함께 확인한다.
 
 ## 실행 환경

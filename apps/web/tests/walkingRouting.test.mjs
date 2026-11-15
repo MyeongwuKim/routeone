@@ -171,12 +171,12 @@ test("지원 밖 좌표와 이미 취소된 요청은 Worker나 다운로드 전
   await assert.rejects(fetchWalkingRoute({ start:point(37.75,128.9), goal:point(37.75,128.901), signal:controller.signal }), error => error.name === "AbortError");
 });
 
-test("라우터 밖의 전역 장소 상세에서도 도보 모드가 렌더링된다", async () => {
+test("전역 장소 상세는 도보 선택을 숨기고 자동차 길찾기를 표시한다", async () => {
   const { default: PlaceDirectionsSection } = await server.ssrLoadModule("/src/features/place-sheet/components/PlaceDirectionsSection.tsx");
   const { getUiText } = await server.ssrLoadModule("/src/lib/uiText.ts");
   const origin = { coordinates:point(37.75,128.9), label:"강릉", isCurrentLocation:false };
   const props = {
-    appLanguage:"ko", routeMode:"walking", onRouteModeChange:() => {}, onOriginChange:() => {}, walkingRoute:null,
+    appLanguage:"ko", routeMode:"driving", onRouteModeChange:() => {}, onOriginChange:() => {}, walkingRoute:null,
     currentLocation:origin.coordinates, directionOrigin:origin,
     isCurrentLocationLookupPending:false, isDarkMode:false, isRouteLoading:false,
     routeDistanceText:null, routeDurationText:null, routeError:"테스트 오류", routePathPoints:[],
@@ -184,18 +184,18 @@ test("라우터 밖의 전역 장소 상세에서도 도보 모드가 렌더링�
     text:getUiText("ko"),
   };
   const html = renderToString(createElement(PlaceDirectionsSection, props));
-  assert.ok(html.includes("도보"));
+  assert.equal(html.includes("도보"), false);
+  assert.equal(html.includes('aria-label="이동수단"'), false);
   assert.ok(html.includes("테스트 오류"));
-  assert.ok(html.includes("OpenStreetMap"));
+  assert.equal(html.includes("OpenStreetMap"), false);
   assert.ok(html.includes("출발지 변경"));
-  const result = route(pack([[37.75,128.9],[37.75,128.901]],[[0,1,0,0]]));
-  const duration = `${Math.ceil(result.durationMs/60_000)}분`;
+  const duration = "3분";
   const successHtml = renderToString(createElement(PlaceDirectionsSection, {
-    ...props, routeError:null, routeDistanceText:`${result.distanceM} m`, routeDurationText:duration,
-    walkingRoute:result, routePathPoints:result.path,
+    ...props, routeError:null, routeDistanceText:"1.3 km", routeDurationText:duration,
+    routePathPoints:[point(37.75,128.9), point(37.76,128.91)],
   }));
-  assert.ok(successHtml.includes(`도보 ${duration}`));
-  assert.equal(successHtml.includes(`차로 ${duration}`), false);
+  assert.ok(successHtml.includes(`차로 ${duration}`));
+  assert.equal(successHtml.includes("도보"), false);
 });
 
 test("배포할 실제 강릉 데이터에서 예시 두 구간의 경로·거리·시간을 계산한다", async () => {

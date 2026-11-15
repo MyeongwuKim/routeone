@@ -3,7 +3,7 @@
  *
  * 용도:
  * 출발지별 경로를 미리 보여주고 네이버 지도 길찾기로 연결한다.
- * 자동차는 기존 네이버 경로를, 도보는 공개 보행로를 자체 계산한 결과를 같은 지도에 표시한다.
+ * 자동차는 기존 네이버 경로를 표시하며, 도보 선택은 노출 설정이 켜졌을 때만 제공한다.
  * 현재 위치 출발은 실행 시 권한을 다시 확인해 이전 좌표 사용을 막는다.
  * 권한이 꺼지면 현재 위치 경로를 숨기되 지도에서 출발지를 직접 선택할 수 있다.
  */
@@ -37,6 +37,7 @@ import type { PlaceDirectionMode } from "../placeSheetModel";
 import type { WalkingRouteResult } from "@/features/walking/walkingTypes";
 import { getWalkingRouteText } from "@/features/walking/walkingRouteText";
 import WalkingRouteNotice from "@/features/walking/WalkingRouteNotice";
+import { WALKING_DIRECTIONS_ENABLED } from "@/features/walking/walkingCoverage";
 import { RouteInfoSkeleton } from "./PlaceSheetPrimitives";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import type { PlannedRouteDay } from "@/features/route-checkout/models/routePlanTypes";
@@ -382,12 +383,12 @@ function PlaceDirectionsContent({
         <p className="font-trip text-sm text-brand-700">{text.placeSheet.directions}</p>
       </div>
 
-      <div role="group" aria-label={appLanguage === "en" ? "Travel mode" : "이동수단"} className="mb-3 grid grid-cols-2 gap-2">
+      {WALKING_DIRECTIONS_ENABLED ? <div role="group" aria-label={appLanguage === "en" ? "Travel mode" : "이동수단"} className="mb-3 grid grid-cols-2 gap-2">
         {(["driving", "walking"] as const).map(mode => <button
           type="button" key={mode} aria-pressed={routeMode === mode} onClick={() => onRouteModeChange(mode)}
           className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-brand-200 px-3 text-sm font-bold text-brand-800 aria-pressed:border-brand-600 aria-pressed:bg-brand-100 dark:border-brand-400/25 dark:text-brand-100 dark:aria-pressed:bg-brand-900"
         >{mode === "walking" ? <IoFootstepsOutline /> : <IoCarSportOutline />}{walkingText[mode]}</button>)}
-      </div>
+      </div> : null}
       {originControl}
       <div aria-live="polite" className="mb-3 rounded-2xl border border-brand-100 bg-white px-3 py-3">
         {isCurrentLocationLookupPending || isRouteLoading ? (
