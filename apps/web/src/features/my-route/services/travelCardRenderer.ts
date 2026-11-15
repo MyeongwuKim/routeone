@@ -1,5 +1,6 @@
 import { fetchImageAsDataUrl } from "../routeCompletionPoster";
 import type { TravelCardDraft, TravelCardPhoto } from "../models/travelCard";
+import { getTravelCardPhotoLayout, TRAVEL_CARD_PHOTO_BACKGROUND } from "../utils/travelCardPhotoLayout";
 
 export type TravelCardFrame = { x: number; y: number; width: number; height: number };
 export type TravelCardErrors = { title?: "empty" | "long"; caption?: "long"; photos?: "empty" | "failed" };
@@ -62,21 +63,17 @@ export async function prepareTravelCardDraft(draft: TravelCardDraft, isCurrent =
 }
 
 function drawPhoto(context: CanvasRenderingContext2D, image: HTMLImageElement, photo: TravelCardPhoto, frame: TravelCardFrame) {
-  const scale = Math.max(frame.width / image.naturalWidth, frame.height / image.naturalHeight);
-  const width = image.naturalWidth * scale;
-  const height = image.naturalHeight * scale;
-  const x = frame.x - (width - frame.width) * Math.max(0, Math.min(1, photo.focal.x));
-  const y = frame.y - (height - frame.height) * Math.max(0, Math.min(1, photo.focal.y));
+  const { x, y, width, height } = getTravelCardPhotoLayout({ width: image.naturalWidth, height: image.naturalHeight }, frame, photo);
   context.save();
   context.beginPath();
   context.roundRect(frame.x, frame.y, frame.width, frame.height, 16);
   context.clip();
-  context.drawImage(image, x, y, width, height);
+  context.drawImage(image, frame.x + x, frame.y + y, width, height);
   context.restore();
 }
 
 /**
- * 현재 선택한 사진·초점 위치·문구를 실제 PNG 한 장으로 만든다. 원본과 방문 기록은 변경하지 않는다.
+ * 현재 선택한 사진·초점 위치·배율·문구를 실제 PNG 한 장으로 만든다. 원본과 방문 기록은 변경하지 않는다.
  * 한 줄을 넘는 입력이나 사진이 없는 경우 dataUrl 없이 입력 오류를 돌려준다.
  * 일부 사진만 실패하면 성공한 사진으로 재배치하고 누락 ID를 반환해 재시도·교체 안내에 사용한다.
  */
@@ -109,7 +106,7 @@ export async function renderTravelCard(draft: TravelCardDraft): Promise<TravelCa
   });
   if (!loaded.length) return { ...base, errors: { photos: "failed" } };
 
-  context.fillStyle = "#fffcf5";
+  context.fillStyle = TRAVEL_CARD_PHOTO_BACKGROUND;
   context.fillRect(0, 0, 1080, 1350);
   const frames = getTravelCardPhotoFrames(loaded.length);
   loaded.forEach(({ image, photo }, index) => drawPhoto(context, image, photo, frames[index]));

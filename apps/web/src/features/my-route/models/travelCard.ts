@@ -4,14 +4,16 @@ import { getCompletedPosterDayGroups } from "../routeCompletionPoster";
 import { getRouteDateKey } from "../routeDisplay";
 import type { MyRoute } from "../types";
 
-/** 카드 안에서만 쓰는 사진과 크롭 위치. 원본 URL과 방문 인증 데이터는 변경하지 않는다. */
+/** 카드 안에서만 쓰는 사진과 크롭 구도. 원본 URL과 방문 인증 데이터는 변경하지 않는다. */
 export type TravelCardPhoto = {
   id: string;
   source: "verification" | "album";
   label: string;
   url: string;
-  /** 0은 왼쪽·위, 1은 오른쪽·아래 끝이다. 미리보기 object-position과 출력에 같은 비율을 쓴다. */
+  /** 0은 왼쪽·위, 1은 오른쪽·아래 끝 정렬이다. 축소로 생긴 여백에도 같은 정렬 비율을 쓴다. */
   focal: { x: number; y: number };
+  /** 틀을 채우는 크기 대비 배율. 생략하면 기존 구도인 1배이며, 전체 보기 크기부터 3배까지 허용한다. */
+  zoom?: number;
 };
 
 /** 한 편집 세션의 입력. candidates는 조회한 인증 사진 후보이며 photos만 카드에 포함된다. */

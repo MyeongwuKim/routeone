@@ -45,6 +45,24 @@
         const card = await renderTravelCard({...draft,photos:[{...photo(0),url:crop.toDataURL(),focal:{x,y:0.5}}]});
         check(`가로 초점 ${x} 반영`, (await pixels(card)).at(540,490) === expected);
       }
+      const whole = await renderTravelCard({...draft,photos:[{...photo(0),url:crop.toDataURL(),zoom:972/900/(906/300)}]});
+      const wholePixels = await pixels(whole);
+      check("축소하면 가로 원본 양끝과 카드색 여백 표시", wholePixels.at(100,490) === "34,107,211" && wholePixels.at(540,490) === "255,255,0" && wholePixels.at(980,490) === "255,0,0" && wholePixels.at(540,100) === "255,252,245");
+      const square = document.createElement("canvas"); square.width = square.height = 900;
+      const squareContext = square.getContext("2d"); squareContext.fillStyle = "#226bd3"; squareContext.fillRect(0,0,900,900);
+      squareContext.fillStyle = "#268c52"; squareContext.fillRect(360,360,180,180);
+      const squarePhoto = {...photo(0),url:square.toDataURL()};
+      const standard = await pixels(await renderTravelCard({...draft,photos:[squarePhoto]}));
+      const enlarged = await pixels(await renderTravelCard({...draft,photos:[{...squarePhoto,zoom:2}]}));
+      check("2배 확대가 실제 PNG 구도에 반영", standard.at(400,490) === "34,107,211" && enlarged.at(400,490) === "38,140,82");
+      const portrait = await pixels(await renderTravelCard({...draft,photos:[{...photo(0,300,900),zoom:0}]}));
+      check("세로 사진은 전체 보기 이하로 작아지지 않음", portrait.at(540,100) === "34,107,211" && portrait.at(540,900) === "34,107,211" && portrait.at(100,490) === "255,252,245");
+      const overZoom = await renderTravelCard({...draft,photos:[{...squarePhoto,zoom:99}]});
+      const maxZoom = await renderTravelCard({...draft,photos:[{...squarePhoto,zoom:3}]});
+      check("과도한 확대는 3배로 제한", overZoom.dataUrl === maxZoom.dataUrl);
+      const invalidZoom = await renderTravelCard({...draft,photos:[{...squarePhoto,zoom:NaN}]});
+      const legacyZoom = await renderTravelCard({...draft,photos:[squarePhoto]});
+      check("배율 없는 기존 사진과 잘못된 배율은 기존 구도 유지", invalidZoom.dataUrl === legacyZoom.dataUrl);
       for (const [field,value,error] of [["title","   ","empty"],["title","여행".repeat(100),"long"],["caption","기억".repeat(100),"long"]]) {
         const card = await renderTravelCard({...draft,[field]:value});
         check(`${field} 입력 오류 ${error}`, !card.dataUrl && card.errors[field] === error);

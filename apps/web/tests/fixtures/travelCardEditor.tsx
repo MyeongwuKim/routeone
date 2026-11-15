@@ -8,6 +8,7 @@ import "/src/index.css";
 // 실제 목록·편집 화면을 사용하며 외부 조회 응답만 테스트 데이터로 바꾼다.
 const colors = ["#397b9b", "#b76838", "#578651", "#c8a25a"];
 function photo(index: number) {
+  if (new URLSearchParams(location.search).has("testPhotos")) return `routeone-test://travel-card/photo-${index}`;
   const canvas = document.createElement("canvas");
   canvas.width = 1200; canvas.height = 800;
   const context = canvas.getContext("2d")!;

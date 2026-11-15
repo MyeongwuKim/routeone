@@ -36,11 +36,13 @@
 
 - 내 정보 → 다녀온 루트 목록의 `카드 만들기`는 `MyRouteHistoryPage.tsx`에서 `useTravelCardEditor.ts`로 연결한다. `MyRouteCard.tsx`는 하단 액션 슬롯만 표시하며 생성 조건과 편집 상태는 소유하지 않는다. 기존 DAY 상세의 기록 카드와 `useRoutePosterPreview.ts`는 유지한다.
 - `models/travelCard.ts`는 기존 완료 DAY 판정을 재사용해 실제 방문의 인증 사진 후보를 정렬·중복 제거한다. `services/travelCardRenderer.ts`의 초안 준비는 사용 가능한 사진 최대 네 장을 고르고, 앞 사진이 실패하면 뒤 후보를 읽는다. 전부 건너뛴 DAY와 미완료 DAY는 후보에서 제외하며 사진 없는 방문 기록은 앨범 선택으로 시작한다.
-- `useTravelCardEditor.ts` 한 곳이 제목·선택 문장·사진 순서·초점 위치의 임시 편집본을 소유한다. 계정·루트·닫기 변경은 세션 번호로, 연속 편집은 생성 번호로 오래된 결과를 제외한다. 편집하지 않은 기본 제목·날짜는 앱 언어를 따르고 직접 쓴 제목·문장은 유지한다. 초안 영구 저장과 기기 간 동기화는 하지 않는다.
-- `TravelCardEditor.tsx`는 미리보기·문구·내보내기를, `TravelCardPhotoEditor.tsx`는 사진 선택·순서·위치 조정을 표시한다. 모바일에서는 상단 `사진 편집`으로 제어 영역에 바로 이동할 수 있다. 사진별 실패 표시는 실제 PNG의 대표 사진·포함 사진과 구분하며 실패한 후보를 다시 시도할 수 있다.
+- `useTravelCardEditor.ts` 한 곳이 제목·선택 문장·사진 순서·초점 위치·배율의 임시 편집본을 소유한다. 계정·루트·닫기 변경은 세션 번호로, 연속 편집은 생성 번호로 오래된 결과를 제외한다. 편집하지 않은 기본 제목·날짜는 앱 언어를 따르고 직접 쓴 제목·문장은 유지한다. 초안 영구 저장과 기기 간 동기화는 하지 않는다.
+- `TravelCardEditor.tsx`는 미리보기·문구·내보내기를, `TravelCardPhotoEditor.tsx`는 사진 선택·순서를 표시한다. `TravelCardPhotoCrop.tsx`는 사진 이동·두 손가락 줌·배율과 위치 슬라이더를 다루며 이미지 원본 크기와 제스처 좌표만 자체 관리한다. 모바일에서는 상단 `사진 편집`으로 제어 영역에 바로 이동할 수 있다. 사진별 실패 표시는 실제 PNG의 대표 사진·포함 사진과 구분하며 실패한 후보를 다시 시도할 수 있다.
+- `utils/travelCardPhotoLayout.ts`는 크롭 화면·제스처·PNG가 공유하는 이미지 사각형 계산이다. 100%는 기존 틀 채움이며 전체 보기 크기부터 300%까지 조절한다. `전체 보기`는 사진을 가운데에 모두 표시하고 여백은 카드의 아이보리색으로 채운다. `틀 채우기`는 100%·가운데로, `가운데로`는 배율을 유지하고 위치만 복원한다. 순서 변경은 사진별 구도를 유지하되 새 프레임의 전체 보기 크기보다 작으면 그 크기로 표시한다. 교체한 새 사진은 기본 구도로 시작한다.
 - 대표 카드는 1080×1350 PNG 한 장이다. 렌더러는 사진 수별 배치와 초점 비율을 캔버스에 적용하고 실제 출력 글꼴로 제목·한 줄 너비를 검사한다. 같은 PNG를 미리보기와 저장·공유에 사용한다. `routeCompletionPoster.ts`의 기존 이미지 읽기와 저장·공유를 재사용하고, 웹 공유의 파일 준비 뒤에도 편집 세션을 확인해 닫힌 카드의 공유·저장이 새로 시작되지 않게 한다.
+- `routeCompletionPoster.ts`의 `resolveRoutePosterPhotoSource`는 `routeone-test:` 인증 사진 주소를 SVG로 바꾸며 PNG 생성과 선택·후보 썸네일·크롭 화면이 함께 사용한다. 실제 사진 URL과 앨범의 data URL은 그대로 유지한다. 테스트 계정의 표시 회귀는 `travelCardEditor.html?testPhotos=1`과 `travelCardPhotoSources.mjs`에서 9개 편집 이미지의 디코딩을 확인한다.
 - 앨범 선택은 기존 네이티브 사진 브리지에 `library`만 전달하며 업로드 대상을 보내지 않는다. 웹 파일도 로컬에서만 읽고 최대 1920px로 줄인다. 카드 편집은 루트·방문·GPS·인증 사진·공개 동의를 변경하지 않는다. iOS 저장·공유는 시스템 시트에 전달하는 동작이며 취소를 저장·SNS 게시 완료로 안내하지 않는다.
-- 자동 테스트는 `apps/web/tests/travelCard.test.mjs`와 기존 `routePosterThemes.test.mjs`를 사용한다. 실제 PNG·크롭·입력 오류·사진 실패·후속 후보는 `apps/web/tests/fixtures/travelCardRendering.html`에서 확인한다. 실제 목록·편집 화면과 읽기 응답을 연결한 `travelCardEditor.html`·`travelCardEditor.tsx`는 Playwright의 `browser_run_code_unsafe`에 `travelCardFlow.mjs`를 전달해 확인한다. 각 검증은 별도 브라우저 컨텍스트와 테스트 사진을 쓰며 네이티브 경계 대체 검증과 실제 iOS 시트 검증을 구분한다.
+- 자동 테스트는 `apps/web/tests/travelCard.test.mjs`와 기존 `routePosterThemes.test.mjs`를 사용한다. 실제 PNG·크롭·배율·입력 오류·사진 실패·후속 후보는 `apps/web/tests/fixtures/travelCardRendering.html`에서 확인한다. 실제 목록·편집 화면과 읽기 응답을 연결한 `travelCardEditor.html`·`travelCardEditor.tsx`는 Playwright의 `browser_run_code_unsafe`에 `travelCardFlow.mjs`를 전달해 확인한다. `travelCardZoom.mjs`는 실제 두 손가락 터치, 취소 뒤 재조작, 사진별 배율 보존·교체, 크롭과 PNG 픽셀 일치·저장 전달을 확인한다. 각 검증은 별도 브라우저 컨텍스트와 테스트 사진을 쓰며 네이티브 경계 대체 검증과 실제 iOS 시트 검증을 구분한다.
 
 ## 공유 루트와 찜
 

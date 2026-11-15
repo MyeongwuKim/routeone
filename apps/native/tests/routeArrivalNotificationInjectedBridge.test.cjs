@@ -73,7 +73,8 @@ test("장소 도착 등록 bridge가 무응답 요청을 60초 후 실패 처리
     URL,
     Date,
   });
-  window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ = "mutated-session";
+  // 로그인 전환 때 WebView를 다시 설치하지 않고 전달된 현재 세션 번호로 요청한다.
+  window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ = "native-session-2";
 
   const request = window.RouteOneNative.syncRouteArrivalNotifications({
     places: [],
@@ -94,7 +95,7 @@ test("장소 도착 등록 bridge가 무응답 요청을 60초 후 실패 처리
     ({ type }) => type === "routeone:native-route-arrival-notifications-sync"
   );
   assert.equal(syncMessage.requestPermissions, true);
-  assert.equal(syncMessage.sessionId, "native-session-1");
+  assert.equal(syncMessage.sessionId, "native-session-2");
 });
 
 test("장소 도착 등록 bridge가 권한 요청 생략 옵션을 네이티브에 전달한다", async () => {
@@ -122,7 +123,7 @@ test("장소 도착 등록 bridge가 권한 요청 생략 옵션을 네이티브
     URL,
     Date,
   });
-  window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ = "mutated-session";
+  window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ = "native-session-2";
 
   const request = window.RouteOneNative.syncRouteArrivalNotifications({
     places: [],
@@ -136,7 +137,7 @@ test("장소 도착 등록 bridge가 권한 요청 생략 옵션을 네이티브
 
   assert.equal(syncMessage.requestPermissions, false);
   assert.equal(syncMessage.waitForCurrentPosition, true);
-  assert.equal(syncMessage.sessionId, "native-session-1");
+  assert.equal(syncMessage.sessionId, "native-session-2");
   window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_SYNC_RESPONSE__(
     syncMessage.id,
     {
@@ -201,4 +202,44 @@ test("진행 안내는 해당 요청에만 전달하고 종료·시간 초과 �
   await assert.rejects(timedOutRequest, /응답하지 않았어요/);
   progress(timedOutId, "locating");
   assert.deepEqual(stages, ["registering", "locating"]);
+});
+
+test("같은 WebView의 세션 전환은 새 요청에만 반영하고 이미 보낸 요청 번호는 유지한다", async () => {
+  const messages = [];
+  const window = {
+    __ROUTEONE_NATIVE_AUTH_SESSION_ID__: "session-before-login",
+    ReactNativeWebView: { postMessage: message => messages.push(JSON.parse(message)) },
+    addEventListener() {}, setTimeout() { return 1; }, clearTimeout() {},
+    fetch() { throw new Error("Unexpected network access"); },
+  };
+  vm.runInNewContext(loadInjectedBridgeScript(), { window, document: createDocument(), URL, Date });
+  const first = window.RouteOneNative.syncRouteArrivalNotifications({ places: [], requestPermissions: false });
+  const firstMessage = messages.at(-1);
+  window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ = "session-after-login";
+  const second = window.RouteOneNative.syncRouteArrivalNotifications({ places: [], requestPermissions: false });
+  const secondMessage = messages.at(-1);
+  assert.equal(firstMessage.sessionId, "session-before-login");
+  assert.equal(secondMessage.sessionId, "session-after-login");
+  assert.notEqual(firstMessage.id, secondMessage.id);
+  window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_SYNC_RESPONSE__(firstMessage.id, { ok: false, error: "The login session changed." });
+  await assert.rejects(first, /session changed/);
+  window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_SYNC_RESPONSE__(secondMessage.id, { ok: true, activeCount: 0, pendingCount: 0, registrationStatus: "inactive" });
+  assert.equal((await second).registrationStatus, "inactive");
+});
+
+test("비로그인 상태에서 설치한 브리지도 첫 로그인 이후 현재 세션으로 요청한다", async () => {
+  const messages = [];
+  const window = {
+    __ROUTEONE_NATIVE_AUTH_SESSION_ID__: "",
+    ReactNativeWebView: { postMessage: message => messages.push(JSON.parse(message)) },
+    addEventListener() {}, setTimeout() { return 1; }, clearTimeout() {},
+    fetch() { throw new Error("Unexpected network access"); },
+  };
+  vm.runInNewContext(loadInjectedBridgeScript(), { window, document: createDocument(), URL, Date });
+  window.__ROUTEONE_NATIVE_AUTH_SESSION_ID__ = "first-login-session";
+  const request = window.RouteOneNative.syncRouteArrivalNotifications({ places: [] });
+  const message = messages.at(-1);
+  assert.equal(message.sessionId, "first-login-session");
+  window.__ROUTEONE_NATIVE_ROUTE_ARRIVAL_NOTIFICATIONS_SYNC_RESPONSE__(message.id, { ok: true, activeCount: 0, pendingCount: 0, registrationStatus: "inactive" });
+  await request;
 });

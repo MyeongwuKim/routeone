@@ -34,4 +34,5 @@
 - 앱 안에서 영어로 전환하는 동안은 전역 다운로드 모달로 화면 조작과 앱 내부 뒤로가기를 막는다. 받은 바이트의 진행률을 표시하고, 완료하거나 실패하면 모달을 닫아 전환 또는 재시도를 이어간다.
 - `NativeWebViewScreen.tsx`의 번들 선택은 화면 진입 시 실행한다. 언어 변경으로 번들을 다시 조회하거나 준비 상태를 초기화하지 않으며, 비동기 준비 결과와 오류 안내는 현재 언어를 읽어 표시한다. `apps/native/tests/webViewLanguageChange.test.cjs`에서 실행 중 언어 전환과 시작 시 언어팩 진행 표시를 확인한다.
 - WebView 화면이 보내는 메시지의 종류와 응답은 `apps/native/src/webview/bridge/types.ts`, `index.ts`, 각 브릿지 모듈을 따라간다. 변경 시 웹 브라우저에서의 동작과 네이티브 권한 승인·거절 후 동작을 나눠 확인한다.
+- 도착 알림 메시지는 `injectedScript.ts`에서 요청 시점의 로컬 세션 번호를 읽는다. 같은 WebView의 로그인 전환은 `NativeWebViewScreen.tsx`가 새 번호를 전달하며, 이미 보낸 메시지에는 이전 번호가 남아 네이티브의 현재 세션 검사에서 거절된다. `routeArrivalNotificationInjectedBridge.test.cjs`에서 첫 로그인·세션 전환·기존 요청 번호 보존과 시간 초과·권한 옵션을 구분해 확인한다.
 - 앱 바이너리 업데이트 정책은 `apps/native/src/nativeUpdate/`, 원격 웹 번들 선택은 `apps/native/src/config/webBundleUpdateConfig.ts`와 `apps/native/src/webBundle/`에 있다. 시뮬레이터에서 오래된 화면이 보이면 앱 바이너리, 선택된 번들의 버전·채널, API 연결 대상을 구분한다. 발행 흐름은 `.github/workflows/`에서 확인한다.

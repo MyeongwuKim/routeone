@@ -943,15 +943,18 @@ function isCloudflareImageDeliveryUrl(url: string) {
   }
 }
 
-function getRouteOneTestPhotoDataUrl(url: string) {
+/** 실제 파일이 없는 테스트 인증 사진 주소를 표시용 SVG로 바꾼다. 실제 URL과 data URL은 그대로 반환한다. */
+export function resolveRoutePosterPhotoSource(url: string) {
+  if (url.startsWith("data:image/")) return url;
+
   try {
     const parsedUrl = new URL(url);
 
     if (parsedUrl.protocol !== "routeone-test:") {
-      return null;
+      return url;
     }
   } catch {
-    return null;
+    return url;
   }
 
   const accentColors = ["#14b8a6", "#f59e0b", "#38bdf8", "#f472b6"];
@@ -1042,10 +1045,10 @@ export async function fetchImageAsDataUrl(url: string) {
     return url;
   }
 
-  const testPhotoDataUrl = getRouteOneTestPhotoDataUrl(url);
+  const photoSource = resolveRoutePosterPhotoSource(url);
 
-  if (testPhotoDataUrl) {
-    return testPhotoDataUrl;
+  if (photoSource !== url) {
+    return photoSource;
   }
 
   let normalizedUrl: string;
