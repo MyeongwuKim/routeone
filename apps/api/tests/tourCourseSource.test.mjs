@@ -131,3 +131,87 @@ test("허용하지 않은 오류 코드와 순환 원인에는 민감한 값을 
     message: "Tour course source request failed (page 1)",
   });
 });
+
+test("일시적인 연결 실패가 계속되면 세 번까지만 요청하고 키 없는 오류를 반환한다", async (t) => {
+  const request = t.mock.method(globalThis, "fetch", async (url) => {
+    throw new TypeError(`Failed ${url}`, { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } });
+  });
+
+  await assert.rejects(fetchOfficialTourCourses(), (error) => {
+    assert.match(error.message, /page 1, UND_ERR_CONNECT_TIMEOUT/);
+    assert.doesNotMatch(inspect(error), /course-test-key|apis\.data\.go\.kr/);
+    return true;
+  });
+  assert.equal(request.mock.callCount(), 3);
+});
+
+test("다음 페이지의 연결 실패만 재시도하고 이미 받은 페이지는 다시 요청하지 않는다", async (t) => {
+  const pages = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const page = new URL(url).searchParams.get("pageNo");
+    pages.push(page);
+    if (page === "1") return tourResponse({ contentid: "101", title: "첫 코스" }, 201);
+    if (pages.filter((value) => value === "2").length === 1) {
+      throw new TypeError("fetch failed", { cause: { code: "ECONNRESET" } });
+    }
+    return tourResponse({ contentid: "102", title: "다음 코스" }, 201);
+  });
+
+  const courses = await fetchOfficialTourCourses();
+  assert.deepEqual(courses.map(({ id }) => id), ["101", "102"]);
+  assert.deepEqual(pages, ["1", "2", "2"]);
+});
+
+test("인증 응답과 인증서 오류는 재시도하지 않는다", async (t) => {
+  const request = t.mock.method(globalThis, "fetch", async () => new Response(null, { status: 403 }));
+  await assert.rejects(fetchOfficialTourCourses(), /HTTP 403/);
+  assert.equal(request.mock.callCount(), 1);
+
+  request.mock.mockImplementation(async () => {
+    throw new TypeError("fetch failed", { cause: { code: "CERT_HAS_EXPIRED" } });
+  });
+  await assert.rejects(fetchOfficialTourCourses(), /CERT_HAS_EXPIRED/);
+  assert.equal(request.mock.callCount(), 2);
+
+  request.mock.mockImplementation(async () => {
+    throw new TypeError("fetch failed", { cause: new AggregateError([
+      { code: "UND_ERR_CONNECT_TIMEOUT" }, { code: "CERT_HAS_EXPIRED" },
+    ]) });
+  });
+  await assert.rejects(fetchOfficialTourCourses(), /CERT_HAS_EXPIRED/);
+  assert.equal(request.mock.callCount(), 3);
+});
+
+test("전체 목록 조회의 기한이 끝나면 다음 연결 시도를 시작하지 않는다", async (t) => {
+  const deadline = new AbortController();
+  const createTimeout = AbortSignal.timeout.bind(AbortSignal);
+  t.mock.method(AbortSignal, "timeout", (ms) => ms === 10_000 ? deadline.signal : createTimeout(ms));
+  const request = t.mock.method(globalThis, "fetch", async () => {
+    deadline.abort(new DOMException("catalog deadline", "TimeoutError"));
+    throw new TypeError("fetch failed", { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } });
+  });
+
+  await assert.rejects(fetchOfficialTourCourses(), /UND_ERR_CONNECT_TIMEOUT/);
+  assert.equal(request.mock.callCount(), 1);
+});
+
+test("느린 연결은 시도별 제한 시간에 중단하고 새 연결로 코스를 읽는다", async (t) => {
+  const createTimeout = AbortSignal.timeout.bind(AbortSignal);
+  let attemptTimeoutCount = 0;
+  t.mock.method(AbortSignal, "timeout", (ms) => {
+    if (ms !== 4_000 || attemptTimeoutCount++ > 0) return createTimeout(ms);
+    const timeout = new AbortController();
+    queueMicrotask(() => timeout.abort(new DOMException("attempt deadline", "TimeoutError")));
+    return timeout.signal;
+  });
+  const request = t.mock.method(globalThis, "fetch", async (_url, { signal }) => {
+    if (attemptTimeoutCount > 1) return tourResponse({ contentid: "101", title: "복구된 코스" }, 1);
+    return new Promise((_resolve, reject) => {
+      if (signal.aborted) reject(signal.reason);
+      else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+  });
+
+  assert.equal((await fetchOfficialTourCourses())[0].id, "101");
+  assert.equal(request.mock.callCount(), 2);
+});

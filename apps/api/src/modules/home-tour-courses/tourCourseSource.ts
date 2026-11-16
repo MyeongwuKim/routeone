@@ -1,4 +1,5 @@
 import { suppressTracing } from "@sentry/node";
+import { setTimeout as delay } from "node:timers/promises";
 
 export type OfficialTourCourse = {
   id: string;
@@ -37,13 +38,21 @@ type TourCourseSourceResponse = {
 const TOUR_COURSE_SOURCE_URL = "https://apis.data.go.kr/B551011/KorService2/areaBasedList2";
 const TOUR_COURSE_SOURCE_PAGE_SIZE = 200;
 const TOUR_COURSE_SOURCE_MAX_PAGES = 100;
-const TOUR_COURSE_SOURCE_TIMEOUT_MS = 15_000;
+const TOUR_COURSE_CATALOG_TIMEOUT_MS = 10_000;
+const TOUR_COURSE_SOURCE_TIMEOUT_MS = 4_000;
+const TOUR_COURSE_SOURCE_MAX_ATTEMPTS = 3;
+const TOUR_COURSE_SOURCE_RETRY_DELAY_MS = 200;
 const NETWORK_ERROR_CODES = new Set([
   "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "UND_ERR_SOCKET",
   "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH",
   "ERR_TLS_CERT_ALTNAME_INVALID", "ERR_TLS_HANDSHAKE_TIMEOUT", "CERT_HAS_EXPIRED", "CERT_NOT_YET_VALID",
   "DEPTH_ZERO_SELF_SIGNED_CERT", "SELF_SIGNED_CERT_IN_CHAIN", "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
   "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+]);
+const RETRYABLE_NETWORK_ERROR_CODES = new Set([
+  "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET",
+  "EAI_AGAIN", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH",
+  "TimeoutError",
 ]);
 
 /** URL이 담길 수 있는 원본 오류 대신, 중첩·복수 연결 실패에서 허용한 네트워크 코드만 남긴다. */
@@ -81,8 +90,32 @@ function readText(value: unknown) {
   return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
 }
 
+/** 일시적인 연결 실패만 최대 3회 시도하고, 전체 목록의 제한 시간이 끝나면 재시도를 중단한다. */
+async function fetchTourCourseSourceResponse(url: URL, pageNo: number, signal: AbortSignal) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      signal.throwIfAborted();
+      // 관광공사 게이트웨이는 Sentry 추적 헤더가 붙은 요청을 HTTP 400으로 거절한다.
+      return await suppressTracing(() => fetch(url, {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(TOUR_COURSE_SOURCE_TIMEOUT_MS)]),
+      }));
+    } catch (error: unknown) {
+      const codes = readNetworkErrorCodes(error);
+      const canRetry = attempt < TOUR_COURSE_SOURCE_MAX_ATTEMPTS && !signal.aborted && codes.length > 0 &&
+        codes.every((code) => RETRYABLE_NETWORK_ERROR_CODES.has(code));
+      if (canRetry) {
+        // 대기 중에도 전체 목록의 기한을 지키고, 중단 이유는 다음 시도에서 키가 없는 오류로 바꾼다.
+        await delay(TOUR_COURSE_SOURCE_RETRY_DELAY_MS * attempt, undefined, { signal }).catch(() => undefined);
+        continue;
+      }
+      const details = codes.length ? `, ${codes.join(", ")}` : "";
+      throw new Error(`Tour course source request failed (page ${pageNo}${details})`);
+    }
+  }
+}
+
 /** 지역 코드가 비어 있는 코스도 인덱싱할 수 있도록 지역 조건 없이 공식 목록 한 페이지를 읽는다. */
-async function fetchTourCourseSourcePage(serviceKey: string, pageNo: number) {
+async function fetchTourCourseSourcePage(serviceKey: string, pageNo: number, signal: AbortSignal) {
   const url = new URL(TOUR_COURSE_SOURCE_URL);
   url.search = new URLSearchParams({
     serviceKey,
@@ -95,14 +128,7 @@ async function fetchTourCourseSourcePage(serviceKey: string, pageNo: number) {
     numOfRows: String(TOUR_COURSE_SOURCE_PAGE_SIZE),
   }).toString();
 
-  // 관광공사 게이트웨이는 Sentry 추적 헤더가 붙은 요청을 HTTP 400으로 거절한다.
-  const response = await suppressTracing(() =>
-    fetch(url, { signal: AbortSignal.timeout(TOUR_COURSE_SOURCE_TIMEOUT_MS) })
-  ).catch((error: unknown) => {
-    const codes = readNetworkErrorCodes(error);
-    const details = codes.length ? `, ${codes.join(", ")}` : "";
-    throw new Error(`Tour course source request failed (page ${pageNo}${details})`);
-  });
+  const response = await fetchTourCourseSourceResponse(url, pageNo, signal);
   if (!response.ok) {
     throw new Error(`Tour course source request failed (page ${pageNo}, HTTP ${response.status})`);
   }
@@ -123,17 +149,19 @@ async function fetchTourCourseSourcePage(serviceKey: string, pageNo: number) {
   return { items, totalCount };
 }
 
-/** 국문 공식 여행코스를 원본 순서로 읽고, 같은 콘텐츠 ID의 첫 항목만 지역 인덱스에 전달한다. */
+/** 국문 코스 전체를 10초 안에 읽으며 연결 실패는 페이지별로 재시도하고, 같은 ID의 첫 항목만 지역 인덱스에 전달한다. */
 export async function fetchOfficialTourCourses(): Promise<OfficialTourCourse[]> {
   const configuredKey = process.env.VISITKOREA_SERVICE_KEY?.trim() || process.env.TOUR_API_SERVICE_KEY?.trim();
   if (!configuredKey) throw new Error("Tour course source service key is missing");
 
   const serviceKey = normalizeServiceKey(configuredKey);
-  const firstPage = await fetchTourCourseSourcePage(serviceKey, 1);
+  // 웹의 12초 요청 제한 안에 오류를 반환하도록 모든 원본 페이지가 같은 마감 시간을 사용한다.
+  const signal = AbortSignal.timeout(TOUR_COURSE_CATALOG_TIMEOUT_MS);
+  const firstPage = await fetchTourCourseSourcePage(serviceKey, 1, signal);
   const totalPages = Math.min(TOUR_COURSE_SOURCE_MAX_PAGES, Math.ceil(firstPage.totalCount / TOUR_COURSE_SOURCE_PAGE_SIZE));
   const remainingPages = await Promise.all(Array.from(
     { length: Math.max(0, totalPages - 1) },
-    (_, index) => fetchTourCourseSourcePage(serviceKey, index + 2)
+    (_, index) => fetchTourCourseSourcePage(serviceKey, index + 2, signal)
   ));
 
   const courses = new Map<string, OfficialTourCourse>();
