@@ -1,14 +1,13 @@
 import { useState } from "react";
-import { MdArrowForward, MdChevronRight, MdExpandLess, MdExpandMore, MdLandscape } from "react-icons/md";
-import { IoAlertCircleOutline } from "react-icons/io5";
-import { getUiText } from "@/lib/uiText";
+import { MdArrowForward, MdLandscape } from "react-icons/md";
 import type { AppLanguage } from "@/stores/appLanguageStore";
 import type { MapSheetCourseStopDescription } from "@/stores/mapSheetStore";
-import { useUiModalStore } from "@/stores/uiModalStore";
 import type { MapSheetPlace } from "@/types/place";
+import HomeCourseDetailsDialog from "./HomeCourseDetailsDialog";
+import HomeCourseFacts from "./HomeCourseFacts";
 import type { HomeRecommendationText } from "./homeRecommendationText";
 import type { HomeTourCourse } from "./homeRecommendations";
-import { useHomeCoursePreview, useHomeCourseStops } from "./useHomeRecommendations";
+import { useHomeCoursePreview } from "./useHomeRecommendations";
 
 type Props = {
   course: HomeTourCourse;
@@ -19,166 +18,26 @@ type Props = {
   onStartCourse: (places: MapSheetPlace[]) => void;
 };
 
-type CourseStopProps = {
-  title: string;
-  place: MapSheetPlace | null;
-  description: MapSheetCourseStopDescription;
-  number: number;
-  detailsLabel: string;
-  unavailableLabel: string;
-  onPlaceSelect: Props["onPlaceSelect"];
-  onPlaceUnavailable: (title: string) => void;
-};
-
-/** 공식 방문 순서를 표시하고, 상세가 있는 방문지는 장소 화면으로, 나머지는 안내 모달로 연결한다. */
-function CourseStop({ title, place, description, number, detailsLabel, unavailableLabel, onPlaceSelect, onPlaceUnavailable }: CourseStopProps) {
-  const rowClassName = "flex min-h-14 w-full items-center gap-3 rounded-xl px-1 py-2 text-left";
-  const content = (
-    <>
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-800 dark:bg-brand-900 dark:text-brand-100">{number}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-slate-800 dark:text-slate-100" title={title}>{title}</span>
-        {place?.address ? <span className="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{place.address}</span> : null}
-      </span>
-    </>
-  );
-
-  return (
-    <li>
-      {place ? (
-        <button
-          type="button"
-          onClick={() => onPlaceSelect(place, description)}
-          aria-label={`${title} · ${detailsLabel}`}
-          className={`${rowClassName} hover:bg-brand-50 dark:hover:bg-brand-900/30`}
-        >
-          {content}
-          <MdChevronRight aria-hidden="true" className="shrink-0 text-slate-400" />
-        </button>
-      ) : (
-        <div className={rowClassName}>
-          {content}
-          <button
-            type="button"
-            aria-label={`${title} · ${unavailableLabel}`}
-            aria-haspopup="dialog"
-            onClick={() => onPlaceUnavailable(title)}
-            className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-xl text-amber-700 hover:bg-amber-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/30"
-          >
-            <IoAlertCircleOutline aria-hidden="true" />
-          </button>
-        </div>
-      )}
-    </li>
-  );
-}
-
-/** 코스 소개와 제공된 코스 정보를 카드에 표시하고, 펼치면 소개 전문과 방문 순서를 보여준다. */
-export default function HomeRecommendedCourseCard({
-  course,
-  index,
-  language,
-  text,
-  onPlaceSelect,
-  onStartCourse,
-}: Props) {
+/** 코스를 짧게 소개하고, 상세를 열면 홈 목록의 높이를 유지한 채 센터 팝업을 표시한다. */
+export default function HomeRecommendedCourseCard({ course, index, language, text, onPlaceSelect, onStartCourse }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const { coverRef, image, title, description, distance, duration, theme, markImageFailed } = useHomeCoursePreview(course, language);
-  const showTheme = theme.text && (language === "ko" || theme.lang === "en");
-  const courseFacts = [
-    { label: text.courseDistance, value: distance },
-    { label: text.courseDuration, value: duration },
-    ...(showTheme ? [{ label: text.courseTheme, value: theme }] : []),
-  ];
-  const query = useHomeCourseStops(course.id, language, isOpen);
-  const stops = query.data ?? [];
-  const places = stops.flatMap(({ place }) => place ? [place] : []);
-  const canStartCourse = stops.length > 0 && places.length === stops.length;
-  const detailsId = `home-course-${course.id}`;
-
-  /** 상세를 연결할 수 없는 방문지의 이름과 일정 추가 조건을 안내한다. */
-  const showUnavailablePlace = (title: string) => {
-    useUiModalStore.getState().openModal({
-      title,
-      description: text.placeUnavailableDescription,
-      detail: text.stopsIncomplete,
-      actions: [{ label: getUiText(language).common.confirm }],
-    });
-  };
+  const preview = { image, title, description, distance, duration, theme, markImageFailed };
 
   return (
-    <article
-      className="home-course-card-enter min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#0b211f]"
-      style={{ animationDelay: `${Math.min(index, 4) * 45}ms` }}
-    >
-      <div ref={coverRef} className="relative h-40 overflow-hidden bg-gradient-to-br from-brand-100 to-sky-100 sm:h-44 dark:from-brand-900 dark:to-slate-800">
-        {image
-          ? <img key={image} src={image} alt="" loading="lazy" onError={() => markImageFailed(image)} className="h-full w-full object-cover" />
-          : <div className="flex h-full items-center justify-center text-brand-700/35 dark:text-brand-200/40"><MdLandscape aria-hidden="true" className="text-8xl" /></div>}
-      </div>
-      <div className="p-4 sm:p-5">
-        <h3 lang={title.lang} title={title.text} className="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white">{title.text}</h3>
-        {description.text ? (
-          <p lang={description.lang} className={`mt-2 break-words text-sm leading-6 text-slate-600 dark:text-slate-300 ${isOpen ? "" : "truncate"}`}>
-            {description.text}
-          </p>
-        ) : null}
-        <dl className="mt-3 flex flex-wrap gap-2">
-          {courseFacts.map(({ label, value }) => (
-            <div key={label} className="flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs dark:bg-brand-900/40">
-              <dt className="font-semibold text-brand-800 dark:text-brand-200">{label}</dt>
-              <dd lang={value.lang} className="min-w-0 break-words text-slate-700 empty:hidden dark:text-slate-200">
-                {language === "ko" || value.lang === "en" ? value.text : null}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        <button type="button" aria-expanded={isOpen} aria-controls={detailsId} onClick={() => setIsOpen(open => !open)} className="mt-4 flex min-h-11 w-full items-center justify-between rounded-xl bg-brand-50 px-3 py-2 text-sm font-bold text-brand-800 transition hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-100">
-          {isOpen ? text.courseClose : text.courseOpen}{isOpen ? <MdExpandLess aria-hidden="true" className="text-xl" /> : <MdExpandMore aria-hidden="true" className="text-xl" />}
-        </button>
-        <div id={detailsId} hidden={!isOpen} className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-700">
-          {isOpen && query.isPending ? (
-            <p role="status" className="text-sm text-slate-500 dark:text-slate-400">{text.stopsLoading}</p>
-          ) : null}
-          {isOpen && query.isError ? (
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p role="status" className="text-sm text-slate-500 dark:text-slate-400">{text.stopsError}</p>
-              <button type="button" onClick={() => void query.refetch()} className="min-h-11 rounded-xl border border-brand-200 px-3 text-xs font-bold text-brand-700 hover:bg-brand-50 dark:border-brand-400/25 dark:text-brand-100 dark:hover:bg-brand-900/30">{text.retry}</button>
-            </div>
-          ) : null}
-          {isOpen && query.isSuccess ? (
-            stops.length > 0 ? (
-              <>
-                <ol className="space-y-1">
-                  {stops.map(({ title, place, description }, stopIndex) => (
-                    <CourseStop
-                      key={`${title}-${stopIndex}`}
-                      title={title}
-                      place={place}
-                      description={description}
-                      number={stopIndex + 1}
-                      detailsLabel={text.placeDetails}
-                      unavailableLabel={text.placeUnavailable}
-                      onPlaceSelect={onPlaceSelect}
-                      onPlaceUnavailable={showUnavailablePlace}
-                    />
-                  ))}
-                </ol>
-                {!canStartCourse ? <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{text.stopsIncomplete}</p> : null}
-                <button
-                  type="button"
-                  disabled={!canStartCourse}
-                  onClick={() => onStartCourse(places)}
-                  className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-sm font-bold text-white transition enabled:hover:bg-brand-700 disabled:opacity-50"
-                >
-                  {text.startCourse}
-                  <MdArrowForward aria-hidden="true" className="text-lg" />
-                </button>
-              </>
-            ) : <p className="text-sm text-slate-500 dark:text-slate-400">{text.stopsEmpty}</p>
-          ) : null}
+    <>
+      <article className="home-course-card-enter min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#0b211f]" style={{ animationDelay: `${Math.min(index, 4) * 45}ms` }}>
+        <div ref={coverRef} className="relative h-40 overflow-hidden bg-gradient-to-br from-brand-100 to-sky-100 sm:h-44 dark:from-brand-900 dark:to-slate-800">
+          {image ? <img key={image} src={image} alt="" loading="lazy" onError={() => markImageFailed(image)} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-brand-700/35 dark:text-brand-200/40"><MdLandscape aria-hidden="true" className="text-8xl" /></div>}
         </div>
-      </div>
-    </article>
+        <div className="p-4 sm:p-5">
+          <h3 lang={preview.title.lang} title={preview.title.text} className="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white">{preview.title.text}</h3>
+          {preview.description.text ? <p lang={preview.description.lang} className="mt-2 truncate text-sm leading-6 text-slate-600 dark:text-slate-300">{preview.description.text}</p> : null}
+          <div className="mt-3"><HomeCourseFacts language={language} text={text} facts={preview} /></div>
+          <button type="button" aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setIsOpen(true); }} className="mt-4 flex min-h-11 w-full items-center justify-between rounded-xl bg-brand-50 px-3 py-2 text-sm font-bold text-brand-800 transition hover:bg-brand-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 dark:bg-brand-900/40 dark:text-brand-100">{text.courseOpen}<MdArrowForward aria-hidden="true" className="text-lg" /></button>
+        </div>
+      </article>
+      {isOpen ? <HomeCourseDetailsDialog courseId={course.id} language={language} text={text} preview={preview} onClose={() => setIsOpen(false)} onPlaceSelect={onPlaceSelect} onStartCourse={onStartCourse} /> : null}
+    </>
   );
 }
