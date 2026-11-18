@@ -228,6 +228,8 @@ export type NativeBridgeApi = {
   getDeliveredNotifications?: (options?: {
     acknowledgedIds?: string[];
   }) => Promise<NativeDeliveredRouteArrivalNotification[]>;
+  /** 미확인 총개수를 네이티브에 전달한다. true는 메시지 전송이며 OS 배지 표시 성공 여부는 아니다. */
+  setBadgeCount?: (count: number) => boolean;
   getPushToken?: (options?: {
     requestPermission?: boolean;
   }) => Promise<NativePushTokenResult>;

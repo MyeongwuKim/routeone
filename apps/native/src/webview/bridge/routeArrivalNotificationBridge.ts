@@ -177,7 +177,7 @@ Notifications.setNotificationHandler({
 
     return {
       shouldPlaySound: isRouteArrivalNotification,
-      shouldSetBadge: false,
+      shouldSetBadge: true,
       shouldShowBanner: true,
       shouldShowList: true,
     };
@@ -797,7 +797,7 @@ async function ensureRouteArrivalNotificationPermission(
     : await Notifications.requestPermissionsAsync({
         ios: {
           allowAlert: true,
-          allowBadge: false,
+          allowBadge: true,
           allowSound: true,
         },
       });

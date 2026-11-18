@@ -17,6 +17,7 @@ import {
   isNativeFetchRequest,
   isNativeLocationRequest,
   isNativeLoginRequest,
+  isNativeNotificationBadgeMessage,
   isNativePhotoUploadRequest,
   isNativePhotoRequest,
   isNativePushTokenRequest,
@@ -26,6 +27,7 @@ import {
   isNativeSaveImageRequest,
 } from "./messageGuards";
 import { handleNativePushTokenRequest } from "./pushTokenBridge";
+import { handleNativeNotificationBadgeMessage } from "./notificationBadgeBridge";
 import {
   handleNativeDeliveredNotificationHistoryRequest,
   handleNativeRouteArrivalNotificationSyncRequest,
@@ -153,6 +155,11 @@ export async function handleNativeBridgeMessage(
 
   if (isNativePushTokenRequest(message)) {
     await handleNativePushTokenRequest(message, webViewRef);
+    return;
+  }
+
+  if (isNativeNotificationBadgeMessage(message)) {
+    await handleNativeNotificationBadgeMessage(message);
     return;
   }
 

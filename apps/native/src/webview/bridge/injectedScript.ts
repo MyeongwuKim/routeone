@@ -800,6 +800,20 @@ export const ROUTEONE_WEBVIEW_BRIDGE_SCRIPT = `
         );
       });
     },
+    setBadgeCount: function setBadgeCount(count) {
+      if (!window.ReactNativeWebView || !Number.isSafeInteger(count) || count < 0) {
+        return false;
+      }
+
+      window.ReactNativeWebView.postMessage(
+        JSON.stringify({
+          type: "routeone:native-notification-badge",
+          sessionId: getNativeAuthSessionId(),
+          count: count
+        })
+      );
+      return true;
+    },
     getPushToken: function getPushToken(options) {
       if (!window.ReactNativeWebView) {
         return Promise.reject(new Error("Native bridge is not available"));

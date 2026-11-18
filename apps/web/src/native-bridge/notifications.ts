@@ -87,6 +87,11 @@ export function getNativePushToken(requestPermission = false) {
   );
 }
 
+/** 미확인 총개수를 아이콘 배지에 전달한다. 0은 제거이며 일반 웹·미지원 앱에서는 false를 반환한다. */
+export function setNativeNotificationBadgeCount(count: number) {
+  return getNativeBridgeApi()?.setBadgeCount?.(count) ?? false;
+}
+
 /** 서버에서 계산한 축제 알림 목록으로 네이티브 예약을 교체한다. 빈 배열은 기존 예약 제거이며 미지원 환경은 null이다. */
 export function syncNativeFestivalNotifications(
   notifications: NativeFestivalNotification[]

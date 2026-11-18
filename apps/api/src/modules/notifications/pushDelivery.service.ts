@@ -1,4 +1,5 @@
 import { isFestivalRegionSelected, getFestivalRegionLabel } from "./festivalRegions.js";
+import { countUnreadNotifications } from "./notificationInbox.repository.js";
 import {
   UserNotificationPushStatus,
   UserNotificationType,
@@ -21,6 +22,7 @@ type ExpoPushMessage = {
   sound: "default";
   title: string;
   body: string;
+  badge?: number;
   data: Record<string, string>;
 };
 
@@ -563,7 +565,15 @@ async function deliverClaimedNotification(
   }
 
   try {
-    const tickets = await sendExpoPushMessages(messages);
+    // 증가분 대신 알림함과 같은 총개수를 보내 재전송에서도 배지가 중복 증가하지 않게 한다.
+    const badge = await countUnreadNotifications(prisma, notification.userId, now)
+      .catch(() => {
+        console.warn("[notification-badge] unread count lookup failed");
+        return undefined;
+      });
+    const tickets = await sendExpoPushMessages(
+      messages.map((message) => badge === undefined ? message : { ...message, badge })
+    );
     const ticketIds: string[] = [];
     let acceptedCount = 0;
     const errors: string[] = [];

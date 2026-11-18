@@ -308,7 +308,7 @@ export function useNativeBoot() {
       await Notifications.requestPermissionsAsync({
         ios: {
           allowAlert: true,
-          allowBadge: false,
+          allowBadge: true,
           allowSound: true
         }
       });

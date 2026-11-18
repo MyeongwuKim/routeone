@@ -22,6 +22,7 @@ import {
   hasFestivalCoordinates,
 } from "./festivalSource.service.js";
 import { getUserNotificationCutoffAt } from "./notificationCleanup.service.js";
+import { countUnreadNotifications } from "./notificationInbox.repository.js";
 import { FESTIVAL_REGION_BY_CODE, getFestivalRegionLabel, normalizeFestivalRegionCode } from "./festivalRegions.js";
 import { deliverPendingNotifications } from "./pushDelivery.service.js";
 
@@ -1187,27 +1188,7 @@ export function getUnreadNotificationCount(
   prisma: PrismaClient,
   user: User
 ) {
-  const now = new Date();
-
-  return prisma.userNotification.count({
-    where: {
-      userId: user.id,
-      OR: [
-        {
-          readAt: null,
-        },
-        {
-          readAt: {
-            isSet: false,
-          },
-        },
-      ],
-      availableAt: {
-        gte: getUserNotificationCutoffAt(now),
-        lte: now,
-      },
-    },
-  });
+  return countUnreadNotifications(prisma, user.id);
 }
 
 export async function markNotificationInboxRead(

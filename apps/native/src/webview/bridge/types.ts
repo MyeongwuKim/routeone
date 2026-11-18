@@ -155,6 +155,13 @@ export type NativePushTokenRequest = {
   requestPermission?: boolean;
 };
 
+/** 웹 알림함에서 확인한 미확인 총개수. sessionId는 요청을 보낸 네이티브 로그인 세션이다. */
+export type NativeNotificationBadgeMessage = {
+  type: "routeone:native-notification-badge";
+  sessionId: string;
+  count: number;
+};
+
 export type NativeFestivalNotificationKind =
   | "today"
   | "weekly"

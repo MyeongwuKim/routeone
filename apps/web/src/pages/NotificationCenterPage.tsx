@@ -36,6 +36,7 @@ import {
   type ScheduleNotificationInboxItem,
 } from "@/features/notifications/notificationItemTypes";
 import type { NotificationInboxQuery } from "@/generated/graphql";
+import { createAuthSessionRequest } from "@/lib/authToken";
 import { UI_LAYER_CLASS } from "@/lib/uiLayers";
 import { useUiText } from "@/lib/uiText";
 
@@ -139,8 +140,25 @@ function NotificationCenterPage() {
     !isFocusedNotificationLoaded &&
     Boolean(hasNextPage);
   const { mutate: markRead } = useMutation({
-    mutationFn: () => notificationApi.markRead(),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const session = createAuthSessionRequest();
+      await notificationApi.markRead();
+      return session;
+    },
+    onSuccess: async (session) => {
+      if (!session.isCurrent()) {
+        return;
+      }
+
+      // 읽음 처리 전 시작한 조회가 늦게 끝나 아이콘 배지를 이전 값으로 되돌리지 않게 한다.
+      await queryClient.cancelQueries({
+        queryKey: NOTIFICATION_INBOX_FIRST_PAGE_QUERY_KEY,
+        exact: true,
+      });
+      if (!session.isCurrent()) {
+        return;
+      }
+
       const readAt = new Date().toISOString();
 
       queryClient.setQueryData<NotificationInboxQuery>(

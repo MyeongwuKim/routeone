@@ -103,6 +103,13 @@ function createCleanupHarness() {
           },
         };
       }
+      if (specifier === "@/webview/bridge/notificationBadgeBridge") {
+        return {
+          setNativeNotificationBadgeCount: async (count) => {
+            events.push(`set-badge:${count}`);
+          },
+        };
+      }
 
       throw new Error(`Unexpected module: ${specifier}`);
     },
@@ -131,6 +138,7 @@ test("세션 정리는 표식·위치 감시·인증·표식 순서로 처리한
     "clear-route-targets",
     "clear-festival-notifications",
     "clear-route-review-notifications",
+    "set-badge:0",
     "clear-auth",
     `remove:${CLEANUP_KEY}`,
   ]);
@@ -160,6 +168,7 @@ test("위치 감시 해제 도중 실패하면 표식을 남기고 다음 부팅
     "clear-route-targets",
     "clear-festival-notifications",
     "clear-route-review-notifications",
+    "set-badge:0",
     "clear-auth",
     `remove:${CLEANUP_KEY}`,
   ]);

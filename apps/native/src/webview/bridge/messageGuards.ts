@@ -10,6 +10,7 @@ import type {
   NativeFetchRequest,
   NativeLocationRequest,
   NativeLoginRequest,
+  NativeNotificationBadgeMessage,
   NativePhotoUploadRequest,
   NativePhotoRequest,
   NativePushTokenRequest,
@@ -295,6 +296,24 @@ export function isNativePushTokenRequest(
     typeof maybeRequest.id === "string" &&
     (maybeRequest.requestPermission == null ||
       typeof maybeRequest.requestPermission === "boolean")
+  );
+}
+
+export function isNativeNotificationBadgeMessage(
+  value: unknown
+): value is NativeNotificationBadgeMessage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const message = value as Partial<NativeNotificationBadgeMessage>;
+  return (
+    message.type === "routeone:native-notification-badge" &&
+    typeof message.sessionId === "string" &&
+    message.sessionId.trim().length > 0 &&
+    typeof message.count === "number" &&
+    Number.isSafeInteger(message.count) &&
+    message.count >= 0
   );
 }
 

@@ -19,6 +19,7 @@ import {
   getNativeDeliveredNotifications,
   getNativePushToken,
   setNativeRouteArrivalTestLocation,
+  setNativeNotificationBadgeCount,
   syncNativeFestivalNotifications,
   syncNativeRouteArrivalNotifications,
   syncNativeRouteReviewNotifications,
@@ -56,6 +57,7 @@ export const nativeBridge = {
     saveImage: saveNativeImage,
   },
   notifications: {
+    setBadgeCount: setNativeNotificationBadgeCount,
     getDelivered: getNativeDeliveredNotifications,
     getPushToken: getNativePushToken,
     setRouteArrivalTestLocation: setNativeRouteArrivalTestLocation,

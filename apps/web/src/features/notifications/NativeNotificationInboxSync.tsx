@@ -18,6 +18,7 @@ import type { NotificationInboxQuery } from "@/generated/graphql";
 import { useAuthSession } from "@/hooks/useAuthSession";
 import { nativeBridge } from "@/native-bridge";
 import { useAppLanguageStore } from "@/stores/appLanguageStore";
+import { startNativeNotificationBadgeSync } from "./notificationBadgeSync";
 
 function NativeNotificationInboxSync() {
   const location = useLocation();
@@ -26,6 +27,11 @@ function NativeNotificationInboxSync() {
   const { isAuthenticated } = useAuthSession();
   const optimisticallyCountedNotificationIdsRef = useRef(
     new Set<string>()
+  );
+
+  useEffect(
+    () => startNativeNotificationBadgeSync(queryClient),
+    [queryClient]
   );
 
   useEffect(() => {
