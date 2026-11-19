@@ -74,6 +74,7 @@ function parseManifest(value: unknown): WebBundleManifest {
 
   const version = typeof value.version === "string" ? value.version.trim() : "";
   const sha256 = typeof value.sha256 === "string" ? value.sha256.trim() : "";
+  const minimumNativeVersion = value.minNativeVersion ?? null;
 
   if (!VERSION_PATTERN.test(version)) {
     throw new Error("Web bundle manifest version is invalid.");
@@ -82,9 +83,14 @@ function parseManifest(value: unknown): WebBundleManifest {
   if (!SHA256_PATTERN.test(sha256)) {
     throw new Error("Web bundle manifest sha256 is invalid.");
   }
+  if (minimumNativeVersion !== null &&
+    (typeof minimumNativeVersion !== "string" || !/^\d+\.\d+\.\d+$/.test(minimumNativeVersion))) {
+    throw new Error("Web bundle manifest minNativeVersion is invalid.");
+  }
 
   return {
     version,
+    minimumNativeVersion,
     channel: readWebBundleChannel(value.channel, "channel"),
     appVariant: readWebBundleChannel(value.appVariant, "appVariant"),
     bundleUrl: readRemoteUrl(value.bundleUrl, "bundleUrl"),

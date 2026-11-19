@@ -23,6 +23,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import webBundleRuntime from "../config/web-bundle-runtime.json" with { type: "json" };
+import { parseNumericVersion } from "./resolve-web-bundle-version.mjs";
 
 const env = process.env;
 
@@ -52,6 +54,27 @@ const version = required("ROUTEONE_WEB_BUNDLE_VERSION");
 if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(version)) {
   fail("ROUTEONE_WEB_BUNDLE_VERSION contains unsupported characters.");
 }
+const runtime = webBundleRuntime[channel];
+const devMinimumOverride = env.ROUTEONE_DEV_MIN_NATIVE_VERSION?.trim();
+if (channel === "prod" && devMinimumOverride) {
+  fail("ROUTEONE_DEV_MIN_NATIVE_VERSION is only supported for dev publishing.");
+}
+let minimumNativeVersion;
+if (channel === "prod") {
+  const web = parseNumericVersion(version);
+  const min = parseNumericVersion(runtime.minimumNativeVersion);
+  if (web.major < min.major || (web.major === min.major && web.minor < min.minor)) {
+    fail(`Production web bundle must use version series ${min.major}.${min.minor}.x or newer.`);
+  }
+  // 웹 버전의 앞 두 자리는 발행 대상 네이티브 버전 계열과 일치한다.
+  minimumNativeVersion = web.major === min.major && web.minor === min.minor
+    ? min.value
+    : `${web.major}.${web.minor}.0`;
+} else {
+  // 개발 채널의 수동 발행에서는 앱을 재빌드하지 않고 호환 조건을 바꿔 검증할 수 있다.
+  const devMinimum = devMinimumOverride || runtime.minimumNativeVersion;
+  minimumNativeVersion = parseNumericVersion(devMinimum, "dev minimum native version").value;
+}
 
 const createdAt = new Date().toISOString();
 const publicBaseUrl = trimTrailingSlashes(
@@ -60,12 +83,13 @@ const publicBaseUrl = trimTrailingSlashes(
 const tmpRoot = mkdtempSync(join(tmpdir(), "routeone-web-bundle-"));
 const bundleFileName = "web-ui.zip";
 const bundlePath = join(tmpRoot, bundleFileName);
-const releasePrefix = joinKey("releases", version);
+const releasesPrefix = joinKey(runtime.prefix, "releases");
+const releasePrefix = joinKey(releasesPrefix, version);
 const releaseWebPrefix = joinKey(releasePrefix, "web");
 const entryKey = joinKey(releaseWebPrefix, "index.html");
 const bundleKey = joinKey(releasePrefix, bundleFileName);
 const releaseManifestKey = joinKey(releasePrefix, "manifest.json");
-const latestManifestKey = joinKey("latest", "manifest.json");
+const latestManifestKey = joinKey(runtime.prefix, "latest", "manifest.json");
 const manifestPath = join(tmpRoot, "manifest.json");
 
 try {
@@ -74,6 +98,7 @@ try {
 
   const manifest = {
     version,
+    minNativeVersion: minimumNativeVersion,
     channel,
     appVariant: channel,
     bundleUrl: `${publicBaseUrl}/${bundleKey}`,
@@ -363,7 +388,7 @@ function listReleases() {
       "--bucket",
       bucketName,
       "--prefix",
-      "releases/"
+      `${releasesPrefix}/`
     ],
     { capture: true, allowFailure: true }
   );
@@ -380,11 +405,11 @@ function listReleases() {
     const releases = new Map();
 
     for (const item of parsed.Contents || []) {
-      if (typeof item.Key !== "string" || !item.Key.startsWith("releases/")) {
+      if (typeof item.Key !== "string" || !item.Key.startsWith(`${releasesPrefix}/`)) {
         continue;
       }
 
-      const releaseVersion = item.Key.slice("releases/".length).split("/")[0];
+      const releaseVersion = item.Key.slice(releasesPrefix.length + 1).split("/")[0];
 
       if (!releaseVersion) {
         continue;
@@ -396,7 +421,7 @@ function listReleases() {
       if (!current || modifiedAt > current.modifiedAt) {
         releases.set(releaseVersion, {
           version: releaseVersion,
-          prefix: `releases/${releaseVersion}/`,
+          prefix: `${releasesPrefix}/${releaseVersion}/`,
           modifiedAt
         });
       }

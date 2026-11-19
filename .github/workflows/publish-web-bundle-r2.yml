@@ -3,12 +3,12 @@ name: Publish web bundle to R2
 on:
   push:
     branches:
-      - main
       - develop
     paths:
       - "apps/web/**"
       - "apps/native/app.config.ts"
       - "apps/native/app-versions.json"
+      - "config/web-bundle-runtime.json"
       - ".github/workflows/publish-web-bundle-r2.yml"
       - "scripts/publish-web-bundle-r2.mjs"
       - "scripts/publish-web-bundle-r2.test.mjs"
@@ -27,6 +27,10 @@ on:
           - prod
       version:
         description: "Web bundle version (optional)"
+        required: false
+        type: string
+      dev_min_native_version:
+        description: "Minimum native app version for this dev publication (optional, x.y.z)"
         required: false
         type: string
 
@@ -157,5 +161,6 @@ jobs:
       - name: Publish to R2
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ROUTEONE_DEV_MIN_NATIVE_VERSION: ${{ inputs.dev_min_native_version }}
           ROUTEONE_WEB_BUNDLE_RETENTION: "5"
         run: pnpm publish:web-bundle:r2

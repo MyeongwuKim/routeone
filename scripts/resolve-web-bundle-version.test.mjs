@@ -46,14 +46,28 @@ test("rejects a native version series older than the published web series", () =
   );
 });
 
-test("requires iOS and Android to share a major/minor for one channel", () => {
+test("prod 발행은 새 운영 경로를 쓰는 플랫폼만 대상으로 한다", () => {
+  assert.deepEqual(
+    resolveNativeVersionSeries(
+      { prod: { ios: "1.1.0", android: "1.0.9" } },
+      "prod"
+    ),
+    { major: 1, minor: 1 }
+  );
+  assert.throws(
+    () => resolveNativeVersionSeries({ prod: { ios: "1.0.1", android: "1.0.0" } }, "prod"),
+    /No production native app meets/
+  );
+});
+
+test("같은 발행 경로에 있는 iOS와 Android는 버전 계열을 맞춘다", () => {
   assert.throws(
     () =>
       resolveNativeVersionSeries(
         {
           prod: {
             ios: "1.1.0",
-            android: "1.0.9"
+            android: "1.2.0"
           }
         },
         "prod"

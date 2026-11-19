@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import webBundleRuntime from "../config/web-bundle-runtime.json" with { type: "json" };
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "..");
@@ -60,7 +61,10 @@ appendFileSync(
   JSON.stringify({
     args,
     maxAttempts: process.env.AWS_MAX_ATTEMPTS,
-    retryMode: process.env.AWS_RETRY_MODE
+    retryMode: process.env.AWS_RETRY_MODE,
+    manifest: args[0] === "s3" && args[1] === "cp" && args[3]?.endsWith("/latest/manifest.json")
+      ? JSON.parse(readFileSync(args[2], "utf8"))
+      : undefined
   }) + "\\n"
 );
 
@@ -230,7 +234,66 @@ test("skips cleanup with a warning when releases cannot be listed", () => {
   }
 });
 
-function createFixture({ failCopy = false, failList = false, rmFailures = 0, languagePack }) {
+test("prod는 새 경로만 쓰고 기존 운영 릴리스는 정리하지 않는다", () => {
+  const fixture = createFixture({
+    channel: "prod",
+    version: "1.1.2",
+    releases: [
+      { Key: "releases/1.0.9/manifest.json", LastModified: "2026-09-01T01:00:00Z" },
+      { Key: "runtime/v2/releases/1.1.2/manifest.json", LastModified: "2026-09-03T01:00:00Z" },
+      { Key: "runtime/v2/releases/1.1.1/manifest.json", LastModified: "2026-09-02T01:00:00Z" },
+    ],
+  });
+  try {
+    const result = fixture.run();
+    assert.equal(result.status, 0, result.stderr);
+    const args = fixture.readCalls().map(call => call.args);
+    assert.ok(args.some(call => call.includes("s3://test-bucket/runtime/v2/latest/manifest.json")));
+    assert.ok(args.some(call => call.includes("runtime/v2/releases/")));
+    assert.ok(args.some(call => call.includes("s3://test-bucket/runtime/v2/releases/1.1.1/")));
+    assert.ok(!args.some(call => call.some(arg => /^s3:\/\/test-bucket\/(latest|releases)\//.test(arg))));
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("dev는 기존 경로의 매니페스트에 정책 기본값 또는 수동 발행의 최소 앱 버전을 담는다", () => {
+  const configuredMinimum = webBundleRuntime.dev.minimumNativeVersion;
+  const override = configuredMinimum === "1.0.2" ? "1.1.0" : "1.0.2";
+  for (const devMinimum of ["", override]) {
+    const fixture = createFixture({ devMinimum });
+    try {
+      const result = fixture.run();
+      assert.equal(result.status, 0, result.stderr);
+      const latest = fixture.readCalls().find(({ args }) =>
+        args.includes("s3://test-bucket/latest/manifest.json")
+      );
+      assert.equal(latest.manifest.minNativeVersion, devMinimum || configuredMinimum);
+      assert.equal(latest.manifest.channel, "dev");
+    } finally {
+      fixture.cleanup();
+    }
+  }
+});
+
+test("잘못된 개발 최소 버전과 운영 채널에 입력한 개발 최소 버전은 업로드 전에 거절한다", () => {
+  for (const [channel, devMinimum, error] of [
+    ["dev", "1.1", /numeric x.y.z/],
+    ["prod", "1.1.0", /only supported for dev/],
+  ]) {
+    const fixture = createFixture({ channel, version: "1.1.2", devMinimum });
+    try {
+      const result = fixture.run();
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, error);
+      assert.deepEqual(fixture.readCalls(), []);
+    } finally {
+      fixture.cleanup();
+    }
+  }
+});
+
+function createFixture({ failCopy = false, failList = false, rmFailures = 0, languagePack, channel = "dev", version = "1.0.6", releases, devMinimum = "" }) {
   const fixtureRoot = mkdtempSync(join(tmpdir(), "routeone-r2-publish-test-"));
   const binDirectory = join(fixtureRoot, "bin");
   const distDirectory = join(fixtureRoot, "dist");
@@ -257,8 +320,9 @@ function createFixture({ failCopy = false, failList = false, rmFailures = 0, lan
     R2_ACCESS_KEY_ID: "test-access-key",
     R2_SECRET_ACCESS_KEY: "test-secret-key",
     R2_PUBLIC_BASE_URL: "https://bundle.example.com",
-    ROUTEONE_WEB_BUNDLE_CHANNEL: "dev",
-    ROUTEONE_WEB_BUNDLE_VERSION: "1.0.6",
+    ROUTEONE_WEB_BUNDLE_CHANNEL: channel,
+    ROUTEONE_DEV_MIN_NATIVE_VERSION: devMinimum,
+    ROUTEONE_WEB_BUNDLE_VERSION: version,
     ROUTEONE_WEB_BUNDLE_RETENTION: "1",
     ROUTEONE_WEB_BUNDLE_PRUNE_RETRY_DELAY_MS: "0",
     ROUTEONE_WEB_DIST_DIR: distDirectory,
@@ -267,7 +331,7 @@ function createFixture({ failCopy = false, failList = false, rmFailures = 0, lan
     FAKE_AWS_FAIL_LIST: failList ? "1" : "0",
     FAKE_AWS_LOG_PATH: logPath,
     FAKE_AWS_RELEASES_JSON: JSON.stringify({
-      Contents: [
+      Contents: releases ?? [
         {
           Key: "releases/1.0.6/manifest.json",
           LastModified: "2026-09-02T01:00:00.000Z"

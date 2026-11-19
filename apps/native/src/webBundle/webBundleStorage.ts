@@ -1,6 +1,7 @@
 import { CryptoDigestAlgorithm, digest } from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
 import { unzipSync } from "fflate";
+import { WEB_BUNDLE_UPDATE_CONFIG } from "@/config/webBundleUpdateConfig";
 import type {
   InstalledWebBundle,
   WebBundleManifest,
@@ -14,6 +15,7 @@ import { emitWebBundleProgress } from "./webBundleProgress";
 
 type StoredBundleRecord = {
   version: string;
+  minimumNativeVersion: string | null;
   entryPath: string;
   entryUrl: string | null;
   sha256: string;
@@ -34,7 +36,10 @@ export type WebBundleStorageSnapshot = {
   failedVersions: string[];
 };
 
-const STORAGE_DIRECTORY_NAME = "routeone-web-bundles";
+// 앱을 구버전으로 되돌려도 이전 앱이 새 운영 번들을 캐시에서 열지 않도록 분리한다.
+const STORAGE_DIRECTORY_NAME = WEB_BUNDLE_UPDATE_CONFIG.requiresMinimumNativeVersion
+  ? "routeone-web-bundles-prod-v2"
+  : "routeone-web-bundles";
 const STATE_FILE_NAME = "state.json";
 const MAX_DOWNLOAD_BYTES = 30 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES = 150 * 1024 * 1024;
@@ -116,6 +121,10 @@ function readStoredBundleRecord(value: unknown): StoredBundleRecord | null {
 
   return {
     version: record.version,
+    minimumNativeVersion: typeof record.minimumNativeVersion === "string" &&
+      /^\d+\.\d+\.\d+$/.test(record.minimumNativeVersion)
+      ? record.minimumNativeVersion
+      : null,
     entryPath: record.entryPath,
     entryUrl: readStoredEntryUrl(record.entryUrl),
     sha256: record.sha256,
@@ -596,6 +605,7 @@ export async function installWebBundle(
     state.previous = state.active;
     state.active = {
       version: manifest.version,
+      minimumNativeVersion: manifest.minimumNativeVersion,
       entryPath: manifest.entryPath,
       entryUrl: manifest.entryUrl,
       sha256: manifest.sha256,

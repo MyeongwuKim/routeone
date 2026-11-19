@@ -6,6 +6,7 @@ type RouteOneExtra = {
   appVariant?: unknown;
   webBundleChannel?: unknown;
   webBundleManifestUrl?: unknown;
+  webBundleManifestPath?: unknown;
   webBundleUpdatesEnabled?: unknown;
 };
 
@@ -82,7 +83,11 @@ function readManifestUrl(
 
   const explicitUrl =
     appVariant === "prod"
-      ? readPublicEnv("EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD")
+      ? readPublicEnv(
+        usesProdWebBundleRuntime
+          ? "EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD_V2"
+          : "EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD"
+      )
       : readPublicEnv("EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV");
 
   if (explicitUrl) {
@@ -93,7 +98,7 @@ function readManifestUrl(
     return readString(routeOneExtra.webBundleManifestUrl) || null;
   }
 
-  return `${publicBaseUrl}/latest/manifest.json`;
+  return `${publicBaseUrl}/${webBundleManifestPath}`;
 }
 
 const explicitRuntimeAppVariant = readAppVariant(
@@ -109,6 +114,8 @@ const updatesEnabled =
   (configuredUpdatesEnabled ?? Boolean(explicitRuntimeAppVariant));
 const publicBaseUrl = readPublicBaseUrl();
 const publicOrigin = readHttpOrigin(publicBaseUrl);
+const webBundleManifestPath = readString(routeOneExtra.webBundleManifestPath) || "latest/manifest.json";
+const usesProdWebBundleRuntime = appVariant === "prod" && webBundleManifestPath !== "latest/manifest.json";
 const manifestUrl = readManifestUrl(appVariant, updatesEnabled, publicBaseUrl);
 
 export const WEB_BUNDLE_UPDATE_CONFIG = {
@@ -118,5 +125,6 @@ export const WEB_BUNDLE_UPDATE_CONFIG = {
   publicBaseUrl,
   publicOrigin,
   updatesEnabled,
+  requiresMinimumNativeVersion: usesProdWebBundleRuntime,
   nativeVersion: readString(Constants.expoConfig?.version) || "0.0.0"
 } as const;

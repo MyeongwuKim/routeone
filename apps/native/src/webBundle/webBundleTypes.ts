@@ -2,6 +2,7 @@ export type WebBundleChannel = "dev" | "prod";
 
 export type WebBundleManifest = {
   version: string;
+  minimumNativeVersion: string | null;
   channel: WebBundleChannel | null;
   appVariant: WebBundleChannel | null;
   bundleUrl: string;
@@ -14,6 +15,7 @@ export type WebBundleManifest = {
 
 export type InstalledWebBundle = {
   version: string;
+  minimumNativeVersion: string | null;
   entryPath: string;
   entryUrl: string | null;
   entryUri: string;

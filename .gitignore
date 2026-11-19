@@ -30,3 +30,6 @@ apps/image-analyzer/
 
 # Local browser verification artifacts
 .playwright-mcp/
+
+# Local Understand Anything artifacts
+/.ua/

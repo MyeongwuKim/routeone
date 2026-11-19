@@ -3,6 +3,7 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import webBundleRuntime from "../config/web-bundle-runtime.json" with { type: "json" };
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "..");
@@ -49,6 +50,7 @@ function compareVersionSeries(left, right) {
   return 0;
 }
 
+/** 발행 경로에 참여하는 앱의 버전 계열을 계산한다. 구형 운영 앱은 기존 R2 경로에 남는다. */
 export function resolveNativeVersionSeries(appVersions, channel) {
   const channelVersions = appVersions?.[channel];
 
@@ -65,15 +67,23 @@ export function resolveNativeVersionSeries(appVersions, channel) {
     `${channel}.android native version`
   );
 
-  if (compareVersionSeries(iosVersion, androidVersion) !== 0) {
+  const minVersion = parseNumericVersion(webBundleRuntime.prod.minimumNativeVersion);
+  const participants = channel === "prod"
+    ? [iosVersion, androidVersion].filter(version => compareVersions(version, minVersion) >= 0)
+    : [iosVersion, androidVersion];
+  const firstVersion = participants[0];
+  if (!firstVersion) {
+    throw new Error(`No production native app meets the ${minVersion.value} web bundle minimum.`);
+  }
+  if (participants.some(version => compareVersionSeries(firstVersion, version) !== 0)) {
     throw new Error(
       `${channel} iOS and Android native versions must share the same major/minor before publishing one shared web bundle. Received ${iosVersion.value} and ${androidVersion.value}.`
     );
   }
 
   return {
-    major: iosVersion.major,
-    minor: iosVersion.minor
+    major: firstVersion.major,
+    minor: firstVersion.minor
   };
 }
 
@@ -132,7 +142,10 @@ export function resolveWebBundleVersion({
 }
 
 async function readLatestWebBundleVersion(publicBaseUrl, channel) {
-  const manifestUrl = `${publicBaseUrl.replace(/\/+$/g, "")}/latest/manifest.json`;
+  const manifestPath = [webBundleRuntime[channel].prefix, "latest/manifest.json"]
+    .filter(Boolean)
+    .join("/");
+  const manifestUrl = `${publicBaseUrl.replace(/\/+$/g, "")}/${manifestPath}`;
   const response = await fetch(manifestUrl, { cache: "no-store" });
 
   if (response.status === 404) {

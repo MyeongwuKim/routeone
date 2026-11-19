@@ -19,7 +19,7 @@ import type {
 } from "./webBundleTypes";
 import { emitWebBundleProgress } from "./webBundleProgress";
 import { isFatalWebBundleInstallError } from "./webBundleErrors";
-import { shouldInstallWebBundle } from "./webBundleVersionChecker";
+import { isWebBundleCompatible, shouldInstallWebBundle } from "./webBundleVersionChecker";
 
 const DEFAULT_EMBEDDED_BASE_URL = "https://routeone.native/";
 
@@ -103,7 +103,7 @@ function readHttpOrigin(value: string | null | undefined) {
 }
 
 function shouldUseInstalledBundle(bundle: InstalledWebBundle | null) {
-  if (!bundle) {
+  if (!bundle || !canUseNativeVersion(bundle.minimumNativeVersion)) {
     return false;
   }
 
@@ -114,6 +114,14 @@ function shouldUseInstalledBundle(bundle: InstalledWebBundle | null) {
   }
 
   return readHttpOrigin(bundle.entryUrl) === expectedOrigin;
+}
+
+function canUseNativeVersion(minimumNativeVersion: string | null) {
+  return isWebBundleCompatible(
+    minimumNativeVersion,
+    WEB_BUNDLE_UPDATE_CONFIG.nativeVersion,
+    WEB_BUNDLE_UPDATE_CONFIG.requiresMinimumNativeVersion
+  );
 }
 
 function isManifestRemoteEntryAllowed(manifest: WebBundleManifest) {
@@ -198,6 +206,10 @@ export async function resolveWebBundle(
       message: "최신 버전을 확인하고 있어요."
     });
     const manifest = await fetchWebBundleManifest(manifestUrl);
+    // 호환되지 않는 번들은 다운로드뿐 아니라 원격 URL로 여는 대체 경로에서도 사용하지 않는다.
+    if (!canUseNativeVersion(manifest.minimumNativeVersion)) {
+      return fallback;
+    }
     const remoteFallbackBundle = createRemoteFallbackBundle(
       manifest,
       snapshot.failedVersions
