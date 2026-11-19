@@ -161,6 +161,8 @@ function createHarness({
     testPositions: [],
     locationAccuracy: "full",
     notificationAllowsAlert: true,
+    notificationAllowsBadge: true,
+    badgeCount: 0,
     onNotificationPermission: null,
     onPosition: null,
     onScheduleNotification: null,
@@ -187,7 +189,7 @@ function createHarness({
     await state.onNotificationPermission?.();
     return {
       ...(await granted()),
-      ios: { allowsAlert: state.notificationAllowsAlert },
+      ios: { allowsAlert: state.notificationAllowsAlert, allowsBadge: state.notificationAllowsBadge },
     };
   };
   const respond = (_ref, id, payload) => state.responses.push({ id, ...payload });
@@ -263,6 +265,7 @@ function createHarness({
     "expo-notifications": {
       setNotificationHandler: () => {},
       getPermissionsAsync: getNotificationPermission,
+      getBadgeCountAsync: async () => state.badgeCount,
       setNotificationChannelAsync: async () => {},
       AndroidImportance: { HIGH: 4 },
       AndroidNotificationPriority: { HIGH: "high" },
@@ -1148,6 +1151,29 @@ test("알림 탭으로 저장된 수신 기록도 iOS 재등록에서 제외한�
 
   assert.equal(state.nativeSyncs.flat().length, 0);
   assert.equal(state.scheduled.length, 0);
+});
+
+test("iOS GPS 강제 이동 알림은 배지 권한이 있을 때 현재 숫자에 1을 더해 표시한다", async () => {
+  for (const allowsBadge of [true, false]) {
+    const { bridge, state } = createHarness();
+    state.badgeCount = 2;
+    state.notificationAllowsBadge = allowsBadge;
+
+    await bridge.handleNativeRouteArrivalTestLocationRequest(
+      {
+        type: "routeone:native-route-arrival-test-location",
+        id: "gps-test-badge",
+        place,
+        language: "ko",
+      },
+      { current: null },
+      true
+    );
+
+    assert.equal(state.responses.at(-1).notificationScheduled, true);
+    assert.equal(state.scheduled[0].content.data.type, "route-arrival-test");
+    assert.equal(state.scheduled[0].content.badge, allowsBadge ? 3 : undefined);
+  }
 });
 
 test("GPS 강제 이동 테스트 알림도 서버 동기화용 수신 기록으로 저장한다", async () => {

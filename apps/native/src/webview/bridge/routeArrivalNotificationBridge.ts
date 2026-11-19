@@ -1441,6 +1441,7 @@ async function deliverRouteArrivalNotification(
     notificationId?: string;
     notificationType?: "route-arrival" | "route-arrival-test";
     shouldRecordHistory?: boolean;
+    badge?: number;
   } = {}
 ) {
   const notificationId =
@@ -1454,6 +1455,7 @@ async function deliverRouteArrivalNotification(
       title: place.notificationTitle,
       body: place.notificationBody,
       sound: "default",
+      ...(options.badge === undefined ? {} : { badge: options.badge }),
       priority: Notifications.AndroidNotificationPriority.HIGH,
       data: {
         notificationId,
@@ -1939,11 +1941,16 @@ export async function handleNativeRouteArrivalTestLocationRequest(
       await getBackgroundNotificationStatus(place);
 
     if (didEnterArrivalRadius) {
-      await ensureRouteArrivalNotificationPermission(message.language);
+      const permission = await ensureRouteArrivalNotificationPermission(message.language);
+      // 즉시 도착 테스트는 알림이 표시될 때 먼저 배지를 올리고, 이후 알림함 조회로 총개수를 맞춘다.
+      const currentBadge = Platform.OS === "ios" && permission.ios?.allowsBadge
+        ? await Notifications.getBadgeCountAsync().catch(() => undefined)
+        : undefined;
       await deliverRouteArrivalNotification(place, getTodayDateKey(), {
         notificationId: `arrival-test:${place.routeId}:${place.stopId}:${Date.now()}`,
         notificationType: "route-arrival-test",
         shouldRecordHistory: false,
+        badge: currentBadge === undefined ? undefined : currentBadge + 1,
       });
     }
 

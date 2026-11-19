@@ -31,9 +31,9 @@ export function useHomeMapRegionSelection({ runtime, boundaryBySigunguCode, onFi
       return paths.length ? [new naverMaps.Polygon({
         map,
         paths,
-        strokeColor: "#475569",
-        strokeWeight: 1.5,
-        strokeOpacity: 0.65,
+        strokeColor: "#64748b",
+        strokeWeight: 2.5,
+        strokeOpacity: 1,
         fillOpacity: 0,
         clickable: false,
         zIndex: 50,

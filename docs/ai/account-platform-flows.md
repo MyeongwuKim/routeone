@@ -20,6 +20,7 @@
 - 앱 아이콘 배지는 알림함과 같은 최근 180일 미확인 총개수를 사용한다. API의 `notificationInbox.repository.ts`가 읽음 필드가 없는 이전 기록까지 세며, `pushDelivery.service.ts`는 증가분 대신 총개수를 `badge`에 담아 iOS가 앱 종료 중에도 반영하게 한다. 재전송은 같은 알림을 중복으로 세지 않는다. 개수 조회만 실패하면 배지 값을 생략해 푸시 전송을 유지한다.
 - 앱 실행 중에는 `notificationBadgeSync.ts`가 모든 탭에서 알림함 첫 페이지 Query를 구독한다. 수신·앱 복귀 후 조회와 알림함 읽음 처리 결과를 `routeone:native-notification-badge`로 전달하며, 네이티브 `notificationBadgeBridge.ts`는 현재 로그인 세션의 메시지만 인증 변경 큐에서 처리한다. 알림함 읽음 처리 성공 시 진행 중인 첫 페이지 조회를 취소해 이전 응답이 배지를 되살리지 않게 한다. 로그아웃·만료·계정 전환 정리는 배지를 0으로 만들고 이전 계정의 조회·메시지를 무시한다. 네이티브 도착 알림은 서버 알림함에 반영된 뒤 이 총개수에 포함된다.
 - iOS 권한 요청에는 `allowBadge: true`를 포함한다. 사용자가 OS 설정에서 배지를 끄면 표시되지 않으며 Android 숫자 표시는 런처 지원에 따른다. 배지 검증은 API `notificationBadge.test.mjs`, 웹 `notificationBadgeSync.test.mjs`, 네이티브 `notificationBadgeBridge.test.cjs`·`nativeSessionCleanup.test.cjs`를 사용한다. 실제 푸시·아이콘 확인에는 테스트 계정과 기기별 OS 배지 설정을 함께 확인한다.
+- iOS에서 GPS 테스트로 즉시 발송하는 도착 알림은 배지 권한이 있으면 현재 아이콘 숫자에 1을 더한 값을 로컬 알림에 담는다. 이후 알림함 조회로 실제 미확인 총개수를 맞춘다. `routeArrivalNotificationBridge.test.cjs`에서 테스트 버튼의 배지 값과 권한이 꺼진 경우의 알림 발송을 확인한다.
 
 ## 사진 신고 차단
 
