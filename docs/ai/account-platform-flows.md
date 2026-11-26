@@ -33,9 +33,10 @@
 
 ## WebView와 배포
 
-- 운영 앱 1.1.0부터 R2의 `runtime/v2/latest/manifest.json`과 별도 기기 캐시를 사용한다. 1.0.1 및 그 이전 운영 앱은 기존 `latest/manifest.json`과 릴리스를 계속 사용한다. 새 매니페스트는 `minNativeVersion`을 포함하고, 호환되지 않으면 호환되는 저장본 또는 앱에 포함된 번들을 연다. 운영 URL을 별도로 지정하는 환경은 `EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD_V2`를 사용한다.
-- 웹 번들은 `develop`에서 개발 채널에 자동 발행하며, 운영은 GitHub Actions의 `Publish web bundle to R2`에서 `prod`를 선택해 수동 발행한다. 운영 발행의 버전 조회, 업로드, 보존 정리는 새 경로 안에서만 진행된다. 새 경로에 참여하는 운영 플랫폼이 하나도 없으면 발행은 실패한다. 새 기능은 심사에 제출할 빌드가 실제로 여는 웹 번들을 확인한다.
-- 앱과 발행 스크립트가 공유하는 호환 정책은 루트 `config/web-bundle-runtime.json`에 둔다. 개발과 운영 모두 `prefix`와 `minimumNativeVersion`을 갖는다. 개발은 빈 경로 접두사로 기존 R2 경로를 사용하고, 설정의 최소 버전 값을 매니페스트에 넣는다. 개발 수동 발행에서 `dev_min_native_version`을 지정하면 그 발행에만 설정 파일의 최소 버전을 대신한다. 조건 검사 코드가 포함된 TestFlight 빌드로 다운로드와 호환 번들 복귀를 확인한다. 이후 자동 발행에는 설정 파일의 기본값이 다시 적용된다.
+- 새로 빌드한 개발·운영 앱은 각 채널 R2의 `latest/manifest.json`을 사용한다. 운영 앱은 매니페스트의 `minNativeVersion`을 요구하며, 호환되는 번들이 없으면 호환 저장본 또는 내장 번들을 연다. 이미 배포된 운영 1.1.0 바이너리에는 `runtime/v2/latest/manifest.json`이 남아 있으므로 루트의 신규 번들은 1.1.1부터 받는다. 운영 URL을 별도로 지정하는 환경은 `EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD`를 사용한다.
+- 웹 번들은 `develop`에서 개발 채널에 자동 발행하며, 운영은 GitHub Actions의 `Publish web bundle to R2`에서 `prod`를 선택해 수동 발행한다. 두 채널은 각 버킷의 `releases/`에 올린 뒤 `latest/manifest.json`을 갱신한다. 운영 보존 정리는 지원 버전 계열의 릴리스에 적용한다. 최소 지원 버전을 충족하는 운영 플랫폼이 하나도 없으면 발행은 실패한다.
+- 웹 번들 발행에 사용하는 최소 지원 버전은 루트 `config/web-bundle-runtime.json`에 둔다. 개발 수동 발행에서 `dev_min_native_version`을 지정하면 해당 발행에만 설정 파일의 값을 대신한다. 심사와 TestFlight에는 실제 바이너리가 여는 번들과 영어팩 해시를 함께 확인한다.
+- 네이티브 강제 업데이트 정책과 운영 웹 번들은 별도로 발행된다. 현재 강제 업데이트 워크플로는 `develop`의 정책 변경을 개발에, `main`의 정책 변경을 운영에 발행한다. 새 버전 설치가 가능해진 채널부터 강제 업데이트 정책을 올린다.
 
 - 한국어 UI 문구는 기본 웹 번들에 포함한다. 영어 UI는 웹 빌드에서 해시가 붙은 팩으로 만들고 R2의 `language-packs/`에 따로 발행한다. 설치 앱의 첫 언어 선택은 네이티브에서 영어팩을 받고 검증한 뒤 WebView에 넘긴다. 웹 언어 설정은 해당 번들의 해시에 맞는 저장본을 재사용하고, 내려받기나 검증에 실패하면 한국어와 재시도 버튼을 유지한다.
 - `pnpm native:ios:local`은 같은 빌드의 영어팩을 시뮬레이터 앱에 포함한다. 첫 언어 선택과 WebView 설정 모두 이 팩을 사용하고 영어팩 요청을 R2로 보내지 않는다.

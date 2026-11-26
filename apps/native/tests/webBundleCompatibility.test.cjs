@@ -28,33 +28,43 @@ function load(relativePath, dependencies, env = {}) {
   return exports;
 }
 
-const runtime = require("../../../config/web-bundle-runtime.json");
+const appVersions = require("../app-versions.json");
 
-test("운영 1.1.0부터 새 경로를 사용하고 구형 운영 앱과 dev는 기존 경로를 사용한다", () => {
-  for (const [appVariant, version, path] of [
-    ["prod", "1.0.1", "latest/manifest.json"],
-    ["prod", "1.1.0", "runtime/v2/latest/manifest.json"],
-    ["dev", "1.1.0", "latest/manifest.json"],
-  ]) {
-    const env = {
-      APP_VARIANT: appVariant,
-      EXPO_PUBLIC_APP_VARIANT: appVariant,
-      EXPO_PUBLIC_WEB_BUNDLE_BASE_URL: "https://bundle.example.test",
-      EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD: "https://bundle.example.test/latest/manifest.json",
-    };
-    const { default: { expo: config } } = load("app.config.ts", {
-      "./app-versions.json": {
-        dev: { ios: version, android: version },
-        prod: { ios: version, android: version }
-      },
-      "../../config/web-bundle-runtime.json": runtime
-    }, env);
-    const { WEB_BUNDLE_UPDATE_CONFIG } = load("src/config/webBundleUpdateConfig.ts", {
-      "expo-constants": { expoConfig: config }
-    }, env);
-    assert.equal(config.extra.routeone.webBundleManifestUrl, `https://bundle.example.test/${path}`);
-    assert.equal(WEB_BUNDLE_UPDATE_CONFIG.manifestUrl, `https://bundle.example.test/${path}`);
+function loadWebBundleConfig(channel, version, buildOverrides = {}) {
+  const runtimeEnv = {
+    APP_VARIANT: channel,
+    EXPO_PUBLIC_APP_VARIANT: channel,
+    EXPO_PUBLIC_WEB_BUNDLE_BASE_URL: "https://bundle.example.test",
+  };
+  const { default: { expo: config } } = load("app.config.ts", {
+    "./app-versions.json": {
+      [channel]: { ios: version, android: version },
+    },
+  }, { ...runtimeEnv, ...buildOverrides });
+  const { WEB_BUNDLE_UPDATE_CONFIG } = load("src/config/webBundleUpdateConfig.ts", {
+    "expo-constants": { expoConfig: config },
+  }, runtimeEnv);
+  return { config, runtime: WEB_BUNDLE_UPDATE_CONFIG };
+}
+
+test("개발과 운영은 루트 매니페스트를 쓰고 운영은 최소 버전을 요구한다", () => {
+  for (const channel of ["dev", "prod"]) {
+    const { config, runtime } = loadWebBundleConfig(channel, appVersions[channel].ios, {
+      EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD_V2: "https://bundle.example.test/runtime/v2/latest/manifest.json",
+    });
+    const expected = "https://bundle.example.test/latest/manifest.json";
+    assert.equal(config.extra.routeone.webBundleManifestUrl, expected);
+    assert.equal(runtime.manifestUrl, expected);
+    assert.equal(runtime.requiresMinimumNativeVersion, channel === "prod");
   }
+});
+
+test("운영 빌드에서 지정한 매니페스트 주소를 WebView 런타임이 사용한다", () => {
+  const manifestUrl = "https://bundle.example.test/custom/latest/manifest.json";
+  const { runtime } = loadWebBundleConfig("prod", appVersions.prod.ios, {
+    EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD: manifestUrl,
+  });
+  assert.equal(runtime.manifestUrl, manifestUrl);
 });
 
 test("호환되지 않는 원격 번들은 설치하거나 원격 대체 화면으로 열지 않는다", async () => {
@@ -63,32 +73,25 @@ test("호환되지 않는 원격 번들은 설치하거나 원격 대체 화면�
     "@/version/compareVersions": compare
   });
   for (const [channel, nativeVersion, min, expected] of [
-    ["prod", "1.1.0", null, "embedded"],
-    ["prod", "1.1.0", "1.2.0", "embedded"],
-    ["prod", "1.1.0", "1.1.0", "installed"],
+    ["prod", "1.1.1", null, "embedded"],
+    ["prod", "1.1.1", "1.2.0", "embedded"],
+    ["prod", "1.1.1", "1.1.1", "installed"],
     ["dev", "1.0.2", "1.1.0", "installed-old"],
     ["dev", "1.1.0", "1.1.0", "installed"],
     ["dev", "1.0.2", null, "installed"],
   ]) {
     let installed = 0;
+    const { runtime } = loadWebBundleConfig(channel, nativeVersion);
+    const version = channel === "prod" && !min ? "1.0.34" : "1.2.0";
     const manifest = {
-      version: "1.2.0",
+      version,
       channel,
-      entryUrl: `https://bundle.example.test/${channel === "prod" ? "runtime/v2/" : ""}releases/1.2.0/web/index.html`,
+      entryUrl: `https://bundle.example.test/releases/${version}/web/index.html`,
       minimumNativeVersion: min,
     };
     const { resolveWebBundle } = load("src/webBundle/webBundleLoader.ts", {
       "react-native": { Platform: { OS: "ios" } },
-      "@/config/webBundleUpdateConfig": {
-        WEB_BUNDLE_UPDATE_CONFIG: {
-          updatesEnabled: true,
-          channel,
-          nativeVersion,
-          requiresMinimumNativeVersion: channel === "prod",
-          publicOrigin: "https://bundle.example.test",
-          manifestUrl: `https://bundle.example.test/${channel === "prod" ? "runtime/v2/" : ""}latest/manifest.json`
-        }
-      },
+      "@/config/webBundleUpdateConfig": { WEB_BUNDLE_UPDATE_CONFIG: runtime },
       "@/generated/webBundle": { WEB_BUNDLE_HTML: "<html/>" },
       "./webBundleManifest": { fetchWebBundleManifest: async () => manifest },
       "./webBundleStorage": {

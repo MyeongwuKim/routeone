@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import webBundleRuntime from "../config/web-bundle-runtime.json" with { type: "json" };
 import {
+  parseNumericVersion,
   resolveNativeVersionSeries,
   resolveWebBundleVersion
 } from "./resolve-web-bundle-version.mjs";
+
+const productionMinimum = parseNumericVersion(webBundleRuntime.prod.minimumNativeVersion);
 
 test("starts a channel without a manifest at the native major/minor baseline", () => {
   assert.equal(
@@ -46,28 +50,30 @@ test("rejects a native version series older than the published web series", () =
   );
 });
 
-test("prod 발행은 새 운영 경로를 쓰는 플랫폼만 대상으로 한다", () => {
+test("운영 발행은 최소 지원 버전을 충족하는 플랫폼만 대상으로 한다", () => {
+  const { major, minor, value } = productionMinimum;
   assert.deepEqual(
     resolveNativeVersionSeries(
-      { prod: { ios: "1.1.0", android: "1.0.9" } },
+      { prod: { ios: value, android: "0.0.0" } },
       "prod"
     ),
-    { major: 1, minor: 1 }
+    { major, minor }
   );
   assert.throws(
-    () => resolveNativeVersionSeries({ prod: { ios: "1.0.1", android: "1.0.0" } }, "prod"),
+    () => resolveNativeVersionSeries({ prod: { ios: "0.0.0", android: "0.0.0" } }, "prod"),
     /No production native app meets/
   );
 });
 
-test("같은 발행 경로에 있는 iOS와 Android는 버전 계열을 맞춘다", () => {
+test("운영 발행 대상인 iOS와 Android는 버전 계열을 맞춘다", () => {
+  const { major, minor, value } = productionMinimum;
   assert.throws(
     () =>
       resolveNativeVersionSeries(
         {
           prod: {
-            ios: "1.1.0",
-            android: "1.2.0"
+            ios: value,
+            android: `${major}.${minor + 1}.0`
           }
         },
         "prod"

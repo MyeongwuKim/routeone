@@ -38,7 +38,7 @@ function compareVersions(left, right) {
   return 0;
 }
 
-function compareVersionSeries(left, right) {
+export function compareVersionSeries(left, right) {
   if (left.major !== right.major) {
     return left.major > right.major ? 1 : -1;
   }
@@ -50,7 +50,7 @@ function compareVersionSeries(left, right) {
   return 0;
 }
 
-/** 발행 경로에 참여하는 앱의 버전 계열을 계산한다. 구형 운영 앱은 기존 R2 경로에 남는다. */
+/** 운영은 최소 지원 버전을 충족하는 플랫폼을 기준으로 웹 번들의 버전 계열을 계산한다. */
 export function resolveNativeVersionSeries(appVersions, channel) {
   const channelVersions = appVersions?.[channel];
 
@@ -142,10 +142,7 @@ export function resolveWebBundleVersion({
 }
 
 async function readLatestWebBundleVersion(publicBaseUrl, channel) {
-  const manifestPath = [webBundleRuntime[channel].prefix, "latest/manifest.json"]
-    .filter(Boolean)
-    .join("/");
-  const manifestUrl = `${publicBaseUrl.replace(/\/+$/g, "")}/${manifestPath}`;
+  const manifestUrl = `${publicBaseUrl.replace(/\/+$/g, "")}/latest/manifest.json`;
   const response = await fetch(manifestUrl, { cache: "no-store" });
 
   if (response.status === 404) {

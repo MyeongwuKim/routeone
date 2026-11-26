@@ -6,7 +6,6 @@ type RouteOneExtra = {
   appVariant?: unknown;
   webBundleChannel?: unknown;
   webBundleManifestUrl?: unknown;
-  webBundleManifestPath?: unknown;
   webBundleUpdatesEnabled?: unknown;
 };
 
@@ -81,24 +80,22 @@ function readManifestUrl(
     return null;
   }
 
-  const explicitUrl =
+  const explicitUrl = readPublicEnv(
     appVariant === "prod"
-      ? readPublicEnv(
-        usesProdWebBundleRuntime
-          ? "EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD_V2"
-          : "EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD"
-      )
-      : readPublicEnv("EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV");
+      ? "EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD"
+      : "EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV"
+  );
 
   if (explicitUrl) {
     return explicitUrl;
   }
 
-  if (!publicBaseUrl) {
-    return readString(routeOneExtra.webBundleManifestUrl) || null;
+  const buildManifestUrl = readString(routeOneExtra.webBundleManifestUrl);
+  if (buildManifestUrl) {
+    return buildManifestUrl;
   }
 
-  return `${publicBaseUrl}/${webBundleManifestPath}`;
+  return publicBaseUrl ? `${publicBaseUrl}/latest/manifest.json` : null;
 }
 
 const explicitRuntimeAppVariant = readAppVariant(
@@ -114,8 +111,6 @@ const updatesEnabled =
   (configuredUpdatesEnabled ?? Boolean(explicitRuntimeAppVariant));
 const publicBaseUrl = readPublicBaseUrl();
 const publicOrigin = readHttpOrigin(publicBaseUrl);
-const webBundleManifestPath = readString(routeOneExtra.webBundleManifestPath) || "latest/manifest.json";
-const usesProdWebBundleRuntime = appVariant === "prod" && webBundleManifestPath !== "latest/manifest.json";
 const manifestUrl = readManifestUrl(appVariant, updatesEnabled, publicBaseUrl);
 
 export const WEB_BUNDLE_UPDATE_CONFIG = {
@@ -125,6 +120,7 @@ export const WEB_BUNDLE_UPDATE_CONFIG = {
   publicBaseUrl,
   publicOrigin,
   updatesEnabled,
-  requiresMinimumNativeVersion: usesProdWebBundleRuntime,
+  // 루트에 남아 있는 기존 운영 번들도 동일한 최소 버전 검사로 거른다.
+  requiresMinimumNativeVersion: appVariant === "prod",
   nativeVersion: readString(Constants.expoConfig?.version) || "0.0.0"
 } as const;

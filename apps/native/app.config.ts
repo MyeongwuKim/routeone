@@ -1,5 +1,4 @@
 import appVersions from "./app-versions.json" with { type: "json" };
-import webBundleRuntime from "../../config/web-bundle-runtime.json" with { type: "json" };
 
 type AppVariant = "dev" | "prod";
 type AppPlatform = "ios" | "android";
@@ -100,12 +99,9 @@ function getWebBundleManifestUrl(
     return null;
   }
 
-  // 이미 배포된 구버전은 기존 URL을 계속 읽으므로 새 운영 런타임에 별도 경로를 사용한다.
-  const explicitUrl = variant === "dev"
-    ? process.env.EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV?.trim()
-    : usesProdWebBundleRuntime
-      ? process.env.EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD_V2?.trim()
-      : process.env.EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD?.trim();
+  const explicitUrl = variant === "prod"
+    ? process.env.EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_PROD?.trim()
+    : process.env.EXPO_PUBLIC_WEB_BUNDLE_MANIFEST_URL_DEV?.trim();
 
   if (explicitUrl) {
     return explicitUrl;
@@ -115,7 +111,7 @@ function getWebBundleManifestUrl(
     return null;
   }
 
-  return `${trimTrailingSlashes(webBundlePublicBaseUrl)}/${webBundleManifestPath}`;
+  return `${trimTrailingSlashes(webBundlePublicBaseUrl)}/latest/manifest.json`;
 }
 
 function getNativeUpdatePolicyUrl(
@@ -151,12 +147,6 @@ const appSlug = appVariantConfig.slug;
 const appScheme = appVariantConfig.scheme;
 const appBundleIdentifier = appVariantConfig.bundleIdentifier;
 const appVersion = getAppVersion(appVariant, buildPlatform);
-const usesProdWebBundleRuntime = appVariant === "prod" &&
-  appVersion.localeCompare(webBundleRuntime.prod.minimumNativeVersion, "en", { numeric: true }) >= 0;
-const webBundlePrefix = appVariant === "dev" || usesProdWebBundleRuntime
-  ? webBundleRuntime[appVariant].prefix
-  : "";
-const webBundleManifestPath = [webBundlePrefix, "latest/manifest.json"].filter(Boolean).join("/");
 const webBundleChannel = appVariant;
 const webBundlePublicBaseUrl =
   process.env.EXPO_PUBLIC_WEB_BUNDLE_BASE_URL?.trim() ||
@@ -179,7 +169,6 @@ const routeoneExtra = {
   appVariant,
   nativeUpdateChecksEnabled: shouldUseRemoteWebBundle,
   webBundleChannel,
-  webBundleManifestPath,
   webBundleUpdatesEnabled: shouldUseRemoteWebBundle,
   ...(nativeUpdatePolicyUrl ? { nativeUpdatePolicyUrl } : {}),
   ...(webBundleManifestUrl ? { webBundleManifestUrl } : {})

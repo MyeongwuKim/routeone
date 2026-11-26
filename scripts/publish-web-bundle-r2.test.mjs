@@ -25,6 +25,7 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import webBundleRuntime from "../config/web-bundle-runtime.json" with { type: "json" };
+import { parseNumericVersion } from "./resolve-web-bundle-version.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "..");
@@ -234,24 +235,33 @@ test("skips cleanup with a warning when releases cannot be listed", () => {
   }
 });
 
-test("prod는 새 경로만 쓰고 기존 운영 릴리스는 정리하지 않는다", () => {
+test("운영은 루트에 발행하고 웹 번들 지원 계열의 릴리스만 정리한다", () => {
+  const minimum = parseNumericVersion(webBundleRuntime.prod.minimumNativeVersion);
+  const previousVersion = minimum.value;
+  const version = `${minimum.major}.${minimum.minor}.${minimum.patch + 1}`;
   const fixture = createFixture({
     channel: "prod",
-    version: "1.1.2",
+    version,
     releases: [
-      { Key: "releases/1.0.9/manifest.json", LastModified: "2026-09-01T01:00:00Z" },
-      { Key: "runtime/v2/releases/1.1.2/manifest.json", LastModified: "2026-09-03T01:00:00Z" },
-      { Key: "runtime/v2/releases/1.1.1/manifest.json", LastModified: "2026-09-02T01:00:00Z" },
+      { Key: "releases/1.0.34/manifest.json", LastModified: "2026-09-01T01:00:00Z" },
+      { Key: `releases/${version}/manifest.json`, LastModified: "2026-09-03T01:00:00Z" },
+      { Key: `releases/${previousVersion}/manifest.json`, LastModified: "2026-09-02T01:00:00Z" },
+      { Key: `runtime/v2/releases/${previousVersion}/manifest.json`, LastModified: "2026-09-02T01:00:00Z" },
     ],
   });
   try {
     const result = fixture.run();
     assert.equal(result.status, 0, result.stderr);
-    const args = fixture.readCalls().map(call => call.args);
-    assert.ok(args.some(call => call.includes("s3://test-bucket/runtime/v2/latest/manifest.json")));
-    assert.ok(args.some(call => call.includes("runtime/v2/releases/")));
-    assert.ok(args.some(call => call.includes("s3://test-bucket/runtime/v2/releases/1.1.1/")));
-    assert.ok(!args.some(call => call.some(arg => /^s3:\/\/test-bucket\/(latest|releases)\//.test(arg))));
+    const calls = fixture.readCalls();
+    const args = calls.map(call => call.args);
+    const latest = calls.find(call => call.args.includes("s3://test-bucket/latest/manifest.json"));
+    assert.equal(latest.manifest.minNativeVersion, minimum.value);
+    assert.equal(latest.manifest.entryUrl, `https://bundle.example.com/releases/${version}/web/index.html`);
+    assert.ok(args.some(call => call.includes("releases/")));
+    assert.deepEqual(calls.filter(isRemoveCall).map(call => call.args[2]), [
+      `s3://test-bucket/releases/${previousVersion}/`,
+    ]);
+    assert.ok(!args.some(call => call.some(arg => arg.includes("runtime/v2/"))));
   } finally {
     fixture.cleanup();
   }
