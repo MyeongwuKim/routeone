@@ -36,8 +36,9 @@ type TourCourseSourceResponse = {
 };
 
 const TOUR_COURSE_SOURCE_URL = "https://apis.data.go.kr/B551011/KorService2/areaBasedList2";
-const TOUR_COURSE_SOURCE_PAGE_SIZE = 200;
-const TOUR_COURSE_SOURCE_MAX_PAGES = 100;
+const TOUR_COURSE_SOURCE_PAGE_SIZE = 10;
+const TOUR_COURSE_SOURCE_MAX_ROWS = 20_000;
+const TOUR_COURSE_SOURCE_CONCURRENT_PAGES = 8;
 const TOUR_COURSE_CATALOG_TIMEOUT_MS = 10_000;
 const TOUR_COURSE_SOURCE_TIMEOUT_MS = 4_000;
 const TOUR_COURSE_SOURCE_MAX_ATTEMPTS = 3;
@@ -149,7 +150,7 @@ async function fetchTourCourseSourcePage(serviceKey: string, pageNo: number, sig
   return { items, totalCount };
 }
 
-/** 국문 코스 전체를 10초 안에 읽으며 연결 실패는 페이지별로 재시도하고, 같은 ID의 첫 항목만 지역 인덱스에 전달한다. */
+/** 국문 코스를 10개씩 조회하고, 10초 안에 읽은 전체 목록에서 같은 ID의 첫 항목만 지역 인덱스에 전달한다. */
 export async function fetchOfficialTourCourses(): Promise<OfficialTourCourse[]> {
   const configuredKey = process.env.VISITKOREA_SERVICE_KEY?.trim() || process.env.TOUR_API_SERVICE_KEY?.trim();
   if (!configuredKey) throw new Error("Tour course source service key is missing");
@@ -158,14 +159,22 @@ export async function fetchOfficialTourCourses(): Promise<OfficialTourCourse[]> 
   // 웹의 12초 요청 제한 안에 오류를 반환하도록 모든 원본 페이지가 같은 마감 시간을 사용한다.
   const signal = AbortSignal.timeout(TOUR_COURSE_CATALOG_TIMEOUT_MS);
   const firstPage = await fetchTourCourseSourcePage(serviceKey, 1, signal);
-  const totalPages = Math.min(TOUR_COURSE_SOURCE_MAX_PAGES, Math.ceil(firstPage.totalCount / TOUR_COURSE_SOURCE_PAGE_SIZE));
-  const remainingPages = await Promise.all(Array.from(
-    { length: Math.max(0, totalPages - 1) },
-    (_, index) => fetchTourCourseSourcePage(serviceKey, index + 2, signal)
-  ));
+  const totalRows = Math.min(TOUR_COURSE_SOURCE_MAX_ROWS, firstPage.totalCount);
+  const totalPages = Math.ceil(totalRows / TOUR_COURSE_SOURCE_PAGE_SIZE);
+  const pages = [firstPage];
+
+  // 첫 페이지에서 전체 개수를 확인한 뒤 남은 요청을 최대 8건씩 보내고 페이지 순서대로 모은다.
+  for (let firstPageNo = 2; firstPageNo <= totalPages; firstPageNo += TOUR_COURSE_SOURCE_CONCURRENT_PAGES) {
+    const pageCount = Math.min(TOUR_COURSE_SOURCE_CONCURRENT_PAGES, totalPages - firstPageNo + 1);
+    const batch = await Promise.all(Array.from(
+      { length: pageCount },
+      (_, index) => fetchTourCourseSourcePage(serviceKey, firstPageNo + index, signal),
+    ));
+    pages.push(...batch);
+  }
 
   const courses = new Map<string, OfficialTourCourse>();
-  for (const { items } of [firstPage, ...remainingPages]) {
+  for (const { items } of pages) {
     for (const item of items) {
       const id = readText(item?.contentid);
       const title = readText(item?.title).replaceAll(/<[^>]*>/g, " ").replaceAll(/\s+/g, " ").trim();

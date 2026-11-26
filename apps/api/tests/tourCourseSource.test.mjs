@@ -31,7 +31,7 @@ test("국문 공식 코스 페이지의 원본 순서와 좌표가 없는 코스
     assert.equal(searchParams.get("serviceKey"), serviceKey);
     assert.equal(searchParams.get("contentTypeId"), "25");
     assert.equal(searchParams.get("arrange"), "C");
-    assert.equal(searchParams.get("numOfRows"), "200");
+    assert.equal(searchParams.get("numOfRows"), "10");
     assert.equal(searchParams.has("areaCode"), false);
     assert.equal(searchParams.has("sigunguCode"), false);
     assert.ok(options.signal instanceof AbortSignal);
@@ -39,7 +39,7 @@ test("국문 공식 코스 페이지의 원본 순서와 좌표가 없는 코스
     const page = searchParams.get("pageNo");
     pages.push(page);
     if (page === "1") {
-      return tourResponse({ contentid: "101", title: "<b>공식 코스</b>", mapx: "", mapy: "0" }, "201");
+      return tourResponse({ contentid: "101", title: "<b>공식 코스</b>", mapx: "", mapy: "0" }, "11");
     }
     return tourResponse([
       { contentid: "101", title: "앞 페이지와 중복된 코스" },
@@ -49,7 +49,7 @@ test("국문 공식 코스 페이지의 원본 순서와 좌표가 없는 코스
         areacode: " 32 ", sigungucode: "1", lDongRegnCd: "51", lDongSignguCd: "150",
         firstimage: " ", firstimage2: " https://example.test/official.jpg ",
       },
-    ], 201);
+    ], 11);
   });
 
   const courses = await fetchOfficialTourCourses();
@@ -61,6 +61,35 @@ test("국문 공식 코스 페이지의 원본 순서와 좌표가 없는 코스
       areaCode: "32", sigunguCode: "1", adminCode: "51150", location: { lat: 37.75, lng: 128.88 },
     },
   ]);
+});
+
+test("전국 코스 1,049개를 10개씩 조회하고 동시 요청을 제한한다", async (t) => {
+  const totalCount = 1049;
+  let activeRequests = 0;
+  let peakRequests = 0;
+  const pages = [];
+  const ids = Array.from({ length: totalCount }, (_, index) => String(index + 1));
+
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const query = new URL(url).searchParams;
+    const page = Number(query.get("pageNo"));
+    const pageSize = Number(query.get("numOfRows"));
+    pages.push(page);
+    activeRequests += 1;
+    peakRequests = Math.max(peakRequests, activeRequests);
+    await new Promise(setImmediate);
+    activeRequests -= 1;
+
+    const start = (page - 1) * pageSize;
+    return tourResponse(ids.slice(start, start + pageSize).map((id) => ({
+      contentid: id, title: `공식 코스 ${id}`,
+    })), totalCount);
+  });
+
+  const courses = await fetchOfficialTourCourses();
+  assert.deepEqual(courses.map(({ id }) => id), ids);
+  assert.deepEqual(pages, Array.from({ length: 105 }, (_, index) => index + 1));
+  assert.ok(peakRequests <= 8, `동시 요청 ${peakRequests}건`);
 });
 
 test("코스 원본 요청 오류에 서비스 키가 포함된 URL이나 원본 응답을 전달하지 않는다", async (t) => {
@@ -150,11 +179,11 @@ test("다음 페이지의 연결 실패만 재시도하고 이미 받은 페이�
   t.mock.method(globalThis, "fetch", async (url) => {
     const page = new URL(url).searchParams.get("pageNo");
     pages.push(page);
-    if (page === "1") return tourResponse({ contentid: "101", title: "첫 코스" }, 201);
+    if (page === "1") return tourResponse({ contentid: "101", title: "첫 코스" }, 11);
     if (pages.filter((value) => value === "2").length === 1) {
       throw new TypeError("fetch failed", { cause: { code: "ECONNRESET" } });
     }
-    return tourResponse({ contentid: "102", title: "다음 코스" }, 201);
+    return tourResponse({ contentid: "102", title: "다음 코스" }, 11);
   });
 
   const courses = await fetchOfficialTourCourses();

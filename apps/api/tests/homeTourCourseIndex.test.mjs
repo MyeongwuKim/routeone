@@ -36,14 +36,15 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
     ...gangnamCourses.slice(4),
   ];
 
-  const catalogResponse = (catalogItems) => Response.json({
+  const catalogResponse = (catalogItems, totalCount = catalogItems.length) => Response.json({
     response: {
       header: { resultCode: "0000" },
-      body: { totalCount: catalogItems.length, items: { item: catalogItems } },
+      body: { totalCount, items: { item: catalogItems } },
     },
   });
   let now = Date.now();
-  let fetchCount = 0;
+  const refreshAt = now + 60 * 60 * 1000;
+  const initialPageCount = Math.ceil(items.length / 10);
   let resolveRefresh;
   const refreshResponse = new Promise((resolve) => { resolveRefresh = resolve; });
   t.mock.method(Date, "now", () => now);
@@ -51,8 +52,9 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
     const url = new URL(input);
     assert.equal(url.origin, "https://apis.data.go.kr");
     assert.equal(url.searchParams.get("contentTypeId"), "25");
-    fetchCount += 1;
-    return fetchCount === 1 ? catalogResponse(items) : refreshResponse;
+    if (now >= refreshAt) return refreshResponse;
+    const offset = (Number(url.searchParams.get("pageNo")) - 1) * 10;
+    return catalogResponse(items.slice(offset, offset + 10), items.length);
   });
 
   const server = new ApolloServer({
@@ -88,7 +90,7 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
   for (const { errors } of results) assert.equal(errors, undefined);
   const [first, next, province, gangneung, empty, combinedFirst, combinedNext, seocho] = results.map(({ data }) => data.homeTourCourses);
 
-  assert.equal(request.mock.callCount(), 1);
+  assert.equal(request.mock.callCount(), initialPageCount);
   assert.equal(first.totalCount, 14);
   assert.deepEqual(first.courses.map(({ id }) => id), [
     ...gangnamCourses.slice(0, 4).map(({ contentid }) => contentid),
@@ -118,13 +120,13 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
   assert.equal((await execute("1", "999", 1)).errors?.[0]?.message, "여행 코스 지역이 올바르지 않아요.");
   assert.equal((await execute("1", null, 1, ["1", "999"])).errors?.[0]?.message, "여행 코스 지역이 올바르지 않아요.");
   assert.equal((await execute("1", null, 0)).errors?.[0]?.message, "여행 코스 페이지가 올바르지 않아요.");
-  assert.equal(request.mock.callCount(), 1);
+  assert.equal(request.mock.callCount(), initialPageCount);
 
-  now += 60 * 60 * 1000 + 1;
+  now = refreshAt + 1;
   const [staleFirst, staleNext] = await Promise.all([execute("1", "1", 1), execute("1", "1", 2)]);
   assert.deepEqual(staleFirst.data.homeTourCourses, first);
   assert.deepEqual(staleNext.data.homeTourCourses, next);
-  assert.equal(request.mock.callCount(), 2);
+  assert.equal(request.mock.callCount(), initialPageCount + 1);
 
   resolveRefresh(catalogResponse([{ ...gangnamCourses[0], title: "갱신된 공식 코스" }]));
   await refreshResponse;
@@ -132,5 +134,5 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
   const refreshed = (await execute("1", "1", 1)).data.homeTourCourses;
   assert.equal(refreshed.totalCount, 1);
   assert.equal(refreshed.courses[0].title, "갱신된 공식 코스");
-  assert.equal(request.mock.callCount(), 2);
+  assert.equal(request.mock.callCount(), initialPageCount + 1);
 });
