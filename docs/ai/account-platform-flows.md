@@ -25,6 +25,7 @@
 ## 사진 신고 차단
 
 - 방문 인증은 `apps/web/src/features/my-route/hooks/useRouteVisitProgress.ts`에서 시작한다. API의 `apps/api/src/modules/routes/routeVisit.service.ts`와 `routeVisitPhoto.service.ts`, 네이티브의 `apps/native/src/webview/bridge/visitPhotoBridge.ts`에서 위치·사진 처리 경로를 나눠 찾는다. 이미지 분석 서비스 진입점은 `apps/image-analyzer/src/main.py`다.
+- 인증 사진을 연결하거나 새로 공개할 때는 Cloudflare에서 업로드 완료와 발급 당시 사용자·방문지·환경을 확인하고, 서버가 조회한 이미지 주소를 사용한다. 사진 기록을 삭제한 뒤에도 동일한 발급 정보가 확인되는 원본만 삭제한다.
 - 사진 신고 관리와 차단 해제는 `apps/web/src/features/photo-report/pages/PhotoReportManagementPage.tsx`, `apps/web/src/features/user-block/pages/BlockedUsersPage.tsx`에서 찾는다. API 신고 처리는 `apps/api/src/modules/moderation/`, 차단은 `apps/api/src/modules/user/userBlock.service.ts`가 진입점이다.
 - 사진 공개나 차단을 바꾸면 내 기록에서 보이는 사진과 다른 사용자에게 보이는 장소 사진을 구분한다. 차단의 영향을 받는 공유 목록과 상세도 같이 확인한다. 이미지 삭제와 신고 처리는 테스트 데이터에서만 실행한다.
 

@@ -66,6 +66,16 @@ function photoScenario(t, onDelete) {
     }
   });
   t.mock.method(globalThis, "fetch", async (_url, options) => {
+    if (options.method === "GET") {
+      const environment = [process.env.ROUTEONE_ENV, process.env.APP_ENV, process.env.NODE_ENV]
+        .find((value) => value?.trim())?.trim().toLowerCase();
+      return Response.json({ success: true, result: {
+        id: "synthetic-active-image",
+        meta: { kind: "route-stop-visit-photo",
+          environment: ["prod", "production"].includes(environment) ? "prod" : "dev",
+          userId: owner.id, stopId: "stop-2" },
+      } });
+    }
     assert.equal(options.method, "DELETE");
     onDelete(db);
     return new Response(JSON.stringify({ success: true }), { status: 200 });

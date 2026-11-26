@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useStore } from "zustand";
 import { routeApi } from "@/api/routeApi";
 import { useLoginRequest } from "@/hooks/useLoginRequest";
-import type { RouteByIdQuery } from "@/generated/graphql";
+import type { SharedRouteByIdQuery } from "@/generated/graphql";
 import { getAuthToken } from "@/lib/authToken";
 import { useUiText } from "@/lib/uiText";
 import type { ServiceAreaId } from "@/data/serviceAreas";
@@ -45,7 +45,7 @@ type ToggleLikeVariables = {
 type ToggleLikeContext = {
   previousSharedRoutes: SharedRouteInfiniteData | undefined;
   previousLikedRoutes: SharedRouteInfiniteData | undefined;
-  previousDetail: RouteByIdQuery | undefined;
+  previousDetail: SharedRouteByIdQuery | undefined;
 };
 
 /**
@@ -84,7 +84,7 @@ export function useSharedRouteLike({
     queryClient.setQueryData<SharedRouteInfiniteData>(queryKeys.liked, (data) =>
       upsertSharedRouteInInfiniteData(data, "liked", route, { keepUnlikedRoute })
     );
-    queryClient.setQueryData<RouteByIdQuery>(
+    queryClient.setQueryData<SharedRouteByIdQuery>(
       getRouteDetailQueryKey(route.id),
       (data) => data?.route
         ? { ...data, route: { ...data.route, ...getSharedRouteLikeState(route) } }
@@ -125,7 +125,7 @@ export function useSharedRouteLike({
         queryClient.getQueryData<SharedRouteInfiniteData>(queryKeys.shared);
       const previousLikedRoutes =
         queryClient.getQueryData<SharedRouteInfiniteData>(queryKeys.liked);
-      const previousDetail = queryClient.getQueryData<RouteByIdQuery>(
+      const previousDetail = queryClient.getQueryData<SharedRouteByIdQuery>(
         getRouteDetailQueryKey(route.id)
       );
 
@@ -166,7 +166,7 @@ export function useSharedRouteLike({
             data, context.previousLikedRoutes, "liked", route.id
           )
         );
-        queryClient.setQueryData<RouteByIdQuery>(
+        queryClient.setQueryData<SharedRouteByIdQuery>(
           getRouteDetailQueryKey(route.id),
           (data) => data?.route
             ? {

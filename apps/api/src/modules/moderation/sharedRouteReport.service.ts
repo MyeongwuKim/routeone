@@ -117,7 +117,7 @@ export async function getReportedSharedRouteIds(
 }
 
 export async function hasReportedSharedRoute(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, "sharedRouteReport">,
   reporterId: string,
   routeId: string
 ) {

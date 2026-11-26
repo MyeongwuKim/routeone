@@ -1,5 +1,5 @@
-mutation ShareRoute($routeId: ID!) {
-  shareRoute(routeId: $routeId) {
+mutation ShareRoute($routeId: ID!, $startLocations: [ShareRouteStartLocationInput!]!) {
+  shareRoute(routeId: $routeId, startLocations: $startLocations) {
     ...RouteSummaryFields
   }
 }

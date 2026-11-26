@@ -19,7 +19,7 @@ fragment RoutePlaceFields on PlaceSnapshot {
   regionLabelKey
 }
 
-fragment RouteStopFields on RouteStop {
+fragment SharedRouteStopFields on RouteStop {
   id
   routeId
   dayId
@@ -41,13 +41,17 @@ fragment RouteStopFields on RouteStop {
   verificationPhotoPublicationStatus
   verificationPhotoRecordId
   verificationPhotoReportedByMe
-  verificationLat
-  verificationLng
-  verificationAccuracyMeters
   checkedInAt
   checkedOutAt
   actualStayMinutes
   visitTimeEditedAt
+}
+
+fragment RouteStopFields on RouteStop {
+  ...SharedRouteStopFields
+  verificationLat
+  verificationLng
+  verificationAccuracyMeters
 }
 
 fragment SharedRouteOwnerFields on User {

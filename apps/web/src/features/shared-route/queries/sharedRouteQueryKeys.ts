@@ -20,4 +20,4 @@ export const getSharedRouteListQueryKey = (
 export const SHARED_ROUTE_LIKE_MUTATION_KEY = ["shared-route-like"] as const;
 
 export const getRouteDetailQueryKey = (routeId: string | null) =>
-  ["route-detail", routeId] as const;
+  ["route-detail", routeId, "shared"] as const;

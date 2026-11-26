@@ -54,7 +54,9 @@ export function memoryDatabase(initial = {}) {
     Object.entries(where).every(([key, value]) => {
       if (key === "OR") return value.some(condition => matches(row, condition));
       if (key === "AND") return value.every(condition => matches(row, condition));
+      if (key === "NOT") return !matches(row, value);
       if (value && typeof value === "object" && "in" in value) return value.in.includes(row[key]);
+      if (value && typeof value === "object" && "notIn" in value) return !value.notIn.includes(row[key]);
       if (value && typeof value === "object" && "isSet" in value) return (row[key] !== undefined) === value.isSet;
       return row[key] === value;
     });
@@ -128,6 +130,12 @@ export function memoryDatabase(initial = {}) {
   const requests = table("requests");
   requests.findUnique = async ({ where }) =>
     structuredClone(state.requests.find((row) => matches(row, where.ownerId_requestId)) ?? null);
+  const interactions = (name) => ({
+    ...table(name),
+    async findUnique({ where }) {
+      return structuredClone(getRows(name).find((row) => matches(row, where.userId_routeId)) ?? null);
+    },
+  });
 
   const decode = (value) => {
     if (!value || typeof value !== "object") return value;
@@ -138,6 +146,10 @@ export function memoryDatabase(initial = {}) {
   };
   const prisma = {
     route,
+    routeLike: interactions("likes"),
+    routeSave: interactions("saves"),
+    userBlock: { findUnique: async () => null, findMany: async () => [] },
+    sharedRouteReport: { findFirst: async () => null, findMany: async () => [] },
     routeDay: table("days", { date: null, startLocation: null }),
     routeStop: table("stops", { visitStatus: "PENDING", visitRevision: 0 }),
     routeCreateRequest: requests,

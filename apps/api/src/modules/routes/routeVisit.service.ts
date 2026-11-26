@@ -25,7 +25,7 @@ import { UserFacingError } from "../../graphql/userFacingError.js";
 import { isDevVerificationBypassEnabled } from "../../lib/devVerification.js";
 import { runTransactionWithRetry } from "../../lib/transaction.js";
 import { updateRouteStopVisitVersion, updateRouteStopVisitVersions } from "./routeStopVisitVersion.js";
-import { deleteRouteVisitPhotoImages } from "./routeVisitPhoto.service.js";
+import { confirmRouteVisitPhoto, deleteRouteVisitPhotoImage } from "./routeVisitPhoto.service.js";
 import {
   VERIFIED_ROUTE_STOP_STATUSES,
   assertRouteOwner,
@@ -996,6 +996,14 @@ export async function checkInRouteStop(
     verification,
     bypassVerification
   );
+  if (checkInData.verificationStatus === "GPS_PHOTO") {
+    const photo = await confirmRouteVisitPhoto(
+      { userId: user.id, stopId },
+      checkInData.verificationPhotoImageId,
+      checkInData.verificationPhotoUrl
+    );
+    checkInData.verificationPhotoUrl = photo.imageUrl;
+  }
 
   await updateRouteStopVisitVersion(prisma, stop, {
     ...checkInData,
@@ -1031,9 +1039,15 @@ export async function setRouteStopPhotoPublication(
   }
 
   const publishedAt = published ? new Date() : null;
+  const confirmedPhoto = published ? await confirmRouteVisitPhoto(
+    { userId: user.id, stopId },
+    stop.verificationPhotoImageId,
+    stop.verificationPhotoUrl
+  ) : null;
 
   await prisma.$transaction(async (transaction) => {
     const nextStop = await updateRouteStopVisitVersion(transaction, stop, {
+      ...(confirmedPhoto ? { verificationPhotoUrl: confirmedPhoto.imageUrl } : {}),
       verificationPhotoPublicationConsent: published,
       verificationPhotoPublishedAt: publishedAt,
     });
@@ -1074,15 +1088,9 @@ export async function setRouteStopVisitPhoto(
     throw new UserFacingError("완료한 장소에서만 인증 사진을 수정할 수 있어요.");
   }
 
-  const normalizedImageId = nullableString(imageId);
-  const sourceImageUrl = nullableString(imageUrl);
-  const normalizedImageUrl = sourceImageUrl
-    ? normalizePlacePhotoImageUrl(sourceImageUrl)
-    : null;
-
-  if (!normalizedImageId || !normalizedImageUrl) {
-    throw new UserFacingError("저장할 인증 사진 정보가 올바르지 않아요.");
-  }
+  const { imageId: normalizedImageId, imageUrl: normalizedImageUrl } = await confirmRouteVisitPhoto(
+    { userId: user.id, stopId }, nullableString(imageId), nullableString(imageUrl)
+  );
 
   const nextVerificationStatus: RouteStopVerificationStatus =
     stop.verificationStatus === "GPS_PHOTO"
@@ -1114,7 +1122,7 @@ export async function setRouteStopVisitPhoto(
     stop.verificationPhotoImageId !== normalizedImageId
   ) {
     try {
-      await deleteRouteVisitPhotoImages([stop.verificationPhotoImageId]);
+      await deleteRouteVisitPhotoImage({ userId: user.id, stopId }, stop.verificationPhotoImageId);
     } catch (error) {
       console.error(
         "[visit-photo] replaced image cleanup failed",
@@ -1164,7 +1172,7 @@ export async function deleteRouteStopVisitPhoto(
   // 조건부 저장에서 거절된 요청은 현재 기록이 참조하는 원본을 지우면 안 된다.
   if (stop.verificationPhotoImageId) {
     try {
-      await deleteRouteVisitPhotoImages([stop.verificationPhotoImageId]);
+      await deleteRouteVisitPhotoImage({ userId: user.id, stopId }, stop.verificationPhotoImageId);
     } catch (error) {
       console.error("[visit-photo] deleted image cleanup failed", error instanceof Error ? error.message : error);
     }
@@ -1499,6 +1507,18 @@ export async function markRouteStopVisited(
     actualStayMinutes,
     canBypassVisitVerification(user)
   );
+  if (
+    visited && (visitData.verificationStatus === "GPS_PHOTO" ||
+      (visitData.verificationStatus === "MANUAL" && (verification?.photoImageId || verification?.photoUrl)))
+  ) {
+    const photo = await confirmRouteVisitPhoto(
+      { userId: user.id, stopId },
+      nullableString(verification?.photoImageId),
+      nullableString(verification?.photoUrl)
+    );
+    visitData.verificationPhotoImageId = photo.imageId;
+    visitData.verificationPhotoUrl = photo.imageUrl;
+  }
   const nextStop: RouteStopStayContributionSource = {
     place: stop.place,
     visitStatus: visitData.visitStatus,

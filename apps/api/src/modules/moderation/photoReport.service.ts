@@ -14,7 +14,7 @@ import type {
   User,
 } from "@prisma/client";
 import { UserFacingError } from "../../graphql/userFacingError.js";
-import { deleteRouteVisitPhotoImages } from "../routes/routeVisitPhoto.service.js";
+import { deleteRouteVisitPhotoImage } from "../routes/routeVisitPhoto.service.js";
 import { normalizePlacePhotoImageUrl } from "../routes/route.shared.js";
 
 const MAX_REPORT_DETAILS_LENGTH = 500;
@@ -311,7 +311,10 @@ export async function moderatePlacePhoto(
   });
 
   if (action === "DELETED" && photo.imageId) {
-    await deleteRouteVisitPhotoImages([photo.imageId]).catch(() => undefined);
+    await deleteRouteVisitPhotoImage(
+      { userId: photo.userId, stopId: photo.routeStopId },
+      photo.imageId
+    ).catch(() => undefined);
   }
 
   return { photoId, action };

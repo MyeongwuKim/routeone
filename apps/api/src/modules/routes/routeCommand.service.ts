@@ -10,6 +10,8 @@ import { createHash } from "node:crypto";
 import type { Prisma, PrismaClient, User } from "@prisma/client";
 import { runTransactionWithRetry } from "../../lib/transaction.js";
 import { updateRouteStopVisitVersions } from "./routeStopVisitVersion.js";
+import { getSharedDayStartLocation, getSharedRouteStartLocation } from "./routeSharedStartLocation.js";
+import { canReadRoute } from "./routeAccess.js";
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import {
   addDays,
@@ -1084,14 +1086,15 @@ export async function cloneRoute(
       },
     });
 
-    if (!sourceRoute || sourceRoute.visibility !== "PUBLIC") {
+    if (!sourceRoute || sourceRoute.visibility !== "PUBLIC" ||
+      !(await canReadRoute(transaction, sourceRoute, user.id))) {
       throw new UserFacingError("복사할 수 있는 공유 루트를 찾을 수 없습니다.");
     }
 
-    const startLocation = normalizeRouteStartLocation(sourceRoute.startLocation);
+    const startLocation = normalizeRouteStartLocation(getSharedRouteStartLocation(sourceRoute));
     const sourceDays = sourceRoute.days.map((day) => ({
       ...day,
-      startLocation: normalizeRouteStartLocation(day.startLocation ?? startLocation),
+      startLocation: normalizeRouteStartLocation(getSharedDayStartLocation(sourceRoute, day) ?? startLocation),
     }));
 
     const route = await transaction.route.create({

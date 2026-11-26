@@ -228,6 +228,7 @@ export function useDayRoutePopupController({
     setOrderedStops,
   });
   const { isSharingRoute, shareRoute } = useRouteShareMutation(route.id);
+  const [shareConfirmationRouteId, setShareConfirmationRouteId] = useState<string | null>(null);
   const { isUpdatingRouteDayStart, updateRouteDayStart } =
     useRouteDayStartMutation();
   const { isUpdatingRouteStartDate, updateRouteStartDate } =
@@ -550,24 +551,6 @@ export function useDayRoutePopupController({
     showToast("인증 사진은 나만 볼 수 있게 저장했어요.");
   };
 
-  const handleShareRoute = () => {
-    if (isSharingRoute) {
-      return;
-    }
-
-    if (isRouteShared) {
-      navigate("/shared-route");
-      return;
-    }
-
-    if (!isRouteCompleted) {
-      showToast("모든 장소를 완료한 루트만 공유할 수 있어요.");
-      return;
-    }
-
-    shareRoute();
-  };
-
   /** 방문하지 않은 장소만 건너뛰거나 복원한다. 원래 순서와 방문 기록은 유지한다. */
   const handleToggleStopSkipped = (routeDay: MyRouteDay, stop: MyRouteStop) => {
     if (!canToggleSkipStatus || visitSavingStopId || isFinishingDay || isOrderEditing ||
@@ -600,8 +583,9 @@ export function useDayRoutePopupController({
     });
   };
 
+  /** 완료한 내 루트는 공개 출발지 확인을 열고, 이미 공유했다면 공개 목록으로 이동한다. */
   const handleRequestShareRoute = () => {
-    if (isSharingRoute) {
+    if (!route.isMine || isSharingRoute) {
       return;
     }
 
@@ -615,23 +599,7 @@ export function useDayRoutePopupController({
       return;
     }
 
-    openModal({
-      title: "이대로 공유할까요?",
-      description:
-        "한 번 공유하면 현재 앱에서는 직접 삭제하거나 공유를 되돌릴 수 없어요.",
-      detail:
-        "작성자 이름과 완료 일정이 공개돼요. 부적절한 내용은 신고 후 숨김 처리될 수 있고, 공개 사진은 운영자 승인 후 표시돼요.",
-      actions: [
-        { label: "취소", variant: "secondary" },
-        {
-          label: "동의하고 공유",
-          variant: "primary",
-          onClick: () => {
-            void handleShareRoute();
-          },
-        },
-      ],
-    });
+    setShareConfirmationRouteId(route.id);
   };
 
   const handleRequestDeleteDay = (targetDay: MyRouteDay) => {
@@ -935,6 +903,9 @@ export function useDayRoutePopupController({
       handleOpenMapForDay,
     },
     overlays: {
+      shareConfirmation: route.isMine && shareConfirmationRouteId === route.id
+        ? { route, days: sortedDays, onClose: () => setShareConfirmationRouteId(null), onShare: shareRoute }
+        : null,
       skippingOperation,
       mapTargetRouteDay,
       mapTargetDayOption,

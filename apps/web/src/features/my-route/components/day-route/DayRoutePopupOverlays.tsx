@@ -1,4 +1,4 @@
-/** DAY 팝업 controller의 지도·출발지·방문·사진·GPS 대상과 저장 진행 상태를 전용 팝업·대화상자·토스트로 연결한다. */
+/** DAY 팝업의 지도·출발지·공유·방문·사진·GPS와 저장 진행 상태를 전용 팝업·대화상자·토스트로 연결한다. */
 import RouteVisitProgressToast from "./RouteVisitProgressToast";
 import RouteSkippingProgressDialog from "./RouteSkippingProgressDialog";
 import { MdDragIndicator } from "react-icons/md";
@@ -7,6 +7,7 @@ import PlaceCartRouteMapPopup from "@/features/route-checkout/components/cart-st
 import StartLocationPickerPopup from "@/features/route-checkout/components/cart-steps/StartLocationPickerPopup";
 import type { DayRoutePopupController } from "../../hooks/useDayRoutePopupController";
 import GpsTestLocationPopup from "./GpsTestLocationPopup";
+import ShareRouteDialog from "./ShareRouteDialog";
 import {
   ActualStayMinutesPopup,
   DayStartTimePopup,
@@ -26,6 +27,7 @@ type DayRoutePopupOverlaysProps = {
 function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
   const text = useUiText();
   const {
+    shareConfirmation,
     skippingOperation,
     mapTargetRouteDay,
     mapTargetDayOption,
@@ -90,6 +92,7 @@ function DayRoutePopupOverlays({ controller }: DayRoutePopupOverlaysProps) {
 
   return (
     <>
+      {shareConfirmation ? <ShareRouteDialog key={shareConfirmation.route.id} {...shareConfirmation} /> : null}
       {skippingOperation ? <RouteSkippingProgressDialog operation={skippingOperation} /> : null}
       {visitProgress && visitSavingStopId === visitProgress.stopId ? (
         <RouteVisitProgressToast key={visitProgress.stopId} progress={visitProgress} />

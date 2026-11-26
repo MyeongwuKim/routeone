@@ -54,17 +54,26 @@ export async function getSavedRoutes(prisma: PrismaClient, user: User) {
       createdAt: "desc",
     },
   });
-  const routes = await Promise.all(
-    saves.map((save) =>
-      prisma.route.findUnique({
-        where: {
-          id: save.routeId,
-        },
-      })
-    )
-  );
+  if (!saves.length) return [];
 
-  return routes.filter((route): route is Route => Boolean(route));
+  const [blockedOwnerWhere, reportedRouteWhere] = await Promise.all([
+    getBlockedRouteOwnerWhere(prisma, user.id),
+    getReportedRouteWhere(prisma, user.id),
+  ]);
+  const routes = await prisma.route.findMany({
+    where: {
+      id: { in: saves.map(({ routeId }) => routeId) },
+      OR: [
+        { ownerId: user.id },
+        { visibility: "PUBLIC", ...blockedOwnerWhere, ...reportedRouteWhere },
+      ],
+    },
+  });
+  const routeById = new Map(routes.map((route) => [route.id, route]));
+  return saves.flatMap(({ routeId }) => {
+    const route = routeById.get(routeId);
+    return route ? [route] : [];
+  });
 }
 
 export async function getLikedRoutes(prisma: PrismaClient, user: User) {

@@ -8,11 +8,13 @@ import type {
 import { gql } from "graphql-tag";
 import type { GraphQLContext } from "../../context.js";
 import { requireUser } from "../../lib/auth.js";
+import { getBlockedUserIds } from "../user/userBlock.service.js";
+import { canReadRoute } from "./routeAccess.js";
 import {
-  getBlockedUserIds,
-  hasBlockedUser,
-} from "../user/userBlock.service.js";
-import { hasReportedSharedRoute } from "../moderation/sharedRouteReport.service.js";
+  getSharedDayStartLocation,
+  getSharedRouteStartLocation,
+  type ShareRouteStartLocationInput,
+} from "./routeSharedStartLocation.js";
 import {
   appendRouteDays,
   checkInRouteStop,
@@ -283,6 +285,11 @@ export const routeTypeDefs = gql`
     lng: Float!
   }
 
+  input ShareRouteStartLocationInput {
+    dayId: ID
+    startLocation: RouteStartLocationInput
+  }
+
   input RouteDayStartLocationInput {
     dayIndex: Int!
     startLocation: RouteStartLocationInput!
@@ -415,7 +422,7 @@ export const routeTypeDefs = gql`
       limit: Int
       cursor: String
     ): RouteConnection!
-    route(id: ID!): Route
+    route(id: ID!, sharedView: Boolean = false): Route
     placeStaySummary(place: PlaceSnapshotInput!): PlaceStaySummary!
     placeStaySummaries(places: [PlaceSnapshotInput!]!): [PlaceStaySummary!]!
     placePhotos(place: PlaceSnapshotInput!, limit: Int): [PlacePhoto!]!
@@ -455,7 +462,7 @@ export const routeTypeDefs = gql`
     updateRouteStopStayMinutes(input: UpdateRouteStopStayMinutesInput!): Route!
     updateRouteStopVisitTimes(input: UpdateRouteStopVisitTimesInput!): Route!
     clearRoute(routeId: ID!): Route!
-    shareRoute(routeId: ID!): Route!
+    shareRoute(routeId: ID!, startLocations: [ShareRouteStartLocationInput!]!): Route!
     likeRoute(routeId: ID!): RouteInteractionPayload!
     unlikeRoute(routeId: ID!): RouteInteractionPayload!
     saveRoute(routeId: ID!): RouteInteractionPayload!
@@ -594,11 +601,32 @@ function sanitizeRouteStopPhotoForViewer(
   };
 }
 
+// Propagate the shared view through nested GraphQL fields, including when the author opens the feed.
+const sharedView = Symbol("shared route view");
+type RouteView<T> = T & { [sharedView]?: true };
+
+function asSharedView<T>(value: T): RouteView<T> {
+  return { ...value, [sharedView]: true };
+}
+
+function isSharedView(route: RouteView<Route>, context: GraphQLContext) {
+  return route[sharedView] === true || route.ownerId !== context.user?.id;
+}
+
+function projectSharedDay(route: Route, day: RouteDay) {
+  return asSharedView({
+    ...day,
+    startLocation: route.visibility === "PUBLIC" ? getSharedDayStartLocation(route, day) : null,
+  });
+}
+
+/** 공유 정류장에는 장소 핀과 방문 표시 필드만 전달하고 인증 GPS는 개인 보기에서만 반환한다. */
 async function sanitizeRouteStopsForViewer(
   context: GraphQLContext,
   stops: RouteStop[],
   route: Pick<Route, "ownerId" | "visibility">,
-  viewerId: string | null
+  viewerId: string | null,
+  isShared: boolean
 ) {
   const photos = stops.length
     ? await context.prisma.placePhoto.findMany({
@@ -610,14 +638,41 @@ async function sanitizeRouteStopsForViewer(
     photos.map((photo) => [photo.routeStopId, photo.status])
   );
 
-  return stops.map((stop) =>
-    sanitizeRouteStopPhotoForViewer(
+  return stops.map((stop) => {
+    const resolved = sanitizeRouteStopPhotoForViewer(
       stop,
       route,
       viewerId,
       statusByStopId.get(stop.id) ?? null
-    )
-  );
+    );
+    if (!isShared) return resolved;
+
+    return asSharedView({
+      id: resolved.id,
+      routeId: resolved.routeId,
+      dayId: resolved.dayId,
+      order: resolved.order,
+      place: resolved.place,
+      stayMinutes: resolved.stayMinutes,
+      travelMinutesFromPrevious: resolved.travelMinutesFromPrevious,
+      memo: resolved.memo,
+      visitStatus: resolved.visitStatus,
+      visitedAt: resolved.visitedAt,
+      verificationStatus: resolved.verificationStatus,
+      verifiedAt: resolved.verifiedAt,
+      verificationPhotoImageId: resolved.verificationPhotoImageId,
+      verificationPhotoUrl: resolved.verificationPhotoUrl,
+      verificationPhotoPublicationConsent: resolved.verificationPhotoPublicationConsent,
+      verificationPhotoPublishedAt: resolved.verificationPhotoPublishedAt,
+      verificationPhotoPublicationStatus: resolved.verificationPhotoPublicationStatus,
+      checkedInAt: resolved.checkedInAt,
+      checkedOutAt: resolved.checkedOutAt,
+      actualStayMinutes: resolved.actualStayMinutes,
+      visitTimeEditedAt: resolved.visitTimeEditedAt,
+      createdAt: resolved.createdAt,
+      updatedAt: resolved.updatedAt,
+    });
+  });
 }
 
 type RouteIdArgs = {
@@ -673,9 +728,9 @@ export const routeResolvers = {
       const user = requireUser(context);
       return getSavedRoutes(context.prisma, user);
     },
-    likedRoutes(_parent: unknown, _args: unknown, context: GraphQLContext) {
+    async likedRoutes(_parent: unknown, _args: unknown, context: GraphQLContext) {
       const user = requireUser(context);
-      return getLikedRoutes(context.prisma, user);
+      return (await getLikedRoutes(context.prisma, user)).map(asSharedView);
     },
     async myRouteHistoryConnection(
       _parent: unknown,
@@ -692,71 +747,57 @@ export const routeResolvers = {
         today: args.today,
       });
     },
-    likedRouteConnection(
+    async likedRouteConnection(
       _parent: unknown,
       args: RouteConnectionArgs,
       context: GraphQLContext
     ) {
       const user = requireUser(context);
-      return getLikedRouteConnection(context.prisma, user, {
+      const connection = await getLikedRouteConnection(context.prisma, user, {
         regionTag: args.regionTag,
         limit: args.limit,
         cursor: args.cursor,
       });
+      return { ...connection, nodes: connection.nodes.map(asSharedView) };
     },
-    sharedRoutes(
+    async sharedRoutes(
       _parent: unknown,
       args: SharedRoutesArgs,
       context: GraphQLContext
     ) {
-      return getPublicRoutes(context.prisma, {
+      const routes = await getPublicRoutes(context.prisma, {
         viewerId: context.user?.id,
         regionCode: args.regionCode,
         regionTag: args.regionTag,
         limit: args.limit,
       });
+      return routes.map(asSharedView);
     },
-    sharedRouteConnection(
+    async sharedRouteConnection(
       _parent: unknown,
       args: RouteConnectionArgs,
       context: GraphQLContext
     ) {
-      return getPublicRouteConnection(context.prisma, {
+      const connection = await getPublicRouteConnection(context.prisma, {
         viewerId: context.user?.id,
         regionCode: args.regionCode,
         regionTag: args.regionTag,
         limit: args.limit,
         cursor: args.cursor,
       });
+      return { ...connection, nodes: connection.nodes.map(asSharedView) };
     },
-    async route(_parent: unknown, args: IdArgs, context: GraphQLContext) {
+    async route(_parent: unknown, args: IdArgs & { sharedView?: boolean }, context: GraphQLContext) {
       const route = await context.prisma.route.findUnique({
         where: {
           id: args.id,
         },
       });
 
-      if (!route) {
-        return null;
-      }
+      if (!route || (args.sharedView && route.visibility !== "PUBLIC") ||
+        !(await canReadRoute(context.prisma, route, context.user?.id))) return null;
 
-      if (route.visibility === "PUBLIC") {
-        if (
-          context.user &&
-          ((await hasBlockedUser(context.prisma, context.user.id, route.ownerId)) ||
-            (await hasReportedSharedRoute(
-              context.prisma,
-              context.user.id,
-              route.id
-            )))
-        ) {
-          return null;
-        }
-
-        return route;
-      }
-
-      return context.user?.id === route.ownerId ? route : null;
+      return args.sharedView ? asSharedView(route) : route;
     },
     placeStaySummary(
       _parent: unknown,
@@ -965,9 +1006,9 @@ export const routeResolvers = {
       const user = requireUser(context);
       return clearRoute(context.prisma, user, args.routeId);
     },
-    shareRoute(_parent: unknown, args: RouteIdArgs, context: GraphQLContext) {
+    shareRoute(_parent: unknown, args: RouteIdArgs & { startLocations: ShareRouteStartLocationInput[] }, context: GraphQLContext) {
       const user = requireUser(context);
-      return shareRoute(context.prisma, user, args.routeId);
+      return shareRoute(context.prisma, user, args.routeId, args.startLocations);
     },
     likeRoute(_parent: unknown, args: RouteIdArgs, context: GraphQLContext) {
       const user = requireUser(context);
@@ -1024,8 +1065,12 @@ export const routeResolvers = {
         },
       });
     },
-    days(parent: Route, _args: unknown, context: GraphQLContext) {
-      return context.prisma.routeDay.findMany({
+    startLocation(parent: RouteView<Route>, _args: unknown, context: GraphQLContext) {
+      if (!isSharedView(parent, context)) return parent.startLocation;
+      return parent.visibility === "PUBLIC" ? getSharedRouteStartLocation(parent) : null;
+    },
+    async days(parent: RouteView<Route>, _args: unknown, context: GraphQLContext) {
+      const days = await context.prisma.routeDay.findMany({
         where: {
           routeId: parent.id,
         },
@@ -1033,8 +1078,9 @@ export const routeResolvers = {
           dayIndex: "asc",
         },
       });
+      return isSharedView(parent, context) ? days.map((day) => projectSharedDay(parent, day)) : days;
     },
-    async stops(parent: Route, _args: unknown, context: GraphQLContext) {
+    async stops(parent: RouteView<Route>, _args: unknown, context: GraphQLContext) {
       const stops = await context.prisma.routeStop.findMany({
         where: {
           routeId: parent.id,
@@ -1048,12 +1094,13 @@ export const routeResolvers = {
         context,
         stops,
         parent,
-        context.user?.id ?? null
+        context.user?.id ?? null,
+        isSharedView(parent, context)
       );
     },
   },
   RouteDay: {
-    async stops(parent: RouteDay, _args: unknown, context: GraphQLContext) {
+    async stops(parent: RouteView<RouteDay>, _args: unknown, context: GraphQLContext) {
       const [route, stops] = await Promise.all([
         context.prisma.route.findUnique({
           where: {
@@ -1078,7 +1125,8 @@ export const routeResolvers = {
         context,
         stops,
         route,
-        context.user?.id ?? null
+        context.user?.id ?? null,
+        Boolean(parent[sharedView] || isSharedView(route, context))
       );
     },
   },
@@ -1096,16 +1144,19 @@ export const routeResolvers = {
     verificationStatus(parent: RouteStop) {
       return (parent.verificationStatus ?? "NONE") as RouteStopVerificationStatus;
     },
-    day(parent: RouteStop, _args: unknown, context: GraphQLContext) {
+    async day(parent: RouteView<RouteStop>, _args: unknown, context: GraphQLContext) {
       if (!parent.dayId) {
         return null;
       }
 
-      return context.prisma.routeDay.findUnique({
+      const day = await context.prisma.routeDay.findUnique({
         where: {
           id: parent.dayId,
         },
       });
+      if (!day || !parent[sharedView]) return day;
+      const route = await context.prisma.route.findUnique({ where: { id: day.routeId } });
+      return route ? projectSharedDay(route, day) : null;
     },
   },
 };

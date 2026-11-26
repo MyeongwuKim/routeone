@@ -21,7 +21,7 @@ export async function getBlockedUserIds(
 }
 
 export async function hasBlockedUser(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, "userBlock">,
   blockerId: string,
   blockedId: string
 ) {

@@ -89,6 +89,8 @@ model Route {
   moderationHiddenById String? @db.ObjectId
 
   startLocation RouteStartLocation?
+  /// 공유 확인에서 확정한 좌표. 기존 공유 루트는 값이 없으면 원래 출발지를 사용한다.
+  sharedStartLocations RouteSharedStartLocations?
 
   owner User        @relation(fields: [ownerId], references: [id])
   days  RouteDay[]
@@ -537,6 +539,16 @@ type PlaceSnapshot {
 type RouteStartLocation {
   lat Float
   lng Float
+}
+
+type RouteSharedStartLocations {
+  startLocation RouteStartLocation?
+  days          RouteSharedDayStartLocation[]
+}
+
+type RouteSharedDayStartLocation {
+  dayId         String
+  startLocation RouteStartLocation?
 }
 
 enum OAuthProvider {

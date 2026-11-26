@@ -1,0 +1,26 @@
+query SharedRouteById($id: ID!) {
+  route(id: $id, sharedView: true) {
+    ...RouteSummaryFields
+    owner {
+      ...SharedRouteOwnerFields
+    }
+    days {
+      id
+      routeId
+      dayIndex
+      date
+      plannedStartMinutes
+      startedAt
+      startLocation {
+        lat
+        lng
+      }
+      stops {
+        ...SharedRouteStopFields
+      }
+    }
+    stops {
+      ...SharedRouteStopFields
+    }
+  }
+}

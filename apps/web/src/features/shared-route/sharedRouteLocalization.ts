@@ -1,6 +1,7 @@
 /** 공유 경로의 장소를 번역 요청용 후보로 중복 제거하고 응답 제목·주소를 목록 또는 상세 경로 구조에 다시 합친다. */
-import type { RouteByIdQuery } from "@/generated/graphql";
+import type { SharedRouteByIdQuery } from "@/generated/graphql";
 import { getPlaceLocalizationId } from "@/lib/placeLocalization";
+import type { MyRouteStop } from "@/features/my-route/types";
 import type { SharedRoute } from "./sharedRouteCardModel";
 
 /** 번역 요청에서 같은 장소를 합치는 ID와 서버에 전달할 원문 장소 정보를 묶는다. */
@@ -22,7 +23,22 @@ type RouteStopWithLocalizablePlace = {
   };
 };
 
-export type SharedRouteDetail = NonNullable<RouteByIdQuery["route"]>;
+export type SharedRouteDetail = NonNullable<SharedRouteByIdQuery["route"]>;
+
+/** 공용 DAY 상세 UI에서 사용하는 개인 인증 필드는 공개 응답을 읽을 때 빈 값으로 채운다. */
+export function toSharedDayPopupRoute(route: SharedRouteDetail) {
+  const toPopupStop = (stop: SharedRouteDetail["stops"][number]): MyRouteStop => ({
+    ...stop,
+    verificationLat: null,
+    verificationLng: null,
+    verificationAccuracyMeters: null,
+  });
+  return {
+    ...route,
+    days: route.days.map((day) => ({ ...day, stops: day.stops.map(toPopupStop) })),
+    stops: route.stops.map(toPopupStop),
+  };
+}
 
 function addSharedRoutePlaceLocalizationCandidate(
   candidateById: Map<string, SharedRoutePlaceLocalizationCandidate>,

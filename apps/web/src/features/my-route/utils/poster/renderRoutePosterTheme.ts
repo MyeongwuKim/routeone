@@ -3,6 +3,7 @@
  * 동작 방식: 테마별 배경과 프레임을 그리고, 사진 원본과 방문 기록을 같은 좌표에 조합한다.
  */
 import type { RoutePosterThemeInput, RoutePosterThemeItem, RoutePosterThemeId } from "../../models/routePosterTheme";
+import { renderDayJournalHeader, renderDayJournalItinerary } from "./renderDayJournal";
 import { renderPosterVisits } from "./renderPosterVisits";
 import { getRoutePosterPhotoLayout, type PosterPhotoRect } from "./routePosterLayout";
 import { escapePosterText as xml, fitPosterText, renderPixelPosterText, renderPosterPhoto } from "./routePosterSvgParts";
@@ -23,7 +24,7 @@ function renderThemeBackground(input: RoutePosterThemeInput, colors: ThemePalett
   // 앨범 사진은 종이색과 섞어 은은하게 깔고, 문구 뒤의 바탕으로 가독성을 유지한다.
   const customTintOpacity = ["fantasy", "journal", "polaroid"].includes(input.themeId) ? 0.6 : isPixel ? 0.88 : 0.76;
   const custom = input.backgroundId === "custom" && input.backgroundImageDataUrl
-    ? `<image href="${xml(input.backgroundImageDataUrl)}" x="0" y="0" width="1080" height="1350" preserveAspectRatio="xMidYMid slice"/><rect width="1080" height="1350" fill="${base}" opacity="${customTintOpacity}"/>`
+    ? `<image href="${xml(input.backgroundImageDataUrl)}" x="0" y="0" width="1080" height="1350" preserveAspectRatio="xMidYMid slice"/><rect width="1080" height="1350" fill="${base}" opacity="${customTintOpacity}"/>${input.themeId === "journal" ? '<rect x="52" y="52" width="976" height="1246" rx="18" fill="#fffaf0" fill-opacity=".93"/>' : ""}`
     : "";
   const pattern = input.themeId === "blocks"
     ? `<pattern id="themeTexture" width="44" height="44" patternUnits="userSpaceOnUse"><circle cx="14" cy="17" r="10" fill="#315c6a" opacity=".12"/><circle cx="14" cy="14" r="10" fill="#ffffff" opacity=".30"/><path d="M7 13a7 7 0 0 1 10-5" stroke="#fff" stroke-width="2" opacity=".45" fill="none"/></pattern>`
@@ -33,11 +34,10 @@ function renderThemeBackground(input: RoutePosterThemeInput, colors: ThemePalett
   return `<defs>${pattern}</defs><rect width="1080" height="1350" fill="${base}"/>${custom}<rect width="1080" height="1350" fill="url(#themeTexture)"/>`;
 }
 
-function renderJournalShell(input: RoutePosterThemeInput) {
-  const polaroid = input.themeId === "polaroid";
-  return `<rect x="32" y="32" width="1016" height="1286" rx="${polaroid ? 20 : 0}" fill="#fffdf6" fill-opacity=".18" stroke="#bdb5a0" stroke-width="2"/>
+function renderPolaroidShell(input: RoutePosterThemeInput) {
+  return `<rect x="32" y="32" width="1016" height="1286" rx="20" fill="#fffdf6" fill-opacity=".18" stroke="#bdb5a0" stroke-width="2"/>
     <rect x="68" y="65" width="944" height="226" rx="10" fill="#fffdf6" fill-opacity=".94"/>
-    <text x="100" y="110" class="eyebrow" fill="#597366">${polaroid ? "A DAY TO REMEMBER" : "MY TRAVEL JOURNAL"}</text>
+    <text x="100" y="110" class="eyebrow" fill="#597366">A DAY TO REMEMBER</text>
     <text x="100" y="187" class="title" fill="#293c34">${xml(fitPosterText(input.title, 15.5))}</text>
     <text x="100" y="241" class="meta" fill="#69766e">DAY ${input.dayIndex} · ${xml(input.dateLabel ?? "TRAVEL MEMORY")} · ${input.stopCount}곳의 기록</text>
     <rect x="84" y="1135" width="912" height="96" rx="8" fill="#fffdf6" fill-opacity=".94"/>
@@ -110,7 +110,9 @@ function renderPhotoFrame(item: RoutePosterThemeItem, rect: PosterPhotoRect, ind
       ${Array.from({length: Math.floor((width - 35) / 32)}, (_,i)=>`<circle cx="${x + 24 + i * 32}" cy="${y + 7}" r="4" fill="#fff" opacity=".45"/>`).join("")}`;
   } else if (theme === "pixel") {
     frame = `<g shape-rendering="crispEdges"><rect x="${x + 8}" y="${y + 8}" width="${width}" height="${height}" fill="#0c1729"/><rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#344159" stroke="#869bb0" stroke-width="7"/><path d="M${x + 5} ${y + height - 6}V${y + 6}H${x + width - 6}" stroke="#c9d5e0" stroke-width="3" opacity=".2" fill="none"/></g>`;
-  } else if (theme === "journal" || theme === "polaroid") {
+  } else if (theme === "journal") {
+    frame = `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="8" fill="#fffaf0"/>`;
+  } else if (theme === "polaroid") {
     frame = `<rect x="${x + 4}" y="${y + 7}" width="${width}" height="${height}" fill="#524735" opacity=".10"/><rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#fffdf8" stroke="#d8d0bf" stroke-width="2"/>`;
   } else {
     frame = `<rect x="${x + 4}" y="${y + 7}" width="${width}" height="${height}" fill="#785630" opacity=".12"/><rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#fcf2da" stroke="#bca06a" stroke-width="3"/>`;
@@ -131,13 +133,18 @@ export function renderRoutePosterTheme(input: RoutePosterThemeInput) {
   const visitHeight = visits.length ? (hasPhotos ? 94 + Math.ceil(visits.length / 2) * 64 : 766) : 0;
   const photoArea = { x: 84, y: 326, width: 912, height: 766 - (hasPhotos && visitHeight ? visitHeight + 24 : 0) };
   const layouts = getRoutePosterPhotoLayout(input.items.length, input.themeId, photoArea);
-  const shell = input.themeId === "blocks" ? renderBlockShell(input, colors)
-    : input.themeId === "pixel" ? renderPixelShell(input, colors) : input.themeId === "fantasy" ? renderFantasyShell(input) : renderJournalShell(input);
+  const shell = input.themeId === "journal" ? renderDayJournalHeader(input)
+    : input.themeId === "blocks" ? renderBlockShell(input, colors)
+    : input.themeId === "pixel" ? renderPixelShell(input, colors)
+    : input.themeId === "fantasy" ? renderFantasyShell(input) : renderPolaroidShell(input);
+  const visitsMarkup = input.themeId === "journal" && !hasPhotos
+    ? renderDayJournalItinerary(visits, photoArea.y, visitHeight)
+    : renderPosterVisits(visits, hasPhotos ? 1092 - visitHeight : 326, visitHeight, hasPhotos, input.themeId === "pixel");
   const font = input.themeId === "fantasy" ? 'Georgia, "Apple SD Gothic Neo", serif' : input.themeId === "pixel" ? 'ui-monospace, "Apple SD Gothic Neo", monospace' : '-apple-system, "Apple SD Gothic Neo", sans-serif';
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350" data-poster-theme="${input.themeId}">
     <style>text{font-family:${font}}.title{font-size:56px;font-weight:900}.eyebrow{font-size:24px;font-weight:800;letter-spacing:3px}.meta{font-size:26px;font-weight:600}.footer{font-size:29px;font-weight:700}.brand{font-size:21px;font-weight:700;letter-spacing:2px}</style>
     ${renderThemeBackground(input, colors)}${shell}
-    ${renderPosterVisits(visits, hasPhotos ? 1092 - visitHeight : 326, visitHeight, hasPhotos, input.themeId === "pixel")}
+    ${visitsMarkup}
     ${input.items.map((item,index)=>renderPhotoFrame(item,layouts[index],index,input.themeId,input.dayIndex)).join("")}
     ${input.pageCount > 1 ? `<text x="980" y="1300" text-anchor="end" font-size="20" fill="${input.themeId === "pixel" ? "#becbdb" : "#677568"}">${input.pageIndex} / ${input.pageCount}</text>` : ""}
   </svg>`;

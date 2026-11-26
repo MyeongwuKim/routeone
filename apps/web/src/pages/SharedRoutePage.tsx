@@ -69,6 +69,7 @@ import {
   getSharedRoutePlaceLocalizationCandidates,
   getSharedRoutePlaceLocalizationKey,
   localizeRouteDetailPlaces,
+  toSharedDayPopupRoute,
   localizeSharedRoutePlaces,
 } from "@/features/shared-route/sharedRouteLocalization";
 import {
@@ -508,7 +509,7 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
         throw new Error(text.sharedRoute.selectedRouteMissing);
       }
 
-      const result = await routeApi.routeById(selectedRouteId);
+      const result = await routeApi.sharedRouteById(selectedRouteId);
 
       if (!result.route) {
         throw new Error(text.sharedRoute.routeNotFound);
@@ -578,12 +579,13 @@ function SharedRoutePage({ mode = "feed" }: SharedRoutePageProps) {
     () => {
       const routeWithLikes = selectedRoute ? applyLikeState(selectedRoute) : null;
 
-      return appLanguage === "en"
+      const localizedRoute = appLanguage === "en"
         ? localizeRouteDetailPlaces(
             routeWithLikes,
             selectedRouteLocalizedPlaces
           )
         : routeWithLikes;
+      return localizedRoute ? toSharedDayPopupRoute(localizedRoute) : null;
     },
     [appLanguage, applyLikeState, selectedRoute, selectedRouteLocalizedPlaces]
   );

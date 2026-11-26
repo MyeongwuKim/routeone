@@ -8,6 +8,7 @@ export type CloudflareImage = {
   filename?: string;
   uploaded?: string;
   draft?: boolean;
+  variants?: string[];
   meta?: Record<string, unknown>;
 };
 
@@ -31,6 +32,9 @@ function readImage(value: unknown): CloudflareImage {
     filename: typeof value.filename === "string" ? value.filename : undefined,
     uploaded: typeof value.uploaded === "string" ? value.uploaded : undefined,
     draft: value.draft === true,
+    variants: Array.isArray(value.variants)
+      ? value.variants.filter((variant): variant is string => typeof variant === "string")
+      : undefined,
     meta: isRecord(meta) ? meta : undefined,
   };
 }

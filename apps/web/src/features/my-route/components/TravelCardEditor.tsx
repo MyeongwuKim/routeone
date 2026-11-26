@@ -1,11 +1,36 @@
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import { MdAutorenew, MdClose, MdDownload, MdPhotoLibrary, MdShare } from "react-icons/md";
+import { MdAutorenew, MdClose, MdDownload, MdImageNotSupported, MdPhotoLibrary, MdShare } from "react-icons/md";
 import type { useTravelCardEditor } from "../hooks/useTravelCardEditor";
+import { getTravelCardPhotoFrames } from "../services/travelCardRenderer";
 import type { MyRoute } from "../types";
 import TravelCardPhotoEditor from "./TravelCardPhotoEditor";
 
 type Props = { controller: ReturnType<typeof useTravelCardEditor>; onOpenDayCards?: (route: MyRoute) => void };
+
+/** 완성 카드와 같은 비율과 사진 배치를 사용해 준비 중에도 미리보기 위치를 유지한다. */
+function TravelCardPreviewLoading({ label, photoCount = 4 }: { label: string; photoCount?: number }) {
+  return (
+    <>
+      <div aria-hidden="true" className="absolute inset-0">
+        {getTravelCardPhotoFrames(photoCount).map(({ x, y, width, height }, index) => (
+          <div
+            key={x + ":" + y}
+            className={`rounded-[5px] bg-[#e4ebe0] dark:bg-[#304b41] ${index === 0 ? "skeleton-shimmer" : ""}`}
+            style={{
+              left: `${x / 1080 * 100}%`, top: `${y / 1350 * 100}%`,
+              width: `${width / 1080 * 100}%`, height: `${height / 1350 * 100}%`,
+              position: "absolute",
+            }}
+          />
+        ))}
+      </div>
+      <p role="status" className="absolute inset-x-[5%] top-[77%] text-sm font-semibold text-[#315449] dark:text-brand-100">
+        {label}
+      </p>
+    </>
+  );
+}
 
 /** 다녀온 루트의 대표 카드를 편집·확인하는 전용 화면이다. 세션이 닫히거나 계정이 바뀌면 즉시 제거한다. */
 export default function TravelCardEditor(props: Props) {
@@ -48,7 +73,7 @@ function TravelCardEditorDialog({ controller, onOpenDayCards }: Props) {
   const titleError = image?.errors.title === "empty" ? text.titleEmpty : image?.errors.title === "long" ? text.titleLong : null;
   const captionError = image?.errors.caption ? text.captionLong : null;
   const canExport = Boolean(image?.dataUrl && !renderError && !isPicking && !exporting);
-  const loading = isRendering || isPicking || Boolean(exporting);
+  const showPreviewLoading = !session.loadError && (!draft || (isRendering && draft.photos.length > 0));
   const buttonClass = "inline-flex min-h-12 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-45";
 
   return createPortal(<dialog ref={dialog} aria-labelledby={titleId} aria-modal="true" onCancel={event => { event.preventDefault(); close(); }}
@@ -66,28 +91,36 @@ function TravelCardEditorDialog({ controller, onOpenDayCards }: Props) {
         </div>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-        {!draft ? <div className="mx-auto flex min-h-80 max-w-sm flex-col items-center justify-center gap-4 px-6 text-center" role={session.loadError ? "alert" : "status"}>
-          {!session.loadError ? <MdAutorenew aria-hidden="true" className="animate-spin text-3xl text-brand-700 motion-reduce:animate-none dark:text-brand-200" /> : null}
-          <p className="text-sm font-semibold">{session.loadError ? text.loadError : text.preparing}</p>
-          {session.loadError ? <button type="button" className={`${buttonClass} flex-none bg-brand-700 text-white`} onClick={() => void open(session.route)}>{text.retry}</button> : null}
-        </div> : <div className="mx-auto grid max-w-5xl gap-7 px-5 py-6 md:grid-cols-2 md:gap-12 md:px-8 md:py-8">
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]">
+        <div className="mx-auto grid max-w-5xl gap-7 px-5 py-6 md:grid-cols-2 md:gap-12 md:px-8 md:py-8">
           <div className="min-w-0 md:sticky md:top-8 md:self-start">
-            <div className="relative mx-auto aspect-[4/5] w-full max-w-[360px] overflow-hidden rounded-xl bg-[#fffcf5] shadow-[0_12px_32px_rgba(18,62,53,0.13)]" aria-busy={isRendering}>
-              {image?.dataUrl ? <img src={image.dataUrl} alt={text.preview} className="size-full object-contain" /> : <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-[#46625a]">
-                {isRendering ? <MdAutorenew aria-hidden="true" className="animate-spin text-3xl motion-reduce:animate-none" /> : <MdPhotoLibrary aria-hidden="true" className="text-4xl" />}
-                <p className="text-sm font-bold">{isRendering ? text.working : titleError ?? captionError ?? (renderError ? text.renderError : text.noPhotos)}</p>
-                {!draft.photos.length ? <p className="text-xs leading-relaxed">{text.noPhotosHint}</p> : null}
-              </div>}
+            <div className={`relative mx-auto aspect-[4/5] w-full max-w-[360px] overflow-hidden rounded-xl bg-[#fffcf5] shadow-[0_12px_32px_rgba(18,62,53,0.13)] ${!image?.dataUrl ? "dark:bg-[#17332b]" : ""}`}>
+              {image?.dataUrl ? (
+                <img src={image.dataUrl} alt={text.preview} className="size-full object-contain" />
+              ) : showPreviewLoading ? (
+                <TravelCardPreviewLoading label={draft ? text.working : text.preparing} photoCount={draft?.photos.length} />
+              ) : session.loadError ? (
+                <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+                  <MdImageNotSupported aria-hidden="true" className="text-3xl text-brand-800 dark:text-brand-200" />
+                  <p role="alert" className="text-sm font-bold">{text.loadError}</p>
+                  <button type="button" className={`${buttonClass} flex-none bg-brand-700 text-white hover:bg-brand-800`} onClick={() => void open(session.route)}>{text.retry}</button>
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-[#46625a] dark:text-brand-100">
+                  <MdPhotoLibrary aria-hidden="true" className="text-4xl" />
+                  <p className="text-sm font-bold">{titleError ?? captionError ?? (renderError ? text.renderError : text.noPhotos)}</p>
+                  {draft?.photos.length === 0 ? <p className="text-xs leading-relaxed">{text.noPhotosHint}</p> : null}
+                </div>
+              )}
             </div>
             {renderError || image?.errors.photos === "failed" || image?.missingPhotoIds.length ? <div className="mx-auto mt-4 max-w-[360px] text-sm text-rose-700 dark:text-rose-200" role="alert">
               <p>{renderError ? text.renderError : text.missing}</p>
               <button type="button" onClick={retry} className="mt-1 min-h-11 font-bold underline underline-offset-4">{text.retry}</button>
             </div> : null}
-            {!draft.photos.length && onOpenDayCards ? <button type="button" className="mx-auto mt-3 block min-h-11 text-sm font-bold text-brand-800 underline underline-offset-4 dark:text-brand-100" onClick={() => { close(); onOpenDayCards(session.route); }}>{text.dayCards}</button> : null}
+            {draft?.photos.length === 0 && onOpenDayCards ? <button type="button" className="mx-auto mt-3 block min-h-11 text-sm font-bold text-brand-800 underline underline-offset-4 dark:text-brand-100" onClick={() => { close(); onOpenDayCards(session.route); }}>{text.dayCards}</button> : null}
           </div>
 
-          <div className="min-w-0 space-y-7 pb-2">
+          {draft ? <div className="min-w-0 space-y-7 pb-2">
             <div className="space-y-4">
               <label className="block text-sm font-bold" htmlFor={`${titleId}-input`}>{text.titleLabel}</label>
               <input id={`${titleId}-input`} type="text" value={draft.title} disabled={Boolean(exporting)} aria-invalid={Boolean(titleError)} aria-describedby={titleError ? errorTitleId : undefined}
@@ -101,12 +134,23 @@ function TravelCardEditorDialog({ controller, onOpenDayCards }: Props) {
               {captionError ? <p id={errorCaptionId} role="alert" className="text-xs font-semibold text-rose-700 dark:text-rose-200">{captionError}</p> : null}
             </div>
             <TravelCardPhotoEditor controller={controller} />
-          </div>
-        </div>}
+          </div> : !session.loadError ? (
+            <div aria-hidden="true" className="hidden min-w-0 space-y-5 md:block">
+              <div className="space-y-2">
+                <div className="h-3 w-20 rounded-full bg-brand-100 dark:bg-white/10" />
+                <div className="h-12 rounded-xl bg-brand-100/60 dark:bg-white/5" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-3 w-24 rounded-full bg-brand-100 dark:bg-white/10" />
+                <div className="h-12 rounded-xl bg-brand-100/60 dark:bg-white/5" />
+              </div>
+            </div>
+          ) : null}
+        </div>
       </main>
 
       <footer className="shrink-0 border-t border-brand-100 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 dark:border-white/10 dark:bg-[#102a25]">
-        <p className="sr-only" role="status">{loading ? isPicking ? text.loadingPhoto : text.working : ""}</p>
+        <p className="sr-only" role="status">{isPicking ? text.loadingPhoto : exporting ? text.working : ""}</p>
         <div className="mx-auto flex max-w-lg gap-3">
           <button type="button" disabled={!canExport} onClick={() => void exportImage("save")} className={`${buttonClass} border border-brand-200 text-brand-800 hover:bg-brand-50 dark:border-brand-400/30 dark:text-brand-100 dark:hover:bg-white/5`}>
             {exporting === "save" ? <MdAutorenew aria-hidden="true" className="animate-spin text-xl motion-reduce:animate-none" /> : <MdDownload aria-hidden="true" className="text-xl" />}{text.save}

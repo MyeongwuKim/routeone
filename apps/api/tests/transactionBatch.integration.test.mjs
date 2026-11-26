@@ -120,7 +120,8 @@ test("MongoDB transaction batches preserve data and roll back together", { skip:
         placeKey: "old", provider: "CUSTOM", title: "old", lat: 37, lng: 127, userId: user.id,
         routeId: r.id, routeStopId: stopIds[2], routeDayId: day.id, imageUrl: "https://example.com/old.jpg",
       } });
-      const shared = await measured("share 8 stops", api => shareRoute(api, user, r.id), 5);
+      const confirmedStarts = [{ dayId: day.id, startLocation: null }];
+      const shared = await measured("share 8 stops", api => shareRoute(api, user, r.id, confirmedStarts), 8);
       assert.equal(shared.visibility, "PUBLIC");
       assert.equal(shared.totalStopCount, 8);
       assert.equal(shared.completedStopCount, 8);
@@ -133,7 +134,7 @@ test("MongoDB transaction batches preserve data and roll back together", { skip:
       assert.equal(byStop.get(stopIds[0]).routeDayId, day.id);
       assert.deepEqual(byStop.get(stopIds[0]).publishedAt, verifiedAt);
       assert.equal(byStop.get(stopIds[1]).publishedAt, null);
-      await measured("share replay", api => shareRoute(api, user, r.id), 5);
+      await measured("share replay", api => shareRoute(api, user, r.id, confirmedStarts), 7);
       const repeated = await tx.placePhoto.findUnique({ where: { routeStopId: stopIds[0] } });
       assert.equal(repeated.id, byStop.get(stopIds[0]).id);
       assert.deepEqual(repeated.createdAt, byStop.get(stopIds[0]).createdAt);

@@ -719,6 +719,14 @@ export type UiText = {
     moreTags: (count: number) => string;
   };
   dayRoute: {
+    shareConfirmTitle: string;
+    sharedStartLocationNotice: string;
+    sharedStartLocation: string;
+    noSharedStartLocation: string;
+    editSharedStartLocation: string;
+    shareConfirmDetails: string;
+    shareConfirmAction: string;
+    shareConfirmFailed: string;
     skipStop: string;
     undoSkipStop: string;
     skippingStop: string;

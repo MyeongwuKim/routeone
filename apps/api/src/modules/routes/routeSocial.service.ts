@@ -3,7 +3,9 @@
  * 일정 공유와 좋아요·저장 상태를 관리한다.
  * 공유 시 진행 상태와 사진 공개 상태를 같은 트랜잭션에서 함께 반영한다.
  */
-import { Prisma, type PrismaClient, type User } from "@prisma/client";
+import type { Prisma, PrismaClient, Route, User } from "@prisma/client";
+import { runTransactionWithRetry } from "../../lib/transaction.js";
+import { canReadRoute } from "./routeAccess.js";
 import { UserFacingError } from "../../graphql/userFacingError.js";
 import { assertSharedRouteCanBePublished } from "../moderation/sharedRouteReport.service.js";
 import {
@@ -15,18 +17,14 @@ import {
 import {
   syncPlacePhotosForRouteShare,
 } from "./routeVisit.service.js";
+import { createSharedStartLocations, type ShareRouteStartLocationInput } from "./routeSharedStartLocation.js";
 
-function isUniqueConstraintError(error: unknown) {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2002"
-  );
-}
-
+/** 출발지 확인값과 공개 상태를 함께 저장하며 다시 요청해도 먼저 공개한 좌표를 유지한다. */
 export async function shareRoute(
   prisma: PrismaClient,
   user: User,
-  routeId: string
+  routeId: string,
+  startLocations: ShareRouteStartLocationInput[]
 ) {
   return prisma.$transaction(async (transaction) => {
     await assertSharedRouteCanBePublished(transaction, routeId);
@@ -38,11 +36,19 @@ export async function shareRoute(
     if (progress.status !== "COMPLETED") {
       throw new UserFacingError("완료한 루트만 공유할 수 있습니다.");
     }
+    const sharedStartLocations = route.visibility === "PUBLIC"
+      ? route.sharedStartLocations
+      : createSharedStartLocations(await transaction.routeDay.findMany({
+          where: { routeId },
+          select: { id: true },
+          orderBy: { dayIndex: "asc" },
+        }), startLocations);
     const sharedRoute = await transaction.route.update({
       where: { id: routeId },
       data: {
         ...progress,
         visibility: "PUBLIC",
+        ...(sharedStartLocations ? { sharedStartLocations } : {}),
         sharedAt: route.sharedAt ?? new Date(),
         shareTags: buildRouteShareTags({ ...route, ...progress }, stops),
       },
@@ -52,138 +58,74 @@ export async function shareRoute(
   });
 }
 
-async function readRouteInteraction(
-  prisma: PrismaClient,
+/** 상호작용을 저장하기 전에 상세 조회와 같은 접근 조건을 확인한다. */
+async function requireReadableRoute(
+  transaction: Prisma.TransactionClient,
   userId: string,
   routeId: string
 ) {
-  const [route, like, save] = await Promise.all([
-    prisma.route.findUnique({
-      where: {
-        id: routeId,
-      },
-    }),
-    prisma.routeLike.findUnique({
-      where: {
-        userId_routeId: {
-          userId,
-          routeId,
-        },
-      },
-    }),
-    prisma.routeSave.findUnique({
-      where: {
-        userId_routeId: {
-          userId,
-          routeId,
-        },
-      },
-    }),
-  ]);
-
-  if (!route) {
+  const route = await transaction.route.findUnique({ where: { id: routeId } });
+  if (!route || !(await canReadRoute(transaction, route, userId))) {
     throw new UserFacingError("루트를 찾을 수 없습니다.");
   }
-
-  return {
-    route,
-    liked: Boolean(like),
-    saved: Boolean(save),
-  };
 }
 
+async function readRouteInteraction(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  route: Route
+) {
+  const key = { userId_routeId: { userId, routeId: route.id } };
+  const [like, save] = await Promise.all([
+    transaction.routeLike.findUnique({ where: key }),
+    transaction.routeSave.findUnique({ where: key }),
+  ]);
+
+  return { route, liked: Boolean(like), saved: Boolean(save) };
+}
+
+/** 읽을 수 있는 루트의 좋아요와 집계만 같은 트랜잭션에서 저장한다. */
 export async function setRouteLike(
   prisma: PrismaClient,
   user: User,
   routeId: string,
   liked: boolean
 ) {
-  if (liked) {
-    try {
-      await prisma.routeLike.create({
-        data: {
-          userId: user.id,
-          routeId,
-        },
-      });
-    } catch (error) {
-      if (!isUniqueConstraintError(error)) {
-        throw error;
-      }
+  return runTransactionWithRetry(prisma, async (transaction) => {
+    await requireReadableRoute(transaction, user.id, routeId);
+    const key = { userId: user.id, routeId };
+    if (liked) {
+      const existing = await transaction.routeLike.findUnique({ where: { userId_routeId: key } });
+      if (!existing) await transaction.routeLike.create({ data: key });
+    } else {
+      await transaction.routeLike.deleteMany({ where: key });
     }
-  }
 
-  if (!liked) {
-    await prisma.routeLike.deleteMany({
-      where: {
-        userId: user.id,
-        routeId,
-      },
-    });
-  }
-
-  const likeCount = await prisma.routeLike.count({
-    where: {
-      routeId,
-    },
+    const likeCount = await transaction.routeLike.count({ where: { routeId } });
+    const route = await transaction.route.update({ where: { id: routeId }, data: { likeCount } });
+    return readRouteInteraction(transaction, user.id, route);
   });
-
-  await prisma.route.update({
-    where: {
-      id: routeId,
-    },
-    data: {
-      likeCount,
-    },
-  });
-
-  return readRouteInteraction(prisma, user.id, routeId);
 }
 
+/** 읽을 수 있는 루트의 저장 여부와 집계만 같은 트랜잭션에서 저장한다. */
 export async function setRouteSave(
   prisma: PrismaClient,
   user: User,
   routeId: string,
   saved: boolean
 ) {
-  if (saved) {
-    try {
-      await prisma.routeSave.create({
-        data: {
-          userId: user.id,
-          routeId,
-        },
-      });
-    } catch (error) {
-      if (!isUniqueConstraintError(error)) {
-        throw error;
-      }
+  return runTransactionWithRetry(prisma, async (transaction) => {
+    await requireReadableRoute(transaction, user.id, routeId);
+    const key = { userId: user.id, routeId };
+    if (saved) {
+      const existing = await transaction.routeSave.findUnique({ where: { userId_routeId: key } });
+      if (!existing) await transaction.routeSave.create({ data: key });
+    } else {
+      await transaction.routeSave.deleteMany({ where: key });
     }
-  }
 
-  if (!saved) {
-    await prisma.routeSave.deleteMany({
-      where: {
-        userId: user.id,
-        routeId,
-      },
-    });
-  }
-
-  const saveCount = await prisma.routeSave.count({
-    where: {
-      routeId,
-    },
+    const saveCount = await transaction.routeSave.count({ where: { routeId } });
+    const route = await transaction.route.update({ where: { id: routeId }, data: { saveCount } });
+    return readRouteInteraction(transaction, user.id, route);
   });
-
-  await prisma.route.update({
-    where: {
-      id: routeId,
-    },
-    data: {
-      saveCount,
-    },
-  });
-
-  return readRouteInteraction(prisma, user.id, routeId);
 }

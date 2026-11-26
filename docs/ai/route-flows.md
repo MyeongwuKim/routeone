@@ -48,4 +48,7 @@
 
 - `/shared-route`는 비로그인 상태에서도 진입한다. `apps/web/src/pages/SharedRoutePage.tsx`가 지역·필터 조건에 따라 목록 페이지와 상세를 가져온다. 필터와 찜 상태는 `apps/web/src/features/shared-route/`, 내 정보의 찜한 목록은 `apps/web/src/features/shared-route/pages/LikedSharedRoutePage.tsx`에서 찾는다.
 - 서버 목록과 상세의 공개 범위 및 사용자 차단 조건은 `apps/api/src/modules/routes/routeQuery.service.ts`, 공유 공개와 찜·저장 처리는 `apps/api/src/modules/routes/routeSocial.service.ts`에서 확인한다. 공개 설정이나 차단 조건을 바꾸면 목록뿐 아니라 ID를 통한 상세와 찜한 목록에도 같은 규칙이 적용되는지 확인한다.
+- 상세 조회, 좋아요·저장 변경과 복사는 `routeAccess.ts`의 접근 조건을 공유한다. 좋아요·저장 변경은 권한 확인과 집계를 함께 저장하고, 저장 목록은 현재 보이지 않는 루트를 제외한다.
+- 공개 목록·상세·찜에서 장소 핀과 방문 상태는 유지하고, `route.resolver.ts`가 방문 인증 위도·경도·정확도를 공개 응답에서 제외한다. `shared-route-by-id.graphql`도 해당 필드를 요청하지 않는다. 소유자의 내 루트는 인증 정보와 원래 출발지를 사용한다.
+- 내 루트의 DAY 상세에서 공유를 누르면 `ShareRouteDialog.tsx`가 DAY별 공개 출발지를 확인한다. 지도 편집값은 대화상자에만 보관하고 최종 동의 때 `shareRoute`에 보낸다. 서버는 공개 상태와 공개 출발지를 함께 저장하며, 이전 공유 루트에 공개 출발지 값이 없으면 기존 출발지를 표시한다.
 - `useSharedRouteLike.ts`는 찜 요청 전에 목록·상세 캐시를 갱신한다. 수정 시 공유 목록, 상세, 내 정보의 찜 목록에 표시가 일치하는지와 요청 실패 시 원복을 확인한다. 공유 루트로 일정 만들기를 선택하면 `SharedRoutePage.tsx`가 원본을 바탕으로 편집용 일정을 만들어 `RouteCheckoutModal`에 넘긴다. 이 흐름을 바꾸면 저장할 때 원본 루트가 변경되지 않는지 확인한다.

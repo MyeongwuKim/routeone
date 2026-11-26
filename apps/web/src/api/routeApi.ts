@@ -31,6 +31,7 @@ import {
   SetRouteStopSkippedDocument,
   ShareRouteDocument,
   SharedRoutesDocument,
+  SharedRouteByIdDocument,
   SharedRouteConnectionDocument,
   StartRouteDocument,
   UnlikeRouteDocument,
@@ -49,6 +50,7 @@ import {
   type PlacePhotoReportReason,
   type ReorderRouteStopsInput,
   type RouteStopVisitVerificationInput,
+  type ShareRouteStartLocationInput,
   type SharedRoutesQueryVariables,
   type StartRouteInput,
   type UpdateRouteStopStayMinutesInput,
@@ -108,6 +110,10 @@ export const routeApi = {
     return requestGraphQL(RouteByIdDocument, {
       id,
     });
+  },
+  /** 공유 화면에 필요한 상세와 공개용 출발지를 조회한다. */
+  sharedRouteById(id: RouteId) {
+    return requestGraphQL(SharedRouteByIdDocument, { id });
   },
   placeStaySummary(place: PlaceSnapshotInput) {
     return requestGraphQL(PlaceStaySummaryDocument, {
@@ -283,9 +289,10 @@ export const routeApi = {
       routeId,
     });
   },
-  shareRoute(routeId: RouteId) {
+  shareRoute(routeId: RouteId, startLocations: ShareRouteStartLocationInput[]) {
     return requestGraphQL(ShareRouteDocument, {
       routeId,
+      startLocations,
     });
   },
   likeRoute(routeId: RouteId) {
