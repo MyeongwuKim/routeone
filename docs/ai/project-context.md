@@ -41,9 +41,12 @@
 | `pnpm api:local` | API에 `apps/api/.env`를 적용한다. |
 | `pnpm api:dev` | API에 `apps/api/.env.development`를 우선 적용하고 없는 값은 `apps/api/.env`에서 채운다. 이미 설정된 프로세스 환경변수는 유지한다. |
 | `pnpm native:ios:local` | `apps/native/.env`를 사용해 iOS 로컬 설정과 WebView 번들을 준비하고 Expo로 실행한다. |
-| `pnpm native:ios:dev` | `apps/native/.env.development`를 사용해 개발용 iOS 네이티브 프로젝트와 번들을 준비한다. |
+| `pnpm native:ios:dev` | `apps/native/.env.development`로 개발용 프로젝트와 번들을 준비하고 Xcode에서 `MasilT.xcworkspace`를 다시 연다. |
+| `pnpm native:ios:prod` | `apps/native/.env.production`으로 운영용 프로젝트와 번들을 준비하고 Xcode에서 `Masil.xcworkspace`를 다시 연다. |
 
 API 환경 선택은 `apps/api/src/lib/serverEnv.ts`에서 확인한다. iOS 환경과 번들 생성은 `apps/native/scripts/run-ios-local.mjs`, `apps/native/scripts/prebuild-ios.mjs`, `apps/native/scripts/sync-web-build.mjs`에서 확인한다. 시뮬레이터 화면이 웹 개발 서버와 다르면 앱이 실행 중인 WebView 번들과 브릿지가 가리키는 API를 각각 확인한다. 네이티브 앱의 `EXPO_PUBLIC_API_URL`은 `fetchBridge.ts`에서 사용한다.
+
+dev와 prod를 전환할 때 이전 `ios/` 프로젝트를 `apps/native/.expo/ios-projects/`에 보관하고, 요청한 환경의 프로젝트를 복원하거나 새로 만든다. 같은 환경을 다시 실행하면 현재 프로젝트를 갱신한다. Xcode 자동화 권한을 허용하면 현재 저장소의 열린 iOS 워크스페이스를 닫고 준비된 워크스페이스를 다시 연다.
 
 다른 프로젝트와 로컬 API 포트가 겹치면 `apps/api/.env`의 `PORT`, `apps/native/.env`의 `EXPO_PUBLIC_GRAPHQL_ENDPOINT`(우선) 또는 `EXPO_PUBLIC_API_URL`, `apps/web/.env`의 `VITE_GRAPHQL_PROXY_TARGET`을 같은 마실 API 포트로 맞춘다. 서버가 HTTP 200을 반환해도 다른 프로젝트일 수 있으므로 `homeTourCourses`와 `loginWithNativeOAuth`가 해당 GraphQL 스키마에 있는지 확인한다. Native 환경값을 바꿨으면 Metro를 재시작하고 앱을 다시 불러온다. Xcode 빌드 환경은 `node apps/native/scripts/sync-xcode-env.mjs .env none`으로 함께 맞춘다.
 
