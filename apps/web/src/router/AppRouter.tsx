@@ -8,7 +8,9 @@
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
+  useState,
   type ComponentType,
   type LazyExoticComponent,
   type ReactNode,
@@ -22,6 +24,7 @@ import {
   Route,
   Routes,
   useLocation,
+  useMatch,
   useNavigate,
 } from "react-router-dom";
 import { FaHeart } from "react-icons/fa";
@@ -38,6 +41,7 @@ import {
   MdPhotoLibrary,
   MdPolicy,
 } from "react-icons/md";
+import NativeWebBundleReadySignal from "@/components/NativeWebBundleReadySignal";
 import { AppLoadingCard } from "@/components/feedback/AppLoadingOverlay";
 import LoginRequiredCard from "@/components/auth/LoginRequiredCard";
 import FeedbackSkeleton from "@/components/feedback/FeedbackSkeleton";
@@ -86,7 +90,7 @@ function lazyWithPreload<T extends ComponentType<Record<string, never>>>(
 
 const LoginPage = lazyWithPreload(() => import("@/pages/LoginPage"));
 const HomePage = lazyWithPreload(() => import("@/pages/HomePage"));
-const HomeRecommendationPage = lazyWithPreload(() => import("@/pages/HomeRecommendationPage"));
+const HomeRecommendationPage = lazy(() => import("@/pages/HomeRecommendationPage"));
 const MyRoutePage = lazyWithPreload(() => import("@/pages/MyRoutePage"));
 const SharedRoutePage = lazyWithPreload(async () => {
   const module = await import("@/pages/SharedRoutePage");
@@ -276,21 +280,21 @@ function LoginRouteFallback() {
   );
 }
 
-function HomeRouteFallback() {
+function HomeRouteFallback({ isMap = false }: { isMap?: boolean }) {
   const text = useUiText();
 
   return (
-    <main className="flex h-full items-center justify-center bg-brand-50 px-5 text-slate-900 dark:bg-[#071718] dark:text-slate-100">
-      <section className="w-full max-w-sm">
+    <div className="flex h-full items-center justify-center bg-brand-50 px-5 text-slate-900 dark:bg-[#071718] dark:text-slate-100">
+      <div role="status" className="w-full max-w-sm">
         <AppLoadingCard
-          title={text.routeShell.homeLoadingTitle}
-          description={text.routeShell.homeLoadingDescription}
-          animation="map-rendering"
+          title={isMap ? text.routeShell.homeLoadingTitle : text.routeShell.defaultLoadingTitle}
+          description={isMap ? text.routeShell.homeLoadingDescription : undefined}
+          animation={isMap ? "map-rendering" : "generic"}
           compact
           className="shadow-sm"
         />
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }
 
@@ -732,6 +736,12 @@ function LoginRoute() {
 function AppRoutes() {
   const location = useLocation();
   const text = useUiText();
+  const isRoot = Boolean(useMatch("/"));
+  const isRecommendationHome = Boolean(useMatch("/home"));
+  const [hasRenderedHome, setHasRenderedHome] = useState(false);
+  const markHomeReady = useCallback(() => setHasRenderedHome(true), []);
+  // 루트 이동과 홈 모듈 로딩이 끝나고 본문이 반영될 때까지 네이티브 시작 화면을 유지한다.
+  const isWaitingForHome = (isRoot || isRecommendationHome) && !hasRenderedHome;
   const backgroundLocation = location.pathname === "/login"
     ? getLoginNavigation(location.state).backgroundLocation
     : undefined;
@@ -744,11 +754,14 @@ function AppRoutes() {
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route
             path="/home"
-            element={withRouteSuspense(<HomeRecommendationPage />, <div className="h-full bg-brand-50 dark:bg-[#071718]" />)}
+            element={withRouteSuspense(
+              <HomeRecommendationPage onReady={markHomeReady} />,
+              <HomeRouteFallback />
+            )}
           />
           <Route
             path="/home/map"
-            element={withRouteSuspense(<HomePage />, <HomeRouteFallback />)}
+            element={withRouteSuspense(<HomePage />, <HomeRouteFallback isMap />)}
           />
           <Route
             path="/home/walking"
@@ -887,6 +900,7 @@ function AppRoutes() {
           <LoginRoute />
         </div>
       ) : null}
+      {!isWaitingForHome ? <NativeWebBundleReadySignal /> : null}
     </>
   );
 }

@@ -244,7 +244,7 @@ test("WebView 복구만 재로딩하고 로그인 세션 변경은 현재 화면
   );
 });
 
-test("웹 화면은 React 마운트 직후 준비 신호를 즉시 보낸다", () => {
+test("준비 신호 컴포넌트가 마운트되면 신호를 즉시 보낸다", () => {
   const immediateSignalIndex = webReadySignalSource.indexOf(
     "    postReadySignal();"
   );

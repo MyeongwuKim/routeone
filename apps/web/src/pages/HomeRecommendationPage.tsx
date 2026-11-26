@@ -30,6 +30,10 @@ type CourseListProps = {
   onStartCourse: (places: MapSheetPlace[]) => void;
 };
 
+type HomeRecommendationPageProps = {
+  onReady: () => void;
+};
+
 /** 기존 카드를 유지한 채 다음 페이지를 붙이고, 이동하는 버튼 영역은 스크롤 기준에서 제외한다. */
 function HomeRecommendationCourseList({
   courses, language, text, hasMore, isLoadingMore, loadMoreFailed, onLoadMore, onPlaceSelect, onStartCourse,
@@ -65,7 +69,7 @@ function HomeRecommendationCourseList({
 }
 
 /** 홈의 로그인 진입점과 누구나 볼 수 있는 지역별 공식 여행 코스를 표시한다. */
-function HomeRecommendationContent() {
+function HomeRecommendationContent({ onReady }: HomeRecommendationPageProps) {
   const { selection, area, selectedRegions, language, resultScope, query, courses, mapHref, actions } = useHomeRecommendations();
   const text = getHomeRecommendationText(language);
   const ui = useUiText();
@@ -83,6 +87,9 @@ function HomeRecommendationContent() {
   const formRef = useRef<HTMLDivElement>(null);
   const recommendationsRef = useRef<HTMLElement>(null);
   const { hash, search } = useLocation();
+
+  // 제목과 지역 선택이 화면에 반영되면 추천 코스 조회가 진행 중이어도 홈을 열 수 있다.
+  useEffect(onReady, [onReady]);
 
   // 앱의 해시 라우터에서도 홈 상단 대신 추천 결과에 초점과 스크롤을 맞춘다.
   useLayoutEffect(() => {
@@ -238,7 +245,7 @@ function HomeRecommendationContent() {
  * 진입 경로: 하단 홈 탭. 지역별 공식 여행 코스를 펼쳐 방문 순서와 장소 상세를 보거나 일정 만들기로 이동한다.
  * 지역을 바꾸면 선택 메뉴를 유지한 채 결과만 갱신한다. 기존 축제 알림 URL은 검색 조건을 유지한 채 지도로 연결한다.
  */
-export default function HomeRecommendationPage() {
+export default function HomeRecommendationPage({ onReady }: HomeRecommendationPageProps) {
   const [params] = useSearchParams();
   if (params.has("festivalRegion")) return <Navigate to={`/home/map?${params}`} replace />;
   // 이전 홈의 도보·대중교통 선택 URL도 지역은 유지하되 지원하지 않는 이동수단 조건을 제거한다.
@@ -248,5 +255,5 @@ export default function HomeRecommendationPage() {
     const search = nextParams.toString();
     return <Navigate to={`/home${search ? `?${search}` : ""}`} replace />;
   }
-  return <HomeRecommendationContent />;
+  return <HomeRecommendationContent onReady={onReady} />;
 }

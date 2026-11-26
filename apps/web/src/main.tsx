@@ -12,7 +12,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { getReactRootMonitoringOptions } from "./monitoring/sentry";
 import App from "./App.tsx";
 import AppErrorBoundary from "./components/AppErrorBoundary";
-import NativeWebBundleReadySignal from "./components/NativeWebBundleReadySignal";
 import { isGraphQLRequestError } from "./lib/graphqlClient";
 import { startLocalizedApp } from "./lib/startLocalizedApp";
 import { installHistoryNavigationGuard } from "./lib/historyNavigationGuard";
@@ -70,7 +69,6 @@ function renderApp() {
         <AppErrorBoundary>
           <App />
         </AppErrorBoundary>
-        <NativeWebBundleReadySignal />
       </QueryClientProvider>
     </StrictMode>
   );
