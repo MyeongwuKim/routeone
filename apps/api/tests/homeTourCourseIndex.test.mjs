@@ -22,6 +22,7 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
     areacode: "1",
     sigungucode: "1",
   }));
+  const sourcePageSize = 50;
   const items = [
     ...gangnamCourses.slice(0, 4),
     { contentid: "gangneung", title: "강릉 코스", areacode: "32", sigungucode: "1" },
@@ -33,6 +34,10 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
     { contentid: "jongno-location", title: "대표 좌표가 종로인 코스", mapx: "126.979", mapy: "37.5735" },
     { contentid: "mismatched-location", title: "다른 권역이 등록된 코스", areacode: "32", mapx: "127.0473", mapy: "37.5172" },
     { contentid: "unknown-location", title: "등록 지역이나 대표 좌표가 없는 코스" },
+    ...Array.from({ length: sourcePageSize }, (_, index) => ({
+      contentid: `unassigned-${index}`,
+      title: `지역 미등록 코스 ${index}`,
+    })),
     ...gangnamCourses.slice(4),
   ];
 
@@ -44,7 +49,7 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
   });
   let now = Date.now();
   const refreshAt = now + 60 * 60 * 1000;
-  const initialPageCount = Math.ceil(items.length / 10);
+  const initialPageCount = Math.ceil(items.length / sourcePageSize);
   let resolveRefresh;
   const refreshResponse = new Promise((resolve) => { resolveRefresh = resolve; });
   t.mock.method(Date, "now", () => now);
@@ -52,9 +57,10 @@ test("기동 조회를 공유하고 공식 코스를 선택 지역과 페이지�
     const url = new URL(input);
     assert.equal(url.origin, "https://apis.data.go.kr");
     assert.equal(url.searchParams.get("contentTypeId"), "25");
+    assert.equal(url.searchParams.get("numOfRows"), String(sourcePageSize));
     if (now >= refreshAt) return refreshResponse;
-    const offset = (Number(url.searchParams.get("pageNo")) - 1) * 10;
-    return catalogResponse(items.slice(offset, offset + 10), items.length);
+    const offset = (Number(url.searchParams.get("pageNo")) - 1) * sourcePageSize;
+    return catalogResponse(items.slice(offset, offset + sourcePageSize), items.length);
   });
 
   const server = new ApolloServer({

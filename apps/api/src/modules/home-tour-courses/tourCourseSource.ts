@@ -36,7 +36,7 @@ type TourCourseSourceResponse = {
 };
 
 const TOUR_COURSE_SOURCE_URL = "https://apis.data.go.kr/B551011/KorService2/areaBasedList2";
-const TOUR_COURSE_SOURCE_PAGE_SIZE = 10;
+const TOUR_COURSE_SOURCE_PAGE_SIZE = 50;
 const TOUR_COURSE_SOURCE_MAX_ROWS = 20_000;
 const TOUR_COURSE_SOURCE_CONCURRENT_PAGES = 8;
 const TOUR_COURSE_CATALOG_TIMEOUT_MS = 10_000;
@@ -150,7 +150,7 @@ async function fetchTourCourseSourcePage(serviceKey: string, pageNo: number, sig
   return { items, totalCount };
 }
 
-/** 국문 코스를 10개씩 조회하고, 10초 안에 읽은 전체 목록에서 같은 ID의 첫 항목만 지역 인덱스에 전달한다. */
+/** 국문 코스를 50개씩 조회하고, 10초 안에 읽은 전체 목록에서 같은 ID의 첫 항목만 지역 인덱스에 전달한다. */
 export async function fetchOfficialTourCourses(): Promise<OfficialTourCourse[]> {
   const configuredKey = process.env.VISITKOREA_SERVICE_KEY?.trim() || process.env.TOUR_API_SERVICE_KEY?.trim();
   if (!configuredKey) throw new Error("Tour course source service key is missing");
